@@ -1,0 +1,332 @@
+{
+  "meta": {
+    "exportedAt": "2026-09-14T16:56:50.175Z",
+    "restaurantKey": "resto_nikhil",
+    "restaurantName": "FoodDrinks",
+    "version": 1
+  },
+  "restaurant": {
+    "_id": "6aa8195bb328788799c2e023",
+    "name": "FoodDrinks",
+    "key": "resto_nikhil",
+    "logoUrl": "",
+    "address": "123 Main Street, Your City",
+    "gstin": "",
+    "fssaiLicense": "",
+    "tagline": "",
+    "aboutText": "",
+    "heroImages": [],
+    "dayEndTime": "00:00",
+    "taxRates": [
+      {
+        "name": "CGST",
+        "percent": 2.5,
+        "_id": "6aa8195bb328788799c2e024"
+      },
+      {
+        "name": "SGST",
+        "percent": 2.5,
+        "_id": "6aa8195bb328788799c2e025"
+      }
+    ],
+    "qrSettings": {
+      "showLogo": true,
+      "showName": true,
+      "showAddress": false,
+      "instructionText": "Scan to view menu & order",
+      "accentColor": "#ea580c"
+    },
+    "kotSettings": {
+      "headerText": "Kitchen Order Ticket",
+      "showCustomerName": true,
+      "showTableInfo": true,
+      "footerNote": "",
+      "paperSize": "thermal80",
+      "fontSize": "normal",
+      "showLogo": false,
+      "showPrices": false,
+      "showJainTag": true
+    },
+    "invoiceSettings": {
+      "showCustomerPhone": true,
+      "footerNote": "Thank you for dining with us!",
+      "termsText": "",
+      "paperSize": "a5",
+      "fontSize": "normal",
+      "showLogo": true,
+      "showUnitPrice": true,
+      "showJainTag": true
+    },
+    "createdAt": "2026-09-14T15:57:15.821Z",
+    "updatedAt": "2026-09-14T16:55:44.540Z",
+    "__v": 0,
+    "backupSchedule": {
+      "enabled": false,
+      "time": "02:00",
+      "lastRunAt": "2026-09-14T16:54:27.568Z"
+    }
+  },
+  "categories": [
+    {
+      "_id": "6aa8197302cab2c7234e08b7",
+      "restaurantId": "6aa8195bb328788799c2e023",
+      "name": "Starters",
+      "description": "Appetizers to begin your meal",
+      "isActive": true,
+      "createdAt": "2026-09-14T15:57:39.127Z",
+      "updatedAt": "2026-09-14T15:57:39.127Z",
+      "__v": 0
+    },
+    {
+      "_id": "6aa8197302cab2c7234e08b9",
+      "restaurantId": "6aa8195bb328788799c2e023",
+      "name": "Main Course",
+      "description": "Hearty main dishes",
+      "isActive": true,
+      "createdAt": "2026-09-14T15:57:39.154Z",
+      "updatedAt": "2026-09-14T15:57:39.154Z",
+      "__v": 0
+    },
+    {
+      "_id": "6aa8197302cab2c7234e08bb",
+      "restaurantId": "6aa8195bb328788799c2e023",
+      "name": "Beverages",
+      "description": "Drinks, hot and cold",
+      "isActive": true,
+      "createdAt": "2026-09-14T15:57:39.156Z",
+      "updatedAt": "2026-09-14T15:57:39.156Z",
+      "__v": 0
+    }
+  ],
+  "subcategories": [
+    {
+      "_id": "6aa8197302cab2c7234e08bd",
+      "restaurantId": "6aa8195bb328788799c2e023",
+      "categoryId": "6aa8197302cab2c7234e08b7",
+      "name": "Soups",
+      "description": "",
+      "isActive": true,
+      "createdAt": "2026-09-14T15:57:39.157Z",
+      "updatedAt": "2026-09-14T15:57:39.157Z",
+      "__v": 0
+    },
+    {
+      "_id": "6aa8197302cab2c7234e08bf",
+      "restaurantId": "6aa8195bb328788799c2e023",
+      "categoryId": "6aa8197302cab2c7234e08b7",
+      "name": "Snacks",
+      "description": "",
+      "isActive": true,
+      "createdAt": "2026-09-14T15:57:39.198Z",
+      "updatedAt": "2026-09-14T15:57:39.198Z",
+      "__v": 0
+    },
+    {
+      "_id": "6aa8197302cab2c7234e08c1",
+      "restaurantId": "6aa8195bb328788799c2e023",
+      "categoryId": "6aa8197302cab2c7234e08b9",
+      "name": "Curries",
+      "description": "",
+      "isActive": true,
+      "createdAt": "2026-09-14T15:57:39.200Z",
+      "updatedAt": "2026-09-14T15:57:39.200Z",
+      "__v": 0
+    },
+    {
+      "_id": "6aa8197302cab2c7234e08c3",
+      "restaurantId": "6aa8195bb328788799c2e023",
+      "categoryId": "6aa8197302cab2c7234e08b9",
+      "name": "Breads",
+      "description": "",
+      "isActive": true,
+      "createdAt": "2026-09-14T15:57:39.201Z",
+      "updatedAt": "2026-09-14T15:57:39.201Z",
+      "__v": 0
+    },
+    {
+      "_id": "6aa8197302cab2c7234e08c5",
+      "restaurantId": "6aa8195bb328788799c2e023",
+      "categoryId": "6aa8197302cab2c7234e08bb",
+      "name": "Cold Drinks",
+      "description": "",
+      "isActive": true,
+      "createdAt": "2026-09-14T15:57:39.202Z",
+      "updatedAt": "2026-09-14T15:57:39.202Z",
+      "__v": 0
+    }
+  ],
+  "foodItems": [
+    {
+      "_id": "6aa8197302cab2c7234e08c7",
+      "restaurantId": "6aa8195bb328788799c2e023",
+      "categoryId": "6aa8197302cab2c7234e08b7",
+      "subcategoryId": "6aa8197302cab2c7234e08bd",
+      "name": "Tomato Soup",
+      "price": 120,
+      "description": "",
+      "imageUrl": "",
+      "isActive": true,
+      "isBestseller": false,
+      "bestsellerEmoji": "⭐",
+      "createdAt": "2026-09-14T15:57:39.204Z",
+      "updatedAt": "2026-09-14T15:57:39.204Z",
+      "__v": 0
+    },
+    {
+      "_id": "6aa8197302cab2c7234e08c8",
+      "restaurantId": "6aa8195bb328788799c2e023",
+      "categoryId": "6aa8197302cab2c7234e08b7",
+      "subcategoryId": "6aa8197302cab2c7234e08bf",
+      "name": "Paneer Tikka",
+      "price": 220,
+      "description": "",
+      "imageUrl": "",
+      "isActive": true,
+      "isBestseller": false,
+      "bestsellerEmoji": "⭐",
+      "createdAt": "2026-09-14T15:57:39.204Z",
+      "updatedAt": "2026-09-14T15:57:39.204Z",
+      "__v": 0
+    },
+    {
+      "_id": "6aa8197302cab2c7234e08c9",
+      "restaurantId": "6aa8195bb328788799c2e023",
+      "categoryId": "6aa8197302cab2c7234e08b9",
+      "subcategoryId": "6aa8197302cab2c7234e08c1",
+      "name": "Paneer Butter Masala",
+      "price": 260,
+      "description": "",
+      "imageUrl": "",
+      "isActive": true,
+      "isBestseller": false,
+      "bestsellerEmoji": "⭐",
+      "createdAt": "2026-09-14T15:57:39.204Z",
+      "updatedAt": "2026-09-14T15:57:39.204Z",
+      "__v": 0
+    },
+    {
+      "_id": "6aa8197302cab2c7234e08ca",
+      "restaurantId": "6aa8195bb328788799c2e023",
+      "categoryId": "6aa8197302cab2c7234e08b9",
+      "subcategoryId": "6aa8197302cab2c7234e08c1",
+      "name": "Dal Makhani",
+      "price": 210,
+      "description": "",
+      "imageUrl": "",
+      "isActive": true,
+      "isBestseller": false,
+      "bestsellerEmoji": "⭐",
+      "createdAt": "2026-09-14T15:57:39.204Z",
+      "updatedAt": "2026-09-14T15:57:39.204Z",
+      "__v": 0
+    },
+    {
+      "_id": "6aa8197302cab2c7234e08cb",
+      "restaurantId": "6aa8195bb328788799c2e023",
+      "categoryId": "6aa8197302cab2c7234e08b9",
+      "subcategoryId": "6aa8197302cab2c7234e08c3",
+      "name": "Butter Naan",
+      "price": 45,
+      "description": "",
+      "imageUrl": "",
+      "isActive": true,
+      "isBestseller": false,
+      "bestsellerEmoji": "⭐",
+      "createdAt": "2026-09-14T15:57:39.204Z",
+      "updatedAt": "2026-09-14T15:57:39.204Z",
+      "__v": 0
+    },
+    {
+      "_id": "6aa8197302cab2c7234e08cc",
+      "restaurantId": "6aa8195bb328788799c2e023",
+      "categoryId": "6aa8197302cab2c7234e08bb",
+      "subcategoryId": "6aa8197302cab2c7234e08c5",
+      "name": "Masala Lemonade",
+      "price": 90,
+      "description": "",
+      "imageUrl": "",
+      "isActive": true,
+      "isBestseller": false,
+      "bestsellerEmoji": "⭐",
+      "createdAt": "2026-09-14T15:57:39.204Z",
+      "updatedAt": "2026-09-14T15:57:39.204Z",
+      "__v": 0
+    }
+  ],
+  "tables": [
+    {
+      "_id": "6aa8197202cab2c7234e08ac",
+      "restaurantId": "6aa8195bb328788799c2e023",
+      "code": "tbl1",
+      "passwordHash": "$2a$10$rO5VANeesJN5yriCLtYYHurE3LoqOOfxxhxh7nQBWLNRYlVvDzlsK",
+      "password": "pass1",
+      "status": "available",
+      "createdAt": "2026-09-14T15:57:38.880Z",
+      "updatedAt": "2026-09-14T16:38:58.344Z",
+      "__v": 0
+    },
+    {
+      "_id": "6aa8197202cab2c7234e08ae",
+      "restaurantId": "6aa8195bb328788799c2e023",
+      "code": "tbl2",
+      "passwordHash": "$2a$10$gl7pnbyaSz2bDLpsXIiYCujBfB8CvzpWYssz7sfT/cxpmOJakW1ye",
+      "password": "pass2",
+      "status": "available",
+      "createdAt": "2026-09-14T15:57:38.942Z",
+      "updatedAt": "2026-09-14T15:58:28.780Z",
+      "__v": 0
+    },
+    {
+      "_id": "6aa8197302cab2c7234e08b0",
+      "restaurantId": "6aa8195bb328788799c2e023",
+      "code": "tbl3",
+      "passwordHash": "$2a$10$31rofulDEWpEkJ8nkVZDzugj4Phx09tYaCEwmemLAds.6Oqo/b7iK",
+      "password": "pass3",
+      "status": "available",
+      "createdAt": "2026-09-14T15:57:39.002Z",
+      "updatedAt": "2026-09-14T15:57:39.002Z",
+      "__v": 0
+    },
+    {
+      "_id": "6aa8197302cab2c7234e08b2",
+      "restaurantId": "6aa8195bb328788799c2e023",
+      "code": "tbl4",
+      "passwordHash": "$2a$10$uCC.oNOYcghM3QnmEscQkuKwcSDqqQ7.nYVQBDaP6ox54Q.e2Pcy.",
+      "password": "pass4",
+      "status": "available",
+      "createdAt": "2026-09-14T15:57:39.061Z",
+      "updatedAt": "2026-09-14T15:57:39.061Z",
+      "__v": 0
+    },
+    {
+      "_id": "6aa8197302cab2c7234e08b4",
+      "restaurantId": "6aa8195bb328788799c2e023",
+      "code": "tbl5",
+      "passwordHash": "$2a$10$yNJb4TNgNuX14vhvRb.9H.v0SLdQnVJgylHWI2yyUmjlRsFk23Uei",
+      "password": "pass5",
+      "status": "available",
+      "createdAt": "2026-09-14T15:57:39.119Z",
+      "updatedAt": "2026-09-14T15:57:39.119Z",
+      "__v": 0
+    }
+  ],
+  "chefs": [
+    {
+      "_id": "6aa8197202cab2c7234e08a8",
+      "restaurantId": "6aa8195bb328788799c2e023",
+      "username": "chef1",
+      "passwordHash": "$2a$10$zE7LJxCi.eZUMUQcQRdRYeLfwx21CjxjojO4bTJQmZlqCCh91WoEC",
+      "password": "Chef@123",
+      "createdAt": "2026-09-14T15:57:38.810Z",
+      "updatedAt": "2026-09-14T15:57:38.810Z",
+      "__v": 0
+    }
+  ],
+  "team": [],
+  "awards": [],
+  "coupons": [],
+  "reviews": [],
+  "orders": [],
+  "orderItems": [],
+  "chatMessages": []
+}

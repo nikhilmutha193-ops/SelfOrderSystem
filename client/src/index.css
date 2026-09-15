@@ -1,0 +1,48 @@
+@import "tailwindcss";
+
+/*
+ * "Banne Dosa" cafe theme: warm South-Indian filter-coffee palette.
+ * These redefine Tailwind's built-in orange and amber scales, so every
+ * existing orange- and amber- utility across the app (buttons, badges,
+ * links, focus rings) picks up the cafe's terracotta + turmeric-gold
+ * identity for free.
+ */
+@theme {
+  --color-orange-50: #fdf3ed;
+  --color-orange-100: #fbe3d3;
+  --color-orange-200: #f5c6a5;
+  --color-orange-300: #eba476;
+  --color-orange-400: #dc7d4e;
+  --color-orange-500: #c4602f;
+  --color-orange-600: #a34a22;
+  --color-orange-700: #833a1c;
+  --color-orange-800: #692f1a;
+  --color-orange-900: #542818;
+  --color-orange-950: #2e140b;
+
+  --color-amber-50: #fffbeb;
+  --color-amber-100: #fdf1cc;
+  --color-amber-200: #fbe4a0;
+  --color-amber-300: #f6d06c;
+  --color-amber-400: #e8b93d;
+  --color-amber-500: #d9a441;
+  --color-amber-600: #b9852a;
+  --color-amber-700: #8f6720;
+  --color-amber-800: #74521c;
+  --color-amber-900: #60441c;
+  --color-amber-950: #38250d;
+}
+
+:root {
+  color-scheme: light;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background-color: #fefaf5;
+}

@@ -1,0 +1,32 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Server: Debug (ts-node)",
+      "type": "node",
+      "request": "launch",
+      "cwd": "${workspaceFolder}/server",
+      "runtimeArgs": ["-r", "ts-node/register"],
+      "args": ["${workspaceFolder}/server/src/index.ts"],
+      "envFile": "${workspaceFolder}/server/.env",
+      "skipFiles": ["<node_internals>/**", "${workspaceFolder}/server/node_modules/**"],
+      "console": "integratedTerminal",
+      "outputCapture": "std",
+      "preLaunchTask": "prelaunch: server"
+    },
+    {
+      "name": "Client: Launch Chrome",
+      "type": "chrome",
+      "request": "launch",
+      "url": "http://localhost:5173",
+      "webRoot": "${workspaceFolder}/client"
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Full Stack: Server + Client",
+      "configurations": ["Server: Debug (ts-node)", "Client: Launch Chrome"],
+      "stopAll": true
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+import { Schema, model, Types } from "mongoose";
+
+export type TableStatus = "available" | "occupied";
+
+export interface ITable {
+  _id: Types.ObjectId;
+  restaurantId: Types.ObjectId;
+  code: string;
+  passwordHash: string;
+  password: string;
+  status: TableStatus;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+const tableSchema = new Schema<ITable>(
+  {
+    restaurantId: { type: Schema.Types.ObjectId, ref: "Restaurant", required: true, index: true },
+    code: { type: String, required: true, trim: true },
+    passwordHash: { type: String, required: true },
+    password: { type: String, required: true },
+    status: { type: String, enum: ["available", "occupied"], default: "available" },
+  },
+  { timestamps: true }
+);
+
+tableSchema.index({ restaurantId: 1, code: 1 }, { unique: true });
+
+export default model<ITable>("Table", tableSchema);

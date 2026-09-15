@@ -1,0 +1,23 @@
+import { Schema, model, Types } from "mongoose";
+
+export interface ICategory {
+  _id: Types.ObjectId;
+  restaurantId: Types.ObjectId;
+  name: string;
+  description?: string;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+const categorySchema = new Schema<ICategory>(
+  {
+    restaurantId: { type: Schema.Types.ObjectId, ref: "Restaurant", required: true, index: true },
+    name: { type: String, required: true, trim: true },
+    description: { type: String, default: "" },
+    isActive: { type: Boolean, default: true },
+  },
+  { timestamps: true }
+);
+
+export default model<ICategory>("Category", categorySchema);

@@ -1,0 +1,172 @@
+import { Request, Response } from "express";
+import Restaurant, { IInvoiceSettings, IKotSettings, IQrSettings, IRestaurant, ITaxRate } from "../models/Restaurant";
+import { IOrder } from "../models/Order";
+import { IOrderItem } from "../models/OrderItem";
+import { asyncHandler } from "../middleware/errorHandler";
+import { HttpError } from "../utils/httpError";
+import { computeInvoiceTotals } from "../utils/invoice";
+import { streamInvoicePdf, streamKotPdf } from "../utils/pdf";
+import { isValidDayEndTime } from "../utils/businessDay";
+
+const SAMPLE_ITEMS: Pick<IOrderItem, "foodName" | "isJain" | "quantity" | "unitPrice" | "total" | "status">[] = [
+  { foodName: "Paneer Butter Masala", isJain: false, quantity: 2, unitPrice: 220, total: 440, status: "pending" },
+  { foodName: "Dal Tadka (Jain)", isJain: true, quantity: 1, unitPrice: 150, total: 150, status: "pending" },
+  { foodName: "Butter Naan", isJain: false, quantity: 4, unitPrice: 35, total: 140, status: "pending" },
+];
+
+function buildSampleOrder(): IOrder {
+  return {
+    _id: "preview",
+    orderType: "dine-in",
+    customerName: "Sample Customer",
+    customerPhone: "9876543210",
+    checkinTime: new Date(),
+    members: 2,
+    status: "open",
+    paymentMethod: "pending",
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  } as unknown as IOrder;
+}
+
+async function buildPreviewRestaurant(req: Request, overrides: Record<string, unknown>): Promise<IRestaurant> {
+  const existing = await Restaurant.findById(req.restaurantId);
+  if (!existing) throw new HttpError(404, "Restaurant not found");
+  const base = existing.toObject();
+
+  return {
+    ...base,
+    ...(overrides.name !== undefined && { name: overrides.name }),
+    ...(overrides.logoUrl !== undefined && { logoUrl: overrides.logoUrl }),
+    ...(overrides.address !== undefined && { address: overrides.address }),
+    ...(overrides.gstin !== undefined && { gstin: overrides.gstin }),
+    ...(overrides.fssaiLicense !== undefined && { fssaiLicense: overrides.fssaiLicense }),
+    ...(overrides.taxRates !== undefined && { taxRates: overrides.taxRates }),
+    kotSettings: { ...base.kotSettings, ...(overrides.kotSettings as Partial<IKotSettings> | undefined) },
+    invoiceSettings: { ...base.invoiceSettings, ...(overrides.invoiceSettings as Partial<IInvoiceSettings> | undefined) },
+  } as unknown as IRestaurant;
+}
+
+export const getRestaurantPublic = asyncHandler(async (req: Request, res: Response) => {
+  const restaurant = await Restaurant.findById(req.restaurantId).select("name logoUrl address");
+  if (!restaurant) throw new HttpError(404, "Restaurant not found");
+  res.json(restaurant);
+});
+
+export const getRestaurantSettings = asyncHandler(async (req: Request, res: Response) => {
+  const restaurant = await Restaurant.findById(req.restaurantId);
+  if (!restaurant) throw new HttpError(404, "Restaurant not found");
+  res.json(restaurant);
+});
+
+export const updateRestaurantSettings = asyncHandler(async (req: Request, res: Response) => {
+  const {
+    name,
+    address,
+    logoUrl,
+    gstin,
+    fssaiLicense,
+    tagline,
+    aboutText,
+    publicUrl,
+    heroImages,
+    dayEndTime,
+    taxRates,
+    qrSettings,
+    kotSettings,
+    invoiceSettings,
+  } = req.body as {
+    name?: string;
+    address?: string;
+    logoUrl?: string;
+    gstin?: string;
+    fssaiLicense?: string;
+    tagline?: string;
+    aboutText?: string;
+    publicUrl?: string;
+    heroImages?: string[];
+    dayEndTime?: string;
+    taxRates?: { name: string; percent: number }[];
+    qrSettings?: Partial<IQrSettings>;
+    kotSettings?: Partial<IKotSettings>;
+    invoiceSettings?: Partial<IInvoiceSettings>;
+  };
+
+  if (publicUrl && !/^https?:\/\/.+/i.test(publicUrl)) {
+    throw new HttpError(400, "publicUrl must start with http:// or https://");
+  }
+
+  if (taxRates) {
+    for (const rate of taxRates) {
+      if (!rate.name || typeof rate.percent !== "number" || rate.percent < 0 || rate.percent > 100) {
+        throw new HttpError(400, "Each tax rate needs a name and a percent between 0 and 100");
+      }
+    }
+  }
+
+  if (heroImages && (!Array.isArray(heroImages) || heroImages.some((url) => typeof url !== "string" || !url))) {
+    throw new HttpError(400, "heroImages must be an array of non-empty URLs");
+  }
+
+  if (dayEndTime !== undefined && !isValidDayEndTime(dayEndTime)) {
+    throw new HttpError(400, "dayEndTime must be in HH:mm format (e.g. 03:00)");
+  }
+
+  const restaurant = await Restaurant.findById(req.restaurantId);
+  if (!restaurant) throw new HttpError(404, "Restaurant not found");
+
+  if (name !== undefined) restaurant.name = name;
+  if (address !== undefined) restaurant.address = address;
+  if (logoUrl !== undefined) restaurant.logoUrl = logoUrl;
+  if (gstin !== undefined) restaurant.gstin = gstin;
+  if (fssaiLicense !== undefined) restaurant.fssaiLicense = fssaiLicense;
+  if (tagline !== undefined) restaurant.tagline = tagline;
+  if (aboutText !== undefined) restaurant.aboutText = aboutText;
+  if (publicUrl !== undefined) restaurant.publicUrl = publicUrl.replace(/\/+$/, "");
+  if (heroImages !== undefined) restaurant.heroImages = heroImages;
+  if (dayEndTime !== undefined) restaurant.dayEndTime = dayEndTime;
+  if (taxRates !== undefined) restaurant.taxRates = taxRates;
+  if (qrSettings !== undefined) Object.assign(restaurant.qrSettings, qrSettings);
+  if (kotSettings !== undefined) Object.assign(restaurant.kotSettings, kotSettings);
+  if (invoiceSettings !== undefined) Object.assign(restaurant.invoiceSettings, invoiceSettings);
+
+  await restaurant.save();
+  res.json(restaurant);
+});
+
+export const previewKotPdf = asyncHandler(async (req: Request, res: Response) => {
+  const { name, logoUrl, kotSettings } = req.body as {
+    name?: string;
+    logoUrl?: string;
+    kotSettings?: Partial<IKotSettings>;
+  };
+  const restaurant = await buildPreviewRestaurant(req, { name, logoUrl, kotSettings });
+  const order = buildSampleOrder();
+  const items = SAMPLE_ITEMS as unknown as IOrderItem[];
+  await streamKotPdf(res, { restaurant, order, round: 1, items, tableCode: "5" });
+});
+
+export const previewInvoicePdf = asyncHandler(async (req: Request, res: Response) => {
+  const { name, logoUrl, address, gstin, fssaiLicense, taxRates, invoiceSettings } = req.body as {
+    name?: string;
+    logoUrl?: string;
+    address?: string;
+    gstin?: string;
+    fssaiLicense?: string;
+    taxRates?: ITaxRate[];
+    invoiceSettings?: Partial<IInvoiceSettings>;
+  };
+  const restaurant = await buildPreviewRestaurant(req, {
+    name,
+    logoUrl,
+    address,
+    gstin,
+    fssaiLicense,
+    taxRates,
+    invoiceSettings,
+  });
+  const order = buildSampleOrder();
+  const items = SAMPLE_ITEMS as unknown as IOrderItem[];
+  const totals = computeInvoiceTotals(items, restaurant.taxRates || []);
+  await streamInvoicePdf(res, { restaurant, order, items, totals });
+});
