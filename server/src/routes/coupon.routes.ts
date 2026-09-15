@@ -1,13 +1,13 @@
 import { Router } from "express";
 import { listCoupons, createCoupon, updateCoupon, setCouponActive, deleteCoupon } from "../controllers/coupon.controller";
-import { requireAuth } from "../middleware/auth";
+import { requireAuth, requireModule } from "../middleware/auth";
 
 const router = Router();
 
-router.get("/", requireAuth("admin"), listCoupons);
-router.post("/", requireAuth("admin"), createCoupon);
-router.put("/:id", requireAuth("admin"), updateCoupon);
-router.patch("/:id/active", requireAuth("admin"), setCouponActive);
-router.delete("/:id", requireAuth("admin"), deleteCoupon);
+router.get("/", requireAuth("admin"), requireModule("coupons"), listCoupons);
+router.post("/", requireAuth("admin"), requireModule("coupons"), createCoupon);
+router.put("/:id", requireAuth("admin"), requireModule("coupons"), updateCoupon);
+router.patch("/:id/active", requireAuth("admin"), requireModule("coupons"), setCouponActive);
+router.delete("/:id", requireAuth("admin"), requireModule("coupons"), deleteCoupon);
 
 export default router;

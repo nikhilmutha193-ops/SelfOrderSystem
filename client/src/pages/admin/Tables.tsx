@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, extractErrorMessage } from "../../lib/apiClient";
-import { Badge, Button, Card, ErrorText, Input } from "../../components/ui";
+import { Badge, Button, Card, ErrorText, Input, TableWrap } from "../../components/ui";
 import type { TableRow } from "../../lib/types";
 
 export default function Tables() {
@@ -89,7 +89,8 @@ export default function Tables() {
       <ErrorText>{error}</ErrorText>
 
       <Card>
-        <table className="w-full text-sm">
+        <TableWrap>
+          <table className="w-full min-w-[34rem] text-sm">
           <thead>
             <tr className="text-left text-slate-500">
               <th className="pb-2">Code</th>
@@ -144,6 +145,7 @@ export default function Tables() {
             ))}
           </tbody>
         </table>
+      </TableWrap>
       </Card>
     </div>
   );

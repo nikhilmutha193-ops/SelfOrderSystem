@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api, extractErrorMessage } from "../../lib/apiClient";
-import { Badge, Button, Card, ErrorText, Input, Select } from "../../components/ui";
+import { Badge, Button, Card, ErrorText, Input, Select, TableWrap } from "../../components/ui";
 import type { MenuCategory, OrderDetailResponse, PaymentMethod } from "../../lib/types";
 
 const STATUS_TONE = {
@@ -153,7 +153,8 @@ export default function OrderDetail() {
 
       <Card>
         <h2 className="mb-2 text-lg font-semibold text-slate-800">Items</h2>
-        <table className="w-full text-sm">
+        <TableWrap>
+          <table className="w-full min-w-[34rem] text-sm">
           <thead>
             <tr className="text-left text-slate-500">
               <th className="pb-2">Item</th>
@@ -179,6 +180,7 @@ export default function OrderDetail() {
             ))}
           </tbody>
         </table>
+      </TableWrap>
 
         {order.status === "open" && (
           <div className="mt-4 flex flex-wrap items-end gap-2 border-t border-slate-100 pt-4">

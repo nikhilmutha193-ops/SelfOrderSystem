@@ -1,9 +1,12 @@
-import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { api, storeToken, setActiveAuth, extractErrorMessage } from "../../lib/apiClient";
+import { useEffect, useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { api, storeToken, setActiveAuth, extractErrorMessage, wasSessionExpired, clearExpiredFlag } from "../../lib/apiClient";
 import { Button, Card, ErrorText, Input } from "../../components/ui";
 
 export default function AdminLogin() {
+  const [searchParams] = useSearchParams();
+  const [sessionExpired] = useState(() => searchParams.get("expired") === "1" || wasSessionExpired("admin"));
+  useEffect(() => clearExpiredFlag("admin"), []);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -45,6 +48,11 @@ export default function AdminLogin() {
               required
             />
           </label>
+          {sessionExpired && !error && (
+            <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              Your session expired. Please sign in again.
+            </p>
+          )}
           <ErrorText>{error}</ErrorText>
           <Button type="submit" disabled={loading}>
             {loading ? "Signing in..." : "Sign in"}

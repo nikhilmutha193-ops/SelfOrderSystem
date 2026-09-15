@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api, extractErrorMessage } from "../../lib/apiClient";
-import { Badge, Button, Card, ErrorText, Input, Select } from "../../components/ui";
+import { Badge, Button, Card, ErrorText, Input, Select, TableWrap } from "../../components/ui";
 import type { Order, OrderStatus, OrderType } from "../../lib/types";
 
 const STATUS_TONE = { open: "amber", closed: "green", cancelled: "red" } as const;
@@ -123,7 +123,8 @@ export default function Orders() {
       <ErrorText>{error}</ErrorText>
 
       <Card>
-        <table className="w-full text-sm">
+        <TableWrap>
+          <table className="w-full min-w-[34rem] text-sm">
           <thead>
             <tr className="text-left text-slate-500">
               <th className="pb-2">Customer</th>
@@ -162,6 +163,7 @@ export default function Orders() {
             )}
           </tbody>
         </table>
+      </TableWrap>
       </Card>
     </div>
   );

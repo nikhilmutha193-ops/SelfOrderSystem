@@ -42,6 +42,7 @@ export default function NotificationCenter() {
   const [open, setOpen] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const prev = useRef<DashboardSummary | null>(null);
+  const [clearing, setClearing] = useState(false);
 
   useEffect(() => {
     function poll() {
@@ -73,6 +74,26 @@ export default function NotificationCenter() {
     return () => clearInterval(interval);
   }, []);
 
+  /**
+   * Counts are derived from live data, so "clear" dismisses the toasts and marks
+   * table messages read. Items still waiting for KOT are real outstanding work and
+   * stay on the badge until they're actually sent to the kitchen.
+   */
+  async function clearNotifications() {
+    setClearing(true);
+    setToasts([]);
+    try {
+      await api.patch("/orders/chat/read-all");
+      const res = await api.get<DashboardSummary>("/dashboard/summary");
+      prev.current = res.data;
+      setSummary(res.data);
+    } catch {
+      // Non-critical: the next poll will resync the counts.
+    } finally {
+      setClearing(false);
+    }
+  }
+
   const badgeCount = (summary?.pendingKotItems || 0) + (summary?.unreadChatCount || 0);
 
   return (
@@ -101,7 +122,17 @@ export default function NotificationCenter() {
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
           <div className="absolute right-0 z-20 mt-2 w-72 rounded-lg border border-slate-200 bg-white p-3 shadow-lg">
-            <p className="mb-2 text-sm font-semibold text-slate-800">Notifications</p>
+            <div className="mb-2 flex items-center justify-between">
+              <p className="text-sm font-semibold text-slate-800">Notifications</p>
+              <button
+                type="button"
+                onClick={clearNotifications}
+                disabled={clearing}
+                className="rounded px-2 py-1 text-xs font-medium text-orange-600 hover:bg-orange-50 disabled:opacity-50"
+              >
+                {clearing ? "Clearing..." : "Clear"}
+              </button>
+            </div>
             <div className="flex flex-col gap-2 text-sm">
               <Link
                 to="/admin/kot"

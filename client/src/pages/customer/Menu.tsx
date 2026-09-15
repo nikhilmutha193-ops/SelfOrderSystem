@@ -4,10 +4,27 @@ import { api, extractErrorMessage } from "../../lib/apiClient";
 import { useTableSession } from "../../lib/useTableSession";
 import { Button, ErrorText, Input, Select } from "../../components/ui";
 import ChatFab from "../../components/ChatFab";
+import { BestsellerTag, FoodTypeIcon, RatingChip } from "../../components/FoodBadges";
 import QuickRequests from "../../components/QuickRequests";
 import type { CartLine, MenuCategory, MenuFoodItem } from "../../lib/types";
 
 type SortOption = "recommended" | "priceLowHigh" | "priceHighLow" | "nameAsc" | "bestsellerFirst";
+
+function sortItems(sortBy: SortOption, items: MenuFoodItem[]): MenuFoodItem[] {
+  const copy = [...items];
+  switch (sortBy) {
+    case "priceLowHigh":
+      return copy.sort((a, b) => a.price - b.price);
+    case "priceHighLow":
+      return copy.sort((a, b) => b.price - a.price);
+    case "nameAsc":
+      return copy.sort((a, b) => a.name.localeCompare(b.name));
+    case "bestsellerFirst":
+      return copy.sort((a, b) => Number(!!b.isBestseller) - Number(!!a.isBestseller));
+    default:
+      return copy;
+  }
+}
 
 const SORT_LABELS: Record<SortOption, string> = {
   recommended: "Recommended",
@@ -52,25 +69,25 @@ export default function Menu() {
   const cartTotal = useMemo(() => cart.reduce((sum, l) => sum + l.price * l.quantity, 0), [cart]);
   const cartCount = useMemo(() => cart.reduce((sum, l) => sum + l.quantity, 0), [cart]);
 
-  function getCartQty(foodItemId: string, isJain: boolean) {
-    return cart.find((l) => l.foodItemId === foodItemId && l.isJain === isJain)?.quantity ?? 0;
+  function getCartQty(foodItemId: string) {
+    return cart.find((l) => l.foodItemId === foodItemId)?.quantity ?? 0;
   }
 
-  function incrementCart(food: MenuFoodItem, isJain: boolean) {
+  function incrementCart(food: MenuFoodItem) {
     setCart((prev) => {
-      const idx = prev.findIndex((l) => l.foodItemId === food._id && l.isJain === isJain);
+      const idx = prev.findIndex((l) => l.foodItemId === food._id);
       if (idx >= 0) {
         const next = [...prev];
         next[idx] = { ...next[idx], quantity: next[idx].quantity + 1 };
         return next;
       }
-      return [...prev, { foodItemId: food._id, name: food.name, price: food.price, quantity: 1, isJain }];
+      return [...prev, { foodItemId: food._id, name: food.name, price: food.price, quantity: 1 }];
     });
   }
 
-  function decrementCart(foodItemId: string, isJain: boolean) {
+  function decrementCart(foodItemId: string) {
     setCart((prev) => {
-      const idx = prev.findIndex((l) => l.foodItemId === foodItemId && l.isJain === isJain);
+      const idx = prev.findIndex((l) => l.foodItemId === foodItemId);
       if (idx < 0) return prev;
       if (prev[idx].quantity <= 1) return prev.filter((_, i) => i !== idx);
       const next = [...prev];
@@ -89,7 +106,7 @@ export default function Menu() {
     setError(null);
     try {
       await api.post(`/orders/${orderId}/items`, {
-        items: cart.map((l) => ({ foodItemId: l.foodItemId, quantity: l.quantity, isJain: l.isJain })),
+        items: cart.map((l) => ({ foodItemId: l.foodItemId, quantity: l.quantity })),
       });
       setCart([]);
       navigate("/order/invoice");
@@ -105,22 +122,6 @@ export default function Menu() {
   const filteredMenu = useMemo(() => {
     const query = search.trim().toLowerCase();
 
-    function sortItems(items: MenuFoodItem[]): MenuFoodItem[] {
-      const copy = [...items];
-      switch (sortBy) {
-        case "priceLowHigh":
-          return copy.sort((a, b) => a.price - b.price);
-        case "priceHighLow":
-          return copy.sort((a, b) => b.price - a.price);
-        case "nameAsc":
-          return copy.sort((a, b) => a.name.localeCompare(b.name));
-        case "bestsellerFirst":
-          return copy.sort((a, b) => Number(!!b.isBestseller) - Number(!!a.isBestseller));
-        default:
-          return copy;
-      }
-    }
-
     return menu
       .map((category) => ({
         ...category,
@@ -128,6 +129,7 @@ export default function Menu() {
           .map((sub) => ({
             ...sub,
             foodItems: sortItems(
+              sortBy,
               sub.foodItems.filter((food) => {
                 if (bestsellerOnly && !food.isBestseller) return false;
                 if (query && !food.name.toLowerCase().includes(query) && !food.description?.toLowerCase().includes(query)) {
@@ -141,6 +143,16 @@ export default function Menu() {
       }))
       .filter((category) => category.subcategories.length > 0);
   }, [menu, search, sortBy, bestsellerOnly]);
+
+  /**
+   * Sorting inside each subcategory looks broken, because most hold only one or two
+   * dishes. While a sort or filter is on, the grouping is dropped and every match is
+   * shown as one list ordered across the whole menu.
+   */
+  const flatResults = useMemo(
+    () => sortItems(sortBy, filteredMenu.flatMap((c) => c.subcategories.flatMap((sub) => sub.foodItems))),
+    [filteredMenu, sortBy]
+  );
 
   useEffect(() => {
     if (isFiltering) return;
@@ -247,37 +259,56 @@ export default function Menu() {
       </div>
 
       <div className="flex flex-col gap-6 px-4 pt-2">
-        {filteredMenu.map((category) => (
-          <div
-            key={category._id}
-            data-category-id={category._id}
-            ref={(el) => {
-              sectionRefs.current[category._id] = el;
-            }}
-            className="scroll-mt-32"
-          >
-            <h2 className="mb-2 text-lg font-bold text-slate-800">{category.name}</h2>
-            {category.subcategories.map((sub) => (
-              <div key={sub._id} className="mb-4">
-                <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">
-                  {sub.name} <span className="text-slate-400">({sub.foodItems.length})</span>
-                </h3>
-                <div className="flex flex-col divide-y divide-slate-200 rounded-lg border border-slate-200 bg-white">
-                  {sub.foodItems.map((food) => (
-                    <FoodCard
-                      key={food._id}
-                      food={food}
-                      cartQtyRegular={getCartQty(food._id, false)}
-                      cartQtyJain={getCartQty(food._id, true)}
-                      onIncrement={incrementCart}
-                      onDecrement={decrementCart}
-                    />
-                  ))}
-                </div>
-              </div>
-            ))}
+        {isFiltering ? (
+          <div>
+            <p className="mb-2 text-sm text-slate-500">
+              {flatResults.length} dish{flatResults.length === 1 ? "" : "es"}
+              {sortBy !== "recommended" && ` · sorted by ${SORT_LABELS[sortBy].toLowerCase()}`}
+            </p>
+            <div className="flex flex-col divide-y divide-slate-200 rounded-lg border border-slate-200 bg-white">
+              {flatResults.map((food) => (
+                <FoodCard
+                  key={food._id}
+                  food={food}
+                  cartQty={getCartQty(food._id)}
+                  onIncrement={incrementCart}
+                  onDecrement={decrementCart}
+                />
+              ))}
+            </div>
           </div>
-        ))}
+        ) : (
+          filteredMenu.map((category) => (
+            <div
+              key={category._id}
+              data-category-id={category._id}
+              ref={(el) => {
+                sectionRefs.current[category._id] = el;
+              }}
+              className="scroll-mt-32"
+            >
+              <h2 className="mb-2 text-lg font-bold text-slate-800">{category.name}</h2>
+              {category.subcategories.map((sub) => (
+                <div key={sub._id} className="mb-4">
+                  <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">
+                    {sub.name} <span className="text-slate-400">({sub.foodItems.length})</span>
+                  </h3>
+                  <div className="flex flex-col divide-y divide-slate-200 rounded-lg border border-slate-200 bg-white">
+                    {sub.foodItems.map((food) => (
+                      <FoodCard
+                        key={food._id}
+                        food={food}
+                        cartQty={getCartQty(food._id)}
+                        onIncrement={incrementCart}
+                        onDecrement={decrementCart}
+                      />
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ))
+        )}
         {menu.length === 0 && !error && <p className="text-sm text-slate-500">Loading menu...</p>}
         {menu.length > 0 && filteredMenu.length === 0 && (
           <p className="py-8 text-center text-sm text-slate-500">No dishes match your search or filters.</p>
@@ -294,7 +325,7 @@ export default function Menu() {
                 {cart.map((line, idx) => (
                   <div key={idx} className="flex items-center justify-between text-sm">
                     <span>
-                      {line.name} x {line.quantity} {line.isJain && "(Jain)"}
+                      {line.name} x {line.quantity}
                     </span>
                     <div className="flex items-center gap-2">
                       <span>₹{(line.price * line.quantity).toFixed(2)}</span>
@@ -331,71 +362,72 @@ export default function Menu() {
 
 function FoodCard({
   food,
-  cartQtyRegular,
-  cartQtyJain,
+  cartQty,
   onIncrement,
   onDecrement,
 }: {
   food: MenuFoodItem;
-  cartQtyRegular: number;
-  cartQtyJain: number;
-  onIncrement: (food: MenuFoodItem, isJain: boolean) => void;
-  onDecrement: (foodItemId: string, isJain: boolean) => void;
+  cartQty: number;
+  onIncrement: (food: MenuFoodItem) => void;
+  onDecrement: (foodItemId: string) => void;
 }) {
-  const [isJain, setIsJain] = useState(false);
-  const qty = isJain ? cartQtyJain : cartQtyRegular;
+  const qty = cartQty;
 
   return (
-    <div className="flex items-start justify-between gap-3 p-3">
-      <div className="flex-1">
-        <div className="flex items-center gap-2">
-          <p className="text-sm font-medium text-slate-800">{food.name}</p>
-          {food.isBestseller && (
-            <span className="rounded-sm bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700">
-              {food.bestsellerEmoji || "⭐"} Bestseller
-            </span>
-          )}
+    <div className="flex items-center gap-3 p-3 transition-colors hover:bg-orange-50/40">
+      {food.imageUrl ? (
+        <img
+          src={food.imageUrl}
+          alt={food.name}
+          loading="lazy"
+          className="h-20 w-20 shrink-0 rounded-xl object-cover shadow-sm"
+        />
+      ) : (
+        <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-orange-100 to-amber-50 text-2xl font-bold text-orange-400">
+          {food.name.charAt(0).toUpperCase()}
         </div>
-        <p className="mt-0.5 text-sm font-semibold text-slate-700">₹{food.price.toFixed(2)}</p>
-        {food.description && <p className="mt-1 text-xs text-slate-500">{food.description}</p>}
-        <label className="mt-2 flex items-center gap-1.5 text-xs text-slate-500">
-          <input type="checkbox" checked={isJain} onChange={(e) => setIsJain(e.target.checked)} />
-          Jain (No Onion and Garlic)
-        </label>
+      )}
+
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <FoodTypeIcon type={food.foodType} />
+          <RatingChip rating={food.rating} />
+          {food.isBestseller && <BestsellerTag emoji={food.bestsellerEmoji} />}
+        </div>
+
+        <p className="mt-1 text-[15px] font-semibold leading-snug text-slate-900">{food.name}</p>
+        <p className="mt-0.5 text-sm font-bold text-slate-800">₹{food.price.toFixed(2)}</p>
+
+        {food.description && (
+          <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-slate-500">{food.description}</p>
+        )}
       </div>
 
-      <div className="flex shrink-0 flex-col items-center gap-1">
-        <div className="relative h-16 w-16">
-          {food.imageUrl ? (
-            <img src={food.imageUrl} alt={food.name} className="h-16 w-16 rounded-lg object-cover" />
-          ) : (
-            <div className="flex h-16 w-16 items-center justify-center rounded-lg bg-orange-50 text-lg font-bold text-orange-300">
-              {food.name.charAt(0).toUpperCase()}
-            </div>
-          )}
-          {food.isBestseller && (
-            <span
-              className="absolute -right-1.5 -top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-white text-sm shadow"
-              title="Bestseller"
-            >
-              {food.bestsellerEmoji || "⭐"}
-            </span>
-          )}
-        </div>
+      {/* Its own column on the right, so the action sits in one predictable place
+          down the whole list rather than moving with each dish's text length. */}
+      <div className="w-[4.5rem] shrink-0">
         {qty === 0 ? (
           <button
-            onClick={() => onIncrement(food, isJain)}
-            className="w-16 -translate-y-2 rounded-lg border border-orange-600 bg-white px-2 py-1.5 text-sm font-semibold text-orange-600 shadow-sm hover:bg-orange-50"
+            onClick={() => onIncrement(food)}
+            className="flex h-10 w-full items-center justify-center rounded-lg border border-orange-600 bg-white text-sm font-bold tracking-wide text-orange-600 shadow-sm hover:bg-orange-50"
           >
             ADD
           </button>
         ) : (
-          <div className="flex w-16 -translate-y-2 items-center justify-between rounded-lg border border-orange-600 bg-orange-600 px-1.5 py-1.5 text-white shadow-sm">
-            <button onClick={() => onDecrement(food._id, isJain)} className="px-1 font-bold leading-none">
+          <div className="flex h-10 w-full items-center justify-between rounded-lg bg-orange-600 px-1 text-white shadow-sm">
+            <button
+              onClick={() => onDecrement(food._id)}
+              aria-label={`Remove one ${food.name}`}
+              className="flex h-full w-6 items-center justify-center text-lg font-bold leading-none"
+            >
               −
             </button>
-            <span className="text-sm font-semibold">{qty}</span>
-            <button onClick={() => onIncrement(food, isJain)} className="px-1 font-bold leading-none">
+            <span className="text-sm font-bold">{qty}</span>
+            <button
+              onClick={() => onIncrement(food)}
+              aria-label={`Add one ${food.name}`}
+              className="flex h-full w-6 items-center justify-center text-lg font-bold leading-none"
+            >
               +
             </button>
           </div>

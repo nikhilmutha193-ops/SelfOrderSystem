@@ -1,6 +1,7 @@
 import Restaurant from "../models/Restaurant";
 import { isValidDayEndTime } from "./businessDay";
 import { generateBackupFile } from "./backupService";
+import { describeError, logger } from "./logger";
 
 const CHECK_INTERVAL_MS = 60 * 1000;
 
@@ -27,9 +28,9 @@ async function runDueBackups(): Promise<void> {
       await generateBackupFile(restaurant._id, "scheduled");
       restaurant.backupSchedule.lastRunAt = now;
       await restaurant.save();
-      console.log(`[backup-scheduler] generated scheduled backup for "${restaurant.key}"`);
+      logger.info("backup-scheduler: generated scheduled backup", { restaurantKey: restaurant.key });
     } catch (err) {
-      console.error(`[backup-scheduler] failed to generate backup for "${restaurant.key}"`, err);
+      logger.error("backup-scheduler: backup failed", { restaurantKey: restaurant.key, ...describeError(err) });
     }
   }
 }
@@ -37,6 +38,6 @@ async function runDueBackups(): Promise<void> {
 /** Polls every minute for restaurants whose daily backup schedule is due. */
 export function initBackupScheduler(): void {
   setInterval(() => {
-    runDueBackups().catch((err) => console.error("[backup-scheduler] tick failed", err));
+    runDueBackups().catch((err) => logger.error("backup-scheduler: tick failed", describeError(err)));
   }, CHECK_INTERVAL_MS);
 }

@@ -1,5 +1,7 @@
 import { Schema, model, Types } from "mongoose";
 
+export type FoodType = "veg" | "non-veg" | "egg";
+
 export interface IFoodItem {
   _id: Types.ObjectId;
   restaurantId: Types.ObjectId;
@@ -12,6 +14,9 @@ export interface IFoodItem {
   isActive: boolean;
   isBestseller: boolean;
   bestsellerEmoji?: string;
+  foodType: FoodType;
+  /** 0 means unrated - the menu shows a "New" chip rather than inventing stars. */
+  rating: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -28,6 +33,8 @@ const foodItemSchema = new Schema<IFoodItem>(
     isActive: { type: Boolean, default: true },
     isBestseller: { type: Boolean, default: false },
     bestsellerEmoji: { type: String, default: "⭐" },
+    foodType: { type: String, enum: ["veg", "non-veg", "egg"], default: "veg" },
+    rating: { type: Number, default: 0, min: 0, max: 5 },
   },
   { timestamps: true }
 );

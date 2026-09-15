@@ -1,5 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import ProtectedRoute from "./components/ProtectedRoute";
+import ErrorBoundary from "./components/ErrorBoundary";
+import { AdminHomeRedirect, RequireModule } from "./lib/adminAuth";
 
 import Landing from "./pages/Landing";
 import TableLogin from "./pages/customer/TableLogin";
@@ -29,13 +31,16 @@ import Coupons from "./pages/admin/Coupons";
 import Reviews from "./pages/admin/Reviews";
 import Messages from "./pages/admin/Messages";
 import Backup from "./pages/admin/Backup";
+import Admins from "./pages/admin/Admins";
+import NoAccess from "./pages/admin/NoAccess";
 
 import ChefLogin from "./pages/chef/ChefLogin";
 import ChefDashboard from "./pages/chef/ChefDashboard";
 
 export default function App() {
   return (
-    <BrowserRouter>
+    <ErrorBoundary>
+      <BrowserRouter>
       <Routes>
         <Route path="/" element={<Landing />} />
         <Route path="/order" element={<TableLogin />} />
@@ -74,26 +79,28 @@ export default function App() {
             </ProtectedRoute>
           }
         >
-          <Route index element={<Navigate to="dashboard" replace />} />
-          <Route path="dashboard" element={<Dashboard />} />
-          <Route path="categories" element={<Categories />} />
-          <Route path="subcategories" element={<Subcategories />} />
-          <Route path="food-items" element={<FoodItems />} />
-          <Route path="tables" element={<Tables />} />
-          <Route path="qr-codes" element={<QrCodes />} />
-          <Route path="kot" element={<AdminKot />} />
-          <Route path="messages" element={<Messages />} />
-          <Route path="chefs" element={<Chefs />} />
-          <Route path="orders" element={<Orders />} />
-          <Route path="orders/:orderId" element={<OrderDetail />} />
-          <Route path="delivery/new" element={<NewDeliveryOrder />} />
-          <Route path="team" element={<Team />} />
-          <Route path="awards" element={<Awards />} />
-          <Route path="coupons" element={<Coupons />} />
-          <Route path="reviews" element={<Reviews />} />
-          <Route path="settings" element={<RestaurantSettings />} />
-          <Route path="backup" element={<Backup />} />
+          <Route index element={<AdminHomeRedirect />} />
+          <Route path="dashboard" element={<RequireModule module="dashboard"><Dashboard /></RequireModule>} />
+          <Route path="categories" element={<RequireModule module="categories"><Categories /></RequireModule>} />
+          <Route path="subcategories" element={<RequireModule module="subcategories"><Subcategories /></RequireModule>} />
+          <Route path="food-items" element={<RequireModule module="foodItems"><FoodItems /></RequireModule>} />
+          <Route path="tables" element={<RequireModule module="tables"><Tables /></RequireModule>} />
+          <Route path="qr-codes" element={<RequireModule module="tables"><QrCodes /></RequireModule>} />
+          <Route path="kot" element={<RequireModule module="kot"><AdminKot /></RequireModule>} />
+          <Route path="messages" element={<RequireModule module="messages"><Messages /></RequireModule>} />
+          <Route path="chefs" element={<RequireModule module="chefs"><Chefs /></RequireModule>} />
+          <Route path="orders" element={<RequireModule module="orders"><Orders /></RequireModule>} />
+          <Route path="orders/:orderId" element={<RequireModule module="orders"><OrderDetail /></RequireModule>} />
+          <Route path="delivery/new" element={<RequireModule module="orders"><NewDeliveryOrder /></RequireModule>} />
+          <Route path="team" element={<RequireModule module="team"><Team /></RequireModule>} />
+          <Route path="awards" element={<RequireModule module="awards"><Awards /></RequireModule>} />
+          <Route path="coupons" element={<RequireModule module="coupons"><Coupons /></RequireModule>} />
+          <Route path="reviews" element={<RequireModule module="reviews"><Reviews /></RequireModule>} />
+          <Route path="settings" element={<RequireModule module="settings"><RestaurantSettings /></RequireModule>} />
+          <Route path="backup" element={<RequireModule module="backup"><Backup /></RequireModule>} />
+          <Route path="admins" element={<RequireModule module="admins"><Admins /></RequireModule>} />
           <Route path="change-password" element={<ChangePassword />} />
+          <Route path="no-access" element={<NoAccess />} />
         </Route>
 
         <Route path="/chef/login" element={<ChefLogin />} />
@@ -108,6 +115,7 @@ export default function App() {
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
-    </BrowserRouter>
+      </BrowserRouter>
+    </ErrorBoundary>
   );
 }

@@ -10,20 +10,20 @@ import {
   restoreFromRecord,
   updateBackupSchedule,
 } from "../controllers/backup.controller";
-import { requireAuth } from "../middleware/auth";
+import { requireAuth, requireModule } from "../middleware/auth";
 
 const router = Router();
 
-router.get("/export", requireAuth("admin"), exportBackup);
-router.post("/import", requireAuth("admin"), importBackup);
+router.get("/export", requireAuth("admin"), requireModule("backup"), exportBackup);
+router.post("/import", requireAuth("admin"), requireModule("backup"), importBackup);
 
-router.get("/schedule", requireAuth("admin"), getBackupSchedule);
-router.put("/schedule", requireAuth("admin"), updateBackupSchedule);
+router.get("/schedule", requireAuth("admin"), requireModule("backup"), getBackupSchedule);
+router.put("/schedule", requireAuth("admin"), requireModule("backup"), updateBackupSchedule);
 
-router.get("/", requireAuth("admin"), listBackups);
-router.post("/generate", requireAuth("admin"), generateBackup);
-router.get("/:id/download", requireAuth("admin"), downloadBackup);
-router.post("/:id/restore", requireAuth("admin"), restoreFromRecord);
-router.delete("/:id", requireAuth("admin"), deleteBackup);
+router.get("/", requireAuth("admin"), requireModule("backup"), listBackups);
+router.post("/generate", requireAuth("admin"), requireModule("backup"), generateBackup);
+router.get("/:id/download", requireAuth("admin"), requireModule("backup"), downloadBackup);
+router.post("/:id/restore", requireAuth("admin"), requireModule("backup"), restoreFromRecord);
+router.delete("/:id", requireAuth("admin"), requireModule("backup"), deleteBackup);
 
 export default router;

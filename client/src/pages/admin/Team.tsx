@@ -51,7 +51,7 @@ export default function Team() {
     setError(null);
     setUploading(true);
     try {
-      const url = await uploadImage(file);
+      const url = await uploadImage(file, "team");
       setPhotoUrl(url);
     } catch (err) {
       setError(extractErrorMessage(err));

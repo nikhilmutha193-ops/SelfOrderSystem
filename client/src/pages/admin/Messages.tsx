@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, extractErrorMessage } from "../../lib/apiClient";
 import { Badge, Button, Card, ErrorText, Input } from "../../components/ui";
+import { useCanEdit } from "../../lib/adminAuth";
 import type { ChatConversation, ChatMessage } from "../../lib/types";
 
 export default function Messages() {
@@ -11,6 +12,7 @@ export default function Messages() {
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const bottomRef = useRef<HTMLDivElement | null>(null);
+  const canEdit = useCanEdit("messages");
 
   const loadConversations = useCallback(() => {
     api
@@ -62,6 +64,18 @@ export default function Messages() {
       setError(extractErrorMessage(err));
     } finally {
       setSending(false);
+    }
+  }
+
+  async function deleteMessage(messageId: string) {
+    if (!window.confirm("Delete this message? This cannot be undone.")) return;
+    setError(null);
+    try {
+      await api.delete(`/orders/chat/${messageId}`);
+      setMessages((prev) => prev.filter((m) => m._id !== messageId));
+      loadConversations();
+    } catch (err) {
+      setError(extractErrorMessage(err));
     }
   }
 
@@ -119,16 +133,32 @@ export default function Messages() {
                 {messages.map((msg) => (
                   <div
                     key={msg._id}
-                    className={`max-w-[75%] rounded-lg px-3 py-2 text-sm ${
+                    className={`group relative max-w-[75%] rounded-lg px-3 py-2 text-sm ${
                       msg.senderRole === "admin"
                         ? "self-end bg-orange-600 text-white"
                         : "self-start bg-white text-slate-800 shadow-sm"
                     }`}
                   >
-                    <p>{msg.message}</p>
+                    <p className="pr-5">{msg.message}</p>
                     <p className={`mt-1 text-[10px] ${msg.senderRole === "admin" ? "text-orange-100" : "text-slate-400"}`}>
                       {new Date(msg.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                     </p>
+                    {canEdit && (
+                      <button
+                        type="button"
+                        aria-label="Delete message"
+                        title="Delete message"
+                        onClick={() => deleteMessage(msg._id)}
+                        // Always visible on touch, where there is no hover to reveal it.
+                        className={`absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded text-xs opacity-100 sm:opacity-0 sm:group-hover:opacity-100 ${
+                          msg.senderRole === "admin"
+                            ? "text-orange-100 hover:bg-orange-700"
+                            : "text-slate-400 hover:bg-slate-100"
+                        }`}
+                      >
+                        ✕
+                      </button>
+                    )}
                   </div>
                 ))}
                 <div ref={bottomRef} />

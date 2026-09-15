@@ -1,5 +1,3 @@
-import fs from "fs";
-import path from "path";
 import { Model, Types } from "mongoose";
 import Restaurant from "../models/Restaurant";
 import BackupRecord, { BackupTrigger, IBackupRecord } from "../models/BackupRecord";
@@ -16,10 +14,7 @@ import Order from "../models/Order";
 import OrderItem from "../models/OrderItem";
 import ChatMessage from "../models/ChatMessage";
 import { HttpError } from "./httpError";
-
-/** Not served by express.static - a backup dump contains full tenant data and must stay behind admin auth. */
-export const BACKUPS_DIR = path.join(__dirname, "..", "..", "backups");
-fs.mkdirSync(BACKUPS_DIR, { recursive: true });
+import { deleteObject, getObject, putObject } from "./objectStore";
 
 /** How many generated backups (manual + scheduled combined) to keep on disk per restaurant. */
 const RETENTION_LIMIT = 30;
@@ -53,14 +48,10 @@ async function buildBackupPayload(restaurantId: Types.ObjectId | string) {
   return { restaurant, backup };
 }
 
-function backupFilePath(record: Pick<IBackupRecord, "restaurantId" | "storedAs">): string {
-  return path.join(BACKUPS_DIR, record.storedAs);
-}
-
 export async function pruneOldBackups(restaurantId: Types.ObjectId | string): Promise<void> {
   const stale = await BackupRecord.find({ restaurantId }).sort({ createdAt: -1 }).skip(RETENTION_LIMIT);
   for (const record of stale) {
-    fs.rm(backupFilePath(record), { force: true }, () => {});
+    await deleteBackupFile(record);
     await BackupRecord.deleteOne({ _id: record._id });
   }
 }
@@ -75,9 +66,7 @@ export async function generateBackupFile(
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
   const filename = `backup-${restaurant.key}-${timestamp}.json`;
   const storedAs = `${restaurantId}/${filename}`;
-  const fullPath = path.join(BACKUPS_DIR, storedAs);
-  fs.mkdirSync(path.dirname(fullPath), { recursive: true });
-  fs.writeFileSync(fullPath, json);
+  await putObject("backups", storedAs, Buffer.from(json, "utf-8"), "application/json");
 
   const record = await BackupRecord.create({
     restaurantId,
@@ -92,12 +81,16 @@ export async function generateBackupFile(
   return { record, json };
 }
 
-export function readBackupFile(record: Pick<IBackupRecord, "restaurantId" | "storedAs">): string {
-  return fs.readFileSync(backupFilePath(record), "utf-8");
+export async function readBackupFile(
+  record: Pick<IBackupRecord, "restaurantId" | "storedAs">,
+): Promise<string> {
+  return (await getObject("backups", record.storedAs)).toString("utf-8");
 }
 
-export function deleteBackupFile(record: Pick<IBackupRecord, "restaurantId" | "storedAs">): void {
-  fs.rm(backupFilePath(record), { force: true }, () => {});
+export async function deleteBackupFile(
+  record: Pick<IBackupRecord, "restaurantId" | "storedAs">,
+): Promise<void> {
+  await deleteObject("backups", record.storedAs);
 }
 
 export async function applyBackupPayload(restaurantId: Types.ObjectId | string, backup: Record<string, unknown>) {

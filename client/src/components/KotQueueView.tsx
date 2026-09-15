@@ -91,18 +91,30 @@ export default function KotQueueView({ canCancel }: { canCancel: boolean }) {
     <div className="flex flex-col gap-4">
       <ErrorText>{error}</ErrorText>
       {groups.length === 0 && <p className="text-sm text-slate-500">No pending kitchen items.</p>}
-      {groups.map(({ order, items }) => (
+      {groups.map(({ order, items, tokenNumber }) => (
         <Card key={order._id}>
-          <div className="mb-2 flex items-center justify-between">
-            <div>
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-3">
+              {tokenNumber ? (
+                <span className="flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-lg bg-orange-600 font-bold leading-none text-white">
+                  <span className="text-[9px] font-semibold opacity-80">TOKEN</span>
+                  <span className="text-base">{tokenNumber}</span>
+                </span>
+              ) : (
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-dashed border-slate-300 text-[10px] font-semibold text-slate-400">
+                  NEW
+                </span>
+              )}
+              <div className="min-w-0">
               <p className="font-semibold text-slate-800">
                 {order.orderType === "dine-in"
                   ? `Table: ${typeof order.tableId === "object" ? order.tableId.code : ""}`
                   : `Delivery: ${order.deliveryProvider}`}
               </p>
               <p className="text-xs text-slate-500">{order.customerName}</p>
+              </div>
             </div>
-            <Button onClick={() => printKot(order._id)}>Print KOT</Button>
+            <Button className="shrink-0" onClick={() => printKot(order._id)}>Print KOT</Button>
           </div>
           <table className="w-full text-sm">
             <tbody>

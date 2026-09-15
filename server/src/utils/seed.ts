@@ -8,6 +8,7 @@ import Category from "../models/Category";
 import Subcategory from "../models/Subcategory";
 import FoodItem from "../models/FoodItem";
 import { hashPassword } from "./password";
+import { seedLandingContent } from "./landingSeed";
 
 async function seed() {
   const uri = process.env.MONGO_URI;
@@ -43,6 +44,7 @@ async function seed() {
       passwordHash: await hashPassword("Admin@123"),
       securityQuestion: "What is your favorite color?",
       securityAnswerHash: await hashPassword("blue"),
+      isOwner: true,
     });
     console.log('Created admin login -> username: "admin", password: "Admin@123", security answer: "blue"');
   }
@@ -176,6 +178,14 @@ async function seed() {
     ]);
     console.log("Created sample categories, subcategories and food items");
   }
+
+  const addedLanding = await seedLandingContent(restaurant._id);
+  if (addedLanding.length > 0) {
+    console.log(`Added sample landing content: ${addedLanding.join(", ")} (edit or delete it in the admin panel)`);
+  }
+  console.log(
+    "Landing page hero images are left empty on purpose - upload your own under Restaurant Settings > Hero slideshow."
+  );
 
   console.log("Seeding complete.");
   await mongoose.disconnect();

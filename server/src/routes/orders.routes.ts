@@ -21,37 +21,41 @@ import {
   listActiveChats,
   getChatMessages,
   sendChatMessage,
+  deleteChatMessage,
+  markAllChatsRead,
 } from "../controllers/orders.controller";
-import { requireAuth } from "../middleware/auth";
+import { requireAuth, requireModule } from "../middleware/auth";
 
 const router = Router();
 
-router.post("/dine-in", requireAuth("table"), startDineInOrder);
-router.post("/delivery", requireAuth("admin"), startDeliveryOrder);
+router.post("/dine-in", requireAuth("table"), requireModule("orders"), startDineInOrder);
+router.post("/delivery", requireAuth("admin"), requireModule("orders"), startDeliveryOrder);
 
-router.get("/", requireAuth("admin"), listOrders);
-router.get("/chat/active", requireAuth("admin"), listActiveChats);
-router.get("/:orderId", requireAuth("table", "admin", "chef"), getOrder);
-router.get("/:orderId/invoice", requireAuth("table", "admin"), getInvoice);
-router.get("/:orderId/invoice/pdf", requireAuth("table", "admin"), getInvoicePdf);
-router.patch("/:orderId/pay", requireAuth("admin"), payOrder);
-router.patch("/:orderId/cancel", requireAuth("admin"), cancelOrder);
+router.get("/", requireAuth("admin"), requireModule("orders"), listOrders);
+router.get("/chat/active", requireAuth("admin"), requireModule("messages"), listActiveChats);
+router.patch("/chat/read-all", requireAuth("admin"), requireModule("messages"), markAllChatsRead);
+router.delete("/chat/:messageId", requireAuth("admin"), requireModule("messages"), deleteChatMessage);
+router.get("/:orderId", requireAuth("table", "admin", "chef"), requireModule("orders"), getOrder);
+router.get("/:orderId/invoice", requireAuth("table", "admin"), requireModule("orders"), getInvoice);
+router.get("/:orderId/invoice/pdf", requireAuth("table", "admin"), requireModule("orders"), getInvoicePdf);
+router.patch("/:orderId/pay", requireAuth("admin"), requireModule("orders"), payOrder);
+router.patch("/:orderId/cancel", requireAuth("admin"), requireModule("orders"), cancelOrder);
 
-router.post("/:orderId/items", requireAuth("table", "admin"), addOrderItems);
+router.post("/:orderId/items", requireAuth("table", "admin"), requireModule("orders"), addOrderItems);
 
-router.post("/:orderId/coupon", requireAuth("table", "admin"), applyCoupon);
-router.delete("/:orderId/coupon", requireAuth("table", "admin"), removeCoupon);
+router.post("/:orderId/coupon", requireAuth("table", "admin"), requireModule("orders"), applyCoupon);
+router.delete("/:orderId/coupon", requireAuth("table", "admin"), requireModule("orders"), removeCoupon);
 
-router.get("/:orderId/chat", requireAuth("table", "admin"), getChatMessages);
-router.post("/:orderId/chat", requireAuth("table", "admin"), sendChatMessage);
+router.get("/:orderId/chat", requireAuth("table", "admin"), requireModule("messages"), getChatMessages);
+router.post("/:orderId/chat", requireAuth("table", "admin"), requireModule("messages"), sendChatMessage);
 
-router.get("/kot/queue", requireAuth("chef", "admin"), getKotQueue);
-router.post("/:orderId/kot/print", requireAuth("chef", "admin"), printKot);
-router.get("/:orderId/kot/:round/pdf", requireAuth("chef", "admin"), getKotPdf);
+router.get("/kot/queue", requireAuth("chef", "admin"), requireModule("kot"), getKotQueue);
+router.post("/:orderId/kot/print", requireAuth("chef", "admin"), requireModule("kot"), printKot);
+router.get("/:orderId/kot/:round/pdf", requireAuth("chef", "admin"), requireModule("kot"), getKotPdf);
 
-router.patch("/items/:itemId/preparing", requireAuth("chef", "admin"), startPreparingItem);
-router.patch("/items/:itemId/ready", requireAuth("chef", "admin"), markItemReady);
-router.patch("/items/:itemId/serve", requireAuth("chef", "admin"), serveOrderItem);
-router.patch("/items/:itemId/cancel", requireAuth("admin"), cancelOrderItem);
+router.patch("/items/:itemId/preparing", requireAuth("chef", "admin"), requireModule("kot"), startPreparingItem);
+router.patch("/items/:itemId/ready", requireAuth("chef", "admin"), requireModule("kot"), markItemReady);
+router.patch("/items/:itemId/serve", requireAuth("chef", "admin"), requireModule("kot"), serveOrderItem);
+router.patch("/items/:itemId/cancel", requireAuth("admin"), requireModule("orders"), cancelOrderItem);
 
 export default router;

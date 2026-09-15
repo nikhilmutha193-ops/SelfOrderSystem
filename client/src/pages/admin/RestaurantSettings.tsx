@@ -59,6 +59,8 @@ export default function RestaurantSettings() {
   const [message, setMessage] = useState<string | null>(null);
   const [previewingKot, setPreviewingKot] = useState(false);
   const [previewingInvoice, setPreviewingInvoice] = useState(false);
+  const [seeding, setSeeding] = useState(false);
+  const [seedResult, setSeedResult] = useState<string | null>(null);
 
   useEffect(() => {
     api
@@ -102,7 +104,7 @@ export default function RestaurantSettings() {
     setError(null);
     setUploadingLogo(true);
     try {
-      const url = await uploadImage(file);
+      const url = await uploadImage(file, "logo");
       setLogoUrl(url);
     } catch (err) {
       setError(extractErrorMessage(err));
@@ -118,7 +120,7 @@ export default function RestaurantSettings() {
     setError(null);
     setUploadingHero(true);
     try {
-      const url = await uploadImage(file);
+      const url = await uploadImage(file, "banner");
       setHeroImages((prev) => [...prev, url]);
     } catch (err) {
       setError(extractErrorMessage(err));
@@ -186,6 +188,24 @@ export default function RestaurantSettings() {
       setError(extractErrorMessage(err));
     } finally {
       setPreviewingInvoice(false);
+    }
+  }
+
+  async function seedSampleContent() {
+    setError(null);
+    setSeedResult(null);
+    setSeeding(true);
+    try {
+      const res = await api.post<{ message: string }>("/restaurant/seed-landing");
+      setSeedResult(res.data.message);
+      // Tagline/about may have just been filled in, so pull the saved values back.
+      const fresh = await api.get<Restaurant>("/restaurant/settings");
+      setTagline(fresh.data.tagline || "");
+      setAboutText(fresh.data.aboutText || "");
+    } catch (err) {
+      setError(extractErrorMessage(err));
+    } finally {
+      setSeeding(false);
     }
   }
 
@@ -327,12 +347,12 @@ export default function RestaurantSettings() {
             <p className="mb-2 text-sm font-medium text-slate-700">Tax rates</p>
             <div className="flex flex-col gap-2">
               {taxRates.map((rate, idx) => (
-                <div key={idx} className="flex items-center gap-2">
+                <div key={idx} className="flex flex-wrap items-center gap-2">
                   <Input
                     placeholder="Name (e.g. CGST)"
                     value={rate.name}
                     onChange={(e) => updateTaxRate(idx, "name", e.target.value)}
-                    className="w-40"
+                    className="!w-auto min-w-0 flex-1 basis-40"
                   />
                   <Input
                     type="number"
@@ -342,9 +362,13 @@ export default function RestaurantSettings() {
                     placeholder="Percent"
                     value={rate.percent}
                     onChange={(e) => updateTaxRate(idx, "percent", e.target.value)}
-                    className="w-28"
+                    className="!w-24 shrink-0"
                   />
-                  <button type="button" className="text-red-600" onClick={() => removeTaxRate(idx)}>
+                  <button
+                    type="button"
+                    className="inline-flex min-h-[44px] shrink-0 items-center px-2 text-sm text-red-600"
+                    onClick={() => removeTaxRate(idx)}
+                  >
                     Remove
                   </button>
                 </div>
@@ -365,7 +389,19 @@ export default function RestaurantSettings() {
 
       <Card>
         <h2 className="mb-3 text-lg font-semibold text-slate-800">Public landing page</h2>
-        <p className="mb-4 text-sm text-slate-500">These appear at the top of your public landing page.</p>
+        <p className="mb-3 text-sm text-slate-500">These appear at the top of your public landing page.</p>
+
+        <div className="mb-4 rounded-md border border-dashed border-slate-300 bg-slate-50 p-3">
+          <p className="text-sm font-medium text-slate-700">Starting from scratch?</p>
+          <p className="mt-0.5 text-xs text-slate-500">
+            Fills empty sections with clearly-labelled sample content so the page isn't blank while you set up. It only
+            fills blanks - nothing you've already written is changed, and hero images are never touched.
+          </p>
+          <Button type="button" variant="secondary" className="mt-2" onClick={seedSampleContent} disabled={seeding}>
+            {seeding ? "Adding..." : "Add sample content"}
+          </Button>
+          {seedResult && <p className="mt-2 text-sm text-green-700">{seedResult}</p>}
+        </div>
         <form onSubmit={submit} className="flex flex-col gap-4">
           <label className="text-sm font-medium text-slate-700">
             Tagline
@@ -528,14 +564,6 @@ export default function RestaurantSettings() {
             />
             Show item prices
           </label>
-          <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
-            <input
-              type="checkbox"
-              checked={kotSettings.showJainTag}
-              onChange={(e) => setKotSettings((prev) => ({ ...prev, showJainTag: e.target.checked }))}
-            />
-            Show Jain tag
-          </label>
           <label className="text-sm font-medium text-slate-700">
             Footer note
             <Input
@@ -619,14 +647,6 @@ export default function RestaurantSettings() {
               onChange={(e) => setInvoiceSettings((prev) => ({ ...prev, showUnitPrice: e.target.checked }))}
             />
             Show unit price column
-          </label>
-          <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
-            <input
-              type="checkbox"
-              checked={invoiceSettings.showJainTag}
-              onChange={(e) => setInvoiceSettings((prev) => ({ ...prev, showJainTag: e.target.checked }))}
-            />
-            Show Jain tag
           </label>
           <label className="text-sm font-medium text-slate-700">
             Footer note

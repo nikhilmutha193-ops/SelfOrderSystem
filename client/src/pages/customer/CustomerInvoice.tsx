@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { api, clearStoredToken, extractErrorMessage, setActiveAuth } from "../../lib/apiClient";
 import { useTableSession } from "../../lib/useTableSession";
 import { Badge, Button, Card, ErrorText, Input } from "../../components/ui";
-import ReviewFab from "../../components/ReviewFab";
+import { ReviewDialog } from "../../components/ReviewFab";
 import ChatFab from "../../components/ChatFab";
 import type { OrderDetailResponse } from "../../lib/types";
 
@@ -17,6 +17,10 @@ const STATUS_TONE = {
 
 export default function CustomerInvoice() {
   const { orderId } = useTableSession();
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [checkingOut, setCheckingOut] = useState(false);
+  const [checkoutRequested, setCheckoutRequested] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const navigate = useNavigate();
   const [data, setData] = useState<OrderDetailResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -46,6 +50,49 @@ export default function CustomerInvoice() {
     clearStoredToken("table");
     setActiveAuth(null);
     navigate("/", { replace: true });
+  }
+
+  /** Payment happens at the counter, so this just notifies staff through the chat
+   *  thread they already watch - it raises their unread badge like any message. */
+  async function requestCheckout() {
+    if (!orderId) return;
+    setError(null);
+    setCheckingOut(true);
+    try {
+      await api.post(`/orders/${orderId}/chat`, {
+        message: "We'd like to checkout please - we'll pay at the counter.",
+      });
+      setCheckoutRequested(true);
+      // Checkout ends the visit, so the table session closes with it - otherwise the
+      // next guest on this device would inherit the previous order.
+      setTimeout(logout, 4000);
+    } catch (err) {
+      setError(extractErrorMessage(err));
+    } finally {
+      setCheckingOut(false);
+    }
+  }
+
+  async function downloadInvoice() {
+    if (!orderId) return;
+    setError(null);
+    setDownloading(true);
+    try {
+      const res = await api.get(`/orders/${orderId}/invoice/pdf`, { responseType: "blob" });
+      const url = URL.createObjectURL(res.data);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `invoice-${orderId}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      // Revoking immediately can cancel the download on some mobile browsers.
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    } catch (err) {
+      setError(extractErrorMessage(err));
+    } finally {
+      setDownloading(false);
+    }
   }
 
   async function applyCoupon(e: React.FormEvent) {
@@ -80,6 +127,11 @@ export default function CustomerInvoice() {
 
   const { order, items, totals } = data;
 
+  // Cancelled items are settled, so they don't hold the table up.
+  const activeItems = items.filter((i) => i.status !== "cancelled");
+  const pendingCount = activeItems.filter((i) => i.status !== "served").length;
+  const orderComplete = order.status === "closed" || (activeItems.length > 0 && pendingCount === 0);
+
   return (
     <div className="mx-auto max-w-2xl px-4 py-6">
       <div className="mb-4 flex items-center justify-between">
@@ -93,24 +145,24 @@ export default function CustomerInvoice() {
       </Card>
 
       <Card className="mb-4">
-        <table className="w-full text-sm">
+        {/* Four short columns fit a phone, so this lays out as a plain table - a
+            forced min-width only produced a sideways scroll over empty space. */}
+        <table className="w-full table-auto text-sm">
           <thead>
             <tr className="text-left text-slate-500">
               <th className="pb-2">Item</th>
-              <th className="pb-2">Qty</th>
-              <th className="pb-2">Amount</th>
-              <th className="pb-2">Status</th>
+              <th className="pb-2 text-center">Qty</th>
+              <th className="pb-2 text-right">Amount</th>
+              <th className="pb-2 text-right">Status</th>
             </tr>
           </thead>
           <tbody>
             {items.map((item) => (
-              <tr key={item._id} className="border-t border-slate-100">
-                <td className="py-1.5">
-                  {item.foodName} {item.isJain && "(Jain)"}
-                </td>
-                <td className="py-1.5">{item.quantity}</td>
-                <td className="py-1.5">₹{item.total.toFixed(2)}</td>
-                <td className="py-1.5">
+              <tr key={item._id} className="border-t border-slate-100 align-top">
+                <td className="py-2 pr-2">{item.foodName}</td>
+                <td className="py-2 text-center tabular-nums">{item.quantity}</td>
+                <td className="py-2 pl-2 text-right tabular-nums whitespace-nowrap">₹{item.total.toFixed(2)}</td>
+                <td className="py-2 pl-2 text-right">
                   <Badge tone={STATUS_TONE[item.status]}>{item.status}</Badge>
                 </td>
               </tr>
@@ -175,14 +227,40 @@ export default function CustomerInvoice() {
         </div>
       </Card>
 
-      <div className="flex gap-3">
+      {checkoutRequested && (
+        <p className="mb-3 rounded-md bg-green-50 px-3 py-2 text-sm text-green-800">
+          Staff have been notified. Please pay at the counter - your bill is ready. Signing you out...
+        </p>
+      )}
+
+      {!orderComplete && (
+        <p className="mb-3 rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-600">
+          {pendingCount > 0
+            ? `Checkout and your invoice unlock once all items are served - ${pendingCount} still on the way.`
+            : "Add something from the menu to start your order."}
+        </p>
+      )}
+
+      <div className="flex flex-wrap gap-3">
         {order.status === "open" && <Button onClick={() => navigate("/order/menu")}>Order more</Button>}
-        <Button variant="secondary" onClick={logout}>
-          Logout
+        {order.status === "open" && (
+          <Button onClick={requestCheckout} disabled={!orderComplete || checkingOut || checkoutRequested}>
+            {checkingOut ? "Notifying..." : checkoutRequested ? "Checkout requested" : "Checkout"}
+          </Button>
+        )}
+        <Button variant="secondary" onClick={downloadInvoice} disabled={!orderComplete || downloading}>
+          {downloading ? "Preparing..." : "Download invoice"}
+        </Button>
+        <Button variant="secondary" onClick={() => setFeedbackOpen(true)}>
+          ★ Leave feedback
         </Button>
       </div>
 
-      {order.status === "closed" && <ReviewFab />}
+      <ReviewDialog
+        open={feedbackOpen}
+        onClose={() => setFeedbackOpen(false)}
+        defaultName={order.customerName}
+      />
       <ChatFab />
     </div>
   );

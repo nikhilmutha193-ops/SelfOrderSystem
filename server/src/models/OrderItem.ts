@@ -14,6 +14,8 @@ export interface IOrderItem {
   isJain: boolean;
   status: OrderItemStatus;
   kotRound: number | null;
+  /** Token number for the business day the ticket was printed on. */
+  tokenNumber: number | null;
   kotPrintedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
@@ -36,6 +38,7 @@ const orderItemSchema = new Schema<IOrderItem>(
       index: true,
     },
     kotRound: { type: Number, default: null },
+    tokenNumber: { type: Number, default: null },
     kotPrintedAt: { type: Date, default: null },
   },
   { timestamps: true }

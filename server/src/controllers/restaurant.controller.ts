@@ -3,6 +3,7 @@ import Restaurant, { IInvoiceSettings, IKotSettings, IQrSettings, IRestaurant, I
 import { IOrder } from "../models/Order";
 import { IOrderItem } from "../models/OrderItem";
 import { asyncHandler } from "../middleware/errorHandler";
+import { seedLandingContent } from "../utils/landingSeed";
 import { HttpError } from "../utils/httpError";
 import { computeInvoiceTotals } from "../utils/invoice";
 import { streamInvoicePdf, streamKotPdf } from "../utils/pdf";
@@ -169,4 +170,14 @@ export const previewInvoicePdf = asyncHandler(async (req: Request, res: Response
   const items = SAMPLE_ITEMS as unknown as IOrderItem[];
   const totals = computeInvoiceTotals(items, restaurant.taxRates || []);
   await streamInvoicePdf(res, { restaurant, order, items, totals });
+});
+
+export const seedLandingSampleContent = asyncHandler(async (req: Request, res: Response) => {
+  const added = await seedLandingContent(req.restaurantId!);
+  res.json({
+    added,
+    message: added.length
+      ? `Added sample ${added.join(", ")}.`
+      : "Nothing to add - your landing page already has content in every section.",
+  });
 });

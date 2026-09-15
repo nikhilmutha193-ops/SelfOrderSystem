@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import Admin from "../models/Admin";
+import Admin, { IAdmin } from "../models/Admin";
 import Chef from "../models/Chef";
 import TableModel from "../models/Table";
 import { asyncHandler } from "../middleware/errorHandler";
@@ -17,8 +17,33 @@ export const adminLogin = asyncHandler(async (req: Request, res: Response) => {
     throw new HttpError(401, "Invalid username or password");
   }
 
+  // Restaurants created before per-module permissions have no owner flagged; the
+  // earliest account is the original admin, so promote it rather than lock it out.
+  if (!admin.isOwner && !(await Admin.exists({ restaurantId: req.restaurantId, isOwner: true }))) {
+    const earliest = await Admin.findOne({ restaurantId: req.restaurantId }).sort({ createdAt: 1 });
+    if (earliest && earliest._id.equals(admin._id)) {
+      admin.isOwner = true;
+      await admin.save();
+    }
+  }
+
   const token = signToken({ role: "admin", restaurantId: req.restaurantId!, id: admin._id.toString() });
-  res.json({ token, admin: { id: admin._id, username: admin.username } });
+  res.json({ token, admin: adminProfile(admin) });
+});
+
+function adminProfile(admin: IAdmin) {
+  return {
+    id: admin._id,
+    username: admin.username,
+    isOwner: admin.isOwner,
+    permissions: Object.fromEntries(admin.permissions ?? []),
+  };
+}
+
+export const adminMe = asyncHandler(async (req: Request, res: Response) => {
+  const admin = await Admin.findById(req.auth!.id);
+  if (!admin) throw new HttpError(401, "Admin account no longer exists");
+  res.json(adminProfile(admin));
 });
 
 export const adminSecurityQuestion = asyncHandler(async (req: Request, res: Response) => {

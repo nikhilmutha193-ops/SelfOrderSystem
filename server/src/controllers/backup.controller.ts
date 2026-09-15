@@ -36,20 +36,20 @@ export const listBackups = asyncHandler(async (req: Request, res: Response) => {
 
 export const downloadBackup = asyncHandler(async (req: Request, res: Response) => {
   const record = await findOwnRecord(req.restaurantId!, req.params.id);
-  const json = readBackupFile(record);
+  const json = await readBackupFile(record);
   sendAsAttachment(res, record.filename, json);
 });
 
 export const deleteBackup = asyncHandler(async (req: Request, res: Response) => {
   const record = await findOwnRecord(req.restaurantId!, req.params.id);
-  deleteBackupFile(record);
+  await deleteBackupFile(record);
   await BackupRecord.deleteOne({ _id: record._id });
   res.json({ message: "Backup deleted" });
 });
 
 export const restoreFromRecord = asyncHandler(async (req: Request, res: Response) => {
   const record = await findOwnRecord(req.restaurantId!, req.params.id);
-  const json = readBackupFile(record);
+  const json = await readBackupFile(record);
   const summary = await applyBackupPayload(req.restaurantId!, JSON.parse(json));
   res.json({ message: "Restore complete", summary });
 });

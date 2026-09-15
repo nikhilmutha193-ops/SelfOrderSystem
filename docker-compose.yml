@@ -11,6 +11,12 @@ services:
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in a .env file at the repo root - see .env.example}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-8h}
       CLIENT_ORIGIN: "*"
+      R2_BUCKET: ${R2_BUCKET:-}
+      R2_ACCOUNT_ID: ${R2_ACCOUNT_ID:-}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
+      R2_PUBLIC_BASE_URL: ${R2_PUBLIC_BASE_URL:-}
+      R2_PRIVATE_BUCKET: ${R2_PRIVATE_BUCKET:-}
     volumes:
       - uploads_data:/app/uploads
       - backups_data:/app/backups

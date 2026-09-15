@@ -46,3 +46,39 @@ body {
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   background-color: #fefaf5;
 }
+
+/*
+ * Touch sizing. Applied only where the primary input is a finger (phones,
+ * tablets) so mouse-driven layouts keep their tighter spacing. This catches
+ * the inline text actions inside table rows - "Edit", "View", "Deactivate" -
+ * which otherwise render around 20px tall and are awkward to tap.
+ */
+@media (pointer: coarse) {
+  button,
+  [role="button"],
+  a[href] {
+    min-height: 44px;
+  }
+
+  /* Inline actions sit in text flow, so centre the label in its taller box. */
+  table button,
+  table a[href] {
+    display: inline-flex;
+    align-items: center;
+  }
+
+  /* Touch capability, not screen width, decides field height - a tablet is wide
+     enough to hit the `sm:` breakpoint but is still operated with a thumb. */
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea {
+    min-height: 44px;
+  }
+
+  input[type="checkbox"],
+  input[type="radio"] {
+    width: 1.35rem;
+    height: 1.35rem;
+    min-height: 0;
+  }
+}

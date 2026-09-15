@@ -3,9 +3,11 @@ import express from "express";
 import cors from "cors";
 import mongoose from "mongoose";
 import { connectDb } from "./config/db";
+import { requestLogger } from "./middleware/requestLogger";
+import { describeError, logger } from "./utils/logger";
 import { resolveTenant } from "./middleware/tenant";
 import { notFoundHandler, errorHandler } from "./middleware/errorHandler";
-import { UPLOADS_DIR } from "./middleware/upload";
+import { UPLOADS_DIR } from "./utils/objectStore";
 
 import authRoutes from "./routes/auth.routes";
 import catalogRoutes from "./routes/catalog.routes";
@@ -21,9 +23,11 @@ import couponRoutes from "./routes/coupon.routes";
 import landingRoutes from "./routes/landing.routes";
 import uploadRoutes from "./routes/upload.routes";
 import backupRoutes from "./routes/backup.routes";
+import adminsRoutes from "./routes/admins.routes";
 
 const app = express();
 
+app.use(requestLogger);
 app.use(cors({ origin: process.env.CLIENT_ORIGIN || "*" }));
 app.use(express.json({ limit: "25mb" })); // a full data backup/restore payload can exceed the 100kb default
 
@@ -31,7 +35,7 @@ app.get("/health", async (_req, res) => {
   try {
     await connectDb(); // a cold serverless instance has no connection yet
   } catch (err) {
-    console.error("[health] MongoDB connection failed", err);
+    logger.error("health check: MongoDB connection failed", describeError(err));
   }
   const dbConnected = mongoose.connection.readyState === 1;
   res.status(dbConnected ? 200 : 503).json({
@@ -68,6 +72,7 @@ app.use("/api/coupons", couponRoutes);
 app.use("/api/landing", landingRoutes);
 app.use("/api/uploads", uploadRoutes);
 app.use("/api/backup", backupRoutes);
+app.use("/api/admins", adminsRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

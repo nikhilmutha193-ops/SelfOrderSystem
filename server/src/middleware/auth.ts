@@ -1,5 +1,7 @@
 import { Request, Response, NextFunction } from "express";
+import Admin, { IAdmin } from "../models/Admin";
 import { verifyToken, AuthTokenPayload, Role } from "../utils/jwt";
+import { ModuleKey } from "../utils/permissions";
 
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
@@ -7,6 +9,7 @@ declare global {
     interface Request {
       auth?: AuthTokenPayload;
       restaurantId?: string;
+      admin?: IAdmin;
     }
   }
 }
@@ -27,6 +30,36 @@ export function requireAuth(...roles: Role[]) {
       next();
     } catch {
       return res.status(401).json({ message: "Invalid or expired token" });
+    }
+  };
+}
+
+const READ_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+
+/**
+ * Gates a route on one admin module. Permissions are read from the database per
+ * request rather than the token, so revoking access takes effect immediately.
+ * Non-admin roles pass through - requireAuth already scoped them.
+ */
+export function requireModule(module: ModuleKey) {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    if (req.auth?.role !== "admin") return next();
+
+    try {
+      const admin = req.admin ?? (await Admin.findById(req.auth.id));
+      if (!admin) return res.status(401).json({ message: "Admin account no longer exists" });
+      req.admin = admin;
+
+      if (!admin.isOwner) {
+        const level = admin.permissions?.get(module);
+        const allowed = READ_METHODS.has(req.method) ? level === "view" || level === "edit" : level === "edit";
+        if (!allowed) {
+          return res.status(403).json({ message: `You don't have access to ${module}` });
+        }
+      }
+      next();
+    } catch (err) {
+      next(err);
     }
   };
 }

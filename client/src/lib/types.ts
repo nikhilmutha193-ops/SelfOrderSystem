@@ -87,6 +87,8 @@ export interface Subcategory {
   isActive: boolean;
 }
 
+export type FoodType = "veg" | "non-veg" | "egg";
+
 export interface FoodItem {
   _id: string;
   categoryId: string;
@@ -98,6 +100,8 @@ export interface FoodItem {
   isActive: boolean;
   isBestseller: boolean;
   bestsellerEmoji?: string;
+  foodType?: FoodType;
+  rating?: number;
 }
 
 export interface MenuFoodItem {
@@ -108,6 +112,8 @@ export interface MenuFoodItem {
   imageUrl?: string;
   isBestseller?: boolean;
   bestsellerEmoji?: string;
+  foodType?: FoodType;
+  rating?: number;
 }
 
 export interface MenuSubcategory {
@@ -170,9 +176,11 @@ export interface OrderItem {
   unitPrice: number;
   quantity: number;
   total: number;
+  /** Retained for orders placed while the Jain option existed. */
   isJain: boolean;
   status: OrderItemStatus;
   kotRound: number | null;
+  tokenNumber: number | null;
   kotPrintedAt: string | null;
 }
 
@@ -198,6 +206,8 @@ export interface OrderDetailResponse {
 export interface KotQueueGroup {
   order: Order;
   items: OrderItem[];
+  /** Lowest token number in this group; null until a ticket is printed. */
+  tokenNumber: number | null;
 }
 
 export interface DashboardSummary {
@@ -234,7 +244,6 @@ export interface CartLine {
   name: string;
   price: number;
   quantity: number;
-  isJain: boolean;
 }
 
 export interface ApiErrorBody {

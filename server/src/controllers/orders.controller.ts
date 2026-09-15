@@ -12,6 +12,7 @@ import { HttpError } from "../utils/httpError";
 import { computeInvoiceTotals } from "../utils/invoice";
 import { findValidCoupon, computeDiscountAmount } from "../utils/coupon";
 import { streamInvoicePdf, streamKotPdf } from "../utils/pdf";
+import { nextTokenNumber } from "../utils/kotQueue";
 import { signToken } from "../utils/jwt";
 import { getBusinessDayStart, getBusinessDayRangeForDate } from "../utils/businessDay";
 
@@ -333,11 +334,14 @@ export const getKotQueue = asyncHandler(async (req: Request, res: Response) => {
   }).sort({ createdAt: 1 });
 
   const grouped = orders
-    .map((order) => ({
-      order,
-      items: items.filter((i) => i.orderId.toString() === order._id.toString()),
-    }))
-    .filter((g) => g.items.length > 0);
+    .map((order) => {
+      const orderItems = items.filter((i) => i.orderId.toString() === order._id.toString());
+      const numbers = orderItems.map((i) => i.tokenNumber).filter((n): n is number => typeof n === "number");
+      return { order, items: orderItems, tokenNumber: numbers.length ? Math.min(...numbers) : null };
+    })
+    .filter((g) => g.items.length > 0)
+    // Kitchen works the queue in order; anything not sent yet trails the printed tickets.
+    .sort((a, b) => (a.tokenNumber ?? Number.MAX_SAFE_INTEGER) - (b.tokenNumber ?? Number.MAX_SAFE_INTEGER));
 
   res.json(grouped);
 });
@@ -352,13 +356,16 @@ export const printKot = asyncHandler(async (req: Request, res: Response) => {
   const lastRound = await OrderItem.findOne({ orderId: order._id, kotRound: { $ne: null } }).sort({ kotRound: -1 });
   const round = (lastRound?.kotRound || 0) + 1;
 
+  const restaurant = await Restaurant.findById(req.restaurantId).select("dayEndTime");
+  const { tokenNumber } = await nextTokenNumber(req.restaurantId!, restaurant?.dayEndTime);
+
   await OrderItem.updateMany(
     { _id: { $in: pending.map((p) => p._id) } },
-    { $set: { kotRound: round, kotPrintedAt: new Date() } }
+    { $set: { kotRound: round, tokenNumber, kotPrintedAt: new Date() } }
   );
 
   const updated = await OrderItem.find({ orderId: order._id, kotRound: round });
-  res.json({ round, items: updated });
+  res.json({ round, tokenNumber, items: updated });
 });
 
 export const getKotPdf = asyncHandler(async (req: Request, res: Response) => {
@@ -375,7 +382,7 @@ export const getKotPdf = asyncHandler(async (req: Request, res: Response) => {
     tableCode = table?.code;
   }
 
-  await streamKotPdf(res, { restaurant, order, round, items, tableCode });
+  await streamKotPdf(res, { restaurant, order, round, items, tableCode, tokenNumber: items[0]?.tokenNumber ?? null });
 });
 
 // ---------- Chat (table <-> admin) ----------
@@ -460,4 +467,24 @@ export const sendChatMessage = asyncHandler(async (req: Request, res: Response) 
   });
 
   res.status(201).json(chatMessage);
+});
+
+export const deleteChatMessage = asyncHandler(async (req: Request, res: Response) => {
+  const message = await ChatMessage.findOne({
+    _id: req.params.messageId,
+    restaurantId: req.restaurantId,
+  });
+  if (!message) throw new HttpError(404, "Message not found");
+
+  await ChatMessage.deleteOne({ _id: message._id });
+  res.json({ message: "Message deleted" });
+});
+
+/** Clears the unread badge without opening every conversation one by one. */
+export const markAllChatsRead = asyncHandler(async (req: Request, res: Response) => {
+  const result = await ChatMessage.updateMany(
+    { restaurantId: req.restaurantId, senderRole: "table", readByAdmin: false },
+    { $set: { readByAdmin: true } }
+  );
+  res.json({ message: "All messages marked as read", updated: result.modifiedCount });
 });

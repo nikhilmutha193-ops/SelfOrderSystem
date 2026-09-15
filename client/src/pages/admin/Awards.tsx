@@ -51,7 +51,7 @@ export default function Awards() {
     setError(null);
     setUploading(true);
     try {
-      const url = await uploadImage(file);
+      const url = await uploadImage(file, "awards");
       setImageUrl(url);
     } catch (err) {
       setError(extractErrorMessage(err));

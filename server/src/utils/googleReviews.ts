@@ -1,3 +1,5 @@
+import { describeError, logger } from "./logger";
+
 export interface GoogleReview {
   author: string;
   rating: number;
@@ -58,7 +60,7 @@ export async function getGoogleReviews(): Promise<GoogleReview[]> {
     cache = { data: reviews, fetchedAt: Date.now() };
     return reviews;
   } catch (err) {
-    console.error("Failed to fetch Google reviews from SerpApi:", err);
+    logger.error("Failed to fetch Google reviews from SerpApi", describeError(err));
     return cache?.data ?? [];
   }
 }

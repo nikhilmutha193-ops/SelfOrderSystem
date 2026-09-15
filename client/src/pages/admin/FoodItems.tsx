@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, extractErrorMessage, uploadImage } from "../../lib/apiClient";
-import { Badge, Button, Card, ErrorText, Input, Select } from "../../components/ui";
-import type { Category, FoodItem, Subcategory } from "../../lib/types";
+import { Badge, Button, Card, ErrorText, Input, Select, TableWrap } from "../../components/ui";
+import type { Category, FoodItem, FoodType, Subcategory } from "../../lib/types";
 
 const EMOJI_CHOICES = ["⭐", "🔥", "👑", "💯", "🏆", "❤️"];
 
@@ -18,6 +18,8 @@ export default function FoodItems() {
   const [uploading, setUploading] = useState(false);
   const [isBestseller, setIsBestseller] = useState(false);
   const [bestsellerEmoji, setBestsellerEmoji] = useState("⭐");
+  const [foodType, setFoodType] = useState<FoodType>("veg");
+  const [rating, setRating] = useState<number>(0);
   const [editing, setEditing] = useState<FoodItem | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -63,7 +65,7 @@ export default function FoodItems() {
     setError(null);
     setUploading(true);
     try {
-      const url = await uploadImage(file);
+      const url = await uploadImage(file, "product");
       setImageUrl(url);
     } catch (err) {
       setError(extractErrorMessage(err));
@@ -75,7 +77,7 @@ export default function FoodItems() {
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    const payload = { categoryId, subcategoryId, name, price, description, imageUrl, isBestseller, bestsellerEmoji };
+    const payload = { categoryId, subcategoryId, name, price, description, imageUrl, isBestseller, bestsellerEmoji, foodType, rating };
     try {
       if (editing) {
         await api.put(`/food-items/${editing._id}`, payload);
@@ -88,6 +90,8 @@ export default function FoodItems() {
       setImageUrl("");
       setIsBestseller(false);
       setBestsellerEmoji("⭐");
+      setFoodType("veg");
+      setRating(0);
       setEditing(null);
       load();
     } catch (err) {
@@ -105,6 +109,8 @@ export default function FoodItems() {
     setImageUrl(food.imageUrl || "");
     setIsBestseller(food.isBestseller);
     setBestsellerEmoji(food.bestsellerEmoji || "⭐");
+    setFoodType(food.foodType || "veg");
+    setRating(food.rating || 0);
   }
 
   async function toggleActive(food: FoodItem) {
@@ -189,6 +195,29 @@ export default function FoodItems() {
             </div>
           </div>
 
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="text-sm font-medium text-slate-700">
+              Food type
+              <Select className="mt-1" value={foodType} onChange={(e) => setFoodType(e.target.value as FoodType)}>
+                <option value="veg">Veg</option>
+                <option value="non-veg">Non-veg</option>
+                <option value="egg">Contains egg</option>
+              </Select>
+            </label>
+            <label className="text-sm font-medium text-slate-700">
+              Rating (0 = show as "New")
+              <Input
+                className="mt-1"
+                type="number"
+                min={0}
+                max={5}
+                step="0.1"
+                value={rating}
+                onChange={(e) => setRating(Number(e.target.value))}
+              />
+            </label>
+          </div>
+
           <div className="flex flex-col gap-1.5">
             <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
               <input type="checkbox" checked={isBestseller} onChange={(e) => setIsBestseller(e.target.checked)} />
@@ -244,7 +273,8 @@ export default function FoodItems() {
       <ErrorText>{error}</ErrorText>
 
       <Card>
-        <table className="w-full text-sm">
+        <TableWrap>
+          <table className="w-full min-w-[34rem] text-sm">
           <thead>
             <tr className="text-left text-slate-500">
               <th className="pb-2">Image</th>
@@ -298,6 +328,7 @@ export default function FoodItems() {
             ))}
           </tbody>
         </table>
+      </TableWrap>
       </Card>
     </div>
   );

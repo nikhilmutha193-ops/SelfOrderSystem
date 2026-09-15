@@ -24,6 +24,61 @@ function Stars({ rating }: { rating: number }) {
   );
 }
 
+/**
+ * Phone/tablet banner. The strip takes the shape of the artwork itself, measured
+ * from the first slide, so the image fills it exactly: nothing is cropped away and
+ * no empty band is left over. Falls back to 16:9 until the first image reports its
+ * size, which keeps the page from jumping as it loads.
+ */
+function HeroBanner({ images }: { images: string[] }) {
+  const [index, setIndex] = useState(0);
+  const [ratio, setRatio] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (images.length < 2) return;
+    const timer = setInterval(() => setIndex((i) => (i + 1) % images.length), 5000);
+    return () => clearInterval(timer);
+  }, [images.length]);
+
+  if (images.length === 0) return null;
+
+  return (
+    <div className="relative w-full overflow-hidden bg-orange-950" style={{ aspectRatio: String(ratio ?? 16 / 9) }}>
+      {images.map((src, i) => (
+        <img
+          key={src + i}
+          src={src}
+          alt=""
+          onLoad={(e) => {
+            if (i !== 0) return;
+            const { naturalWidth, naturalHeight } = e.currentTarget;
+            if (naturalWidth && naturalHeight) setRatio(naturalWidth / naturalHeight);
+          }}
+          className="absolute inset-0 h-full w-full object-cover transition-opacity duration-1000"
+          style={{ opacity: i === index ? 1 : 0 }}
+          aria-hidden={i !== index}
+        />
+      ))}
+      {images.length > 1 && (
+        <div className="absolute bottom-1 left-1/2 flex -translate-x-1/2 gap-3">
+          {images.map((_, i) => (
+            <button
+              key={i}
+              aria-label={`Show slide ${i + 1}`}
+              onClick={() => setIndex(i)}
+              className="flex h-9 w-9 items-center justify-center"
+            >
+              <span
+                className={`block h-2 w-2 rounded-full shadow transition-colors ${i === index ? "bg-white" : "bg-white/50"}`}
+              />
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function HeroSlideshow({ images }: { images: string[] }) {
   const [index, setIndex] = useState(0);
 
@@ -36,25 +91,36 @@ function HeroSlideshow({ images }: { images: string[] }) {
   if (images.length === 0) return null;
 
   return (
-    <div className="absolute inset-0">
+    <div className="absolute inset-0 overflow-hidden">
       {images.map((src, i) => (
-        <img
+        <div
           key={src + i}
-          src={src}
-          alt=""
-          className="absolute inset-0 h-full w-full object-cover transition-opacity duration-1000"
-          style={{ opacity: i === index ? 0.4 : 0 }}
-        />
+          className="absolute inset-0 transition-opacity duration-1000"
+          style={{ opacity: i === index ? 0.45 : 0 }}
+          aria-hidden={i !== index}
+        >
+          {/* A banner is wide, the hero on a phone is tall: cropping to fill would
+              cut the middle out of the artwork. The slide is shown whole and a
+              blurred copy fills the leftover space so there are no bare edges.
+              Desktop is close enough in shape to fill normally. */}
+          <img src={src} alt="" aria-hidden className="absolute inset-0 h-full w-full scale-125 object-cover blur-2xl" />
+          <img src={src} alt="" className="absolute inset-0 h-full w-full object-contain lg:object-cover" />
+        </div>
       ))}
       {images.length > 1 && (
-        <div className="absolute bottom-4 left-1/2 z-10 flex -translate-x-1/2 gap-2">
+        <div className="absolute bottom-4 left-1/2 z-10 flex -translate-x-1/2 gap-3">
           {images.map((_, i) => (
             <button
               key={i}
               aria-label={`Show slide ${i + 1}`}
               onClick={() => setIndex(i)}
-              className={`h-2 w-2 rounded-full transition-colors ${i === index ? "bg-white" : "bg-white/40"}`}
-            />
+              // Padding gives a finger-sized hit area around a deliberately small dot.
+              className="flex h-9 w-9 items-center justify-center"
+            >
+              <span
+                className={`block h-2 w-2 rounded-full transition-colors ${i === index ? "bg-white" : "bg-white/40"}`}
+              />
+            </button>
           ))}
         </div>
       )}
@@ -131,36 +197,63 @@ export default function Landing() {
       </header>
 
       {/* Hero */}
-      <section className="relative flex min-h-[90vh] max-h-[1100px] items-center overflow-hidden bg-orange-950 text-white sm:min-h-screen">
-        <HeroSlideshow images={restaurant.heroImages} />
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-orange-950 via-orange-950/40 to-orange-950/10" />
-        <CoffeeCupDoodle className="pointer-events-none absolute -right-6 top-10 h-40 w-40 rotate-6 text-white/10 sm:h-56 sm:w-56" />
-        <DosaSwirlDoodle className="pointer-events-none absolute -left-10 bottom-10 h-44 w-44 -rotate-12 text-white/10 sm:h-60 sm:w-60" />
-        <div className="relative mx-auto flex w-full max-w-6xl flex-col items-end gap-5 px-4 py-16 text-right sm:px-6 sm:py-20">
-          <span className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-orange-300 backdrop-blur">
-            Welcome to
-          </span>
-          <h1 className="text-4xl font-extrabold tracking-tight sm:text-6xl">{restaurant.name}</h1>
-          {restaurant.tagline && <p className="max-w-xl text-lg text-slate-200 sm:text-xl">{restaurant.tagline}</p>}
-          <div className="flex flex-wrap justify-end gap-3 pt-2">
-            <Link to="/order">
-              <Button className="group px-5 py-3 text-base shadow-lg shadow-orange-900/30 transition-transform hover:scale-105">
-                Order Now
-                <span className="ml-1 inline-block transition-transform group-hover:translate-x-1">&rarr;</span>
-              </Button>
-            </Link>
+      <section className="relative overflow-hidden">
+        {/* Phones and tablets: the banner is far wider than the screen is, so it gets
+            its own full-width strip at its natural shape - nothing cropped, no empty
+            band - and the wording sits underneath it. */}
+        <div className="lg:hidden">
+          <HeroBanner images={restaurant.heroImages} />
+          {/* The wording sits on the page's own background - a dark slab under the
+              banner read as dead space, and taller than the artwork itself. */}
+          <div className="relative px-4 pb-8 pt-6">
+            <CoffeeCupDoodle className="pointer-events-none absolute -right-4 top-0 h-28 w-28 rotate-6 text-orange-100" />
+            <div className="relative flex flex-col items-center gap-3 text-center">
+              <span className="text-xs font-semibold uppercase tracking-widest text-orange-600">Welcome to</span>
+              <h1 className="text-3xl font-extrabold tracking-tight text-slate-900">{restaurant.name}</h1>
+              {restaurant.tagline && <p className="text-base text-slate-600">{restaurant.tagline}</p>}
+              <Link to="/order" className="pt-1">
+                <Button className="group px-5 py-3 text-base shadow-md">
+                  Order Now
+                  <span className="ml-1 inline-block transition-transform group-hover:translate-x-1">&rarr;</span>
+                </Button>
+              </Link>
+            </div>
           </div>
         </div>
 
-        <a
-          href="#about"
-          aria-label="Scroll down"
-          className="absolute bottom-6 left-1/2 hidden -translate-x-1/2 animate-bounce text-white/70 hover:text-white sm:block"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-7 w-7">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-          </svg>
-        </a>
+        {/* Desktop: a wide viewport is close enough to the banner's shape that it can
+            fill the screen behind the wording without losing much of the artwork. */}
+        <div className="relative hidden max-h-[1100px] min-h-screen items-center overflow-hidden bg-orange-950 text-white lg:flex">
+          <HeroSlideshow images={restaurant.heroImages} />
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-orange-950 via-orange-950/40 to-orange-950/10" />
+          <CoffeeCupDoodle className="pointer-events-none absolute -right-6 top-10 h-56 w-56 rotate-6 text-white/10" />
+          <DosaSwirlDoodle className="pointer-events-none absolute -left-10 bottom-10 h-60 w-60 -rotate-12 text-white/10" />
+          <div className="relative mx-auto flex w-full max-w-6xl flex-col items-end gap-5 px-6 py-20 text-right">
+            <span className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-orange-300 backdrop-blur">
+              Welcome to
+            </span>
+            <h1 className="text-6xl font-extrabold tracking-tight">{restaurant.name}</h1>
+            {restaurant.tagline && <p className="max-w-xl text-xl text-slate-200">{restaurant.tagline}</p>}
+            <div className="flex flex-wrap justify-end gap-3 pt-2">
+              <Link to="/order">
+                <Button className="group px-5 py-3 text-base shadow-lg shadow-orange-900/30 transition-transform hover:scale-105">
+                  Order Now
+                  <span className="ml-1 inline-block transition-transform group-hover:translate-x-1">&rarr;</span>
+                </Button>
+              </Link>
+            </div>
+          </div>
+
+          <a
+            href="#about"
+            aria-label="Scroll down"
+            className="absolute bottom-6 left-1/2 -translate-x-1/2 animate-bounce text-white/70 hover:text-white"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-7 w-7">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          </a>
+        </div>
       </section>
 
       {/* About */}

@@ -8,7 +8,8 @@ import { IRestaurant, PrintFontSize, PrintPaperSize } from "../models/Restaurant
 import { IOrder } from "../models/Order";
 import { IOrderItem } from "../models/OrderItem";
 import { InvoiceTotals } from "./invoice";
-import { UPLOADS_DIR } from "../middleware/upload";
+import { UPLOADS_DIR, putObject } from "./objectStore";
+import { describeError, logger } from "./logger";
 
 const MAX_LOGO_BYTES = 5 * 1024 * 1024;
 
@@ -101,7 +102,8 @@ async function renderToPaper(
   res: Response,
   filename: string,
   paperSize: PrintPaperSize,
-  render: (doc: PDFKit.PDFDocument, x0: number, usableWidth: number) => void
+  render: (doc: PDFKit.PDFDocument, x0: number, usableWidth: number) => void,
+  archive?: (pdf: Buffer) => Promise<void>
 ): Promise<void> {
   const width = PAPER_WIDTH[paperSize];
   const margin = isThermal(paperSize) ? 12 : 30;
@@ -114,12 +116,29 @@ async function renderToPaper(
     height = Math.min(THERMAL_MAX_HEIGHT, Math.max(THERMAL_MIN_HEIGHT, Math.ceil(measureDoc.y + margin)));
   }
 
-  const doc = new PDFDocument({ size: [width, height], margin });
+  // Buffered rather than piped: a serverless function can freeze once the response
+  // ends, so the archive upload has to finish first.
+  const pdf = await new Promise<Buffer>((resolve, reject) => {
+    const doc = new PDFDocument({ size: [width, height], margin });
+    const chunks: Buffer[] = [];
+    doc.on("data", (chunk: Buffer) => chunks.push(chunk));
+    doc.on("end", () => resolve(Buffer.concat(chunks)));
+    doc.on("error", reject);
+    render(doc, margin, usableWidth);
+    doc.end();
+  });
+
+  if (archive) {
+    try {
+      await archive(pdf);
+    } catch (err) {
+      logger.error("pdf: archive failed", { filename, ...describeError(err) }); // a storage outage shouldn't block printing
+    }
+  }
+
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader("Content-Disposition", `inline; filename="${filename}"`);
-  doc.pipe(res);
-  render(doc, margin, usableWidth);
-  doc.end();
+  res.end(pdf);
 }
 
 async function resolveLogoBuffer(logoUrl?: string): Promise<Buffer | null> {
@@ -205,6 +224,9 @@ export async function streamInvoicePdf(
   const paperSize = settings?.paperSize || "a5";
 
   const logo = settings?.showLogo ? await resolveLogoBuffer(restaurant.logoUrl) : null;
+
+  const archive = (pdf: Buffer) =>
+    putObject("invoices", `${restaurant._id}/${order._id}.pdf`, pdf, "application/pdf").then(() => undefined);
 
   await renderToPaper(res, `invoice-${order._id}.pdf`, paperSize, (doc, x0, usableWidth) => {
     if (logo) drawLogo(doc, logo, x0, usableWidth);
@@ -329,14 +351,21 @@ export async function streamInvoicePdf(
     }
 
     doc.fontSize(fz(9)).text(settings?.footerNote || "Thank you for dining with us!", { align: "center" });
-  });
+  }, archive);
 }
 
 export async function streamKotPdf(
   res: Response,
-  data: { restaurant: IRestaurant; order: IOrder; round: number; items: IOrderItem[]; tableCode?: string }
+  data: {
+    restaurant: IRestaurant;
+    order: IOrder;
+    round: number;
+    items: IOrderItem[];
+    tableCode?: string;
+    tokenNumber?: number | null;
+  }
 ) {
-  const { restaurant, order, round, items, tableCode } = data;
+  const { restaurant, order, round, items, tableCode, tokenNumber } = data;
   const settings = restaurant.kotSettings;
   const fontSize: PrintFontSize = settings?.fontSize || "normal";
   const scale = FONT_SCALE[fontSize];
@@ -350,6 +379,12 @@ export async function streamKotPdf(
 
     doc.fontSize(fz(14)).text(restaurant.name, { align: "center" });
     doc.fontSize(fz(12)).text(`${settings?.headerText || "Kitchen Order Ticket"} - Round ${round}`, { align: "center" });
+    if (tokenNumber) {
+      // The number the kitchen calls out - biggest thing on the ticket.
+      doc.moveDown(0.2);
+      doc.font("Helvetica-Bold").fontSize(fz(20)).text(`TOKEN ${tokenNumber}`, { align: "center" });
+      doc.font("Helvetica");
+    }
     doc.moveDown(0.5);
     drawSeparator(doc, x0, usableWidth, true);
 
