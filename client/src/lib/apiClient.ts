@@ -1,7 +1,9 @@
 import axios from "axios";
 import type { Role } from "./types";
 
-export const api = axios.create({ baseURL: "/api" });
+// Falls back to a same-origin path so the Vite dev proxy and the nginx container
+// keep working; deployments set VITE_API_BASE_URL to the backend's absolute URL.
+export const api = axios.create({ baseURL: import.meta.env.VITE_API_BASE_URL || "/api" });
 
 interface ActiveAuth {
   role: Role;

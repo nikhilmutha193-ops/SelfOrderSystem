@@ -4,6 +4,9 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 COPY . .
+# Overrides .env.production (which targets the Vercel backend): in Compose the UI
+# talks to the "server" container through nginx on same-origin relative paths.
+ENV VITE_API_BASE_URL=/api
 RUN npm run build
 
 # ---- serve ----
