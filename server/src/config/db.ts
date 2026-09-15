@@ -11,7 +11,9 @@ export function connectDb(): Promise<void> {
   }
 
   connection = mongoose
-    .connect(uri)
+    // default 30s server selection outlives a serverless function's timeout,
+    // turning an unreachable DB into a 504 instead of a clean error
+    .connect(uri, { serverSelectionTimeoutMS: 8000 })
     .then(() => {
       console.log("MongoDB connected");
     })

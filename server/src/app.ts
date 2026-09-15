@@ -27,7 +27,12 @@ const app = express();
 app.use(cors({ origin: process.env.CLIENT_ORIGIN || "*" }));
 app.use(express.json({ limit: "25mb" })); // a full data backup/restore payload can exceed the 100kb default
 
-app.get("/health", (_req, res) => {
+app.get("/health", async (_req, res) => {
+  try {
+    await connectDb(); // a cold serverless instance has no connection yet
+  } catch (err) {
+    console.error("[health] MongoDB connection failed", err);
+  }
   const dbConnected = mongoose.connection.readyState === 1;
   res.status(dbConnected ? 200 : 503).json({
     status: dbConnected ? "ok" : "error",
