@@ -1,6 +1,7 @@
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
+import mongoose from "mongoose";
 import { connectDb } from "./config/db";
 import { resolveTenant } from "./middleware/tenant";
 import { notFoundHandler, errorHandler } from "./middleware/errorHandler";
@@ -27,7 +28,13 @@ const app = express();
 app.use(cors({ origin: process.env.CLIENT_ORIGIN || "*" }));
 app.use(express.json({ limit: "25mb" })); // a full data backup/restore payload can exceed the 100kb default
 
-app.get("/health", (_req, res) => res.json({ status: "ok" }));
+app.get("/health", (_req, res) => {
+  const dbConnected = mongoose.connection.readyState === 1;
+  res.status(dbConnected ? 200 : 503).json({
+    status: dbConnected ? "ok" : "error",
+    db: dbConnected ? "connected" : "disconnected",
+  });
+});
 
 app.use("/uploads", express.static(UPLOADS_DIR));
 
