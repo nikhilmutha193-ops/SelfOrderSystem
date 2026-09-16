@@ -43,6 +43,9 @@ export default function RestaurantSettings() {
   const [address, setAddress] = useState("");
   const [logoUrl, setLogoUrl] = useState("");
   const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [siteTitle, setSiteTitle] = useState("");
+  const [faviconUrl, setFaviconUrl] = useState("");
+  const [uploadingFavicon, setUploadingFavicon] = useState(false);
   const [gstin, setGstin] = useState("");
   const [fssaiLicense, setFssaiLicense] = useState("");
   const [tagline, setTagline] = useState("");
@@ -69,6 +72,8 @@ export default function RestaurantSettings() {
         setName(res.data.name);
         setAddress(res.data.address || "");
         setLogoUrl(res.data.logoUrl || "");
+        setSiteTitle(res.data.siteTitle || "");
+        setFaviconUrl(res.data.faviconUrl || "");
         setGstin(res.data.gstin || "");
         setFssaiLicense(res.data.fssaiLicense || "");
         setTagline(res.data.tagline || "");
@@ -110,6 +115,21 @@ export default function RestaurantSettings() {
       setError(extractErrorMessage(err));
     } finally {
       setUploadingLogo(false);
+    }
+  }
+
+  async function handleFaviconFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setError(null);
+    setUploadingFavicon(true);
+    try {
+      setFaviconUrl(await uploadImage(file, "logo"));
+    } catch (err) {
+      setError(extractErrorMessage(err));
+    } finally {
+      setUploadingFavicon(false);
     }
   }
 
@@ -218,6 +238,8 @@ export default function RestaurantSettings() {
         name,
         address,
         logoUrl,
+        siteTitle,
+        faviconUrl,
         gstin,
         fssaiLicense,
         tagline,
@@ -248,6 +270,36 @@ export default function RestaurantSettings() {
             Address
             <Input className="mt-1" value={address} onChange={(e) => setAddress(e.target.value)} />
           </label>
+          <label className="text-sm font-medium text-slate-700">
+            Browser tab title
+            <Input
+              className="mt-1"
+              placeholder={name || "e.g. Banne.Kaffi - Order Online"}
+              value={siteTitle}
+              onChange={(e) => setSiteTitle(e.target.value)}
+            />
+            <p className="mt-1 text-xs font-normal text-slate-400">
+              Shown on the browser tab and when someone bookmarks the site. Leave blank to use the restaurant name.
+            </p>
+          </label>
+
+          <div className="text-sm font-medium text-slate-700">
+            Favicon
+            <div className="mt-1 flex flex-wrap items-center gap-3">
+              {faviconUrl && <img src={faviconUrl} alt="" className="h-8 w-8 rounded border border-slate-200 object-cover" />}
+              <input type="file" accept="image/*" onChange={handleFaviconFile} className="text-xs" />
+              {uploadingFavicon && <span className="text-xs text-slate-400">Uploading...</span>}
+              {faviconUrl && (
+                <button type="button" className="text-xs text-red-600" onClick={() => setFaviconUrl("")}>
+                  Remove
+                </button>
+              )}
+            </div>
+            <p className="mt-1 text-xs font-normal text-slate-400">
+              The small icon on the browser tab. A square PNG around 64x64 works best.
+            </p>
+          </div>
+
           <label className="text-sm font-medium text-slate-700">
             Public URL (for QR codes)
             <Input

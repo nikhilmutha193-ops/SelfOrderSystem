@@ -39,12 +39,14 @@ export default function CustomerDetails() {
             <Input className="mt-1" value={customerName} onChange={(e) => setCustomerName(e.target.value)} required />
           </label>
           <label className="text-sm font-medium text-slate-700">
-            Phone number
+            Phone number <span className="font-normal text-slate-400">(optional)</span>
             <Input
               className="mt-1"
+              type="tel"
+              inputMode="tel"
+              placeholder="Skip if you'd rather not share it"
               value={customerPhone}
               onChange={(e) => setCustomerPhone(e.target.value)}
-              required
             />
           </label>
           <label className="text-sm font-medium text-slate-700">

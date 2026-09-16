@@ -108,8 +108,10 @@ export default function KotQueueView({ canCancel }: { canCancel: boolean }) {
               <div className="min-w-0">
               <p className="font-semibold text-slate-800">
                 {order.orderType === "dine-in"
-                  ? `Table: ${typeof order.tableId === "object" ? order.tableId.code : ""}`
-                  : `Delivery: ${order.deliveryProvider}`}
+                  ? (typeof order.tableId === "object" && order.tableId?.code
+                      ? `Table: ${order.tableId.code}`
+                      : "Counter")
+                  : order.orderType === "takeaway" ? "Take away" : `Delivery: ${order.deliveryProvider}`}
               </p>
               <p className="text-xs text-slate-500">{order.customerName}</p>
               </div>

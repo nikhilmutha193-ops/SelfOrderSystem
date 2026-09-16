@@ -82,9 +82,10 @@ export default function Messages() {
   function describeOrder(convo: ChatConversation) {
     const order = convo.order;
     if (order.orderType === "dine-in") {
-      const code = typeof order.tableId === "object" ? order.tableId.code : "";
-      return `Table ${code} · ${order.customerName}`;
+      const code = typeof order.tableId === "object" ? order.tableId?.code : "";
+      return code ? `Table ${code} · ${order.customerName}` : `Counter · ${order.customerName}`;
     }
+    if (order.orderType === "takeaway") return `Take away · ${order.customerName}`;
     return `Delivery (${order.deliveryProvider}) · ${order.customerName}`;
   }
 

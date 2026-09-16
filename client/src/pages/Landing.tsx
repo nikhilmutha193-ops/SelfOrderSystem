@@ -15,6 +15,18 @@ import {
 } from "../components/CafeDoodles";
 import type { LandingData } from "../lib/types";
 
+/**
+ * Column count and width for a card row. A short row is centred and given fewer
+ * columns - capping width alone would keep three columns and squash each card into
+ * a third of it.
+ */
+function cardGrid(count: number): string {
+  const base = "grid gap-6";
+  if (count <= 1) return `${base} mx-auto max-w-sm grid-cols-1`;
+  if (count === 2) return `${base} mx-auto max-w-3xl grid-cols-1 sm:grid-cols-2`;
+  return `${base} grid-cols-1 sm:grid-cols-2 lg:grid-cols-3`;
+}
+
 function Stars({ rating }: { rating: number }) {
   return (
     <span className="text-amber-500" aria-label={`${rating} out of 5 stars`}>
@@ -130,6 +142,14 @@ function HeroSlideshow({ images }: { images: string[] }) {
 
 export default function Landing() {
   const [data, setData] = useState<LandingData | null>(null);
+  const [scrolled, setScrolled] = useState(false);
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 8);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -162,7 +182,11 @@ export default function Landing() {
   return (
     <div className="min-h-screen bg-white text-slate-800">
       {/* Header */}
-      <header className="sticky top-0 z-10 border-b border-slate-100 bg-white/90 backdrop-blur">
+      <header
+        className={`sticky top-0 z-10 border-b bg-white/90 backdrop-blur transition-shadow ${
+          scrolled ? "border-slate-200 shadow-sm" : "border-transparent"
+        }`}
+      >
         <div className="flex items-center justify-between px-4 py-3 sm:px-6">
           <div className="flex items-center gap-3">
             {restaurant.logoUrl ? (
@@ -256,6 +280,26 @@ export default function Landing() {
         </div>
       </section>
 
+      {/* Highlights - the quick reassurance strip most food sites lead with */}
+      <section className="border-y border-orange-100 bg-orange-50/60 px-4 py-8 sm:px-6">
+        <div className="mx-auto grid max-w-5xl grid-cols-2 gap-x-4 gap-y-6 lg:grid-cols-4">
+          {[
+            { Icon: CoffeeCupDoodle, title: "Filter coffee", copy: "Brewed fresh through the day" },
+            { Icon: DosaSwirlDoodle, title: "Made to order", copy: "Nothing sits under a lamp" },
+            { Icon: LeafDoodle, title: "Pure veg kitchen", copy: "Prepared separately, always" },
+            { Icon: SteamDoodle, title: "Quick service", copy: "Order from your table by QR" },
+          ].map(({ Icon, title, copy }) => (
+            <div key={title} className="flex flex-col items-center gap-2 text-center">
+              <span className="flex h-14 w-14 items-center justify-center rounded-full bg-white shadow-sm ring-1 ring-orange-100">
+                <Icon className="h-8 w-8 text-orange-500" />
+              </span>
+              <p className="text-sm font-bold text-slate-800">{title}</p>
+              <p className="text-xs leading-relaxed text-slate-500">{copy}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
       {/* About */}
       {restaurant.aboutText && (
         <section id="about" className="relative scroll-mt-24 overflow-hidden px-4 py-20 sm:px-6">
@@ -285,7 +329,7 @@ export default function Landing() {
             <p className="mx-auto mt-3 max-w-xl text-center text-slate-500">
               The people behind every dish and every warm welcome.
             </p>
-            <div className="mt-10 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            <div className={`mt-10 ${cardGrid([...owners, ...chefs].length)}`}>
               {[...owners, ...chefs].map((member) => (
                 <Card
                   key={member._id}
@@ -330,7 +374,7 @@ export default function Landing() {
             <p className="mx-auto mt-3 max-w-xl text-center text-slate-500">
               The dishes our regulars keep coming back for.
             </p>
-            <div className="mt-10 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            <div className={`mt-10 ${cardGrid(bestsellers.length)}`}>
               {bestsellers.map((item) => (
                 <Card
                   key={item._id}
@@ -383,7 +427,7 @@ export default function Landing() {
           <div className="relative mx-auto max-w-6xl">
             <p className="text-center text-xs font-bold uppercase tracking-widest text-orange-600">Recognition</p>
             <h2 className="mt-2 text-center text-3xl font-bold text-slate-900">Awards &amp; Recognition</h2>
-            <div className="mt-10 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            <div className={`mt-10 ${cardGrid(awards.length)}`}>
               {awards.map((award) => (
                 <Card
                   key={award._id}
@@ -425,7 +469,7 @@ export default function Landing() {
             {reviews.length > 0 && (
               <div className="mt-10">
                 <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-400">From our guests</h3>
-                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                <div className={`${cardGrid(reviews.length)}`}>
                   {reviews.map((review) => (
                     <Card
                       key={review._id}
@@ -444,7 +488,7 @@ export default function Landing() {
             {googleReviews.length > 0 && (
               <div className="mt-12">
                 <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-400">From Google</h3>
-                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                <div className={`${cardGrid(googleReviews.length)}`}>
                   {googleReviews.map((review, idx) => (
                     <Card
                       key={idx}

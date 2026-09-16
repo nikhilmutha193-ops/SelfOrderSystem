@@ -4,6 +4,7 @@ import { api, extractErrorMessage } from "../../lib/apiClient";
 import { useTableSession } from "../../lib/useTableSession";
 import { Button, ErrorText, Input, Select } from "../../components/ui";
 import ChatFab from "../../components/ChatFab";
+import DishDialog from "../../components/DishDialog";
 import { BestsellerTag, FoodTypeIcon, RatingChip } from "../../components/FoodBadges";
 import QuickRequests from "../../components/QuickRequests";
 import type { CartLine, MenuCategory, MenuFoodItem } from "../../lib/types";
@@ -40,12 +41,14 @@ export default function Menu() {
   const [menu, setMenu] = useState<MenuCategory[]>([]);
   const [cart, setCart] = useState<CartLine[]>([]);
   const [showCart, setShowCart] = useState(false);
+  const [detailFood, setDetailFood] = useState<MenuFoodItem | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
 
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<SortOption>("recommended");
   const [bestsellerOnly, setBestsellerOnly] = useState(false);
+  const [vegOnly, setVegOnly] = useState(false);
   const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
 
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -117,7 +120,7 @@ export default function Menu() {
     }
   }
 
-  const isFiltering = search.trim().length > 0 || bestsellerOnly || sortBy !== "recommended";
+  const isFiltering = search.trim().length > 0 || bestsellerOnly || vegOnly || sortBy !== "recommended";
 
   const filteredMenu = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -132,6 +135,7 @@ export default function Menu() {
               sortBy,
               sub.foodItems.filter((food) => {
                 if (bestsellerOnly && !food.isBestseller) return false;
+                if (vegOnly && (food.foodType ?? "veg") !== "veg") return false;
                 if (query && !food.name.toLowerCase().includes(query) && !food.description?.toLowerCase().includes(query)) {
                   return false;
                 }
@@ -142,7 +146,7 @@ export default function Menu() {
           .filter((sub) => sub.foodItems.length > 0),
       }))
       .filter((category) => category.subcategories.length > 0);
-  }, [menu, search, sortBy, bestsellerOnly]);
+  }, [menu, search, sortBy, bestsellerOnly, vegOnly]);
 
   /**
    * Sorting inside each subcategory looks broken, because most hold only one or two
@@ -184,36 +188,64 @@ export default function Menu() {
     setSearch("");
     setSortBy("recommended");
     setBestsellerOnly(false);
+    setVegOnly(false);
   }
 
   return (
-    <div className="mx-auto max-w-2xl pb-28">
-      <div className="sticky top-0 z-20 bg-white">
-        <div className="flex items-center justify-between px-4 pt-4">
-          <h1 className="text-xl font-bold text-slate-800">Menu</h1>
+    <div className="mx-auto max-w-3xl pb-32">
+      <div className="sticky top-0 z-20 border-b border-slate-200/80 bg-white/95 backdrop-blur">
+        <div className="flex items-center justify-between gap-3 px-4 pt-4">
+          <div>
+            <h1 className="text-xl font-bold tracking-tight text-slate-900">Menu</h1>
+            <p className="text-xs text-slate-500">Tap a dish for details</p>
+          </div>
           <Button variant="secondary" onClick={() => navigate("/order/invoice")}>
-            View my order
+            My order
           </Button>
         </div>
 
-        <div className="px-4 pt-3">
+        <div className="relative px-4 pt-3">
+          <svg
+            aria-hidden
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            className="pointer-events-none absolute left-7 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+            style={{ marginTop: "0.375rem" }}
+          >
+            <circle cx="11" cy="11" r="7" />
+            <path d="M20 20l-3.5-3.5" strokeLinecap="round" />
+          </svg>
           <Input
+            className="!pl-9"
             placeholder="Search for dishes..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
+          {search && (
+            <button
+              type="button"
+              onClick={() => setSearch("")}
+              aria-label="Clear search"
+              className="absolute right-6 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center text-slate-400 hover:text-slate-600"
+              style={{ marginTop: "0.375rem" }}
+            >
+              ✕
+            </button>
+          )}
         </div>
 
         {!isFiltering && menu.length > 0 && (
-          <div ref={navRef} className="mt-3 flex gap-2 overflow-x-auto border-b border-slate-200 px-4 pb-2">
+          <div ref={navRef} className="mt-3 flex gap-2 overflow-x-auto px-4 pb-1">
             {menu.map((category) => (
               <button
                 key={category._id}
                 onClick={() => scrollToCategory(category._id)}
-                className={`shrink-0 whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
+                className={`min-h-[36px] shrink-0 whitespace-nowrap rounded-full px-3.5 text-sm font-semibold transition-colors ${
                   activeCategoryId === category._id
-                    ? "bg-orange-600 text-white"
-                    : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                    ? "bg-orange-600 text-white shadow-sm"
+                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                 }`}
               >
                 {category.name}
@@ -222,11 +254,31 @@ export default function Menu() {
           </div>
         )}
 
-        <div className="flex items-center gap-2 px-4 py-2">
+        <div className="flex items-center gap-2 overflow-x-auto px-4 py-2">
+          <button
+            onClick={() => setVegOnly((v) => !v)}
+            aria-pressed={vegOnly}
+            className={`inline-flex min-h-[36px] shrink-0 items-center gap-1.5 rounded-full border px-3 text-sm font-semibold transition-colors ${
+              vegOnly ? "border-green-600 bg-green-50 text-green-700" : "border-slate-300 text-slate-600 hover:bg-slate-50"
+            }`}
+          >
+            <FoodTypeIcon type="veg" size={12} /> Veg
+          </button>
+          <button
+            onClick={() => setBestsellerOnly((v) => !v)}
+            aria-pressed={bestsellerOnly}
+            className={`min-h-[36px] shrink-0 whitespace-nowrap rounded-full border px-3 text-sm font-semibold transition-colors ${
+              bestsellerOnly
+                ? "border-amber-500 bg-amber-50 text-amber-700"
+                : "border-slate-300 text-slate-600 hover:bg-slate-50"
+            }`}
+          >
+            ★ Bestsellers
+          </button>
           <Select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as SortOption)}
-            className="w-auto"
+            className="!w-auto min-h-[36px] shrink-0 !py-1 text-sm"
           >
             {(Object.keys(SORT_LABELS) as SortOption[]).map((opt) => (
               <option key={opt} value={opt}>
@@ -234,18 +286,8 @@ export default function Menu() {
               </option>
             ))}
           </Select>
-          <button
-            onClick={() => setBestsellerOnly((v) => !v)}
-            className={`shrink-0 whitespace-nowrap rounded-full border px-3 py-2 text-sm font-medium transition-colors ${
-              bestsellerOnly
-                ? "border-orange-600 bg-orange-50 text-orange-700"
-                : "border-slate-300 text-slate-600 hover:bg-slate-50"
-            }`}
-          >
-            ★ Bestsellers
-          </button>
           {isFiltering && (
-            <button onClick={clearFilters} className="shrink-0 text-sm font-medium text-orange-700 underline">
+            <button onClick={clearFilters} className="shrink-0 px-1 text-sm font-semibold text-orange-700 underline">
               Clear
             </button>
           )}
@@ -265,7 +307,7 @@ export default function Menu() {
               {flatResults.length} dish{flatResults.length === 1 ? "" : "es"}
               {sortBy !== "recommended" && ` · sorted by ${SORT_LABELS[sortBy].toLowerCase()}`}
             </p>
-            <div className="flex flex-col divide-y divide-slate-200 rounded-lg border border-slate-200 bg-white">
+            <div className="grid gap-3 sm:grid-cols-2">
               {flatResults.map((food) => (
                 <FoodCard
                   key={food._id}
@@ -273,6 +315,7 @@ export default function Menu() {
                   cartQty={getCartQty(food._id)}
                   onIncrement={incrementCart}
                   onDecrement={decrementCart}
+                  onOpen={setDetailFood}
                 />
               ))}
             </div>
@@ -287,13 +330,15 @@ export default function Menu() {
               }}
               className="scroll-mt-32"
             >
-              <h2 className="mb-2 text-lg font-bold text-slate-800">{category.name}</h2>
+              <h2 className="mb-3 text-xl font-bold tracking-tight text-slate-900">{category.name}</h2>
               {category.subcategories.map((sub) => (
                 <div key={sub._id} className="mb-4">
-                  <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">
-                    {sub.name} <span className="text-slate-400">({sub.foodItems.length})</span>
+                  <h3 className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-400">
+                    {sub.name}
+                    <span className="h-px flex-1 bg-slate-200" />
+                    <span className="font-semibold normal-case tracking-normal">{sub.foodItems.length}</span>
                   </h3>
-                  <div className="flex flex-col divide-y divide-slate-200 rounded-lg border border-slate-200 bg-white">
+                  <div className="grid gap-3 sm:grid-cols-2">
                     {sub.foodItems.map((food) => (
                       <FoodCard
                         key={food._id}
@@ -301,6 +346,7 @@ export default function Menu() {
                         cartQty={getCartQty(food._id)}
                         onIncrement={incrementCart}
                         onDecrement={decrementCart}
+                        onOpen={setDetailFood}
                       />
                     ))}
                   </div>
@@ -309,48 +355,79 @@ export default function Menu() {
             </div>
           ))
         )}
-        {menu.length === 0 && !error && <p className="text-sm text-slate-500">Loading menu...</p>}
+        {menu.length === 0 && !error && (
+          <div className="grid gap-3 sm:grid-cols-2" aria-label="Loading menu">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="flex animate-pulse items-center gap-3 rounded-xl border border-slate-200 bg-white p-3">
+                <div className="h-20 w-20 shrink-0 rounded-xl bg-slate-100" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-3 w-16 rounded bg-slate-100" />
+                  <div className="h-4 w-2/3 rounded bg-slate-100" />
+                  <div className="h-3 w-12 rounded bg-slate-100" />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
         {menu.length > 0 && filteredMenu.length === 0 && (
-          <p className="py-8 text-center text-sm text-slate-500">No dishes match your search or filters.</p>
+          <div className="py-12 text-center">
+            <p className="text-4xl" aria-hidden>🍽️</p>
+            <p className="mt-2 text-sm font-medium text-slate-600">No dishes match your search or filters.</p>
+            <button onClick={clearFilters} className="mt-2 text-sm font-semibold text-orange-700 underline">
+              Clear filters
+            </button>
+          </div>
         )}
       </div>
+
+      <DishDialog
+        food={detailFood}
+        qty={detailFood ? getCartQty(detailFood._id) : 0}
+        onIncrement={incrementCart}
+        onDecrement={decrementCart}
+        onClose={() => setDetailFood(null)}
+      />
 
       {cartCount === 0 && <ChatFab />}
 
       {cartCount > 0 && (
-        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white shadow-[0_-4px_12px_rgba(0,0,0,0.08)]">
-          <div className="mx-auto max-w-2xl px-4 py-3">
+        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 backdrop-blur shadow-[0_-4px_20px_rgba(0,0,0,0.08)]">
+          <div className="mx-auto max-w-3xl px-4 py-3">
             {showCart && (
-              <div className="mb-3 flex max-h-60 flex-col gap-2 overflow-y-auto">
+              <div className="mb-3 flex max-h-56 flex-col gap-2 overflow-y-auto rounded-lg bg-slate-50 p-2">
                 {cart.map((line, idx) => (
-                  <div key={idx} className="flex items-center justify-between text-sm">
-                    <span>
-                      {line.name} x {line.quantity}
+                  <div key={idx} className="flex items-center justify-between gap-2 text-sm">
+                    <span className="min-w-0 flex-1 truncate text-slate-700">
+                      {line.name} <span className="text-slate-400">x {line.quantity}</span>
                     </span>
-                    <div className="flex items-center gap-2">
-                      <span>₹{(line.price * line.quantity).toFixed(2)}</span>
-                      <button className="text-red-600" onClick={() => removeLine(idx)}>
-                        Remove
-                      </button>
-                    </div>
+                    <span className="font-semibold tabular-nums text-slate-800">
+                      ₹{(line.price * line.quantity).toFixed(2)}
+                    </span>
+                    <button
+                      className="flex h-9 w-9 items-center justify-center text-red-600"
+                      aria-label={`Remove ${line.name}`}
+                      onClick={() => removeLine(idx)}
+                    >
+                      ✕
+                    </button>
                   </div>
                 ))}
               </div>
             )}
-            <div className="flex items-center justify-between">
-              <button
-                className="flex flex-col items-start text-left"
-                onClick={() => setShowCart((s) => !s)}
-              >
-                <span className="text-sm font-semibold text-slate-800">
-                  {cartCount} item{cartCount > 1 ? "s" : ""} | ₹{cartTotal.toFixed(2)}
+            <div className="flex items-center gap-3">
+              <button className="flex min-w-0 flex-1 items-center gap-3 text-left" onClick={() => setShowCart((v) => !v)}>
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-orange-600 text-sm font-bold text-white">
+                  {cartCount}
                 </span>
-                <span className="text-xs font-medium text-orange-700 underline">
-                  {showCart ? "Hide cart" : "View cart"}
+                <span className="min-w-0">
+                  <span className="block text-sm font-bold tabular-nums text-slate-900">₹{cartTotal.toFixed(2)}</span>
+                  <span className="block text-xs font-medium text-orange-700 underline">
+                    {showCart ? "Hide items" : "View items"}
+                  </span>
                 </span>
               </button>
-              <Button onClick={confirmOrder} disabled={confirming}>
-                {confirming ? "Placing order..." : "Confirm order"}
+              <Button className="shrink-0 px-6" onClick={confirmOrder} disabled={confirming}>
+                {confirming ? "Placing..." : "Place order"}
               </Button>
             </div>
           </div>
@@ -365,30 +442,36 @@ function FoodCard({
   cartQty,
   onIncrement,
   onDecrement,
+  onOpen,
 }: {
   food: MenuFoodItem;
   cartQty: number;
   onIncrement: (food: MenuFoodItem) => void;
   onDecrement: (foodItemId: string) => void;
+  onOpen: (food: MenuFoodItem) => void;
 }) {
   const qty = cartQty;
 
   return (
-    <div className="flex items-center gap-3 p-3 transition-colors hover:bg-orange-50/40">
-      {food.imageUrl ? (
-        <img
-          src={food.imageUrl}
-          alt={food.name}
-          loading="lazy"
-          className="h-20 w-20 shrink-0 rounded-xl object-cover shadow-sm"
-        />
-      ) : (
-        <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-orange-100 to-amber-50 text-2xl font-bold text-orange-400">
-          {food.name.charAt(0).toUpperCase()}
-        </div>
-      )}
+    <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm transition-shadow hover:shadow-md">
+      {/* Image and text open the full dish view; the ADD column stays its own
+          control so tapping it never opens the sheet. */}
+      <button type="button" onClick={() => onOpen(food)} aria-label={`View ${food.name}`} className="shrink-0">
+        {food.imageUrl ? (
+          <img
+            src={food.imageUrl}
+            alt={food.name}
+            loading="lazy"
+            className="h-20 w-20 rounded-xl object-cover shadow-sm"
+          />
+        ) : (
+          <div className="flex h-20 w-20 items-center justify-center rounded-xl bg-gradient-to-br from-orange-100 to-amber-50 text-2xl font-bold text-orange-400">
+            {food.name.charAt(0).toUpperCase()}
+          </div>
+        )}
+      </button>
 
-      <div className="min-w-0 flex-1">
+      <button type="button" onClick={() => onOpen(food)} className="min-w-0 flex-1 text-left">
         <div className="flex flex-wrap items-center gap-1.5">
           <FoodTypeIcon type={food.foodType} />
           <RatingChip rating={food.rating} />
@@ -399,9 +482,12 @@ function FoodCard({
         <p className="mt-0.5 text-sm font-bold text-slate-800">₹{food.price.toFixed(2)}</p>
 
         {food.description && (
-          <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-slate-500">{food.description}</p>
+          <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-slate-500">
+            {food.description}
+          </p>
         )}
-      </div>
+        <span className="mt-1 inline-block text-[11px] font-semibold text-orange-600">More details</span>
+      </button>
 
       {/* Its own column on the right, so the action sits in one predictable place
           down the whole list rather than moving with each dish's text length. */}

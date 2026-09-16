@@ -38,7 +38,7 @@ export const startDineInOrder = asyncHandler(async (req: Request, res: Response)
     customerPhone?: string;
     members?: number;
   };
-  if (!customerName || !customerPhone) throw new HttpError(400, "customerName and customerPhone are required");
+  if (!customerName) throw new HttpError(400, "customerName is required");
   if (!req.auth!.tableId) throw new HttpError(400, "No table session found");
 
   const table = await TableModel.findOne({ _id: req.auth!.tableId, restaurantId: req.restaurantId });
@@ -49,7 +49,7 @@ export const startDineInOrder = asyncHandler(async (req: Request, res: Response)
     orderType: "dine-in",
     tableId: table._id,
     customerName,
-    customerPhone,
+    customerPhone: customerPhone || "",
     members: members || 1,
     status: "open",
   });
@@ -60,6 +60,8 @@ export const startDineInOrder = asyncHandler(async (req: Request, res: Response)
     id: req.auth!.id,
     tableId: table._id.toString(),
     orderId: order._id.toString(),
+    // Carried over, or this replacement token would fail the seating check.
+    sessionId: req.auth!.sessionId,
   });
 
   res.status(201).json({ token, order });
@@ -74,17 +76,84 @@ export const startDeliveryOrder = asyncHandler(async (req: Request, res: Respons
   };
   const validProviders: DeliveryProvider[] = ["Swiggy", "Zomato", "Uber-Eats", "Other"];
   if (!provider || !validProviders.includes(provider)) throw new HttpError(400, "A valid provider is required");
-  if (!customerName || !customerPhone) throw new HttpError(400, "customerName and customerPhone are required");
+  if (!customerName) throw new HttpError(400, "customerName is required");
 
   const order = await Order.create({
     restaurantId: req.restaurantId,
     orderType: "delivery",
     deliveryProvider: provider,
     customerName,
-    customerPhone,
+    customerPhone: customerPhone || "",
     members: members || 1,
     status: "open",
   });
+
+  res.status(201).json(order);
+});
+
+/**
+ * Counter order taken by staff. Unlike the guest flow this issues no table token -
+ * the order is worked from the admin panel - so a regular table is marked occupied
+ * here and freed when the order is paid or cancelled.
+ */
+export const startTakeawayOrder = asyncHandler(async (req: Request, res: Response) => {
+  const { customerName, customerPhone, members } = req.body as {
+    customerName?: string;
+    customerPhone?: string;
+    members?: number;
+  };
+  if (!customerName) throw new HttpError(400, "customerName is required");
+
+  // No table and no provider - it is collected at the counter.
+  const order = await Order.create({
+    restaurantId: req.restaurantId,
+    orderType: "takeaway",
+    customerName,
+    customerPhone: customerPhone || "",
+    members: members || 1,
+    status: "open",
+  });
+
+  res.status(201).json(order);
+});
+
+export const startCounterOrder = asyncHandler(async (req: Request, res: Response) => {
+  const { tableId, customerName, customerPhone, members, allowOccupied } = req.body as {
+    tableId?: string;
+    customerName?: string;
+    customerPhone?: string;
+    members?: number;
+    allowOccupied?: boolean;
+  };
+  if (!customerName) throw new HttpError(400, "customerName is required");
+
+  // A table is optional: staff taking an order at the counter don't assign one.
+  let table = null;
+  if (tableId) {
+    validId(tableId);
+    table = await TableModel.findOne({ _id: tableId, restaurantId: req.restaurantId });
+    if (!table) throw new HttpError(404, "Table not found");
+    // Staff can deliberately open a second order on a seated table (a split bill, or a
+    // party that joins later); without the flag an accidental duplicate is still blocked.
+    if (!table.isGuest && table.status === "occupied" && !allowOccupied) {
+      throw new HttpError(409, "This table is already occupied");
+    }
+  }
+
+  const order = await Order.create({
+    restaurantId: req.restaurantId,
+    orderType: "dine-in",
+    ...(table && { tableId: table._id }),
+    customerName,
+    customerPhone: customerPhone || "",
+    members: members || 1,
+    status: "open",
+  });
+
+  if (table && !table.isGuest) {
+    table.status = "occupied";
+    await table.save();
+  }
 
   res.status(201).json(order);
 });
@@ -234,6 +303,43 @@ export const getInvoicePdf = asyncHandler(async (req: Request, res: Response) =>
 
 // ---------- Coupons ----------
 
+/**
+ * Coupons staff can offer on this order. Lives on the orders module rather than the
+ * coupons one, so someone who only takes orders can still see what's available, and
+ * each is scored against this order's subtotal so unusable ones say why.
+ */
+export const listOrderCoupons = asyncHandler(async (req: Request, res: Response) => {
+  const order = await getOwnedOrder(req, req.params.orderId);
+  const items = await OrderItem.find({ orderId: order._id });
+  const restaurant = await Restaurant.findById(req.restaurantId);
+  if (!restaurant) throw new HttpError(404, "Restaurant not found");
+  const { subtotal } = computeInvoiceTotals(items, restaurant.taxRates, 0);
+
+  const coupons = await Coupon.find({ restaurantId: req.restaurantId, isActive: true }).sort({ code: 1 });
+  const now = Date.now();
+
+  const usable = coupons
+    .filter((c) => !(c.expiresAt && c.expiresAt.getTime() < now))
+    .filter((c) => !(c.usageLimit !== undefined && c.usageLimit !== null && c.usedCount >= c.usageLimit))
+    .map((c) => {
+      const meetsMinimum = subtotal >= c.minOrderValue;
+      return {
+        code: c.code,
+        type: c.type,
+        value: c.value,
+        minOrderValue: c.minOrderValue,
+        maxDiscountAmount: c.maxDiscountAmount,
+        eligible: meetsMinimum,
+        discount: meetsMinimum ? computeDiscountAmount(c, subtotal) : 0,
+        reason: meetsMinimum ? null : `Needs a minimum order of ${c.minOrderValue.toFixed(2)}`,
+      };
+    })
+    // Best saving first, and anything unusable drops below it.
+    .sort((a, b) => Number(b.eligible) - Number(a.eligible) || b.discount - a.discount);
+
+  res.json({ subtotal, coupons: usable });
+});
+
 export const applyCoupon = asyncHandler(async (req: Request, res: Response) => {
   const order = await getOwnedOrder(req, req.params.orderId);
   if (order.status !== "open") throw new HttpError(409, "A coupon can only be applied to an open order");
@@ -295,7 +401,7 @@ export const payOrder = asyncHandler(async (req: Request, res: Response) => {
   await order.save();
 
   if (order.orderType === "dine-in" && order.tableId) {
-    await TableModel.findByIdAndUpdate(order.tableId, { $set: { status: "available" } });
+    await TableModel.findByIdAndUpdate(order.tableId, { $set: { status: "available" }, $unset: { sessionId: "" } });
   }
 
   res.json(order);
@@ -310,7 +416,7 @@ export const cancelOrder = asyncHandler(async (req: Request, res: Response) => {
   await OrderItem.updateMany({ orderId: order._id, status: "pending" }, { $set: { status: "cancelled" } });
 
   if (order.orderType === "dine-in" && order.tableId) {
-    await TableModel.findByIdAndUpdate(order.tableId, { $set: { status: "available" } });
+    await TableModel.findByIdAndUpdate(order.tableId, { $set: { status: "available" }, $unset: { sessionId: "" } });
   }
 
   res.json(order);

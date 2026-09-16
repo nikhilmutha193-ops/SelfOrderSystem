@@ -1,6 +1,7 @@
 import { Schema, model, Types } from "mongoose";
 
-export type OrderType = "dine-in" | "delivery";
+/** "delivery" is retained for orders placed before take-away replaced it. */
+export type OrderType = "dine-in" | "takeaway" | "delivery";
 export type OrderStatus = "open" | "closed" | "cancelled";
 export type PaymentMethod = "pending" | "cash" | "online" | "card";
 export type DeliveryProvider = "Swiggy" | "Zomato" | "Uber-Eats" | "Other";
@@ -12,7 +13,8 @@ export interface IOrder {
   tableId?: Types.ObjectId;
   deliveryProvider?: DeliveryProvider;
   customerName: string;
-  customerPhone: string;
+  /** Optional - guests can skip it. */
+  customerPhone?: string;
   members: number;
   checkinTime: Date;
   checkoutTime?: Date;
@@ -27,11 +29,11 @@ export interface IOrder {
 const orderSchema = new Schema<IOrder>(
   {
     restaurantId: { type: Schema.Types.ObjectId, ref: "Restaurant", required: true, index: true },
-    orderType: { type: String, enum: ["dine-in", "delivery"], required: true },
+    orderType: { type: String, enum: ["dine-in", "takeaway", "delivery"], required: true },
     tableId: { type: Schema.Types.ObjectId, ref: "Table" },
     deliveryProvider: { type: String, enum: ["Swiggy", "Zomato", "Uber-Eats", "Other"] },
     customerName: { type: String, required: true, trim: true },
-    customerPhone: { type: String, required: true, trim: true },
+    customerPhone: { type: String, default: "", trim: true },
     members: { type: Number, default: 1, min: 1 },
     checkinTime: { type: Date, default: Date.now },
     checkoutTime: { type: Date },

@@ -7,6 +7,7 @@ export interface AuthTokenPayload {
   restaurantId: string;
   id: string;
   tableId?: string;
+  sessionId?: string;
   orderId?: string;
 }
 

@@ -243,7 +243,8 @@ export async function streamInvoicePdf(
     doc.fontSize(fz(10));
     doc.text(`Order: ${order.orderType === "dine-in" ? "Dine-in" : `Delivery (${order.deliveryProvider})`}`);
     doc.text(
-      `Customer: ${order.customerName}` + (settings?.showCustomerPhone !== false ? `  (${order.customerPhone})` : "")
+      `Customer: ${order.customerName}` +
+        (settings?.showCustomerPhone !== false && order.customerPhone ? `  (${order.customerPhone})` : "")
     );
     doc.text(`Date: ${new Date(order.checkinTime).toLocaleString()}`);
     doc.moveDown(0.3);

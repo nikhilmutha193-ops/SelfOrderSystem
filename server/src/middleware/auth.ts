@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import Admin, { IAdmin } from "../models/Admin";
+import TableModel from "../models/Table";
 import { verifyToken, AuthTokenPayload, Role } from "../utils/jwt";
 import { ModuleKey } from "../utils/permissions";
 
@@ -15,7 +16,7 @@ declare global {
 }
 
 export function requireAuth(...roles: Role[]) {
-  return (req: Request, res: Response, next: NextFunction) => {
+  return async (req: Request, res: Response, next: NextFunction) => {
     const header = req.headers.authorization;
     if (!header || !header.startsWith("Bearer ")) {
       return res.status(401).json({ message: "Missing or invalid Authorization header" });
@@ -26,6 +27,21 @@ export function requireAuth(...roles: Role[]) {
       if (roles.length > 0 && !roles.includes(payload.role)) {
         return res.status(403).json({ message: "Insufficient permissions" });
       }
+
+      // A table token stays cryptographically valid after staff release the table,
+      // so check the seating is still the one the token was issued for.
+      if (payload.role === "table" && payload.tableId) {
+        const table = await TableModel.findById(payload.tableId).select("sessionId isGuest");
+        if (!table) {
+          return res.status(401).json({ message: "This table session has ended" });
+        }
+        // Guest tables host several walk-ins at once, so there is no single seating
+        // to match against; their sessions end with the token or the order.
+        if (!table.isGuest && (!table.sessionId || table.sessionId !== payload.sessionId)) {
+          return res.status(401).json({ message: "This table session has ended" });
+        }
+      }
+
       req.auth = payload;
       next();
     } catch {

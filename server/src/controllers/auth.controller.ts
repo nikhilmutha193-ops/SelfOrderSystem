@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import { Request, Response } from "express";
 import Admin, { IAdmin } from "../models/Admin";
 import Chef from "../models/Chef";
@@ -123,18 +124,28 @@ export const tableLogin = asyncHandler(async (req: Request, res: Response) => {
     }
   }
 
-  if (table.status === "occupied") {
+  // A guest/counter table is shared - several walk-ins can order from it at once,
+  // so it is never marked occupied and never blocks a new sign-in.
+  if (!table.isGuest && table.status === "occupied") {
     throw new HttpError(409, "This table is already occupied");
   }
 
-  table.status = "occupied";
-  await table.save();
+  let sessionId: string | undefined;
+  if (!table.isGuest) {
+    // A fresh id per seating: releasing the table clears it, which invalidates the
+    // token the previous guest is still holding.
+    sessionId = randomUUID();
+    table.status = "occupied";
+    table.sessionId = sessionId;
+    await table.save();
+  }
 
   const token = signToken({
     role: "table",
     restaurantId: req.restaurantId!,
     id: table._id.toString(),
     tableId: table._id.toString(),
+    sessionId,
   });
   res.json({ token, table: { id: table._id, code: table.code } });
 });

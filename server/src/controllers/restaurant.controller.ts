@@ -49,7 +49,7 @@ async function buildPreviewRestaurant(req: Request, overrides: Record<string, un
 }
 
 export const getRestaurantPublic = asyncHandler(async (req: Request, res: Response) => {
-  const restaurant = await Restaurant.findById(req.restaurantId).select("name logoUrl address");
+  const restaurant = await Restaurant.findById(req.restaurantId).select("name logoUrl address siteTitle faviconUrl");
   if (!restaurant) throw new HttpError(404, "Restaurant not found");
   res.json(restaurant);
 });
@@ -65,6 +65,8 @@ export const updateRestaurantSettings = asyncHandler(async (req: Request, res: R
     name,
     address,
     logoUrl,
+    siteTitle,
+    faviconUrl,
     gstin,
     fssaiLicense,
     tagline,
@@ -78,6 +80,8 @@ export const updateRestaurantSettings = asyncHandler(async (req: Request, res: R
     invoiceSettings,
   } = req.body as {
     name?: string;
+    siteTitle?: string;
+    faviconUrl?: string;
     address?: string;
     logoUrl?: string;
     gstin?: string;
@@ -119,6 +123,8 @@ export const updateRestaurantSettings = asyncHandler(async (req: Request, res: R
   if (name !== undefined) restaurant.name = name;
   if (address !== undefined) restaurant.address = address;
   if (logoUrl !== undefined) restaurant.logoUrl = logoUrl;
+  if (siteTitle !== undefined) restaurant.siteTitle = siteTitle;
+  if (faviconUrl !== undefined) restaurant.faviconUrl = faviconUrl;
   if (gstin !== undefined) restaurant.gstin = gstin;
   if (fssaiLicense !== undefined) restaurant.fssaiLicense = fssaiLicense;
   if (tagline !== undefined) restaurant.tagline = tagline;

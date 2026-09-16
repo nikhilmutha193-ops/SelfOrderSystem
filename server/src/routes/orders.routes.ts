@@ -2,6 +2,8 @@ import { Router } from "express";
 import {
   startDineInOrder,
   startDeliveryOrder,
+  startCounterOrder,
+  startTakeawayOrder,
   addOrderItems,
   startPreparingItem,
   markItemReady,
@@ -17,6 +19,7 @@ import {
   printKot,
   getKotPdf,
   applyCoupon,
+  listOrderCoupons,
   removeCoupon,
   listActiveChats,
   getChatMessages,
@@ -30,6 +33,8 @@ const router = Router();
 
 router.post("/dine-in", requireAuth("table"), requireModule("orders"), startDineInOrder);
 router.post("/delivery", requireAuth("admin"), requireModule("orders"), startDeliveryOrder);
+router.post("/counter", requireAuth("admin"), requireModule("orders"), startCounterOrder);
+router.post("/takeaway", requireAuth("admin"), requireModule("orders"), startTakeawayOrder);
 
 router.get("/", requireAuth("admin"), requireModule("orders"), listOrders);
 router.get("/chat/active", requireAuth("admin"), requireModule("messages"), listActiveChats);
@@ -43,6 +48,7 @@ router.patch("/:orderId/cancel", requireAuth("admin"), requireModule("orders"), 
 
 router.post("/:orderId/items", requireAuth("table", "admin"), requireModule("orders"), addOrderItems);
 
+router.get("/:orderId/coupons", requireAuth("table", "admin"), requireModule("orders"), listOrderCoupons);
 router.post("/:orderId/coupon", requireAuth("table", "admin"), requireModule("orders"), applyCoupon);
 router.delete("/:orderId/coupon", requireAuth("table", "admin"), requireModule("orders"), removeCoupon);
 

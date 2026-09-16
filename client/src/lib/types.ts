@@ -54,6 +54,8 @@ export interface InvoiceSettings {
 }
 
 export interface Restaurant {
+  siteTitle?: string;
+  faviconUrl?: string;
   _id: string;
   name: string;
   key?: string;
@@ -136,6 +138,8 @@ export interface TableRow {
   password?: string;
   qrToken?: string;
   status: "available" | "occupied";
+  /** Shared walk-in/counter table: never marked occupied, no seating lock. */
+  isGuest?: boolean;
 }
 
 export interface ChefRow {
@@ -144,7 +148,8 @@ export interface ChefRow {
   password?: string;
 }
 
-export type OrderType = "dine-in" | "delivery";
+/** "delivery" is retained for orders placed before take-away replaced it. */
+export type OrderType = "dine-in" | "takeaway" | "delivery";
 export type OrderStatus = "open" | "closed" | "cancelled";
 export type PaymentMethod = "pending" | "cash" | "online" | "card";
 export type DeliveryProvider = "Swiggy" | "Zomato" | "Uber-Eats" | "Other";
@@ -337,4 +342,15 @@ export interface LandingData {
   reviews: Review[];
   awards: Award[];
   googleReviews: GoogleReview[];
+}
+
+export interface OrderCoupon {
+  code: string;
+  type: "percent" | "flat";
+  value: number;
+  minOrderValue: number;
+  maxDiscountAmount?: number;
+  eligible: boolean;
+  discount: number;
+  reason: string | null;
 }

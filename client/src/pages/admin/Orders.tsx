@@ -73,7 +73,8 @@ export default function Orders() {
             <Select className="mt-1" value={type} onChange={(e) => updateParam("type", e.target.value)}>
               <option value="">All</option>
               <option value="dine-in">Dine-in</option>
-              <option value="delivery">Delivery</option>
+              <option value="takeaway">Take away</option>
+              <option value="delivery">Delivery (old)</option>
             </Select>
           </label>
           <label className="text-sm font-medium text-slate-700">
@@ -140,7 +141,11 @@ export default function Orders() {
               <tr key={order._id} className="border-t border-slate-100">
                 <td className="py-1.5">{order.customerName}</td>
                 <td className="py-1.5 capitalize">
-                  {order.orderType === "delivery" ? `Delivery (${order.deliveryProvider})` : "Dine-in"}
+                  {order.orderType === "delivery"
+                    ? `Delivery (${order.deliveryProvider})`
+                    : order.orderType === "takeaway"
+                      ? "Take away"
+                      : "Dine-in"}
                 </td>
                 <td className="py-1.5">{new Date(order.checkinTime).toLocaleString()}</td>
                 <td className="py-1.5">

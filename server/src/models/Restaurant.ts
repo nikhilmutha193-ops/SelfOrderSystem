@@ -54,6 +54,9 @@ export interface IRestaurant {
   name: string;
   key: string;
   logoUrl?: string;
+  /** Browser tab title; falls back to the restaurant name when blank. */
+  siteTitle?: string;
+  faviconUrl?: string;
   address?: string;
   gstin?: string;
   fssaiLicense?: string;
@@ -140,6 +143,8 @@ const restaurantSchema = new Schema<IRestaurant>(
     name: { type: String, required: true, trim: true },
     key: { type: String, required: true, unique: true, trim: true, lowercase: true },
     logoUrl: { type: String, default: "" },
+    siteTitle: { type: String, default: "" },
+    faviconUrl: { type: String, default: "" },
     address: { type: String, default: "" },
     gstin: { type: String, default: "" },
     fssaiLicense: { type: String, default: "" },

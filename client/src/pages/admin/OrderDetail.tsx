@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api, extractErrorMessage } from "../../lib/apiClient";
 import { Badge, Button, Card, ErrorText, Input, Select, TableWrap } from "../../components/ui";
-import type { MenuCategory, OrderDetailResponse, PaymentMethod } from "../../lib/types";
+import type { MenuCategory, OrderCoupon, OrderDetailResponse, PaymentMethod } from "../../lib/types";
 
 const STATUS_TONE = {
   pending: "amber",
@@ -23,7 +23,16 @@ export default function OrderDetail() {
   const [couponCode, setCouponCode] = useState("");
   const [couponError, setCouponError] = useState<string | null>(null);
   const [applyingCoupon, setApplyingCoupon] = useState(false);
+  const [offers, setOffers] = useState<OrderCoupon[]>([]);
   const [error, setError] = useState<string | null>(null);
+
+  const loadOffers = useCallback(() => {
+    if (!orderId) return;
+    api
+      .get<{ coupons: OrderCoupon[] }>(`/orders/${orderId}/coupons`)
+      .then((res) => setOffers(res.data.coupons))
+      .catch(() => setOffers([])); // the picker is a convenience; typing a code still works
+  }, [orderId]);
 
   const load = useCallback(() => {
     if (!orderId) return;
@@ -34,6 +43,8 @@ export default function OrderDetail() {
   }, [orderId]);
 
   useEffect(load, [load]);
+  // Adding items moves the subtotal, which changes which coupons qualify.
+  useEffect(loadOffers, [loadOffers, data?.totals.subtotal]);
 
   useEffect(() => {
     api.get<MenuCategory[]>("/menu").then((res) => setMenu(res.data));
@@ -75,15 +86,15 @@ export default function OrderDetail() {
     }
   }
 
-  async function applyCoupon(e: React.FormEvent) {
-    e.preventDefault();
-    if (!orderId || !couponCode.trim()) return;
+  async function applyCode(code: string) {
+    if (!orderId || !code.trim()) return;
     setCouponError(null);
     setApplyingCoupon(true);
     try {
-      await api.post(`/orders/${orderId}/coupon`, { code: couponCode.trim() });
+      await api.post(`/orders/${orderId}/coupon`, { code: code.trim() });
       setCouponCode("");
       load();
+      loadOffers();
     } catch (err) {
       setCouponError(extractErrorMessage(err));
     } finally {
@@ -97,6 +108,7 @@ export default function OrderDetail() {
     try {
       await api.delete(`/orders/${orderId}/coupon`);
       load();
+      loadOffers();
     } catch (err) {
       setCouponError(extractErrorMessage(err));
     }
@@ -138,7 +150,12 @@ export default function OrderDetail() {
             <p className="text-sm text-slate-600">Phone: {order.customerPhone}</p>
             <p className="text-sm text-slate-600">Members: {order.members}</p>
             <p className="text-sm text-slate-600">
-              Type: {order.orderType === "delivery" ? `Delivery (${order.deliveryProvider})` : "Dine-in"}
+              Type:{" "}
+              {order.orderType === "delivery"
+                ? `Delivery (${order.deliveryProvider})`
+                : order.orderType === "takeaway"
+                  ? "Take away"
+                  : "Dine-in"}
             </p>
           </div>
           <div>
@@ -223,17 +240,29 @@ export default function OrderDetail() {
               </button>
             </div>
           ) : (
-            <form onSubmit={applyCoupon} className="flex items-end gap-2">
-              <Input
-                className="w-40 uppercase"
-                value={couponCode}
-                onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
-                placeholder="Coupon code"
-              />
-              <Button type="submit" disabled={applyingCoupon || !couponCode.trim()}>
+            <div className="flex flex-wrap items-end gap-2">
+              <label className="text-sm font-medium text-slate-700">
+                Select coupon
+                <Select
+                  className="mt-1 !w-64"
+                  value={couponCode}
+                  onChange={(e) => setCouponCode(e.target.value)}
+                >
+                  <option value="">
+                    {offers.length === 0 ? "No coupons available" : "Select coupon"}
+                  </option>
+                  {offers.map((offer) => (
+                    <option key={offer.code} value={offer.code} disabled={!offer.eligible}>
+                      {offer.code} - {offer.type === "percent" ? `${offer.value}% off` : `₹${offer.value} off`}
+                      {offer.eligible ? ` (saves ₹${offer.discount.toFixed(2)})` : ` - ${offer.reason}`}
+                    </option>
+                  ))}
+                </Select>
+              </label>
+              <Button type="button" onClick={() => applyCode(couponCode)} disabled={applyingCoupon || !couponCode}>
                 {applyingCoupon ? "Applying..." : "Apply"}
               </Button>
-            </form>
+            </div>
           )}
           <ErrorText>{couponError}</ErrorText>
         </Card>

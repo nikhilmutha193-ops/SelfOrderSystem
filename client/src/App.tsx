@@ -1,6 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import ProtectedRoute from "./components/ProtectedRoute";
 import ErrorBoundary from "./components/ErrorBoundary";
+import { useSiteBranding } from "./lib/useSiteBranding";
 import { AdminHomeRedirect, RequireModule } from "./lib/adminAuth";
 
 import Landing from "./pages/Landing";
@@ -38,6 +39,8 @@ import ChefLogin from "./pages/chef/ChefLogin";
 import ChefDashboard from "./pages/chef/ChefDashboard";
 
 export default function App() {
+  useSiteBranding();
+
   return (
     <ErrorBoundary>
       <BrowserRouter>
