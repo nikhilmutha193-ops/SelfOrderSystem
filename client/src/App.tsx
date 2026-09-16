@@ -33,6 +33,7 @@ import Reviews from "./pages/admin/Reviews";
 import Messages from "./pages/admin/Messages";
 import Backup from "./pages/admin/Backup";
 import Admins from "./pages/admin/Admins";
+import LandingPageEditor from "./pages/admin/LandingPage";
 import NoAccess from "./pages/admin/NoAccess";
 
 import ChefLogin from "./pages/chef/ChefLogin";
@@ -101,6 +102,7 @@ export default function App() {
           <Route path="reviews" element={<RequireModule module="reviews"><Reviews /></RequireModule>} />
           <Route path="settings" element={<RequireModule module="settings"><RestaurantSettings /></RequireModule>} />
           <Route path="backup" element={<RequireModule module="backup"><Backup /></RequireModule>} />
+          <Route path="landing" element={<RequireModule module="landing"><LandingPageEditor /></RequireModule>} />
           <Route path="admins" element={<RequireModule module="admins"><Admins /></RequireModule>} />
           <Route path="change-password" element={<ChangePassword />} />
           <Route path="no-access" element={<NoAccess />} />

@@ -1,0 +1,78 @@
+/* ==========================================================================
+   Benne Kaffi — components/outlets.css
+   Styles for <Outlets /> and <OutletCard />. Depends on the tokens and shared classes in css/main.css.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   Visit Our Outlets  →  <Outlets />
+   -------------------------------------------------------------------------- */
+.outlets__grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-4);
+}
+
+.outlet-card {
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-5);
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-top: 4px solid var(--color-primary);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  transition: transform var(--transition), box-shadow var(--transition);
+}
+
+.outlet-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-md);
+}
+
+.outlet-card--soon {
+  background-color: var(--color-primary-tint);
+  border-top-color: var(--color-primary-light);
+}
+
+.outlet-card__city {
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-primary);
+  margin-bottom: var(--space-1);
+}
+
+.outlet-card__area {
+  font-size: var(--fs-lg);
+  margin-bottom: var(--space-3);
+}
+
+.outlet-card__address {
+  font-size: var(--fs-sm);
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-2);
+}
+
+.outlet-card__hours {
+  font-size: var(--fs-xs);
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-5);
+}
+
+.outlet-card .btn {
+  margin-top: auto;
+}
+
+@media (min-width: 768px) {
+  .outlets__grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-5);
+  }
+}
+
+@media (min-width: 1024px) {
+  .outlets__grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}

@@ -78,6 +78,7 @@ export const updateRestaurantSettings = asyncHandler(async (req: Request, res: R
     qrSettings,
     kotSettings,
     invoiceSettings,
+    tableAutoReleaseMinutes,
   } = req.body as {
     name?: string;
     siteTitle?: string;
@@ -95,6 +96,7 @@ export const updateRestaurantSettings = asyncHandler(async (req: Request, res: R
     qrSettings?: Partial<IQrSettings>;
     kotSettings?: Partial<IKotSettings>;
     invoiceSettings?: Partial<IInvoiceSettings>;
+    tableAutoReleaseMinutes?: number;
   };
 
   if (publicUrl && !/^https?:\/\/.+/i.test(publicUrl)) {
@@ -117,6 +119,13 @@ export const updateRestaurantSettings = asyncHandler(async (req: Request, res: R
     throw new HttpError(400, "dayEndTime must be in HH:mm format (e.g. 03:00)");
   }
 
+  if (
+    tableAutoReleaseMinutes !== undefined &&
+    (typeof tableAutoReleaseMinutes !== "number" || tableAutoReleaseMinutes < 0)
+  ) {
+    throw new HttpError(400, "tableAutoReleaseMinutes must be a non-negative number");
+  }
+
   const restaurant = await Restaurant.findById(req.restaurantId);
   if (!restaurant) throw new HttpError(404, "Restaurant not found");
 
@@ -132,6 +141,7 @@ export const updateRestaurantSettings = asyncHandler(async (req: Request, res: R
   if (publicUrl !== undefined) restaurant.publicUrl = publicUrl.replace(/\/+$/, "");
   if (heroImages !== undefined) restaurant.heroImages = heroImages;
   if (dayEndTime !== undefined) restaurant.dayEndTime = dayEndTime;
+  if (tableAutoReleaseMinutes !== undefined) restaurant.tableAutoReleaseMinutes = tableAutoReleaseMinutes;
   if (taxRates !== undefined) restaurant.taxRates = taxRates;
   if (qrSettings !== undefined) Object.assign(restaurant.qrSettings, qrSettings);
   if (kotSettings !== undefined) Object.assign(restaurant.kotSettings, kotSettings);

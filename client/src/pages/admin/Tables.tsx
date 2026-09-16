@@ -4,6 +4,17 @@ import { api, extractErrorMessage } from "../../lib/apiClient";
 import { Badge, Button, Card, ErrorText, Input, TableWrap } from "../../components/ui";
 import type { TableRow } from "../../lib/types";
 
+/** "3h 12m", "45m", or "just now" for how long a table has been occupied. */
+function elapsedSince(iso?: string): string | null {
+  if (!iso) return null;
+  const ms = Date.now() - new Date(iso).getTime();
+  if (ms < 60_000) return "just now";
+  const totalMinutes = Math.floor(ms / 60_000);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+}
+
 export default function Tables() {
   const [tables, setTables] = useState<TableRow[]>([]);
   const [code, setCode] = useState("");
@@ -13,6 +24,10 @@ export default function Tables() {
   const [newPin, setNewPin] = useState("");
   const [resetError, setResetError] = useState<string | null>(null);
   const [isGuest, setIsGuest] = useState(false);
+  const [autoReleaseMinutes, setAutoReleaseMinutes] = useState("0");
+  const [savingExpiry, setSavingExpiry] = useState(false);
+  const [expiryMessage, setExpiryMessage] = useState<string | null>(null);
+  const [, forceTick] = useState(0);
 
   function load() {
     api
@@ -22,6 +37,41 @@ export default function Tables() {
   }
 
   useEffect(load, []);
+
+  useEffect(() => {
+    api
+      .get<{ tableAutoReleaseMinutes?: number }>("/restaurant/settings")
+      .then((res) => setAutoReleaseMinutes(String(res.data.tableAutoReleaseMinutes ?? 0)))
+      .catch(() => {
+        // Non-critical: the input just falls back to "0" (disabled) if this fails.
+      });
+  }, []);
+
+  // Re-renders every 30s so "occupied since" keeps counting up without a reload.
+  useEffect(() => {
+    const id = setInterval(() => forceTick((n) => n + 1), 30_000);
+    return () => clearInterval(id);
+  }, []);
+
+  async function saveExpiry(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setExpiryMessage(null);
+    const minutes = Number(autoReleaseMinutes);
+    if (!Number.isFinite(minutes) || minutes < 0) {
+      setError("Auto-release minutes must be 0 or a positive number");
+      return;
+    }
+    setSavingExpiry(true);
+    try {
+      await api.put("/restaurant/settings", { tableAutoReleaseMinutes: minutes });
+      setExpiryMessage(minutes === 0 ? "Auto-release turned off" : `Tables now auto-release after ${minutes} minutes`);
+    } catch (err) {
+      setError(extractErrorMessage(err));
+    } finally {
+      setSavingExpiry(false);
+    }
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -85,6 +135,30 @@ export default function Tables() {
   return (
     <div className="flex flex-col gap-6">
       <h1 className="text-2xl font-bold text-slate-800">Tables</h1>
+
+      <Card>
+        <form onSubmit={saveExpiry} className="flex flex-wrap items-end gap-3">
+          <label className="text-sm font-medium text-slate-700">
+            Auto-release after (minutes)
+            <Input
+              className="mt-1 w-40"
+              type="number"
+              min={0}
+              value={autoReleaseMinutes}
+              onChange={(e) => setAutoReleaseMinutes(e.target.value)}
+            />
+          </label>
+          <Button type="submit" disabled={savingExpiry}>
+            {savingExpiry ? "Saving..." : "Save"}
+          </Button>
+          {expiryMessage && <span className="text-xs text-green-700">{expiryMessage}</span>}
+        </form>
+        <p className="mt-2 text-xs text-slate-500">
+          If a table stays occupied longer than this, it is automatically freed and the guest's session ends. Set to
+          0 to disable auto-release.
+        </p>
+      </Card>
+
       <Card>
         <form onSubmit={submit} className="flex flex-wrap items-end gap-3">
           <label className="text-sm font-medium text-slate-700">
@@ -133,7 +207,12 @@ export default function Tables() {
                   {table.isGuest ? (
                     <span className="text-xs text-slate-400">shared</span>
                   ) : (
-                    <Badge tone={table.status === "available" ? "green" : "amber"}>{table.status}</Badge>
+                    <div className="flex flex-col gap-0.5">
+                      <Badge tone={table.status === "available" ? "green" : "amber"}>{table.status}</Badge>
+                      {table.status === "occupied" && elapsedSince(table.occupiedAt) && (
+                        <span className="text-xs text-slate-400">occupied {elapsedSince(table.occupiedAt)}</span>
+                      )}
+                    </div>
                   )}
                 </td>
                 <td className="py-1.5">

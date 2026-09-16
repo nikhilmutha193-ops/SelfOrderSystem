@@ -152,6 +152,7 @@ export const startCounterOrder = asyncHandler(async (req: Request, res: Response
 
   if (table && !table.isGuest) {
     table.status = "occupied";
+    table.occupiedAt = new Date();
     await table.save();
   }
 
@@ -401,7 +402,7 @@ export const payOrder = asyncHandler(async (req: Request, res: Response) => {
   await order.save();
 
   if (order.orderType === "dine-in" && order.tableId) {
-    await TableModel.findByIdAndUpdate(order.tableId, { $set: { status: "available" }, $unset: { sessionId: "" } });
+    await TableModel.findByIdAndUpdate(order.tableId, { $set: { status: "available" }, $unset: { sessionId: "", occupiedAt: "" } });
   }
 
   res.json(order);
@@ -416,7 +417,7 @@ export const cancelOrder = asyncHandler(async (req: Request, res: Response) => {
   await OrderItem.updateMany({ orderId: order._id, status: "pending" }, { $set: { status: "cancelled" } });
 
   if (order.orderType === "dine-in" && order.tableId) {
-    await TableModel.findByIdAndUpdate(order.tableId, { $set: { status: "available" }, $unset: { sessionId: "" } });
+    await TableModel.findByIdAndUpdate(order.tableId, { $set: { status: "available" }, $unset: { sessionId: "", occupiedAt: "" } });
   }
 
   res.json(order);

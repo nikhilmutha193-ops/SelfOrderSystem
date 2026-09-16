@@ -18,6 +18,7 @@ export const MODULES = {
   coupons: "Coupons",
   reviews: "Reviews",
   settings: "Restaurant Settings",
+  landing: "Landing Page",
   backup: "Backup & Restore",
   admins: "Admin Users",
 } as const;
@@ -91,6 +92,7 @@ const HOME_ROUTES: { module: ModuleKey; to: string }[] = [
   { module: "coupons", to: "/admin/coupons" },
   { module: "reviews", to: "/admin/reviews" },
   { module: "settings", to: "/admin/settings" },
+  { module: "landing", to: "/admin/landing" },
   { module: "backup", to: "/admin/backup" },
   { module: "admins", to: "/admin/admins" },
 ];

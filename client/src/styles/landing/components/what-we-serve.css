@@ -1,0 +1,143 @@
+/* ==========================================================================
+   Benne Kaffi — components/what-we-serve.css
+   Styles for <WhatWeServe /> and <FoodCard />. Depends on the tokens and shared classes in css/main.css.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   What We Serve  →  <WhatWeServe /> + <FoodCard />
+   2-up on mobile, 4-up on desktop. Each card is a 3D flip: the front face is
+   the transparent food illustration, the back face is a terracotta info panel.
+   -------------------------------------------------------------------------- */
+.serve__grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-4);
+}
+
+.serve__hint {
+  margin-top: var(--space-5);
+  text-align: center;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.food-card {
+  perspective: 1000px;
+}
+
+.food-card__inner {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: var(--radius-lg);
+  transform-style: preserve-3d;
+  transition: transform 450ms cubic-bezier(0.25, 0.4, 0.25, 1);
+}
+
+.food-card--flipped .food-card__inner {
+  transform: rotateY(180deg);
+}
+
+.food-card__inner:focus-visible {
+  outline-offset: 6px;
+}
+
+.food-card__face {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: inherit;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+/* Front: the illustration floats on the cream background, no box */
+.food-card__img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 14px 22px rgba(51, 36, 30, 0.18));
+  transition: transform 400ms ease-out;
+}
+
+/* The coffee tumbler is a taller illustration; inset it like the reference */
+.food-card__img--inset {
+  padding: var(--space-4);
+}
+
+.food-card:hover .food-card__img,
+.food-card__inner:focus-visible .food-card__img {
+  transform: scale(1.08);
+}
+
+/* Back: terracotta info panel */
+.food-card__face--back {
+  padding: var(--space-4);
+  text-align: center;
+  color: var(--color-bg);
+  background-color: var(--color-primary);
+  box-shadow: var(--shadow-lg);
+  transform: rotateY(180deg);
+}
+
+.food-card__title {
+  display: block;
+  margin-bottom: var(--space-2);
+  font-family: var(--font-heading);
+  font-size: var(--fs-lg);
+  font-weight: 600;
+  line-height: 1.15;
+}
+
+.food-card__text {
+  display: block;
+  font-size: var(--fs-xs);
+  line-height: 1.55;
+  color: rgba(253, 251, 247, 0.85);
+}
+
+.food-card__rule {
+  display: block;
+  width: 64px;
+  height: 1px;
+  margin-top: var(--space-4);
+  background-color: rgba(253, 251, 247, 0.35);
+  transform: scaleX(0);
+  transition: transform 400ms ease 200ms;
+}
+
+.food-card--flipped .food-card__rule {
+  transform: scaleX(1);
+}
+
+@media (min-width: 768px) {
+  .serve__grid {
+    gap: var(--space-5);
+  }
+
+  .food-card__face--back {
+    padding: var(--space-5);
+  }
+
+  .food-card__title {
+    font-size: 1.5rem;
+  }
+
+  .food-card__text {
+    font-size: var(--fs-sm);
+  }
+}
+
+@media (min-width: 1024px) {
+  .serve__grid {
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--space-6);
+  }
+}

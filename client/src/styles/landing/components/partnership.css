@@ -1,0 +1,42 @@
+/* ==========================================================================
+   Benne Kaffi — components/partnership.css
+   Styles for <PartnershipBanner />. Depends on the tokens and shared classes in css/main.css.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   Partnership CTA band  →  <PartnershipBanner />
+   -------------------------------------------------------------------------- */
+.cta-band {
+  padding-block: var(--space-7);
+  color: #fff;
+  background-color: var(--color-primary);
+  background-image:
+    radial-gradient(circle at 10% 20%, rgba(255, 255, 255, 0.10), transparent 40%),
+    radial-gradient(circle at 90% 80%, rgba(0, 0, 0, 0.12), transparent 40%);
+}
+
+.cta-band__inner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  align-items: flex-start;
+}
+
+.cta-band__title {
+  font-size: var(--fs-xl);
+  color: #fff;
+  margin-bottom: var(--space-2);
+}
+
+.cta-band__text {
+  max-width: 36rem;
+  color: rgba(255, 255, 255, 0.88);
+}
+
+@media (min-width: 768px) {
+  .cta-band__inner {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+}

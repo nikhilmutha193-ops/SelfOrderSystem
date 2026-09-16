@@ -137,6 +137,7 @@ export const tableLogin = asyncHandler(async (req: Request, res: Response) => {
     sessionId = randomUUID();
     table.status = "occupied";
     table.sessionId = sessionId;
+    table.occupiedAt = new Date();
     await table.save();
   }
 

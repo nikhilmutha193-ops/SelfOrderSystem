@@ -1,0 +1,289 @@
+/* ==========================================================================
+   Benne Kaffi — components/hero.css
+   Styles for <Hero /> (full-screen banner + background slider). Depends on the tokens and shared classes in css/main.css.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   Hero  →  <Hero />
+   Full-viewport banner that sits underneath the transparent fixed header.
+   Background is a stack of .hero__slide elements; JS crossfades them when
+   SITE_CONFIG.heroSlider.enabled is true.
+   -------------------------------------------------------------------------- */
+.hero {
+  position: relative;
+  display: grid;
+  align-items: end;
+  /* Full first screen, capped for very tall monitors; min-height uses min() so
+     the cap actually wins (a separate max-height would lose to min-height) */
+  min-height: min(100vh, 1000px);
+  min-height: min(100svh, 1000px);
+  padding-top: var(--header-h);
+  color: #fff;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.hero__slides {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+}
+
+.hero__slide {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 1200ms ease-in-out;
+}
+
+.hero__slide--active {
+  opacity: 1;
+}
+
+.hero__img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  /* Slow settle-in on load, like the reference banner */
+  animation: hero-settle 1500ms cubic-bezier(0.25, 0.4, 0.25, 1) both;
+}
+
+@keyframes hero-settle {
+  from { transform: scale(1.1); }
+  to   { transform: scale(1); }
+}
+
+.hero__overlay {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    linear-gradient(
+      to top,
+      rgba(43, 29, 24, 0.92) 0%,
+      rgba(43, 29, 24, 0.62) 40%,
+      rgba(43, 29, 24, 0.15) 75%,
+      rgba(43, 29, 24, 0.35) 100%
+    );
+}
+
+/* Brass pendant lamp hanging from the top-left corner (matches the reference
+   site: top-0, left-2, ~20vh tall, drops in with a fade on load). Kept small
+   on phones so it doesn't crowd the banner. */
+.hero__light {
+  position: absolute;
+  top: 0;
+  left: 8px;
+  z-index: 0;
+  height: clamp(88px, 13vh, 120px);
+  width: auto;
+  pointer-events: none;
+  animation: hero-light-drop 1s 0.3s ease-out both;
+}
+
+@keyframes hero-light-drop {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.hero__content {
+  position: relative;
+  z-index: 1;
+  padding-block: var(--space-8) var(--space-7);
+  text-align: center;
+}
+
+.hero__eyebrow {
+  display: inline-block;
+  margin-bottom: var(--space-4);
+  padding: var(--space-1) var(--space-4);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #fff;
+  background-color: rgba(184, 80, 60, 0.85);
+  border-radius: var(--radius-pill);
+}
+
+.hero__title {
+  font-size: var(--fs-hero);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  color: #fff;
+  text-shadow: 0 4px 24px rgba(0, 0, 0, 0.35);
+}
+
+.hero__subtitle {
+  max-width: 34rem;
+  margin: var(--space-4) auto 0;
+  font-size: var(--fs-lg);
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.hero__actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-top: var(--space-6);
+}
+
+.hero__actions .btn {
+  width: 100%;
+}
+
+@media (min-width: 768px) {
+  .hero {
+    align-items: center;
+  }
+
+  .hero__overlay {
+    background:
+      linear-gradient(
+        to right,
+        rgba(43, 29, 24, 0.88) 0%,
+        rgba(43, 29, 24, 0.55) 45%,
+        rgba(43, 29, 24, 0.05) 100%
+      ),
+      linear-gradient(
+        to bottom,
+        rgba(43, 29, 24, 0.45) 0%,
+        rgba(43, 29, 24, 0) 25%
+      );
+  }
+
+  .hero__light {
+    height: clamp(140px, 20vh, 220px);
+  }
+
+  .hero__content {
+    text-align: left;
+    padding-block: var(--space-9);
+  }
+
+  .hero__subtitle {
+    margin-inline: 0;
+  }
+
+  .hero__actions {
+    flex-direction: row;
+  }
+
+  .hero__actions .btn {
+    width: auto;
+  }
+}
+
+/*
+ * Admin-set text alignment (Landing Page > Hero banner), independent per
+ * screen size. Left unset for a tier, it keeps the design's own default
+ * above (centered on phones, left from tablet up). Same specificity as the
+ * base .hero__content rules, so winning is purely a matter of appearing
+ * later in this file - each block is scoped to its own media query, so a
+ * mobile choice can never affect desktop and vice versa.
+ */
+@media (max-width: 767px) {
+  .hero__content--mobile-left {
+    text-align: left;
+  }
+  .hero__content--mobile-left .hero__subtitle {
+    margin-inline: 0;
+  }
+  .hero__content--mobile-left .hero__actions {
+    justify-content: flex-start;
+  }
+
+  .hero__content--mobile-center {
+    text-align: center;
+  }
+  .hero__content--mobile-center .hero__subtitle {
+    margin-inline: auto;
+  }
+  .hero__content--mobile-center .hero__actions {
+    justify-content: center;
+  }
+
+  .hero__content--mobile-right {
+    text-align: right;
+  }
+  .hero__content--mobile-right .hero__subtitle {
+    margin-inline: auto 0;
+  }
+  .hero__content--mobile-right .hero__actions {
+    justify-content: flex-end;
+  }
+}
+
+@media (min-width: 768px) {
+  .hero__content--desktop-left {
+    text-align: left;
+  }
+  .hero__content--desktop-left .hero__subtitle {
+    margin-inline: 0;
+  }
+  .hero__content--desktop-left .hero__actions {
+    justify-content: flex-start;
+  }
+
+  .hero__content--desktop-center {
+    text-align: center;
+  }
+  .hero__content--desktop-center .hero__subtitle {
+    margin-inline: auto;
+  }
+  .hero__content--desktop-center .hero__actions {
+    justify-content: center;
+  }
+
+  .hero__content--desktop-right {
+    text-align: right;
+  }
+  .hero__content--desktop-right .hero__subtitle {
+    margin-inline: auto 0;
+  }
+  .hero__content--desktop-right .hero__actions {
+    justify-content: flex-end;
+  }
+}
+
+/*
+ * Admin-set vertical position, same pattern as the text-alignment overrides
+ * above but on .hero itself (a grid, positioned via align-items) rather than
+ * .hero__content. Unset for a tier, it keeps the design's own default: the
+ * content sits at the bottom on phones, vertically centered from tablet up.
+ */
+@media (max-width: 767px) {
+  .hero--valign-mobile-top {
+    align-items: start;
+  }
+  .hero--valign-mobile-center {
+    align-items: center;
+  }
+  .hero--valign-mobile-bottom {
+    align-items: end;
+  }
+}
+
+@media (min-width: 768px) {
+  .hero--valign-desktop-top {
+    align-items: start;
+  }
+  .hero--valign-desktop-center {
+    align-items: center;
+  }
+  .hero--valign-desktop-bottom {
+    align-items: end;
+  }
+}

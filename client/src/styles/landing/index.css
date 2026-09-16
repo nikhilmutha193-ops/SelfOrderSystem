@@ -1,0 +1,13 @@
+/* Benne Kaffi landing design.
+   Base rules in main.css are scoped to .bk-landing so they don't reach the
+   admin panel or the ordering screens, which are styled with Tailwind. */
+@import "./main.css";
+@import "./components/header.css";
+@import "./components/hero.css";
+@import "./components/what-we-serve.css";
+@import "./components/reels.css";
+@import "./components/outlets.css";
+@import "./components/story.css";
+@import "./components/menu.css";
+@import "./components/partnership.css";
+@import "./components/footer.css";

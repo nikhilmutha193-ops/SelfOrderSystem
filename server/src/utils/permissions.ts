@@ -14,6 +14,7 @@ export const MODULES = {
   coupons: "Coupons",
   reviews: "Reviews",
   settings: "Restaurant Settings",
+  landing: "Landing Page",
   backup: "Backup & Restore",
   admins: "Admin Users",
 } as const;

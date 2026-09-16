@@ -72,6 +72,8 @@ export interface IRestaurant {
   heroImages: string[];
   /** "HH:mm" - when the business day rolls over, for orders placed past midnight. */
   dayEndTime: string;
+  /** Minutes an occupied table is auto-released after with no staff action. 0 disables it. */
+  tableAutoReleaseMinutes: number;
   taxRates: ITaxRate[];
   qrSettings: IQrSettings;
   kotSettings: IKotSettings;
@@ -153,6 +155,7 @@ const restaurantSchema = new Schema<IRestaurant>(
     publicUrl: { type: String, default: "" },
     heroImages: { type: [String], default: [] },
     dayEndTime: { type: String, default: "00:00" },
+    tableAutoReleaseMinutes: { type: Number, default: 0, min: 0 },
     taxRates: { type: [taxRateSchema], default: [] },
     qrSettings: { type: qrSettingsSchema, default: () => ({}) },
     kotSettings: { type: kotSettingsSchema, default: () => ({}) },

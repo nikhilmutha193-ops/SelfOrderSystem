@@ -78,7 +78,7 @@ export const releaseTable = asyncHandler(async (req: Request, res: Response) => 
     { _id: req.params.id, restaurantId: req.restaurantId },
     // Clearing the session id invalidates the guest's token immediately - without
     // it their JWT stays valid and they can keep ordering after being released.
-    { $set: { status: "available" }, $unset: { sessionId: "" } },
+    { $set: { status: "available" }, $unset: { sessionId: "", occupiedAt: "" } },
     { new: true }
   ).select("-passwordHash");
   if (!table) throw new HttpError(404, "Table not found");

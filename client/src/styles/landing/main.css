@@ -1,0 +1,362 @@
+/* ==========================================================================
+   Benne Kaffi — main.css
+   Shared foundation only: design tokens, reset, layout helpers, buttons,
+   section headers and placeholders. Nothing section-specific lives here.
+
+   Per-section styles are in css/components/*.css (one file per future React
+   component) and are linked from index.html after this file.
+   Mobile-first. Breakpoints: 768px (tablet), 1024px (desktop).
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   Design tokens
+   -------------------------------------------------------------------------- */
+:root {
+  /* Brand palette */
+  --color-primary:        #B8503C;   /* rust red / terracotta */
+  --color-primary-dark:   #9A4130;
+  --color-primary-light:  #D9765F;
+  --color-primary-tint:   #F6E6E0;   /* very light terracotta wash */
+
+  --color-bg:             #FDFBF7;   /* warm cream */
+  --color-bg-tint:        #F6F0E6;   /* slightly deeper cream for alternating sections */
+  --color-surface:        #FFFFFF;
+
+  --color-text:           #33241E;   /* deep espresso */
+  --color-text-muted:     #6F5C54;
+  --color-border:         #E8DED2;
+
+  --color-footer-bg:      #2B1D18;
+  --color-footer-text:    #E9DFD6;
+
+  /* Typography */
+  --font-heading: "Fraunces", Georgia, "Times New Roman", serif;
+  --font-body:    "DM Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+  --fs-xs:  0.8125rem;
+  --fs-sm:  0.9375rem;
+  --fs-md:  1.0625rem;
+  --fs-lg:  1.25rem;
+  --fs-xl:  clamp(1.75rem, 1.35rem + 1.6vw, 2.5rem);   /* section titles */
+  --fs-hero: clamp(2.5rem, 1.4rem + 4vw, 5rem);         /* hero headline */
+
+  /* Spacing & shape */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 3rem;
+  --space-8: 4rem;
+  --space-9: 6rem;
+
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 22px;
+  --radius-pill: 999px;
+
+  --shadow-sm: 0 1px 2px rgba(51, 36, 30, 0.06), 0 2px 8px rgba(51, 36, 30, 0.06);
+  --shadow-md: 0 6px 20px rgba(51, 36, 30, 0.10);
+  --shadow-lg: 0 16px 40px rgba(51, 36, 30, 0.16);
+
+  --container-max: 1200px;
+  --gutter: 1rem;
+  --header-h: 72px;
+
+  --transition: 200ms ease;
+}
+
+/* --------------------------------------------------------------------------
+   Base / reset
+   -------------------------------------------------------------------------- */
+.bk-landing,
+.bk-landing *,
+.bk-landing *::before,
+.bk-landing *::after {
+  box-sizing: border-box;
+}
+
+.bk-landing {
+  scroll-behavior: smooth;
+  scroll-padding-top: var(--header-h);
+  -webkit-text-size-adjust: 100%;
+}
+
+.bk-landing {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: var(--fs-md);
+  line-height: 1.6;
+  color: var(--color-text);
+  background-color: var(--color-bg);
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+body.no-scroll {
+  overflow: hidden;
+}
+
+.bk-landing h1:not([class]),
+.bk-landing h2:not([class]),
+.bk-landing h3:not([class]),
+.bk-landing h4:not([class]) {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  line-height: 1.15;
+  margin: 0;
+  color: var(--color-text);
+}
+
+.bk-landing p {
+  margin: 0;
+}
+
+.bk-landing ul[role="list"] {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.bk-landing img,
+.bk-landing picture,
+.bk-landing svg {
+  display: block;
+  max-width: 100%;
+}
+
+.bk-landing a:not([class]) {
+  color: var(--color-primary);
+  text-decoration: none;
+  transition: color var(--transition);
+}
+
+.bk-landing a:not([class]):hover {
+  color: var(--color-primary-dark);
+}
+
+.bk-landing address {
+  font-style: normal;
+}
+
+.bk-landing button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+.bk-landing :focus-visible {
+  outline: 3px solid var(--color-primary);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bk-landing {
+    scroll-behavior: auto;
+  }
+  .bk-landing *,
+  .bk-landing *::before,
+  .bk-landing *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Shared: layout, buttons, section headers, placeholders
+   -------------------------------------------------------------------------- */
+.container {
+  width: 100%;
+  max-width: var(--container-max);
+  margin-inline: auto;
+  padding-inline: var(--gutter);
+}
+
+.skip-link {
+  position: absolute;
+  top: -100px;
+  left: var(--space-4);
+  z-index: 1000;
+  padding: var(--space-2) var(--space-4);
+  background: var(--color-primary);
+  color: #fff;
+  border-radius: var(--radius-sm);
+}
+
+.skip-link:focus {
+  top: var(--space-4);
+  color: #fff;
+}
+
+/* Sections */
+.section {
+  padding-block: var(--space-8);
+}
+
+.section--tinted {
+  background-color: var(--color-bg-tint);
+}
+
+.section__header {
+  max-width: 720px;
+  margin-bottom: var(--space-6);
+}
+
+.section__header--center {
+  margin-inline: auto;
+  text-align: center;
+}
+
+/* Larger display size, used where the heading is the section's only label */
+.section__title--display {
+  font-size: clamp(2.25rem, 1.5rem + 3vw, 3.75rem);
+  color: var(--color-primary);
+}
+
+.section__eyebrow {
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-primary);
+  margin-bottom: var(--space-2);
+}
+
+.section__title {
+  font-size: var(--fs-xl);
+}
+
+.section__lead {
+  margin-top: var(--space-4);
+  color: var(--color-text-muted);
+}
+
+/* Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: 0.75rem 1.5rem;
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  line-height: 1;
+  border-radius: var(--radius-pill);
+  border: 2px solid transparent;
+  white-space: nowrap;
+  transition:
+    background-color var(--transition),
+    color var(--transition),
+    border-color var(--transition),
+    transform var(--transition),
+    box-shadow var(--transition);
+}
+
+.btn:hover {
+  transform: translateY(-2px);
+}
+
+.btn:active {
+  transform: translateY(0);
+}
+
+.btn--lg {
+  padding: 0.95rem 2rem;
+  font-size: var(--fs-md);
+}
+
+.btn--block {
+  width: 100%;
+}
+
+.btn--primary {
+  background-color: var(--color-primary);
+  border-color: var(--color-primary);
+  color: #fff;
+  box-shadow: 0 6px 16px rgba(184, 80, 60, 0.28);
+}
+
+.btn--primary:hover {
+  background-color: var(--color-primary-dark);
+  border-color: var(--color-primary-dark);
+  color: #fff;
+  box-shadow: 0 10px 22px rgba(184, 80, 60, 0.36);
+}
+
+.btn--secondary {
+  background-color: rgba(253, 251, 247, 0.92);
+  border-color: rgba(253, 251, 247, 0.92);
+  color: var(--color-text);
+}
+
+.btn--secondary:hover {
+  background-color: var(--color-primary);
+  border-color: var(--color-primary);
+  color: #fff;
+}
+
+.btn--outline {
+  background-color: transparent;
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.btn--outline:hover {
+  background-color: var(--color-primary);
+  color: #fff;
+}
+
+.btn--ghost {
+  background-color: transparent;
+  border-color: var(--color-border);
+  color: var(--color-text);
+}
+
+.btn--ghost:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.btn--light {
+  background-color: var(--color-bg);
+  border-color: var(--color-bg);
+  color: var(--color-primary);
+}
+
+.btn--light:hover {
+  background-color: #fff;
+  border-color: #fff;
+  color: var(--color-primary-dark);
+}
+
+/* Image placeholders (swap for real <img> later) */
+.placeholder {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  padding: var(--space-4);
+  text-align: center;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--color-primary-dark);
+  background-color: var(--color-primary-tint);
+  background-image:
+    repeating-linear-gradient(
+      45deg,
+      transparent 0 14px,
+      rgba(184, 80, 60, 0.08) 14px 16px
+    );
+  border: 1px dashed var(--color-primary-light);
+}
+
+.placeholder--tall {
+  aspect-ratio: 4 / 5;
+}

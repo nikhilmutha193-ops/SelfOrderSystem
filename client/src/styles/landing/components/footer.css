@@ -1,0 +1,147 @@
+/* ==========================================================================
+   Benne Kaffi — components/footer.css
+   Styles for <Footer />. Depends on the tokens and shared classes in css/main.css.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   Footer  →  <Footer />
+   -------------------------------------------------------------------------- */
+.footer {
+  padding-top: var(--space-8);
+  color: var(--color-footer-text);
+  background-color: var(--color-footer-bg);
+}
+
+.footer__inner {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-6);
+  padding-bottom: var(--space-6);
+}
+
+.footer__logo {
+  display: inline-block;
+  margin-bottom: var(--space-4);
+}
+
+.footer__logo-img {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.footer__tagline {
+  max-width: 26rem;
+  font-size: var(--fs-sm);
+  color: rgba(233, 223, 214, 0.75);
+}
+
+.footer__heading {
+  font-family: var(--font-body);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #fff;
+  margin-bottom: var(--space-4);
+}
+
+.footer__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.footer__link {
+  font-size: var(--fs-sm);
+  color: var(--color-footer-text);
+  transition: color var(--transition), padding-left var(--transition);
+}
+
+.footer__link:hover {
+  color: var(--color-primary-light);
+  padding-left: var(--space-1);
+}
+
+.footer__social {
+  display: flex;
+  gap: var(--space-3);
+}
+
+.footer__social-link {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  color: var(--color-footer-text);
+  border: 1px solid rgba(233, 223, 214, 0.25);
+  border-radius: 50%;
+  transition:
+    background-color var(--transition),
+    border-color var(--transition),
+    color var(--transition),
+    transform var(--transition);
+}
+
+.footer__social-link svg {
+  width: 20px;
+  height: 20px;
+}
+
+.footer__social-link:hover {
+  color: #fff;
+  background-color: var(--color-primary);
+  border-color: var(--color-primary);
+  transform: translateY(-2px);
+}
+
+.footer__bottom {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  align-items: center;
+  padding-block: var(--space-5);
+  border-top: 1px solid rgba(233, 223, 214, 0.15);
+  text-align: center;
+}
+
+.footer__copy {
+  font-size: var(--fs-xs);
+  color: rgba(233, 223, 214, 0.65);
+}
+
+.footer__legal {
+  display: flex;
+  gap: var(--space-5);
+}
+
+.footer__legal .footer__link {
+  font-size: var(--fs-xs);
+}
+
+@media (min-width: 768px) {
+  .footer__inner {
+    grid-template-columns: 1.5fr 1fr 1fr;
+  }
+
+  .footer__col--brand {
+    grid-column: 1 / -1;
+  }
+
+  .footer__bottom {
+    flex-direction: row;
+    justify-content: space-between;
+    text-align: left;
+  }
+}
+
+@media (min-width: 1024px) {
+  .footer__inner {
+    grid-template-columns: 2fr 1fr 1.2fr 1fr;
+  }
+
+  .footer__col--brand {
+    grid-column: auto;
+  }
+}

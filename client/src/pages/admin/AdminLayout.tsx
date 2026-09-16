@@ -24,6 +24,7 @@ const links: { to: string; label: string; module: ModuleKey | null }[] = [
   { to: "/admin/coupons", label: "Coupons", module: "coupons" },
   { to: "/admin/reviews", label: "Reviews", module: "reviews" },
   { to: "/admin/settings", label: "Restaurant Settings", module: "settings" },
+  { to: "/admin/landing", label: "Landing Page", module: "landing" },
   { to: "/admin/backup", label: "Backup & Restore", module: "backup" },
   { to: "/admin/admins", label: "Admin Users", module: "admins" },
   { to: "/admin/change-password", label: "Change Password", module: null },

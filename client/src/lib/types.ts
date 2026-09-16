@@ -140,6 +140,8 @@ export interface TableRow {
   status: "available" | "occupied";
   /** Shared walk-in/counter table: never marked occupied, no seating lock. */
   isGuest?: boolean;
+  /** When the table became occupied; used to show how long it's been sat. */
+  occupiedAt?: string;
 }
 
 export interface ChefRow {
@@ -337,6 +339,7 @@ export interface LandingBestseller {
 
 export interface LandingData {
   restaurant: LandingRestaurant;
+  content?: LandingContent;
   team: TeamMember[];
   bestsellers: LandingBestseller[];
   reviews: Review[];
@@ -353,4 +356,59 @@ export interface OrderCoupon {
   eligible: boolean;
   discount: number;
   reason: string | null;
+}
+
+export interface LandingLink {
+  label: string;
+  url: string;
+}
+
+export interface LandingContent {
+  hero: {
+    eyebrow: string;
+    headline: string;
+    subtitle: string;
+    showEyebrow: boolean;
+    showHeadline: boolean;
+    showSubtitle: boolean;
+    primaryLabel: string;
+    secondaryLabel: string;
+    /** Blank means "use the design's own colour". */
+    eyebrowColor: string;
+    headlineColor: string;
+    subtitleColor: string;
+    slides: { desktopUrl: string; mobileUrl: string }[];
+    textAlignMobile: "" | "left" | "center" | "right";
+    textAlignDesktop: "" | "left" | "center" | "right";
+    verticalAlignMobile: "" | "top" | "center" | "bottom";
+    verticalAlignDesktop: "" | "top" | "center" | "bottom";
+  };
+  serve: { enabled: boolean; title: string; lead: string; hint: string; items: { title: string; text: string; imageUrl: string }[] };
+  menu: { enabled: boolean; eyebrow: string; title: string; lead: string; ctaLabel: string };
+  story: {
+    enabled: boolean;
+    eyebrow: string;
+    title: string;
+    text: string;
+    quote: string;
+    quoteCite: string;
+    imageUrl: string;
+    caption: string;
+  };
+  outlets: {
+    enabled: boolean;
+    eyebrow: string;
+    title: string;
+    items: { city: string; area: string; address: string; hours: string; mapUrl: string; comingSoon: boolean }[];
+  };
+  reels: {
+    enabled: boolean;
+    title: string;
+    lead: string;
+    followUrl: string;
+    followLabel: string;
+    items: { caption: string; url: string; imageUrl: string }[];
+  };
+  partnership: { enabled: boolean; title: string; text: string; ctaLabel: string; ctaUrl: string };
+  footer: { tagline: string; contacts: LandingLink[]; socials: LandingLink[] };
 }

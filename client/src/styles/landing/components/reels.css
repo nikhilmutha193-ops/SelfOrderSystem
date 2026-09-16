@@ -1,0 +1,169 @@
+/* ==========================================================================
+   Benne Kaffi — components/reels.css
+   Styles for <ReelsGallery /> and <ReelCard />. Depends on the tokens and shared classes in css/main.css.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   Catch Our Reels  →  <ReelsGallery /> + <ReelCard />
+   Terracotta band with a centered cream heading and four 9:16 reels:
+   2-up on phones (grid capped at 768px wide), 4-up from 1024px.
+   -------------------------------------------------------------------------- */
+.reels {
+  position: relative;
+  overflow: hidden;
+  color: var(--color-bg);
+  background-color: var(--color-primary);
+}
+
+/* Faint dotted texture, like the reference band */
+.reels::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.1;
+  background-image:
+    radial-gradient(circle at 20% 50%, var(--color-bg) 1px, transparent 1px),
+    radial-gradient(circle at 80% 50%, var(--color-bg) 1px, transparent 1px);
+  background-size: 50px 50px;
+}
+
+.reels > .container {
+  position: relative;
+}
+
+.reels__title {
+  color: var(--color-bg);
+}
+
+.reels__lead {
+  color: rgba(253, 251, 247, 0.65);
+}
+
+.reels__grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-4);
+  max-width: 768px;
+  margin-inline: auto;
+}
+
+.reels__footer {
+  margin-top: var(--space-7);
+  text-align: center;
+}
+
+.reel-card__link {
+  position: relative;
+  display: block;
+  aspect-ratio: 9 / 16;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background-color: var(--color-primary-dark);
+  box-shadow: 0 24px 48px rgba(43, 29, 24, 0.35);
+  color: #fff;
+  transition: transform 300ms ease-out, box-shadow 300ms ease-out;
+}
+
+.reel-card__link:hover,
+.reel-card__link:focus-visible {
+  color: #fff;
+  transform: translateY(-8px) scale(1.02);
+  box-shadow: 0 32px 56px rgba(43, 29, 24, 0.45);
+}
+
+.reel-card__media {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 700ms ease;
+}
+
+.reel-card__link:hover .reel-card__media,
+.reel-card__link:focus-visible .reel-card__media {
+  transform: scale(1.05);
+}
+
+/* Placeholder variant for the terracotta band (swap for real <video>/<img>) */
+.placeholder--dark {
+  color: rgba(253, 251, 247, 0.8);
+  background-color: var(--color-primary-dark);
+  background-image:
+    repeating-linear-gradient(
+      45deg,
+      transparent 0 14px,
+      rgba(253, 251, 247, 0.06) 14px 16px
+    );
+  border: 1px dashed rgba(253, 251, 247, 0.35);
+  align-content: start;
+  padding-top: var(--space-5);
+}
+
+.reel-card__shade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.8), rgba(0, 0, 0, 0.2) 50%, transparent);
+}
+
+/* Play badge: revealed on hover/focus, like the reference */
+.reel-card__play {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 64px;
+  height: 64px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background-color: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  opacity: 0;
+  transition: opacity 300ms ease;
+}
+
+.reel-card__play::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 54%;
+  transform: translate(-50%, -50%);
+  border-left: 18px solid #fff;
+  border-top: 11px solid transparent;
+  border-bottom: 11px solid transparent;
+}
+
+.reel-card__link:hover .reel-card__play,
+.reel-card__link:focus-visible .reel-card__play {
+  opacity: 1;
+}
+
+.reel-card__caption {
+  position: absolute;
+  inset: auto 0 0 0;
+  padding: var(--space-4);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+@media (min-width: 768px) {
+  .reels__grid {
+    gap: var(--space-6);
+  }
+
+  .reel-card__link {
+    border-radius: var(--radius-lg);
+  }
+
+  .reel-card__caption {
+    padding: var(--space-5);
+  }
+}
+
+@media (min-width: 1024px) {
+  .reels__grid {
+    grid-template-columns: repeat(4, 1fr);
+    max-width: none;
+  }
+}

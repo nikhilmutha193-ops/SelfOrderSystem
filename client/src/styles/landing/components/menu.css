@@ -1,0 +1,109 @@
+/* ==========================================================================
+   Benne Kaffi — components/menu.css
+   Styles for <MenuHighlights /> and <MenuItem />. Depends on the tokens and shared classes in css/main.css.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   Menu Highlights  →  <MenuHighlights />
+   -------------------------------------------------------------------------- */
+.menu__grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-5);
+}
+
+.menu__category {
+  padding: var(--space-5);
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.menu__category-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: var(--fs-lg);
+  margin-bottom: var(--space-4);
+  padding-bottom: var(--space-3);
+  border-bottom: 2px solid var(--color-primary-tint);
+}
+
+.menu__category-title::before {
+  content: "";
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background-color: var(--color-primary);
+  flex-shrink: 0;
+}
+
+.menu-item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  border-bottom: 1px dashed var(--color-border);
+  transition: background-color var(--transition);
+}
+
+.menu-item:last-child {
+  border-bottom: 0;
+}
+
+.menu-item__info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.menu-item__name {
+  font-weight: 600;
+  transition: color var(--transition);
+}
+
+.menu-item:hover .menu-item__name {
+  color: var(--color-primary);
+}
+
+.menu-item__desc {
+  font-size: var(--fs-xs);
+  color: var(--color-text-muted);
+}
+
+.menu-item__price {
+  flex-shrink: 0;
+  font-family: var(--font-heading);
+  font-size: var(--fs-md);
+  font-weight: 600;
+  color: var(--color-primary);
+  white-space: nowrap;
+}
+
+.menu__footer {
+  margin-top: var(--space-6);
+  text-align: center;
+}
+
+@media (min-width: 768px) {
+  .menu__grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .menu__category:last-child {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (min-width: 1024px) {
+  .menu__grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .menu__category:last-child {
+    grid-column: auto;
+  }
+}

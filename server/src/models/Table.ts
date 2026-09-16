@@ -11,6 +11,8 @@ export interface ITable {
   status: TableStatus;
   /** Identifies the guest session currently seated here; cleared when the table is released. */
   sessionId?: string;
+  /** When the table became occupied; drives auto-release. Cleared when it is freed. */
+  occupiedAt?: Date;
   /** A walk-in/counter table: shared, never marked occupied, no PIN gate on seating. */
   isGuest: boolean;
   createdAt: Date;
@@ -25,6 +27,7 @@ const tableSchema = new Schema<ITable>(
     password: { type: String, required: true },
     status: { type: String, enum: ["available", "occupied"], default: "available" },
     sessionId: { type: String, default: null },
+    occupiedAt: { type: Date, default: null },
     isGuest: { type: Boolean, default: false },
   },
   { timestamps: true }
