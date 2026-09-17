@@ -199,7 +199,7 @@ export default function Menu() {
             <h1 className="text-xl font-bold tracking-tight text-slate-900">Menu</h1>
             <p className="text-xs text-slate-500">Tap a dish for details</p>
           </div>
-          <Button variant="secondary" onClick={() => navigate("/order/invoice")}>
+          <Button variant="secondary" className="rounded-xl" onClick={() => navigate("/order/invoice")}>
             My order
           </Button>
         </div>
@@ -218,7 +218,7 @@ export default function Menu() {
             <path d="M20 20l-3.5-3.5" strokeLinecap="round" />
           </svg>
           <Input
-            className="!pl-9"
+            className="!pl-9 rounded-xl"
             placeholder="Search for dishes..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -242,7 +242,7 @@ export default function Menu() {
               <button
                 key={category._id}
                 onClick={() => scrollToCategory(category._id)}
-                className={`min-h-[36px] shrink-0 whitespace-nowrap rounded-full px-3.5 text-sm font-semibold transition-colors ${
+                className={`min-h-[36px] shrink-0 whitespace-nowrap rounded-xl px-3.5 text-sm font-semibold transition-colors ${
                   activeCategoryId === category._id
                     ? "bg-orange-600 text-white shadow-sm"
                     : "bg-slate-100 text-slate-600 hover:bg-slate-200"
@@ -258,7 +258,7 @@ export default function Menu() {
           <button
             onClick={() => setVegOnly((v) => !v)}
             aria-pressed={vegOnly}
-            className={`inline-flex min-h-[36px] shrink-0 items-center gap-1.5 rounded-full border px-3 text-sm font-semibold transition-colors ${
+            className={`inline-flex min-h-[36px] shrink-0 items-center gap-1.5 rounded-xl border px-3 text-sm font-semibold transition-colors ${
               vegOnly ? "border-green-600 bg-green-50 text-green-700" : "border-slate-300 text-slate-600 hover:bg-slate-50"
             }`}
           >
@@ -267,7 +267,7 @@ export default function Menu() {
           <button
             onClick={() => setBestsellerOnly((v) => !v)}
             aria-pressed={bestsellerOnly}
-            className={`min-h-[36px] shrink-0 whitespace-nowrap rounded-full border px-3 text-sm font-semibold transition-colors ${
+            className={`min-h-[36px] shrink-0 whitespace-nowrap rounded-xl border px-3 text-sm font-semibold transition-colors ${
               bestsellerOnly
                 ? "border-amber-500 bg-amber-50 text-amber-700"
                 : "border-slate-300 text-slate-600 hover:bg-slate-50"
@@ -278,7 +278,7 @@ export default function Menu() {
           <Select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as SortOption)}
-            className="!w-auto min-h-[36px] shrink-0 !py-1 text-sm"
+            className="!w-auto min-h-[36px] shrink-0 rounded-xl !py-1 text-sm"
           >
             {(Object.keys(SORT_LABELS) as SortOption[]).map((opt) => (
               <option key={opt} value={opt}>
@@ -394,7 +394,7 @@ export default function Menu() {
         <div className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 backdrop-blur shadow-[0_-4px_20px_rgba(0,0,0,0.08)]">
           <div className="mx-auto max-w-3xl px-4 py-3">
             {showCart && (
-              <div className="mb-3 flex max-h-56 flex-col gap-2 overflow-y-auto rounded-lg bg-slate-50 p-2">
+              <div className="mb-3 flex max-h-56 flex-col gap-2 overflow-y-auto rounded-xl bg-slate-50 p-2">
                 {cart.map((line, idx) => (
                   <div key={idx} className="flex items-center justify-between gap-2 text-sm">
                     <span className="min-w-0 flex-1 truncate text-slate-700">
@@ -416,7 +416,7 @@ export default function Menu() {
             )}
             <div className="flex items-center gap-3">
               <button className="flex min-w-0 flex-1 items-center gap-3 text-left" onClick={() => setShowCart((v) => !v)}>
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-orange-600 text-sm font-bold text-white">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-orange-600 text-sm font-bold text-white">
                   {cartCount}
                 </span>
                 <span className="min-w-0">
@@ -426,7 +426,7 @@ export default function Menu() {
                   </span>
                 </span>
               </button>
-              <Button className="shrink-0 px-6" onClick={confirmOrder} disabled={confirming}>
+              <Button className="shrink-0 rounded-xl px-6" onClick={confirmOrder} disabled={confirming}>
                 {confirming ? "Placing..." : "Place order"}
               </Button>
             </div>
@@ -491,28 +491,28 @@ function FoodCard({
 
       {/* Its own column on the right, so the action sits in one predictable place
           down the whole list rather than moving with each dish's text length. */}
-      <div className="w-[4.5rem] shrink-0">
+      <div className="w-24 shrink-0">
         {qty === 0 ? (
           <button
             onClick={() => onIncrement(food)}
-            className="flex h-10 w-full items-center justify-center rounded-lg border border-orange-600 bg-white text-sm font-bold tracking-wide text-orange-600 shadow-sm hover:bg-orange-50"
+            className="flex h-11 w-full items-center justify-center rounded-xl border border-orange-600 bg-white text-base font-bold tracking-wide text-orange-600 shadow-sm hover:bg-orange-50"
           >
             ADD
           </button>
         ) : (
-          <div className="flex h-10 w-full items-center justify-between rounded-lg bg-orange-600 px-1 text-white shadow-sm">
+          <div className="flex h-11 w-full items-center justify-between rounded-xl bg-orange-600 px-0.5 text-white shadow-sm">
             <button
               onClick={() => onDecrement(food._id)}
               aria-label={`Remove one ${food.name}`}
-              className="flex h-full w-6 items-center justify-center text-lg font-bold leading-none"
+              className="flex h-full w-8 items-center justify-center text-xl font-bold leading-none"
             >
               −
             </button>
-            <span className="text-sm font-bold">{qty}</span>
+            <span className="text-base font-bold tabular-nums">{qty}</span>
             <button
               onClick={() => onIncrement(food)}
               aria-label={`Add one ${food.name}`}
-              className="flex h-full w-6 items-center justify-center text-lg font-bold leading-none"
+              className="flex h-full w-8 items-center justify-center text-xl font-bold leading-none"
             >
               +
             </button>

@@ -9,9 +9,17 @@ import { comparePassword, hashPassword } from "../utils/password";
 import { signToken } from "../utils/jwt";
 import { decryptTableToken } from "../utils/tableToken";
 
+/** Credentials must be plain strings; anything else is a malformed or crafted request. */
+function requireString(value: unknown, field: string): string {
+  if (typeof value !== "string" || value.length === 0) {
+    throw new HttpError(400, `${field} is required`);
+  }
+  return value;
+}
+
 export const adminLogin = asyncHandler(async (req: Request, res: Response) => {
-  const { username, password } = req.body as { username?: string; password?: string };
-  if (!username || !password) throw new HttpError(400, "username and password are required");
+  const username = requireString(req.body?.username, "username");
+  const password = requireString(req.body?.password, "password");
 
   const admin = await Admin.findOne({ restaurantId: req.restaurantId, username });
   if (!admin || !(await comparePassword(password, admin.passwordHash))) {
@@ -48,22 +56,16 @@ export const adminMe = asyncHandler(async (req: Request, res: Response) => {
 });
 
 export const adminSecurityQuestion = asyncHandler(async (req: Request, res: Response) => {
-  const { username } = req.query as { username?: string };
-  if (!username) throw new HttpError(400, "username is required");
+  const username = requireString(req.query?.username, "username");
   const admin = await Admin.findOne({ restaurantId: req.restaurantId, username });
   if (!admin) throw new HttpError(404, "No admin account with that username");
   res.json({ securityQuestion: admin.securityQuestion });
 });
 
 export const adminForgotPassword = asyncHandler(async (req: Request, res: Response) => {
-  const { username, securityAnswer, newPassword } = req.body as {
-    username?: string;
-    securityAnswer?: string;
-    newPassword?: string;
-  };
-  if (!username || !securityAnswer || !newPassword) {
-    throw new HttpError(400, "username, securityAnswer and newPassword are required");
-  }
+  const username = requireString(req.body?.username, "username");
+  const securityAnswer = requireString(req.body?.securityAnswer, "securityAnswer");
+  const newPassword = requireString(req.body?.newPassword, "newPassword");
   if (newPassword.length < 6) throw new HttpError(400, "newPassword must be at least 6 characters");
 
   const admin = await Admin.findOne({ restaurantId: req.restaurantId, username });
@@ -76,8 +78,8 @@ export const adminForgotPassword = asyncHandler(async (req: Request, res: Respon
 });
 
 export const adminChangePassword = asyncHandler(async (req: Request, res: Response) => {
-  const { oldPassword, newPassword } = req.body as { oldPassword?: string; newPassword?: string };
-  if (!oldPassword || !newPassword) throw new HttpError(400, "oldPassword and newPassword are required");
+  const oldPassword = requireString(req.body?.oldPassword, "oldPassword");
+  const newPassword = requireString(req.body?.newPassword, "newPassword");
   if (newPassword.length < 6) throw new HttpError(400, "newPassword must be at least 6 characters");
 
   const admin = await Admin.findById(req.auth!.id);
@@ -90,8 +92,8 @@ export const adminChangePassword = asyncHandler(async (req: Request, res: Respon
 });
 
 export const chefLogin = asyncHandler(async (req: Request, res: Response) => {
-  const { username, password } = req.body as { username?: string; password?: string };
-  if (!username || !password) throw new HttpError(400, "username and password are required");
+  const username = requireString(req.body?.username, "username");
+  const password = requireString(req.body?.password, "password");
 
   const chef = await Chef.findOne({ restaurantId: req.restaurantId, username });
   if (!chef || !(await comparePassword(password, chef.passwordHash))) {
@@ -103,23 +105,24 @@ export const chefLogin = asyncHandler(async (req: Request, res: Response) => {
 });
 
 export const tableLogin = asyncHandler(async (req: Request, res: Response) => {
-  const { code, token: qrToken, password } = req.body as { code?: string; token?: string; password?: string };
+  const { code, token: qrToken, password } = req.body as { code?: unknown; token?: unknown; password?: unknown };
   if (!code && !qrToken) throw new HttpError(400, "code or token is required");
 
   let table;
   if (qrToken) {
     // Scanning the encrypted, table-specific QR code already proves this is the physical table stand -
     // no PIN needed on top of that (unlike the bare-code fallback below, which anyone could type in).
-    const decrypted = decryptTableToken(qrToken);
+    const decrypted = decryptTableToken(requireString(qrToken, "token"));
     if (!decrypted || decrypted.restaurantId !== req.restaurantId) {
       throw new HttpError(401, "Invalid or expired QR code");
     }
     table = await TableModel.findOne({ _id: decrypted.tableId, restaurantId: req.restaurantId });
     if (!table) throw new HttpError(401, "Invalid or expired QR code");
   } else {
-    if (!password) throw new HttpError(400, "password is required");
-    table = await TableModel.findOne({ restaurantId: req.restaurantId, code });
-    if (!table || !(await comparePassword(password, table.passwordHash))) {
+    const tableCode = requireString(code, "code");
+    const tablePassword = requireString(password, "password");
+    table = await TableModel.findOne({ restaurantId: req.restaurantId, code: tableCode });
+    if (!table || !(await comparePassword(tablePassword, table.passwordHash))) {
       throw new HttpError(401, "Invalid table code or password");
     }
   }

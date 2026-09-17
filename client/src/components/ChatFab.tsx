@@ -66,11 +66,11 @@ export default function ChatFab() {
         type="button"
         onClick={() => setOpen(true)}
         aria-label="Chat with the restaurant"
-        className="fixed bottom-5 left-5 z-20 flex items-center gap-2 rounded-full bg-slate-800 px-4 py-3 text-sm font-medium text-white shadow-lg hover:bg-slate-900"
+        className="fixed bottom-5 left-5 z-20 flex items-center gap-2 rounded-xl bg-slate-800 px-4 py-3 text-sm font-medium text-white shadow-lg hover:bg-slate-900"
       >
         <span aria-hidden>💬</span> Chat
         {unread > 0 && (
-          <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-red-600 px-1 text-[11px] font-semibold">
+          <span className="flex h-5 min-w-5 items-center justify-center rounded-md bg-red-600 px-1 text-[11px] font-semibold">
             {unread}
           </span>
         )}

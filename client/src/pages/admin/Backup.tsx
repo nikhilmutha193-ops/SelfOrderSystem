@@ -45,7 +45,9 @@ export default function Backup() {
   const [listError, setListError] = useState<string | null>(null);
 
   const [generating, setGenerating] = useState(false);
+  const [downloadingNow, setDownloadingNow] = useState(false);
   const [genError, setGenError] = useState<string | null>(null);
+  const [serverStorage, setServerStorage] = useState(true);
 
   const [busyId, setBusyId] = useState<string | null>(null);
   const [rowError, setRowError] = useState<string | null>(null);
@@ -87,7 +89,25 @@ export default function Backup() {
   useEffect(() => {
     loadRecords();
     loadSchedule();
+    api
+      .get<{ serverStorage: boolean }>("/backup/capabilities")
+      .then((res) => setServerStorage(res.data.serverStorage))
+      .catch(() => setServerStorage(true)); // assume available; the button's own error still guards it
   }, []);
+
+  /** Build-and-download in the browser; needs no server storage, so it works everywhere. */
+  async function downloadNow() {
+    setGenError(null);
+    setDownloadingNow(true);
+    try {
+      const res = await api.get("/backup/export", { responseType: "blob" });
+      await downloadBlobResponse(res, "backup.json");
+    } catch (err) {
+      setGenError(extractErrorMessage(err));
+    } finally {
+      setDownloadingNow(false);
+    }
+  }
 
   async function generate() {
     setGenError(null);
@@ -204,13 +224,26 @@ export default function Backup() {
 
       <Card>
         <h2 className="mb-2 text-lg font-semibold text-slate-800">Generate a backup</h2>
-        <p className="mb-3 text-sm text-slate-500">Creates a new snapshot on the server, listed below.</p>
+        <p className="mb-3 text-sm text-slate-500">
+          <strong>Download backup</strong> saves the snapshot straight to your device and works on any host.
+          {serverStorage
+            ? " Generate backup also keeps a copy on the server, listed below."
+            : " Saving copies on the server isn't available on this host (read-only storage), so use Download."}
+        </p>
         <ErrorText>{genError}</ErrorText>
-        <Button onClick={generate} disabled={generating} className="self-start">
-          {generating ? "Generating..." : "Generate backup"}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button onClick={downloadNow} disabled={downloadingNow} className="self-start">
+            {downloadingNow ? "Preparing..." : "Download backup"}
+          </Button>
+          {serverStorage && (
+            <Button variant="secondary" onClick={generate} disabled={generating} className="self-start">
+              {generating ? "Generating..." : "Generate backup (save on server)"}
+            </Button>
+          )}
+        </div>
       </Card>
 
+      {serverStorage && (
       <Card>
         <h2 className="mb-2 text-lg font-semibold text-slate-800">Automatic daily backup</h2>
         <p className="mb-3 text-sm text-slate-500">When enabled, a backup is generated automatically every day at the chosen time.</p>
@@ -248,7 +281,9 @@ export default function Backup() {
           <p className="mt-2 text-xs text-slate-400">Last automatic run: {new Date(schedule.lastRunAt).toLocaleString()}</p>
         )}
       </Card>
+      )}
 
+      {serverStorage && (
       <Card>
         <h2 className="mb-2 text-lg font-semibold text-slate-800">Backups on this server</h2>
         <ErrorText>{listError}</ErrorText>
@@ -316,6 +351,7 @@ export default function Backup() {
           </div>
         )}
       </Card>
+      )}
 
       <Card>
         <h2 className="mb-2 text-lg font-semibold text-slate-800">Restore from an uploaded file</h2>

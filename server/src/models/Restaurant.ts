@@ -50,6 +50,14 @@ export interface IBackupSchedule {
   lastRunAt?: Date;
 }
 
+export interface IChatModeration {
+  enabled: boolean;
+  /** "mask" replaces banned words with ***; "block" rejects the whole message. */
+  mode: "mask" | "block";
+  /** Extra banned words on top of the built-in list. */
+  customWords: string[];
+}
+
 export interface IRestaurant {
   _id: Types.ObjectId;
   name: string;
@@ -81,6 +89,8 @@ export interface IRestaurant {
   prepBufferMinutes: number;
   /** Shown above the items on the order and invoice screens. {minutes} and {time} are filled in. */
   prepMessageTemplate: string;
+  /** Abuse/violence filter for the guest<->staff chat. */
+  chatModeration: IChatModeration;
   taxRates: ITaxRate[];
   qrSettings: IQrSettings;
   kotSettings: IKotSettings;
@@ -147,6 +157,15 @@ const backupScheduleSchema = new Schema<IBackupSchedule>(
   { _id: false }
 );
 
+const chatModerationSchema = new Schema<IChatModeration>(
+  {
+    enabled: { type: Boolean, default: true },
+    mode: { type: String, enum: ["mask", "block"], default: "mask" },
+    customWords: { type: [String], default: [] },
+  },
+  { _id: false }
+);
+
 const restaurantSchema = new Schema<IRestaurant>(
   {
     name: { type: String, required: true, trim: true },
@@ -174,6 +193,7 @@ const restaurantSchema = new Schema<IRestaurant>(
     kotSettings: { type: kotSettingsSchema, default: () => ({}) },
     invoiceSettings: { type: invoiceSettingsSchema, default: () => ({}) },
     backupSchedule: { type: backupScheduleSchema, default: () => ({}) },
+    chatModeration: { type: chatModerationSchema, default: () => ({}) },
   },
   { timestamps: true }
 );

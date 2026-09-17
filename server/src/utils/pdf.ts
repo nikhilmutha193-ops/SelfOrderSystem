@@ -475,3 +475,109 @@ export async function streamKotPdf(
     }
   });
 }
+
+interface OrdersReportRow {
+  customer: string;
+  type: string;
+  checkin: string;
+  status: string;
+  payment: string;
+  total: number;
+}
+
+/**
+ * Multi-page A4 table of orders with a grand total. Unlike the ticket renderer this
+ * lets PDFKit paginate naturally (rows can run to many pages), but still buffers the
+ * whole document before responding so it works on serverless too.
+ */
+export async function streamOrdersReportPdf(
+  res: Response,
+  data: {
+    restaurant: IRestaurant;
+    filename: string;
+    title: string;
+    rangeLabel: string;
+    rows: OrdersReportRow[];
+    total: number;
+    count: number;
+  }
+): Promise<void> {
+  const { restaurant, filename, title, rangeLabel, rows, total, count } = data;
+  const margin = 36;
+
+  const pdf = await new Promise<Buffer>((resolve, reject) => {
+    const doc = new PDFDocument({ size: "A4", margin });
+    const chunks: Buffer[] = [];
+    doc.on("data", (c: Buffer) => chunks.push(c));
+    doc.on("end", () => resolve(Buffer.concat(chunks)));
+    doc.on("error", reject);
+
+    const left = margin;
+    const right = doc.page.width - margin;
+    const width = right - left;
+    // Column x-offsets and widths: customer, type, check-in, status, payment, total.
+    const cols = [
+      { key: "customer", label: "Customer", w: 0.24, align: "left" as const },
+      { key: "type", label: "Type", w: 0.2, align: "left" as const },
+      { key: "checkin", label: "Check-in", w: 0.22, align: "left" as const },
+      { key: "status", label: "Status", w: 0.12, align: "left" as const },
+      { key: "payment", label: "Payment", w: 0.1, align: "left" as const },
+      { key: "total", label: "Total", w: 0.12, align: "right" as const },
+    ];
+    const xs: number[] = [];
+    let acc = left;
+    for (const c of cols) {
+      xs.push(acc);
+      acc += c.w * width;
+    }
+
+    doc.font("Helvetica-Bold").fontSize(16).fillColor("#111").text(restaurant.name, left, doc.y);
+    doc.font("Helvetica").fontSize(11).fillColor("#333").text(title);
+    doc.fontSize(9).fillColor("#666").text(`${rangeLabel}  |  Generated ${new Date().toLocaleString()}`);
+    doc.moveDown(0.6);
+
+    const drawHeader = () => {
+      const y = doc.y;
+      doc.font("Helvetica-Bold").fontSize(9).fillColor("#111");
+      cols.forEach((c, i) => doc.text(c.label, xs[i], y, { width: c.w * width - 4, align: c.align }));
+      doc.moveDown(0.3);
+      doc.moveTo(left, doc.y).lineTo(right, doc.y).lineWidth(0.5).strokeColor("#bbb").stroke();
+      doc.moveDown(0.2);
+    };
+    drawHeader();
+
+    doc.font("Helvetica").fontSize(9).fillColor("#222");
+    for (const row of rows) {
+      // Start a new page (and repeat the header) before a row would overflow the bottom margin.
+      if (doc.y > doc.page.height - margin - 40) {
+        doc.addPage();
+        drawHeader();
+        doc.font("Helvetica").fontSize(9).fillColor("#222");
+      }
+      const y = doc.y;
+      const cells = [row.customer, row.type, row.checkin, row.status, row.payment, row.total.toFixed(2)];
+      let maxH = 0;
+      cells.forEach((val, i) => {
+        const w = cols[i].w * width - 4;
+        const h = doc.heightOfString(String(val), { width: w });
+        if (h > maxH) maxH = h;
+      });
+      cells.forEach((val, i) => doc.text(String(val), xs[i], y, { width: cols[i].w * width - 4, align: cols[i].align }));
+      doc.y = y + maxH + 3;
+    }
+
+    doc.moveDown(0.3);
+    doc.moveTo(left, doc.y).lineTo(right, doc.y).lineWidth(0.5).strokeColor("#bbb").stroke();
+    doc.moveDown(0.3);
+    doc.font("Helvetica-Bold").fontSize(10).fillColor("#111");
+    const ty = doc.y;
+    doc.text(`Total orders: ${count}`, left, ty, { width: width * 0.6, align: "left" });
+    doc.text(`Grand total: ${total.toFixed(2)}`, left, ty, { width, align: "right" });
+
+    doc.end();
+  });
+
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `inline; filename="${filename}"`);
+  res.end(pdf);
+}

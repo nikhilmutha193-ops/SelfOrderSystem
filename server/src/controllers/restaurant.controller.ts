@@ -82,6 +82,7 @@ export const updateRestaurantSettings = asyncHandler(async (req: Request, res: R
     tableAutoReleaseMinutes,
     prepBufferMinutes,
     prepMessageTemplate,
+    chatModeration,
   } = req.body as {
     name?: string;
     siteTitle?: string;
@@ -103,6 +104,7 @@ export const updateRestaurantSettings = asyncHandler(async (req: Request, res: R
     tableAutoReleaseMinutes?: number;
     prepBufferMinutes?: number;
     prepMessageTemplate?: string;
+    chatModeration?: { enabled?: boolean; mode?: "mask" | "block"; customWords?: string[] };
   };
 
   if (publicUrl && !/^https?:\/\/.+/i.test(publicUrl)) {
@@ -161,6 +163,24 @@ export const updateRestaurantSettings = asyncHandler(async (req: Request, res: R
   if (qrSettings !== undefined) Object.assign(restaurant.qrSettings, qrSettings);
   if (kotSettings !== undefined) Object.assign(restaurant.kotSettings, kotSettings);
   if (invoiceSettings !== undefined) Object.assign(restaurant.invoiceSettings, invoiceSettings);
+  if (chatModeration !== undefined) {
+    if (chatModeration.enabled !== undefined) restaurant.chatModeration.enabled = !!chatModeration.enabled;
+    if (chatModeration.mode !== undefined) {
+      if (chatModeration.mode !== "mask" && chatModeration.mode !== "block") {
+        throw new HttpError(400, "chatModeration.mode must be 'mask' or 'block'");
+      }
+      restaurant.chatModeration.mode = chatModeration.mode;
+    }
+    if (chatModeration.customWords !== undefined) {
+      if (!Array.isArray(chatModeration.customWords) || chatModeration.customWords.some((w) => typeof w !== "string")) {
+        throw new HttpError(400, "chatModeration.customWords must be an array of strings");
+      }
+      // Normalise: trim, drop blanks/dupes, cap length so the list stays sane.
+      restaurant.chatModeration.customWords = [
+        ...new Set(chatModeration.customWords.map((w) => w.trim().toLowerCase()).filter(Boolean)),
+      ].slice(0, 200);
+    }
+  }
 
   await restaurant.save();
   res.json(restaurant);

@@ -15,6 +15,7 @@ import OrderItem from "../models/OrderItem";
 import ChatMessage from "../models/ChatMessage";
 import { HttpError } from "./httpError";
 import { deleteObject, getObject, putObject } from "./objectStore";
+import { getR2 } from "../config/r2";
 
 /** How many generated backups (manual + scheduled combined) to keep on disk per restaurant. */
 const RETENTION_LIMIT = 30;
@@ -46,6 +47,26 @@ async function buildBackupPayload(restaurantId: Types.ObjectId | string) {
     backup[key] = await model.find({ restaurantId }).lean();
   }
   return { restaurant, backup };
+}
+
+/**
+ * Whether generated backups can be persisted server-side. Saving needs a durable place
+ * to write: a private R2 bucket, or a writable local disk. Serverless hosts (Vercel) have
+ * a read-only filesystem, so with no private bucket the "save to server" list can't work
+ * there - but a direct build-and-download still can, since it never touches storage.
+ */
+export function isBackupStorageAvailable(): boolean {
+  const r2 = getR2();
+  if (r2?.privateBucket) return true;
+  // Vercel sets VERCEL=1; its filesystem is read-only outside /tmp.
+  return process.env.VERCEL !== "1";
+}
+
+/** Builds the backup JSON in memory without persisting it - safe on read-only hosts. */
+export async function buildBackupJson(restaurantId: Types.ObjectId | string): Promise<{ filename: string; json: string }> {
+  const { restaurant, backup } = await buildBackupPayload(restaurantId);
+  const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+  return { filename: `backup-${restaurant.key}-${timestamp}.json`, json: JSON.stringify(backup, null, 2) };
 }
 
 export async function pruneOldBackups(restaurantId: Types.ObjectId | string): Promise<void> {

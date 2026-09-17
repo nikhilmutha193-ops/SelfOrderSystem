@@ -4,7 +4,14 @@ import BackupRecord from "../models/BackupRecord";
 import { asyncHandler } from "../middleware/errorHandler";
 import { HttpError } from "../utils/httpError";
 import { isValidDayEndTime } from "../utils/businessDay";
-import { applyBackupPayload, deleteBackupFile, generateBackupFile, readBackupFile } from "../utils/backupService";
+import {
+  applyBackupPayload,
+  buildBackupJson,
+  deleteBackupFile,
+  generateBackupFile,
+  isBackupStorageAvailable,
+  readBackupFile,
+} from "../utils/backupService";
 
 function sendAsAttachment(res: Response, filename: string, json: string) {
   res.setHeader("Content-Type", "application/json");
@@ -18,15 +25,30 @@ async function findOwnRecord(restaurantId: string, id: string) {
   return record;
 }
 
-/** One-click "generate + download" used by the Backup page's main button. */
+/**
+ * One-click "download a backup now". Built in memory and streamed straight to the browser,
+ * so it works everywhere - including read-only serverless hosts where saving to the server
+ * isn't possible.
+ */
 export const exportBackup = asyncHandler(async (req: Request, res: Response) => {
-  const { record, json } = await generateBackupFile(req.restaurantId!, "manual");
-  sendAsAttachment(res, record.filename, json);
+  const { filename, json } = await buildBackupJson(req.restaurantId!);
+  sendAsAttachment(res, filename, json);
 });
 
 export const generateBackup = asyncHandler(async (req: Request, res: Response) => {
+  if (!isBackupStorageAvailable()) {
+    throw new HttpError(
+      503,
+      "Saving backups on the server isn't available on this host (its storage is read-only). Use \"Download backup\" to save the file to your device instead."
+    );
+  }
   const { record } = await generateBackupFile(req.restaurantId!, "manual");
   res.status(201).json(record);
+});
+
+/** Lets the client show the right controls: server-side saving vs download-only. */
+export const getBackupCapabilities = asyncHandler(async (_req: Request, res: Response) => {
+  res.json({ serverStorage: isBackupStorageAvailable() });
 });
 
 export const listBackups = asyncHandler(async (req: Request, res: Response) => {

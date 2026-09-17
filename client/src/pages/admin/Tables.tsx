@@ -15,6 +15,14 @@ function elapsedSince(iso?: string): string | null {
   return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
 }
 
+/** "1h 30m", "45m", or "1h" for a duration in minutes. */
+function formatMinutes(mins: number): string {
+  const hours = Math.floor(mins / 60);
+  const minutes = mins % 60;
+  if (hours === 0) return `${minutes}m`;
+  return minutes === 0 ? `${hours}h` : `${hours}h ${minutes}m`;
+}
+
 export default function Tables() {
   const [tables, setTables] = useState<TableRow[]>([]);
   const [code, setCode] = useState("");
@@ -240,18 +248,37 @@ export default function Tables() {
                   {table.isGuest ? (
                     <span className="text-xs text-slate-400">n/a</span>
                   ) : (
-                    <Input
-                      className="w-28"
-                      type="number"
-                      min={0}
-                      placeholder={defaultExpiryLabel}
-                      value={expiryDraft[table._id] ?? (table.autoReleaseMinutes ?? "")}
-                      onChange={(e) => setExpiryDraft((d) => ({ ...d, [table._id]: e.target.value }))}
-                      onBlur={() => saveExpiryOverride(table)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") e.currentTarget.blur();
-                      }}
-                    />
+                    (() => {
+                      const raw = expiryDraft[table._id] ?? (table.autoReleaseMinutes ?? "");
+                      const effective =
+                        raw === "" ? savedDefault : Number(raw);
+                      const hint =
+                        !Number.isFinite(effective) || effective <= 0
+                          ? "never expires"
+                          : raw === ""
+                            ? `follows default (${formatMinutes(savedDefault)})`
+                            : `= ${formatMinutes(effective)}`;
+                      return (
+                        <div className="flex flex-col gap-0.5">
+                          <div className="flex items-center gap-1.5">
+                            <Input
+                              className="w-20"
+                              type="number"
+                              min={0}
+                              placeholder={defaultExpiryLabel}
+                              value={raw}
+                              onChange={(e) => setExpiryDraft((d) => ({ ...d, [table._id]: e.target.value }))}
+                              onBlur={() => saveExpiryOverride(table)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") e.currentTarget.blur();
+                              }}
+                            />
+                            <span className="text-xs text-slate-500">min</span>
+                          </div>
+                          <span className="text-xs text-slate-400">{hint}</span>
+                        </div>
+                      );
+                    })()
                   )}
                 </td>
                 <td className="py-1.5">

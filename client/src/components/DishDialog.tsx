@@ -55,7 +55,7 @@ export default function DishDialog({
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="absolute right-3 top-3 flex h-10 w-10 items-center justify-center rounded-full bg-white/90 text-lg text-slate-700 shadow-md hover:bg-white"
+            className="absolute right-3 top-3 flex h-10 w-10 items-center justify-center rounded-xl bg-white/90 text-lg text-slate-700 shadow-md hover:bg-white"
           >
             ✕
           </button>
@@ -81,12 +81,12 @@ export default function DishDialog({
             {qty === 0 ? (
               <button
                 onClick={() => onIncrement(food)}
-                className="flex h-12 w-full items-center justify-center rounded-lg bg-orange-600 text-base font-bold tracking-wide text-white shadow-sm hover:bg-orange-700"
+                className="flex h-12 w-full items-center justify-center rounded-xl bg-orange-600 text-base font-bold tracking-wide text-white shadow-sm hover:bg-orange-700"
               >
                 ADD TO ORDER
               </button>
             ) : (
-              <div className="flex h-12 w-full items-center justify-between rounded-lg bg-orange-600 px-2 text-white shadow-sm">
+              <div className="flex h-12 w-full items-center justify-between rounded-xl bg-orange-600 px-2 text-white shadow-sm">
                 <button
                   onClick={() => onDecrement(food._id)}
                   aria-label={`Remove one ${food.name}`}

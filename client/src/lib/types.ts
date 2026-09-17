@@ -53,6 +53,12 @@ export interface InvoiceSettings {
   showJainTag: boolean;
 }
 
+export interface ChatModeration {
+  enabled: boolean;
+  mode: "mask" | "block";
+  customWords: string[];
+}
+
 export interface Restaurant {
   siteTitle?: string;
   faviconUrl?: string;
@@ -72,6 +78,7 @@ export interface Restaurant {
   tableAutoReleaseMinutes?: number;
   prepBufferMinutes?: number;
   prepMessageTemplate?: string;
+  chatModeration?: ChatModeration;
   taxRates: TaxRate[];
   qrSettings: QrSettings;
   kotSettings: KotSettings;
@@ -249,6 +256,8 @@ export interface ChatMessage {
   senderRole: ChatSenderRole;
   senderName: string;
   message: string;
+  /** Set when the abuse filter masked content in this message. */
+  flagged?: boolean;
   createdAt: string;
 }
 

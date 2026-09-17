@@ -16,6 +16,42 @@ export default function Orders() {
 
   const [orders, setOrders] = useState<Order[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [downloading, setDownloading] = useState<"csv" | "pdf" | null>(null);
+
+  // Mirrors the active filters into the report request so the download matches the table.
+  function currentParams(): Record<string, string> {
+    const params: Record<string, string> = {};
+    if (type) params.type = type;
+    if (status) params.status = status;
+    if (today) params.today = "true";
+    else {
+      if (from) params.from = from;
+      if (to) params.to = to;
+    }
+    return params;
+  }
+
+  async function downloadReport(format: "csv" | "pdf") {
+    setError(null);
+    setDownloading(format);
+    try {
+      const res = await api.get(`/orders/report.${format}`, { params: currentParams(), responseType: "blob" });
+      const disposition = res.headers["content-disposition"] as string | undefined;
+      const match = disposition?.match(/filename="([^"]+)"/);
+      const url = URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = match?.[1] || `orders-report.${format}`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    } catch (err) {
+      setError(extractErrorMessage(err));
+    } finally {
+      setDownloading(null);
+    }
+  }
 
   useEffect(() => {
     const params: Record<string, string> = {};
@@ -119,6 +155,14 @@ export default function Orders() {
           <Button type="button" variant="secondary" onClick={() => selectDayFromToday(1)}>
             Tomorrow
           </Button>
+          <div className="ml-auto flex gap-2">
+            <Button type="button" onClick={() => downloadReport("csv")} disabled={downloading !== null}>
+              {downloading === "csv" ? "Preparing..." : "Download CSV"}
+            </Button>
+            <Button type="button" onClick={() => downloadReport("pdf")} disabled={downloading !== null}>
+              {downloading === "pdf" ? "Preparing..." : "Download PDF"}
+            </Button>
+          </div>
         </div>
         <p className="mt-2 text-xs text-slate-500">
           "Today" and the From/To range use your restaurant's day-end time (Restaurant Settings), so late-night

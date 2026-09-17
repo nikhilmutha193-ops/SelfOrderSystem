@@ -39,7 +39,7 @@ export function FoodTypeIcon({ type = "veg", size = 14 }: { type?: FoodType; siz
 
 export function BestsellerTag({ emoji }: { emoji?: string }) {
   return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-800">
+    <span className="inline-flex items-center gap-1 rounded-md bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-800">
       <span aria-hidden>{emoji || "⭐"}</span> Bestseller
     </span>
   );
@@ -49,7 +49,7 @@ export function BestsellerTag({ emoji }: { emoji?: string }) {
 export function RatingChip({ rating }: { rating?: number }) {
   if (!rating || rating <= 0) {
     return (
-      <span className="inline-flex items-center rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-500">
+      <span className="inline-flex items-center rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-500">
         New
       </span>
     );
@@ -57,7 +57,7 @@ export function RatingChip({ rating }: { rating?: number }) {
   const tone = rating >= 4 ? "bg-green-600" : rating >= 3 ? "bg-lime-600" : "bg-amber-600";
   return (
     <span
-      className={`inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-bold text-white ${tone}`}
+      className={`inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[10px] font-bold text-white ${tone}`}
       aria-label={`Rated ${rating} out of 5`}
     >
       <span aria-hidden>★</span>

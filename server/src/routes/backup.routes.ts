@@ -4,6 +4,7 @@ import {
   downloadBackup,
   exportBackup,
   generateBackup,
+  getBackupCapabilities,
   getBackupSchedule,
   importBackup,
   listBackups,
@@ -14,6 +15,7 @@ import { requireAuth, requireModule } from "../middleware/auth";
 
 const router = Router();
 
+router.get("/capabilities", requireAuth("admin"), requireModule("backup"), getBackupCapabilities);
 router.get("/export", requireAuth("admin"), requireModule("backup"), exportBackup);
 router.post("/import", requireAuth("admin"), requireModule("backup"), importBackup);
 

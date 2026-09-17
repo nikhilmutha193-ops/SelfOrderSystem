@@ -10,6 +10,8 @@ import {
   serveOrderItem,
   cancelOrderItem,
   listOrders,
+  exportOrdersCsv,
+  exportOrdersPdf,
   getOrder,
   getInvoice,
   getInvoicePdf,
@@ -37,6 +39,9 @@ router.post("/counter", requireAuth("admin"), requireModule("orders"), startCoun
 router.post("/takeaway", requireAuth("admin"), requireModule("orders"), startTakeawayOrder);
 
 router.get("/", requireAuth("admin"), requireModule("orders"), listOrders);
+// Report exports - declared before "/:orderId" so "report.csv" isn't taken as an order id.
+router.get("/report.csv", requireAuth("admin"), requireModule("orders"), exportOrdersCsv);
+router.get("/report.pdf", requireAuth("admin"), requireModule("orders"), exportOrdersPdf);
 router.get("/chat/active", requireAuth("admin"), requireModule("messages"), listActiveChats);
 router.patch("/chat/read-all", requireAuth("admin"), requireModule("messages"), markAllChatsRead);
 router.delete("/chat/:messageId", requireAuth("admin"), requireModule("messages"), deleteChatMessage);

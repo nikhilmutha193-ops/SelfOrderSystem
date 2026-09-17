@@ -43,7 +43,7 @@ export default function QuickRequests() {
             type="button"
             onClick={() => sendRequest(req)}
             disabled={sendingLabel === req.label}
-            className={`flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-60 ${
+            className={`flex shrink-0 items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-60 ${
               sentLabel === req.label
                 ? "border-green-300 bg-green-50 text-green-700"
                 : "border-slate-300 text-slate-600 hover:bg-slate-50"

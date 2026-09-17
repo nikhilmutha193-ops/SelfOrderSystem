@@ -11,10 +11,11 @@ import { asyncHandler } from "../middleware/errorHandler";
 import { HttpError } from "../utils/httpError";
 import { computeInvoiceTotals } from "../utils/invoice";
 import { findValidCoupon, computeDiscountAmount } from "../utils/coupon";
-import { streamInvoicePdf, streamKotPdf } from "../utils/pdf";
+import { streamInvoicePdf, streamKotPdf, streamOrdersReportPdf } from "../utils/pdf";
 import { nextTokenNumber } from "../utils/kotQueue";
 import { signToken } from "../utils/jwt";
 import { getBusinessDayStart, getBusinessDayRangeForDate } from "../utils/businessDay";
+import { moderateMessage } from "../utils/chatModeration";
 
 function validId(id: string) {
   if (!Types.ObjectId.isValid(id)) throw new HttpError(400, "Invalid id");
@@ -261,7 +262,8 @@ export const cancelOrderItem = asyncHandler(async (req: Request, res: Response) 
 
 // ---------- Order lifecycle ----------
 
-export const listOrders = asyncHandler(async (req: Request, res: Response) => {
+/** Turns the shared type/status/date query params into a Mongo filter (used by the list and the reports). */
+async function buildOrderFilter(req: Request): Promise<Record<string, unknown>> {
   const { type, status, today, from, to } = req.query as {
     type?: OrderType;
     status?: OrderStatus;
@@ -287,9 +289,124 @@ export const listOrders = asyncHandler(async (req: Request, res: Response) => {
     if (to) range.$lt = getBusinessDayRangeForDate(to, restaurant?.dayEndTime, restaurant?.timezone).end;
     filter.checkinTime = range;
   }
+  return filter;
+}
 
+export const listOrders = asyncHandler(async (req: Request, res: Response) => {
+  const filter = await buildOrderFilter(req);
   const orders = await Order.find(filter).sort({ checkinTime: -1 }).populate("tableId", "code");
   res.json(orders);
+});
+
+interface OrderReportRow {
+  order: import("../models/Order").IOrder & { tableId?: { code?: string } };
+  grandTotal: number;
+}
+
+/**
+ * Loads the filtered orders plus a computed grand total for each, in two queries
+ * (orders, then all their items at once) rather than per-order, so a big date range
+ * doesn't fan out into hundreds of round-trips.
+ */
+async function buildOrderReport(req: Request): Promise<{ rows: OrderReportRow[]; total: number; count: number }> {
+  const filter = await buildOrderFilter(req);
+  const orders = await Order.find(filter).sort({ checkinTime: -1 }).populate("tableId", "code").lean();
+  const restaurant = await Restaurant.findById(req.restaurantId).select("taxRates");
+  const taxRates = restaurant?.taxRates || [];
+
+  const orderIds = orders.map((o) => o._id);
+  const items = await OrderItem.find({ orderId: { $in: orderIds } }).select("orderId status total").lean();
+  const itemsByOrder = new Map<string, { status: string; total: number }[]>();
+  for (const it of items) {
+    const key = it.orderId.toString();
+    if (!itemsByOrder.has(key)) itemsByOrder.set(key, []);
+    itemsByOrder.get(key)!.push(it);
+  }
+
+  let total = 0;
+  const rows: OrderReportRow[] = orders.map((order) => {
+    const orderItems = itemsByOrder.get(order._id.toString()) || [];
+    // A cancelled order collects no money, so it reports as 0 regardless of items.
+    const grandTotal =
+      order.status === "cancelled" ? 0 : computeInvoiceTotals(orderItems as any, taxRates, order.discountAmount).grandTotal;
+    total += grandTotal;
+    return { order: order as OrderReportRow["order"], grandTotal };
+  });
+  return { rows, total: Math.round(total * 100) / 100, count: rows.length };
+}
+
+function orderTypeLabel(order: { orderType: string; deliveryProvider?: string }): string {
+  if (order.orderType === "delivery") return `Delivery (${order.deliveryProvider || "?"})`;
+  if (order.orderType === "takeaway") return "Take away";
+  return "Dine-in";
+}
+
+/** Escapes a value for CSV: wrap in quotes and double any inner quotes. */
+function csvCell(value: unknown): string {
+  const s = value == null ? "" : String(value);
+  return `"${s.replace(/"/g, '""')}"`;
+}
+
+function reportFilename(req: Request, ext: string): string {
+  const { type, from, to, today } = req.query as Record<string, string>;
+  const generatedOn = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+  const range = today === "true" ? "today" : [from, to].filter(Boolean).join("_");
+  const parts = ["orders", type || "all", range, generatedOn].filter(Boolean);
+  return `${parts.join("-")}.${ext}`;
+}
+
+export const exportOrdersCsv = asyncHandler(async (req: Request, res: Response) => {
+  const { rows, total, count } = await buildOrderReport(req);
+  const header = ["Customer", "Phone", "Type", "Check-in", "Members", "Status", "Payment", "Coupon", "Total"];
+  const lines = [header.map(csvCell).join(",")];
+  for (const { order, grandTotal } of rows) {
+    lines.push(
+      [
+        order.customerName,
+        order.customerPhone || "",
+        order.tableId?.code ? `${orderTypeLabel(order)} - ${order.tableId.code}` : orderTypeLabel(order),
+        new Date(order.checkinTime).toISOString(),
+        order.members,
+        order.status,
+        order.paymentMethod,
+        order.couponCode || "",
+        grandTotal.toFixed(2),
+      ]
+        .map(csvCell)
+        .join(",")
+    );
+  }
+  lines.push(["", "", "", "", "", "", "", csvCell(`Total (${count})`), csvCell(total.toFixed(2))].join(","));
+
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader("Content-Disposition", `attachment; filename="${reportFilename(req, "csv")}"`);
+  res.send("﻿" + lines.join("\r\n")); // BOM so Excel reads UTF-8 correctly
+});
+
+export const exportOrdersPdf = asyncHandler(async (req: Request, res: Response) => {
+  const restaurant = await Restaurant.findById(req.restaurantId);
+  if (!restaurant) throw new HttpError(404, "Restaurant not found");
+  const { rows, total, count } = await buildOrderReport(req);
+  const { type, from, to, today } = req.query as Record<string, string>;
+  const rangeLabel =
+    today === "true" ? "Today" : from || to ? [from, to].filter(Boolean).join(" to ") : "All dates";
+
+  await streamOrdersReportPdf(res, {
+    restaurant,
+    filename: reportFilename(req, "pdf"),
+    title: `Orders report - ${type ? orderTypeLabel({ orderType: type }) : "All types"}`,
+    rangeLabel,
+    rows: rows.map(({ order, grandTotal }) => ({
+      customer: order.customerName,
+      type: order.tableId?.code ? `${orderTypeLabel(order)} (${order.tableId.code})` : orderTypeLabel(order),
+      checkin: new Date(order.checkinTime).toLocaleString(),
+      status: order.status,
+      payment: order.paymentMethod,
+      total: grandTotal,
+    })),
+    total,
+    count,
+  });
 });
 
 export const getOrder = asyncHandler(async (req: Request, res: Response) => {
@@ -579,12 +696,22 @@ export const sendChatMessage = asyncHandler(async (req: Request, res: Response) 
 
   const senderName = role === "admin" ? "Restaurant" : order.customerName || "Guest";
 
+  // Run the abuse/violence filter before storing. Block mode rejects outright; mask mode
+  // stores a cleaned copy and flags it so staff can see something was filtered.
+  const restaurant = await Restaurant.findById(req.restaurantId).select("chatModeration");
+  const moderation = restaurant?.chatModeration ?? { enabled: true, mode: "mask" as const, customWords: [] };
+  const { clean, flagged } = moderateMessage(message.trim(), moderation);
+  if (flagged && moderation.mode === "block") {
+    throw new HttpError(400, "Your message contains language that isn't allowed. Please rephrase and try again.");
+  }
+
   const chatMessage = await ChatMessage.create({
     restaurantId: req.restaurantId,
     orderId: order._id,
     senderRole: role,
     senderName,
-    message: message.trim(),
+    message: clean,
+    flagged,
     readByAdmin: role === "admin",
     readByTable: role === "table",
   });

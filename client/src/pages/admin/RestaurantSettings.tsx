@@ -84,6 +84,9 @@ export default function RestaurantSettings() {
   const [prepMessageTemplate, setPrepMessageTemplate] = useState(
     "Your order should be ready in about {minutes} minutes (around {time})."
   );
+  const [chatModEnabled, setChatModEnabled] = useState(true);
+  const [chatModMode, setChatModMode] = useState<"mask" | "block">("mask");
+  const [chatModWords, setChatModWords] = useState("");
   const [taxRates, setTaxRates] = useState<TaxRate[]>([]);
   const [kotSettings, setKotSettings] = useState<KotSettings>(DEFAULT_KOT_SETTINGS);
   const [invoiceSettings, setInvoiceSettings] = useState<InvoiceSettings>(DEFAULT_INVOICE_SETTINGS);
@@ -113,6 +116,11 @@ export default function RestaurantSettings() {
         if (res.data.timezone) setTimezone(res.data.timezone);
         setPrepBufferMinutes(res.data.prepBufferMinutes ?? 2);
         if (res.data.prepMessageTemplate !== undefined) setPrepMessageTemplate(res.data.prepMessageTemplate);
+        if (res.data.chatModeration) {
+          setChatModEnabled(res.data.chatModeration.enabled);
+          setChatModMode(res.data.chatModeration.mode);
+          setChatModWords((res.data.chatModeration.customWords || []).join(", "));
+        }
         setTaxRates(res.data.taxRates);
         if (res.data.kotSettings) setKotSettings(res.data.kotSettings);
         if (res.data.invoiceSettings) setInvoiceSettings(res.data.invoiceSettings);
@@ -282,6 +290,11 @@ export default function RestaurantSettings() {
         timezone,
         prepBufferMinutes,
         prepMessageTemplate,
+        chatModeration: {
+          enabled: chatModEnabled,
+          mode: chatModMode,
+          customWords: chatModWords.split(/[\n,]/).map((w) => w.trim()).filter(Boolean),
+        },
         taxRates,
         kotSettings,
         invoiceSettings,
@@ -481,6 +494,52 @@ export default function RestaurantSettings() {
               <code className="rounded bg-slate-100 px-1">{"{time}"}</code> for the clock time it should be ready.
               Clear the field to hide the message entirely.
             </p>
+          </div>
+
+          <div>
+            <p className="mb-2 text-sm font-medium text-slate-700">Chat abuse filter</p>
+            <label className="flex items-center gap-2 text-sm text-slate-700">
+              <input type="checkbox" checked={chatModEnabled} onChange={(e) => setChatModEnabled(e.target.checked)} />
+              Filter abusive and violent language in the guest &harr; staff chat
+            </label>
+            {chatModEnabled && (
+              <div className="mt-3 flex flex-col gap-3">
+                <div className="flex flex-wrap gap-4">
+                  <label className="flex items-center gap-2 text-sm text-slate-700">
+                    <input
+                      type="radio"
+                      name="chatModMode"
+                      checked={chatModMode === "mask"}
+                      onChange={() => setChatModMode("mask")}
+                    />
+                    Mask the words with <code className="rounded bg-slate-100 px-1">***</code> (message still sends)
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-slate-700">
+                    <input
+                      type="radio"
+                      name="chatModMode"
+                      checked={chatModMode === "block"}
+                      onChange={() => setChatModMode("block")}
+                    />
+                    Block the message entirely
+                  </label>
+                </div>
+                <label className="text-sm font-medium text-slate-700">
+                  Extra banned words <span className="font-normal text-slate-400">(comma-separated)</span>
+                  <Textarea
+                    className="mt-1"
+                    rows={2}
+                    value={chatModWords}
+                    onChange={(e) => setChatModWords(e.target.value)}
+                    placeholder="e.g. local slurs to block, one per comma"
+                  />
+                </label>
+                <p className="text-xs text-slate-500">
+                  A built-in list of common abusive and violent terms is always applied; add your own words above.
+                  Filtered messages are marked in the Messages screen so you can still see when something was caught.
+                </p>
+              </div>
+            )}
           </div>
 
           <div>
