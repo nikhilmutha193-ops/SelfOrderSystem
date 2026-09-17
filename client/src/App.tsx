@@ -1,43 +1,48 @@
+import { lazy, Suspense } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import ProtectedRoute from "./components/ProtectedRoute";
 import ErrorBoundary from "./components/ErrorBoundary";
+import PageLoader from "./components/PageLoader";
+import RouteProgress from "./components/RouteProgress";
 import { useSiteBranding } from "./lib/useSiteBranding";
 import { AdminHomeRedirect, RequireModule } from "./lib/adminAuth";
 
-import Landing from "./pages/Landing";
-import TableLogin from "./pages/customer/TableLogin";
-import CustomerDetails from "./pages/customer/CustomerDetails";
-import Menu from "./pages/customer/Menu";
-import CustomerInvoice from "./pages/customer/CustomerInvoice";
+// Routes are code-split: each page's JS loads on first visit, shrinking the initial
+// bundle and letting the Suspense fallback below act as a real page loader.
+const Landing = lazy(() => import("./pages/Landing"));
+const TableLogin = lazy(() => import("./pages/customer/TableLogin"));
+const CustomerDetails = lazy(() => import("./pages/customer/CustomerDetails"));
+const Menu = lazy(() => import("./pages/customer/Menu"));
+const CustomerInvoice = lazy(() => import("./pages/customer/CustomerInvoice"));
 
-import AdminLogin from "./pages/admin/AdminLogin";
-import ForgotPassword from "./pages/admin/ForgotPassword";
-import AdminLayout from "./pages/admin/AdminLayout";
-import Dashboard from "./pages/admin/Dashboard";
-import Categories from "./pages/admin/Categories";
-import Subcategories from "./pages/admin/Subcategories";
-import FoodItems from "./pages/admin/FoodItems";
-import Tables from "./pages/admin/Tables";
-import QrCodes from "./pages/admin/QrCodes";
-import AdminKot from "./pages/admin/AdminKot";
-import Chefs from "./pages/admin/Chefs";
-import Orders from "./pages/admin/Orders";
-import OrderDetail from "./pages/admin/OrderDetail";
-import NewDeliveryOrder from "./pages/admin/NewDeliveryOrder";
-import RestaurantSettings from "./pages/admin/RestaurantSettings";
-import ChangePassword from "./pages/admin/ChangePassword";
-import Team from "./pages/admin/Team";
-import Awards from "./pages/admin/Awards";
-import Coupons from "./pages/admin/Coupons";
-import Reviews from "./pages/admin/Reviews";
-import Messages from "./pages/admin/Messages";
-import Backup from "./pages/admin/Backup";
-import Admins from "./pages/admin/Admins";
-import LandingPageEditor from "./pages/admin/LandingPage";
-import NoAccess from "./pages/admin/NoAccess";
+const AdminLogin = lazy(() => import("./pages/admin/AdminLogin"));
+const ForgotPassword = lazy(() => import("./pages/admin/ForgotPassword"));
+const AdminLayout = lazy(() => import("./pages/admin/AdminLayout"));
+const Dashboard = lazy(() => import("./pages/admin/Dashboard"));
+const Categories = lazy(() => import("./pages/admin/Categories"));
+const Subcategories = lazy(() => import("./pages/admin/Subcategories"));
+const FoodItems = lazy(() => import("./pages/admin/FoodItems"));
+const Tables = lazy(() => import("./pages/admin/Tables"));
+const QrCodes = lazy(() => import("./pages/admin/QrCodes"));
+const AdminKot = lazy(() => import("./pages/admin/AdminKot"));
+const Chefs = lazy(() => import("./pages/admin/Chefs"));
+const Orders = lazy(() => import("./pages/admin/Orders"));
+const OrderDetail = lazy(() => import("./pages/admin/OrderDetail"));
+const NewDeliveryOrder = lazy(() => import("./pages/admin/NewDeliveryOrder"));
+const RestaurantSettings = lazy(() => import("./pages/admin/RestaurantSettings"));
+const ChangePassword = lazy(() => import("./pages/admin/ChangePassword"));
+const Team = lazy(() => import("./pages/admin/Team"));
+const Awards = lazy(() => import("./pages/admin/Awards"));
+const Coupons = lazy(() => import("./pages/admin/Coupons"));
+const Reviews = lazy(() => import("./pages/admin/Reviews"));
+const Messages = lazy(() => import("./pages/admin/Messages"));
+const Backup = lazy(() => import("./pages/admin/Backup"));
+const Admins = lazy(() => import("./pages/admin/Admins"));
+const LandingPageEditor = lazy(() => import("./pages/admin/LandingPage"));
+const NoAccess = lazy(() => import("./pages/admin/NoAccess"));
 
-import ChefLogin from "./pages/chef/ChefLogin";
-import ChefDashboard from "./pages/chef/ChefDashboard";
+const ChefLogin = lazy(() => import("./pages/chef/ChefLogin"));
+const ChefDashboard = lazy(() => import("./pages/chef/ChefDashboard"));
 
 export default function App() {
   useSiteBranding();
@@ -45,6 +50,8 @@ export default function App() {
   return (
     <ErrorBoundary>
       <BrowserRouter>
+      <RouteProgress />
+      <Suspense fallback={<PageLoader />}>
       <Routes>
         <Route path="/" element={<Landing />} />
         <Route path="/order" element={<TableLogin />} />
@@ -120,6 +127,7 @@ export default function App() {
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      </Suspense>
       </BrowserRouter>
     </ErrorBoundary>
   );
