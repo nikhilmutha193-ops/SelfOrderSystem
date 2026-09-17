@@ -37,7 +37,13 @@ export default function Orders() {
     const next = new URLSearchParams(searchParams);
     if (value) next.set(key, value);
     else next.delete(key);
-    if (key === "from" || key === "to") next.delete("today");
+    if (key === "from" || key === "to") {
+      next.delete("today");
+      // Picking one date reads as "show me that day", so mirror it into the empty end of
+      // the range. Leaving it open would quietly list every order from then on instead.
+      const other = key === "from" ? "to" : "from";
+      if (value && !next.get(other)) next.set(other, value);
+    }
     setSearchParams(next);
   }
 

@@ -15,6 +15,8 @@ export interface ITable {
   occupiedAt?: Date;
   /** A walk-in/counter table: shared, never marked occupied, no PIN gate on seating. */
   isGuest: boolean;
+  /** Overrides the restaurant's auto-release window for this table. null follows the default. */
+  autoReleaseMinutes?: number | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -29,6 +31,7 @@ const tableSchema = new Schema<ITable>(
     sessionId: { type: String, default: null },
     occupiedAt: { type: Date, default: null },
     isGuest: { type: Boolean, default: false },
+    autoReleaseMinutes: { type: Number, default: null, min: 0 },
   },
   { timestamps: true }
 );

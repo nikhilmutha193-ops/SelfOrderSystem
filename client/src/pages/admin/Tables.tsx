@@ -27,7 +27,11 @@ export default function Tables() {
   const [autoReleaseMinutes, setAutoReleaseMinutes] = useState("0");
   const [savingExpiry, setSavingExpiry] = useState(false);
   const [expiryMessage, setExpiryMessage] = useState<string | null>(null);
+  const [expiryDraft, setExpiryDraft] = useState<Record<string, string>>({});
   const [, forceTick] = useState(0);
+
+  const savedDefault = Number(autoReleaseMinutes);
+  const defaultExpiryLabel = savedDefault > 0 ? `${savedDefault} (default)` : "never";
 
   function load() {
     api
@@ -70,6 +74,33 @@ export default function Tables() {
       setError(extractErrorMessage(err));
     } finally {
       setSavingExpiry(false);
+    }
+  }
+
+  /** Blank clears the override so the table follows the restaurant default again. */
+  async function saveExpiryOverride(table: TableRow) {
+    const draft = expiryDraft[table._id];
+    if (draft === undefined) return;
+    setExpiryDraft((d) => {
+      const next = { ...d };
+      delete next[table._id];
+      return next;
+    });
+
+    const trimmed = draft.trim();
+    const value = trimmed === "" ? null : Number(trimmed);
+    if (value === (table.autoReleaseMinutes ?? null)) return;
+    if (value !== null && (!Number.isFinite(value) || value < 0)) {
+      setError("Expiry must be 0 or a positive number of minutes");
+      return;
+    }
+
+    setError(null);
+    try {
+      await api.put(`/tables/${table._id}`, { autoReleaseMinutes: value });
+      load();
+    } catch (err) {
+      setError(extractErrorMessage(err));
     }
   }
 
@@ -155,7 +186,8 @@ export default function Tables() {
         </form>
         <p className="mt-2 text-xs text-slate-500">
           If a table stays occupied longer than this, it is automatically freed and the guest's session ends. Set to
-          0 to disable auto-release.
+          0 to disable auto-release. Any order the guest never sent to the kitchen is cancelled with the seating;
+          counter orders and anything already sent are left alone. Individual tables can override this below.
         </p>
       </Card>
 
@@ -191,6 +223,7 @@ export default function Tables() {
               <th className="pb-2">Code</th>
               <th className="pb-2">PIN</th>
               <th className="pb-2">Type</th>
+              <th className="pb-2">Expires after</th>
               <th className="pb-2">Status</th>
               <th className="pb-2"></th>
             </tr>
@@ -202,6 +235,24 @@ export default function Tables() {
                 <td className="py-1.5 font-mono">{table.password || "-"}</td>
                 <td className="py-1.5">
                   {table.isGuest ? <Badge tone="blue">Guest</Badge> : <Badge tone="gray">Table</Badge>}
+                </td>
+                <td className="py-1.5">
+                  {table.isGuest ? (
+                    <span className="text-xs text-slate-400">n/a</span>
+                  ) : (
+                    <Input
+                      className="w-28"
+                      type="number"
+                      min={0}
+                      placeholder={defaultExpiryLabel}
+                      value={expiryDraft[table._id] ?? (table.autoReleaseMinutes ?? "")}
+                      onChange={(e) => setExpiryDraft((d) => ({ ...d, [table._id]: e.target.value }))}
+                      onBlur={() => saveExpiryOverride(table)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") e.currentTarget.blur();
+                      }}
+                    />
+                  )}
                 </td>
                 <td className="py-1.5">
                   {table.isGuest ? (

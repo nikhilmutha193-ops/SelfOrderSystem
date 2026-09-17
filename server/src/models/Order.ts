@@ -3,6 +3,8 @@ import { Schema, model, Types } from "mongoose";
 /** "delivery" is retained for orders placed before take-away replaced it. */
 export type OrderType = "dine-in" | "takeaway" | "delivery";
 export type OrderStatus = "open" | "closed" | "cancelled";
+/** Who raised the order. Counter orders are staff-owned and are never auto-cancelled. */
+export type OrderSource = "guest" | "counter";
 export type PaymentMethod = "pending" | "cash" | "online" | "card";
 export type DeliveryProvider = "Swiggy" | "Zomato" | "Uber-Eats" | "Other";
 
@@ -19,9 +21,12 @@ export interface IOrder {
   checkinTime: Date;
   checkoutTime?: Date;
   status: OrderStatus;
+  source: OrderSource;
   paymentMethod: PaymentMethod;
   couponCode?: string;
   discountAmount: number;
+  /** When the kitchen should have everything ready. Pushed later as rounds are added. */
+  estimatedReadyAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -38,9 +43,11 @@ const orderSchema = new Schema<IOrder>(
     checkinTime: { type: Date, default: Date.now },
     checkoutTime: { type: Date },
     status: { type: String, enum: ["open", "closed", "cancelled"], default: "open", index: true },
+    source: { type: String, enum: ["guest", "counter"], default: "guest" },
     paymentMethod: { type: String, enum: ["pending", "cash", "online", "card"], default: "pending" },
     couponCode: { type: String, trim: true, uppercase: true },
     discountAmount: { type: Number, default: 0, min: 0 },
+    estimatedReadyAt: { type: Date, default: null },
   },
   { timestamps: true }
 );

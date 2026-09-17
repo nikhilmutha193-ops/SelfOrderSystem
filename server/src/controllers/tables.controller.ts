@@ -6,6 +6,7 @@ import { asyncHandler } from "../middleware/errorHandler";
 import { HttpError } from "../utils/httpError";
 import { hashPassword } from "../utils/password";
 import { encryptTableToken } from "../utils/tableToken";
+import { cancelUnsentOrdersForTables } from "../utils/tableRelease";
 
 function validId(id: string) {
   if (!Types.ObjectId.isValid(id)) throw new HttpError(400, "Invalid id");
@@ -54,10 +55,22 @@ export const createTable = asyncHandler(async (req: Request, res: Response) => {
 
 export const updateTable = asyncHandler(async (req: Request, res: Response) => {
   validId(req.params.id);
-  const { code, password, isGuest } = req.body as { code?: string; password?: string; isGuest?: boolean };
+  const { code, password, isGuest, autoReleaseMinutes } = req.body as {
+    code?: string;
+    password?: string;
+    isGuest?: boolean;
+    autoReleaseMinutes?: number | null;
+  };
   const update: Record<string, unknown> = {};
   if (code !== undefined) update.code = code;
   if (isGuest !== undefined) update.isGuest = !!isGuest;
+  if (autoReleaseMinutes !== undefined) {
+    // null clears the override so the table falls back to the restaurant default.
+    if (autoReleaseMinutes !== null && (typeof autoReleaseMinutes !== "number" || autoReleaseMinutes < 0)) {
+      throw new HttpError(400, "autoReleaseMinutes must be a non-negative number or null");
+    }
+    update.autoReleaseMinutes = autoReleaseMinutes;
+  }
   if (password) {
     update.passwordHash = await hashPassword(password);
     update.password = password;
@@ -82,7 +95,12 @@ export const releaseTable = asyncHandler(async (req: Request, res: Response) => 
     { new: true }
   ).select("-passwordHash");
   if (!table) throw new HttpError(404, "Table not found");
-  res.json(table);
+
+  // Anything the guest queued but never sent to the kitchen dies with the seating,
+  // so a walked-away table doesn't leave a phantom open order behind.
+  const cancelledOrders = await cancelUnsentOrdersForTables([table._id]);
+
+  res.json({ ...table.toObject(), cancelledOrders });
 });
 
 export const deleteTable = asyncHandler(async (req: Request, res: Response) => {

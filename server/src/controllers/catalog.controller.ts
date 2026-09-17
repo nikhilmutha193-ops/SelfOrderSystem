@@ -150,8 +150,15 @@ function normalizeRating(value: unknown): number {
   return Math.min(5, Math.max(0, Math.round(n * 10) / 10));
 }
 
+/** Clamped like the rating: staff-entered, so a stray value is corrected rather than rejected. */
+function normalizePrepTime(value: unknown): number {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 0;
+  return Math.max(0, Math.round(n));
+}
+
 export const createFoodItem = asyncHandler(async (req: Request, res: Response) => {
-  const { categoryId, subcategoryId, name, price, description, imageUrl, isBestseller, bestsellerEmoji, foodType, rating } = req.body as {
+  const { categoryId, subcategoryId, name, price, description, imageUrl, isBestseller, bestsellerEmoji, foodType, rating, prepTimeMinutes } = req.body as {
     categoryId?: string;
     subcategoryId?: string;
     name?: string;
@@ -162,6 +169,7 @@ export const createFoodItem = asyncHandler(async (req: Request, res: Response) =
     bestsellerEmoji?: string;
     foodType?: string;
     rating?: number;
+    prepTimeMinutes?: number;
   };
   if (!categoryId || !subcategoryId || !name || price === undefined) {
     throw new HttpError(400, "categoryId, subcategoryId, name and price are required");
@@ -190,13 +198,14 @@ export const createFoodItem = asyncHandler(async (req: Request, res: Response) =
     ...(bestsellerEmoji !== undefined && { bestsellerEmoji }),
     foodType: normalizeFoodType(foodType),
     rating: normalizeRating(rating),
+    ...(prepTimeMinutes !== undefined && { prepTimeMinutes: normalizePrepTime(prepTimeMinutes) }),
   });
   res.status(201).json(foodItem);
 });
 
 export const updateFoodItem = asyncHandler(async (req: Request, res: Response) => {
   validId(req.params.id);
-  const { categoryId, subcategoryId, name, price, description, imageUrl, isBestseller, bestsellerEmoji, foodType, rating } = req.body as {
+  const { categoryId, subcategoryId, name, price, description, imageUrl, isBestseller, bestsellerEmoji, foodType, rating, prepTimeMinutes } = req.body as {
     categoryId?: string;
     subcategoryId?: string;
     name?: string;
@@ -207,6 +216,7 @@ export const updateFoodItem = asyncHandler(async (req: Request, res: Response) =
     bestsellerEmoji?: string;
     foodType?: string;
     rating?: number;
+    prepTimeMinutes?: number;
   };
   if (price !== undefined && (typeof price !== "number" || price < 0)) {
     throw new HttpError(400, "price must be a non-negative number");
@@ -228,6 +238,7 @@ export const updateFoodItem = asyncHandler(async (req: Request, res: Response) =
         ...(bestsellerEmoji !== undefined && { bestsellerEmoji }),
         ...(foodType !== undefined && { foodType: normalizeFoodType(foodType) }),
         ...(rating !== undefined && { rating: normalizeRating(rating) }),
+        ...(prepTimeMinutes !== undefined && { prepTimeMinutes: normalizePrepTime(prepTimeMinutes) }),
       },
     },
     { new: true }

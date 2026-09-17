@@ -17,6 +17,8 @@ export interface IFoodItem {
   foodType: FoodType;
   /** 0 means unrated - the menu shows a "New" chip rather than inventing stars. */
   rating: number;
+  /** Kitchen time for this dish, in minutes; drives an order's estimated ready time. */
+  prepTimeMinutes: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -35,6 +37,7 @@ const foodItemSchema = new Schema<IFoodItem>(
     bestsellerEmoji: { type: String, default: "⭐" },
     foodType: { type: String, enum: ["veg", "non-veg", "egg"], default: "veg" },
     rating: { type: Number, default: 0, min: 0, max: 5 },
+    prepTimeMinutes: { type: Number, default: 10, min: 0 },
   },
   { timestamps: true }
 );

@@ -7,8 +7,8 @@ import { asyncHandler } from "../middleware/errorHandler";
 import { getBusinessDayStart } from "../utils/businessDay";
 
 export const getDashboardSummary = asyncHandler(async (req: Request, res: Response) => {
-  const restaurant = await Restaurant.findById(req.restaurantId).select("dayEndTime");
-  const businessDayStart = getBusinessDayStart(new Date(), restaurant?.dayEndTime);
+  const restaurant = await Restaurant.findById(req.restaurantId).select("dayEndTime timezone");
+  const businessDayStart = getBusinessDayStart(new Date(), restaurant?.dayEndTime, restaurant?.timezone);
 
   const [openOrdersToday, closedToday, pendingKotItems, unreadChatCount] = await Promise.all([
     Order.countDocuments({ restaurantId: req.restaurantId, status: "open", checkinTime: { $gte: businessDayStart } }),

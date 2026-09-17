@@ -23,7 +23,15 @@ export default function Dashboard() {
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-bold text-slate-800">Dashboard</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-2xl font-bold text-slate-800">Dashboard</h1>
+        <Link
+          to="/admin/delivery/new"
+          className="min-h-[44px] rounded-md bg-orange-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-orange-700"
+        >
+          + New order
+        </Link>
+      </div>
       {summary && (
         <p className="-mt-4 text-xs text-slate-400">
           "Today" is since {new Date(summary.businessDayStart).toLocaleString([], {

@@ -389,6 +389,19 @@ export async function streamKotPdf(
     doc.moveDown(0.5);
     drawSeparator(doc, x0, usableWidth, true);
 
+    // Packing is a kitchen instruction, not table info, so it prints even when
+    // table info is switched off - otherwise a take-away could be plated to serve.
+    if (order.orderType !== "dine-in") {
+      doc
+        .font("Helvetica-Bold")
+        .fontSize(fz(14))
+        .text(order.orderType === "takeaway" ? "*** TAKE AWAY - PACK ***" : "*** DELIVERY - PACK ***", {
+          align: "center",
+        });
+      doc.font("Helvetica");
+      doc.moveDown(0.2);
+    }
+
     if (settings?.showTableInfo !== false) {
       if (order.orderType === "dine-in") {
         doc
@@ -397,7 +410,7 @@ export async function streamKotPdf(
           .text(tableCode ? `Table: ${tableCode}` : "Dine-in", { align: "center" });
         doc.font("Helvetica");
         doc.moveDown(0.2);
-      } else {
+      } else if (order.orderType === "delivery") {
         doc.fontSize(fz(10)).text(`Order: Delivery (${order.deliveryProvider})`);
       }
     }

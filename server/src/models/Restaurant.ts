@@ -1,4 +1,5 @@
 import { Schema, model, Types } from "mongoose";
+import { DEFAULT_TIMEZONE } from "../utils/businessDay";
 
 export interface ITaxRate {
   name: string;
@@ -72,8 +73,14 @@ export interface IRestaurant {
   heroImages: string[];
   /** "HH:mm" - when the business day rolls over, for orders placed past midnight. */
   dayEndTime: string;
+  /** IANA zone the business day is measured in, independent of where the server runs. */
+  timezone: string;
   /** Minutes an occupied table is auto-released after with no staff action. 0 disables it. */
   tableAutoReleaseMinutes: number;
+  /** Padding added to every prep estimate so a small kitchen delay doesn't read as late. */
+  prepBufferMinutes: number;
+  /** Shown above the items on the order and invoice screens. {minutes} and {time} are filled in. */
+  prepMessageTemplate: string;
   taxRates: ITaxRate[];
   qrSettings: IQrSettings;
   kotSettings: IKotSettings;
@@ -155,7 +162,13 @@ const restaurantSchema = new Schema<IRestaurant>(
     publicUrl: { type: String, default: "" },
     heroImages: { type: [String], default: [] },
     dayEndTime: { type: String, default: "00:00" },
+    timezone: { type: String, default: DEFAULT_TIMEZONE },
     tableAutoReleaseMinutes: { type: Number, default: 0, min: 0 },
+    prepBufferMinutes: { type: Number, default: 2, min: 0 },
+    prepMessageTemplate: {
+      type: String,
+      default: "Your order should be ready in about {minutes} minutes (around {time}).",
+    },
     taxRates: { type: [taxRateSchema], default: [] },
     qrSettings: { type: qrSettingsSchema, default: () => ({}) },
     kotSettings: { type: kotSettingsSchema, default: () => ({}) },

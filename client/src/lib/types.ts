@@ -68,6 +68,10 @@ export interface Restaurant {
   publicUrl?: string;
   heroImages: string[];
   dayEndTime: string;
+  timezone?: string;
+  tableAutoReleaseMinutes?: number;
+  prepBufferMinutes?: number;
+  prepMessageTemplate?: string;
   taxRates: TaxRate[];
   qrSettings: QrSettings;
   kotSettings: KotSettings;
@@ -104,6 +108,7 @@ export interface FoodItem {
   bestsellerEmoji?: string;
   foodType?: FoodType;
   rating?: number;
+  prepTimeMinutes?: number;
 }
 
 export interface MenuFoodItem {
@@ -142,6 +147,8 @@ export interface TableRow {
   isGuest?: boolean;
   /** When the table became occupied; used to show how long it's been sat. */
   occupiedAt?: string;
+  /** Per-table override of the restaurant's auto-release window. null follows the default. */
+  autoReleaseMinutes?: number | null;
 }
 
 export interface ChefRow {
@@ -171,6 +178,10 @@ export interface Order {
   paymentMethod: PaymentMethod;
   couponCode?: string;
   discountAmount: number;
+  /** "counter" orders are staff-raised and survive a table release. */
+  source?: "guest" | "counter";
+  /** When the kitchen should have the order ready; absent until items are added. */
+  estimatedReadyAt?: string | null;
 }
 
 export type OrderItemStatus = "pending" | "preparing" | "ready" | "served" | "cancelled";
@@ -208,6 +219,10 @@ export interface OrderDetailResponse {
   order: Order;
   items: OrderItem[];
   totals: InvoiceTotals;
+  /** Admin-authored text with {minutes} and {time} placeholders. */
+  prepMessageTemplate?: string;
+  /** Step size the estimate rolls forward by when the kitchen runs late. */
+  prepBufferMinutes?: number;
 }
 
 export interface KotQueueGroup {

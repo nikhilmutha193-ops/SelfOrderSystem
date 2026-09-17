@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api, extractErrorMessage } from "../../lib/apiClient";
 import { Badge, Button, Card, ErrorText, Input, Select, TableWrap } from "../../components/ui";
+import { renderPrepMessage } from "../../lib/prepTime";
 import type { MenuCategory, OrderCoupon, OrderDetailResponse, PaymentMethod } from "../../lib/types";
 
 const STATUS_TONE = {
@@ -17,7 +18,9 @@ export default function OrderDetail() {
   const navigate = useNavigate();
   const [data, setData] = useState<OrderDetailResponse | null>(null);
   const [menu, setMenu] = useState<MenuCategory[]>([]);
-  const [selectedFood, setSelectedFood] = useState("");
+  const [categoryId, setCategoryId] = useState("");
+  const [subcategoryId, setSubcategoryId] = useState("");
+  const [addingFoodId, setAddingFoodId] = useState<string | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
   const [couponCode, setCouponCode] = useState("");
@@ -50,17 +53,32 @@ export default function OrderDetail() {
     api.get<MenuCategory[]>("/menu").then((res) => setMenu(res.data));
   }, []);
 
-  const flatFoods = menu.flatMap((c) => c.subcategories.flatMap((s) => s.foodItems));
+  const subcategoriesForCategory = menu.find((c) => c._id === categoryId)?.subcategories ?? [];
+  const foodsForSubcategory = subcategoriesForCategory.find((s) => s._id === subcategoryId)?.foodItems ?? [];
 
-  async function addItem() {
-    if (!selectedFood || !orderId) return;
+  // Keep the two pickers pointing at something real as the menu loads or the category changes.
+  useEffect(() => {
+    if (menu.length > 0 && !menu.some((c) => c._id === categoryId)) setCategoryId(menu[0]._id);
+  }, [menu, categoryId]);
+
+  useEffect(() => {
+    if (subcategoriesForCategory.length > 0 && !subcategoriesForCategory.some((s) => s._id === subcategoryId)) {
+      setSubcategoryId(subcategoriesForCategory[0]._id);
+    }
+  }, [subcategoriesForCategory, subcategoryId]);
+
+  async function addItem(foodItemId: string) {
+    if (!orderId || addingFoodId) return;
     setError(null);
+    setAddingFoodId(foodItemId);
     try {
-      await api.post(`/orders/${orderId}/items`, { items: [{ foodItemId: selectedFood, quantity }] });
+      await api.post(`/orders/${orderId}/items`, { items: [{ foodItemId, quantity }] });
       setQuantity(1);
       load();
     } catch (err) {
       setError(extractErrorMessage(err));
+    } finally {
+      setAddingFoodId(null);
     }
   }
 
@@ -133,6 +151,10 @@ export default function OrderDetail() {
   if (!data) return <p className="text-sm text-slate-500">Loading...</p>;
 
   const { order, items, totals } = data;
+  const prepMessage =
+    order.status === "open"
+      ? renderPrepMessage(data.prepMessageTemplate, order.estimatedReadyAt, items, data.prepBufferMinutes)
+      : null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -170,6 +192,9 @@ export default function OrderDetail() {
 
       <Card>
         <h2 className="mb-2 text-lg font-semibold text-slate-800">Items</h2>
+        {prepMessage && (
+          <p className="mb-3 rounded-md bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900">{prepMessage}</p>
+        )}
         <TableWrap>
           <table className="w-full min-w-[34rem] text-sm">
           <thead>
@@ -200,29 +225,64 @@ export default function OrderDetail() {
       </TableWrap>
 
         {order.status === "open" && (
-          <div className="mt-4 flex flex-wrap items-end gap-2 border-t border-slate-100 pt-4">
-            <label className="text-sm font-medium text-slate-700">
-              Add item
-              <Select className="mt-1" value={selectedFood} onChange={(e) => setSelectedFood(e.target.value)}>
-                <option value="">Select food</option>
-                {flatFoods.map((f) => (
-                  <option key={f._id} value={f._id}>
-                    {f.name} - ₹{f.price}
-                  </option>
+          <div className="mt-4 border-t border-slate-100 pt-4">
+            <p className="mb-2 text-sm font-semibold text-slate-700">Add items</p>
+            <div className="flex flex-wrap items-end gap-2">
+              <label className="text-sm font-medium text-slate-700">
+                Category
+                <Select className="mt-1" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
+                  {menu.map((c) => (
+                    <option key={c._id} value={c._id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </Select>
+              </label>
+              <label className="text-sm font-medium text-slate-700">
+                Subcategory
+                <Select className="mt-1" value={subcategoryId} onChange={(e) => setSubcategoryId(e.target.value)}>
+                  {subcategoriesForCategory.map((s) => (
+                    <option key={s._id} value={s._id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </Select>
+              </label>
+              <label className="text-sm font-medium text-slate-700">
+                Qty
+                <Input
+                  className="mt-1 w-20"
+                  type="number"
+                  min={1}
+                  value={quantity}
+                  onChange={(e) => setQuantity(Number(e.target.value))}
+                />
+              </label>
+            </div>
+
+            {foodsForSubcategory.length === 0 ? (
+              <p className="mt-3 text-sm text-slate-500">No dishes in this subcategory.</p>
+            ) : (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {foodsForSubcategory.map((f) => (
+                  <button
+                    key={f._id}
+                    type="button"
+                    disabled={addingFoodId !== null}
+                    onClick={() => addItem(f._id)}
+                    className="min-h-[44px] rounded-lg border border-slate-300 px-3 py-2 text-left text-sm transition-colors hover:border-orange-500 hover:bg-orange-50 disabled:opacity-50"
+                  >
+                    <span className="block font-medium text-slate-800">
+                      {addingFoodId === f._id ? "Adding..." : f.name}
+                    </span>
+                    <span className="block text-xs text-slate-500">₹{f.price}</span>
+                  </button>
                 ))}
-              </Select>
-            </label>
-            <label className="text-sm font-medium text-slate-700">
-              Qty
-              <Input
-                className="mt-1 w-20"
-                type="number"
-                min={1}
-                value={quantity}
-                onChange={(e) => setQuantity(Number(e.target.value))}
-              />
-            </label>
-            <Button onClick={addItem}>Add</Button>
+              </div>
+            )}
+            <p className="mt-2 text-xs text-slate-500">
+              Tap a dish to add it at the quantity above. The quantity resets to 1 after each add.
+            </p>
           </div>
         )}
       </Card>

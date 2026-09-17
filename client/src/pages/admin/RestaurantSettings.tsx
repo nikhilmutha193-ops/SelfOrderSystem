@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { api, extractErrorMessage, uploadImage } from "../../lib/apiClient";
 import { Button, Card, ErrorText, Input, Select, Textarea } from "../../components/ui";
 import {
@@ -11,6 +11,13 @@ import {
   type Restaurant,
   type TaxRate,
 } from "../../lib/types";
+
+// Older browsers lack supportedValuesOf, so fall back to the zones this app is
+// realistically deployed in rather than leaving the picker empty.
+const TIMEZONE_CHOICES: string[] =
+  typeof Intl.supportedValuesOf === "function"
+    ? Intl.supportedValuesOf("timeZone")
+    : ["Asia/Kolkata", "Asia/Dubai", "Europe/London", "America/New_York", "UTC"];
 
 const DEFAULT_KOT_SETTINGS: KotSettings = {
   headerText: "Kitchen Order Ticket",
@@ -55,6 +62,28 @@ export default function RestaurantSettings() {
   const [newHeroUrl, setNewHeroUrl] = useState("");
   const [uploadingHero, setUploadingHero] = useState(false);
   const [dayEndTime, setDayEndTime] = useState("00:00");
+  const [timezone, setTimezone] = useState("Asia/Kolkata");
+  // Everything before the cutoff is filed under the previous date. Past the small hours that
+  // stops being "late-night trading" and starts back-dating most of a normal day, which reads
+  // as the Orders filter being broken, so say so plainly before it is saved.
+  const dayEndTimeWarning = useMemo(() => {
+    const [hour] = dayEndTime.split(":").map(Number);
+    if (!Number.isFinite(hour) || hour < 5) return null;
+    const label = new Date(`2000-01-01T${dayEndTime}:00`).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    return `Heads up: with a ${label} cutoff, every order taken between midnight and ${label} is filed under the previous date - that is most of a trading day, so the Orders date filter and daily sales will look shifted by one day. Only keep this if you genuinely serve through ${label}; otherwise use 00:00.`;
+  }, [dayEndTime]);
+
+  // Browsers disagree on zone aliases (Chromium lists Asia/Calcutta, not Asia/Kolkata), and a
+  // <select> whose value matches no option silently shows the first one - which a Save would
+  // then persist as the restaurant's zone. Keep the saved value in the list whatever it is.
+  const timezoneOptions = useMemo(
+    () => (TIMEZONE_CHOICES.includes(timezone) ? TIMEZONE_CHOICES : [timezone, ...TIMEZONE_CHOICES]),
+    [timezone]
+  );
+  const [prepBufferMinutes, setPrepBufferMinutes] = useState<number>(2);
+  const [prepMessageTemplate, setPrepMessageTemplate] = useState(
+    "Your order should be ready in about {minutes} minutes (around {time})."
+  );
   const [taxRates, setTaxRates] = useState<TaxRate[]>([]);
   const [kotSettings, setKotSettings] = useState<KotSettings>(DEFAULT_KOT_SETTINGS);
   const [invoiceSettings, setInvoiceSettings] = useState<InvoiceSettings>(DEFAULT_INVOICE_SETTINGS);
@@ -81,6 +110,9 @@ export default function RestaurantSettings() {
         setPublicUrl(res.data.publicUrl || "");
         setHeroImages(res.data.heroImages || []);
         setDayEndTime(res.data.dayEndTime || "00:00");
+        if (res.data.timezone) setTimezone(res.data.timezone);
+        setPrepBufferMinutes(res.data.prepBufferMinutes ?? 2);
+        if (res.data.prepMessageTemplate !== undefined) setPrepMessageTemplate(res.data.prepMessageTemplate);
         setTaxRates(res.data.taxRates);
         if (res.data.kotSettings) setKotSettings(res.data.kotSettings);
         if (res.data.invoiceSettings) setInvoiceSettings(res.data.invoiceSettings);
@@ -247,6 +279,9 @@ export default function RestaurantSettings() {
         publicUrl,
         heroImages,
         dayEndTime,
+        timezone,
+        prepBufferMinutes,
+        prepMessageTemplate,
         taxRates,
         kotSettings,
         invoiceSettings,
@@ -367,17 +402,17 @@ export default function RestaurantSettings() {
             <div className="mt-1 flex flex-wrap items-center gap-2">
               <button
                 type="button"
-                onClick={() => setDayEndTime("23:00")}
+                onClick={() => setDayEndTime("00:00")}
                 className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50"
               >
-                Today <span className="font-normal text-slate-400">(e.g. closes 11pm)</span>
+                Close before midnight <span className="font-normal text-slate-400">(split at 12am)</span>
               </button>
               <button
                 type="button"
                 onClick={() => setDayEndTime("02:00")}
                 className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50"
               >
-                Tomorrow <span className="font-normal text-slate-400">(e.g. closes 2am)</span>
+                Open past midnight <span className="font-normal text-slate-400">(e.g. closes 2am)</span>
               </button>
               <Input
                 className="w-40"
@@ -387,11 +422,64 @@ export default function RestaurantSettings() {
               />
             </div>
             <p className="mt-1 text-xs text-slate-500">
-              Use the buttons for a quick starting point, then fine-tune the exact time in the field. A time before
-              midnight closes the same day; a time after midnight means you stay open past midnight and the business
-              day rolls over then. Either way, orders placed before this time still count toward the previous day's
-              sales, dashboard, and billing instead of splitting into the next calendar day. Use 00:00 for a standard
-              midnight cutoff.
+              This is when one business day <em>rolls over</em> into the next - not your closing time. If you shut
+              before midnight, leave it at 00:00 so each day matches the calendar. Only set it past midnight if you
+              trade into the small hours: 02:00 means orders taken up to 2am still count toward the previous day's
+              sales, dashboard, and Orders date filter.
+            </p>
+            {dayEndTimeWarning && (
+              <p className="mt-1 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-900">{dayEndTimeWarning}</p>
+            )}
+          </div>
+
+          <div>
+            <label className="text-sm font-medium text-slate-700">
+              Timezone
+              <Select className="mt-1 block !w-72" value={timezone} onChange={(e) => setTimezone(e.target.value)}>
+                {timezoneOptions.map((tz) => (
+                  <option key={tz} value={tz}>
+                    {tz}
+                  </option>
+                ))}
+              </Select>
+            </label>
+            <p className="mt-1 text-xs text-slate-500">
+              The zone your business day is measured in. Reports, the dashboard's "today", the Orders date filter
+              and kitchen token numbers all use it, so it must match where the restaurant actually is - not where
+              the server happens to run. Current local time here:{" "}
+              <strong>{new Date().toLocaleString([], { timeZone: timezone })}</strong>.
+            </p>
+          </div>
+
+          <div>
+            <p className="mb-2 text-sm font-medium text-slate-700">Preparation time</p>
+            <div className="flex flex-wrap items-end gap-3">
+              <label className="text-sm font-medium text-slate-700">
+                Delay buffer (minutes)
+                <Input
+                  className="mt-1 w-32"
+                  type="number"
+                  min={0}
+                  value={prepBufferMinutes}
+                  onChange={(e) => setPrepBufferMinutes(Number(e.target.value))}
+                />
+              </label>
+              <label className="flex-1 text-sm font-medium text-slate-700">
+                Message shown above the order items
+                <Input
+                  className="mt-1"
+                  value={prepMessageTemplate}
+                  onChange={(e) => setPrepMessageTemplate(e.target.value)}
+                  placeholder="Leave empty to show nothing"
+                />
+              </label>
+            </div>
+            <p className="mt-1 text-xs text-slate-500">
+              Each dish carries its own prep time under Food Items; the slowest dish in a round plus this buffer
+              sets when the order is due. Ordering more later pushes the estimate out, never forward. Use{" "}
+              <code className="rounded bg-slate-100 px-1">{"{minutes}"}</code> for the wait still left and{" "}
+              <code className="rounded bg-slate-100 px-1">{"{time}"}</code> for the clock time it should be ready.
+              Clear the field to hide the message entirely.
             </p>
           </div>
 

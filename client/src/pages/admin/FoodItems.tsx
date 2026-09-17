@@ -20,6 +20,7 @@ export default function FoodItems() {
   const [bestsellerEmoji, setBestsellerEmoji] = useState("⭐");
   const [foodType, setFoodType] = useState<FoodType>("veg");
   const [rating, setRating] = useState<number>(0);
+  const [prepTimeMinutes, setPrepTimeMinutes] = useState<number>(10);
   const [editing, setEditing] = useState<FoodItem | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -77,7 +78,7 @@ export default function FoodItems() {
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    const payload = { categoryId, subcategoryId, name, price, description, imageUrl, isBestseller, bestsellerEmoji, foodType, rating };
+    const payload = { categoryId, subcategoryId, name, price, description, imageUrl, isBestseller, bestsellerEmoji, foodType, rating, prepTimeMinutes };
     try {
       if (editing) {
         await api.put(`/food-items/${editing._id}`, payload);
@@ -92,6 +93,7 @@ export default function FoodItems() {
       setBestsellerEmoji("⭐");
       setFoodType("veg");
       setRating(0);
+      setPrepTimeMinutes(10);
       setEditing(null);
       load();
     } catch (err) {
@@ -111,6 +113,7 @@ export default function FoodItems() {
     setBestsellerEmoji(food.bestsellerEmoji || "⭐");
     setFoodType(food.foodType || "veg");
     setRating(food.rating || 0);
+    setPrepTimeMinutes(food.prepTimeMinutes ?? 10);
   }
 
   async function toggleActive(food: FoodItem) {
@@ -216,6 +219,19 @@ export default function FoodItems() {
                 onChange={(e) => setRating(Number(e.target.value))}
               />
             </label>
+            <label className="text-sm font-medium text-slate-700">
+              Prep time (minutes)
+              <Input
+                className="mt-1"
+                type="number"
+                min={0}
+                value={prepTimeMinutes}
+                onChange={(e) => setPrepTimeMinutes(Number(e.target.value))}
+              />
+              <span className="mt-1 block text-xs font-normal text-slate-500">
+                How long the kitchen needs for this dish. The slowest dish in a round sets the order's estimate.
+              </span>
+            </label>
           </div>
 
           <div className="flex flex-col gap-1.5">
@@ -262,6 +278,7 @@ export default function FoodItems() {
                 setImageUrl("");
                 setIsBestseller(false);
                 setBestsellerEmoji("⭐");
+                setPrepTimeMinutes(10);
               }}
             >
               Cancel
@@ -282,6 +299,7 @@ export default function FoodItems() {
               <th className="pb-2">Subcategory</th>
               <th className="pb-2">Name</th>
               <th className="pb-2">Price</th>
+              <th className="pb-2">Prep</th>
               <th className="pb-2">Status</th>
               <th className="pb-2"></th>
             </tr>
@@ -310,6 +328,7 @@ export default function FoodItems() {
                 <td className="py-1.5">{subcategoryName(food.subcategoryId)}</td>
                 <td className="py-1.5">{food.name}</td>
                 <td className="py-1.5">₹{food.price.toFixed(2)}</td>
+                <td className="py-1.5 whitespace-nowrap">{food.prepTimeMinutes ?? 10} min</td>
                 <td className="py-1.5">
                   <div className="flex gap-1.5">
                     <Badge tone={food.isActive ? "green" : "gray"}>{food.isActive ? "Active" : "Inactive"}</Badge>

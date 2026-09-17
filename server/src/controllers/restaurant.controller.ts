@@ -7,7 +7,7 @@ import { seedLandingContent } from "../utils/landingSeed";
 import { HttpError } from "../utils/httpError";
 import { computeInvoiceTotals } from "../utils/invoice";
 import { streamInvoicePdf, streamKotPdf } from "../utils/pdf";
-import { isValidDayEndTime } from "../utils/businessDay";
+import { isValidDayEndTime, isValidTimezone } from "../utils/businessDay";
 
 const SAMPLE_ITEMS: Pick<IOrderItem, "foodName" | "isJain" | "quantity" | "unitPrice" | "total" | "status">[] = [
   { foodName: "Paneer Butter Masala", isJain: false, quantity: 2, unitPrice: 220, total: 440, status: "pending" },
@@ -74,11 +74,14 @@ export const updateRestaurantSettings = asyncHandler(async (req: Request, res: R
     publicUrl,
     heroImages,
     dayEndTime,
+    timezone,
     taxRates,
     qrSettings,
     kotSettings,
     invoiceSettings,
     tableAutoReleaseMinutes,
+    prepBufferMinutes,
+    prepMessageTemplate,
   } = req.body as {
     name?: string;
     siteTitle?: string;
@@ -92,11 +95,14 @@ export const updateRestaurantSettings = asyncHandler(async (req: Request, res: R
     publicUrl?: string;
     heroImages?: string[];
     dayEndTime?: string;
+    timezone?: string;
     taxRates?: { name: string; percent: number }[];
     qrSettings?: Partial<IQrSettings>;
     kotSettings?: Partial<IKotSettings>;
     invoiceSettings?: Partial<IInvoiceSettings>;
     tableAutoReleaseMinutes?: number;
+    prepBufferMinutes?: number;
+    prepMessageTemplate?: string;
   };
 
   if (publicUrl && !/^https?:\/\/.+/i.test(publicUrl)) {
@@ -118,12 +124,18 @@ export const updateRestaurantSettings = asyncHandler(async (req: Request, res: R
   if (dayEndTime !== undefined && !isValidDayEndTime(dayEndTime)) {
     throw new HttpError(400, "dayEndTime must be in HH:mm format (e.g. 03:00)");
   }
+  if (timezone !== undefined && !isValidTimezone(timezone)) {
+    throw new HttpError(400, "timezone must be a valid IANA name (e.g. Asia/Kolkata)");
+  }
 
   if (
     tableAutoReleaseMinutes !== undefined &&
     (typeof tableAutoReleaseMinutes !== "number" || tableAutoReleaseMinutes < 0)
   ) {
     throw new HttpError(400, "tableAutoReleaseMinutes must be a non-negative number");
+  }
+  if (prepBufferMinutes !== undefined && (typeof prepBufferMinutes !== "number" || prepBufferMinutes < 0)) {
+    throw new HttpError(400, "prepBufferMinutes must be a non-negative number");
   }
 
   const restaurant = await Restaurant.findById(req.restaurantId);
@@ -141,7 +153,10 @@ export const updateRestaurantSettings = asyncHandler(async (req: Request, res: R
   if (publicUrl !== undefined) restaurant.publicUrl = publicUrl.replace(/\/+$/, "");
   if (heroImages !== undefined) restaurant.heroImages = heroImages;
   if (dayEndTime !== undefined) restaurant.dayEndTime = dayEndTime;
+  if (timezone !== undefined) restaurant.timezone = timezone;
   if (tableAutoReleaseMinutes !== undefined) restaurant.tableAutoReleaseMinutes = tableAutoReleaseMinutes;
+  if (prepBufferMinutes !== undefined) restaurant.prepBufferMinutes = prepBufferMinutes;
+  if (prepMessageTemplate !== undefined) restaurant.prepMessageTemplate = prepMessageTemplate;
   if (taxRates !== undefined) restaurant.taxRates = taxRates;
   if (qrSettings !== undefined) Object.assign(restaurant.qrSettings, qrSettings);
   if (kotSettings !== undefined) Object.assign(restaurant.kotSettings, kotSettings);

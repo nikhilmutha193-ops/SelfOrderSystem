@@ -15,5 +15,7 @@ COPY --from=build /app/dist /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 EXPOSE 80
+# 127.0.0.1, not localhost: that resolves to ::1 in this image while nginx only
+# listens on IPv4, so the check would fail against a container that serves fine.
 HEALTHCHECK --interval=10s --timeout=5s --retries=5 \
-  CMD wget -qO- http://localhost/ || exit 1
+  CMD wget -qO- http://127.0.0.1/ || exit 1

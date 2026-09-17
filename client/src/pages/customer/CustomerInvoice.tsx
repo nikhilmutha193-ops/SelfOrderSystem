@@ -5,6 +5,7 @@ import { useTableSession } from "../../lib/useTableSession";
 import { Badge, Button, Card, ErrorText, Input } from "../../components/ui";
 import { ReviewDialog } from "../../components/ReviewFab";
 import ChatFab from "../../components/ChatFab";
+import { renderPrepMessage } from "../../lib/prepTime";
 import type { OrderDetailResponse } from "../../lib/types";
 
 const STATUS_TONE = {
@@ -126,6 +127,10 @@ export default function CustomerInvoice() {
   if (!data) return <p className="p-4 text-sm text-slate-500">Loading...</p>;
 
   const { order, items, totals } = data;
+  const prepMessage =
+    order.status === "open"
+      ? renderPrepMessage(data.prepMessageTemplate, order.estimatedReadyAt, items, data.prepBufferMinutes)
+      : null;
 
   // Cancelled items are settled, so they don't hold the table up.
   const activeItems = items.filter((i) => i.status !== "cancelled");
@@ -145,6 +150,9 @@ export default function CustomerInvoice() {
       </Card>
 
       <Card className="mb-4">
+        {prepMessage && (
+          <p className="mb-3 rounded-md bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900">{prepMessage}</p>
+        )}
         {/* Four short columns fit a phone, so this lays out as a plain table - a
             forced min-width only produced a sideways scroll over empty space. */}
         <table className="w-full table-auto text-sm">

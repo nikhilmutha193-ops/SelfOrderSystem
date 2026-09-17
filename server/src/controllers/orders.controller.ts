@@ -82,6 +82,7 @@ export const startDeliveryOrder = asyncHandler(async (req: Request, res: Respons
     restaurantId: req.restaurantId,
     orderType: "delivery",
     deliveryProvider: provider,
+    source: "counter",
     customerName,
     customerPhone: customerPhone || "",
     members: members || 1,
@@ -108,6 +109,7 @@ export const startTakeawayOrder = asyncHandler(async (req: Request, res: Respons
   const order = await Order.create({
     restaurantId: req.restaurantId,
     orderType: "takeaway",
+    source: "counter",
     customerName,
     customerPhone: customerPhone || "",
     members: members || 1,
@@ -144,6 +146,7 @@ export const startCounterOrder = asyncHandler(async (req: Request, res: Response
     restaurantId: req.restaurantId,
     orderType: "dine-in",
     ...(table && { tableId: table._id }),
+    source: "counter",
     customerName,
     customerPhone: customerPhone || "",
     members: members || 1,
@@ -169,6 +172,7 @@ export const addOrderItems = asyncHandler(async (req: Request, res: Response) =>
   if (!Array.isArray(items) || items.length === 0) throw new HttpError(400, "items must be a non-empty array");
 
   const created = [];
+  let longestPrepMinutes = 0;
   for (const line of items) {
     if (!line.foodItemId || !Types.ObjectId.isValid(line.foodItemId)) throw new HttpError(400, "Invalid foodItemId");
     if (!line.quantity || line.quantity < 1) throw new HttpError(400, "quantity must be at least 1");
@@ -191,6 +195,17 @@ export const addOrderItems = asyncHandler(async (req: Request, res: Response) =>
       kotRound: null,
     });
     created.push(orderItem);
+    longestPrepMinutes = Math.max(longestPrepMinutes, food.prepTimeMinutes ?? 0);
+  }
+
+  // The kitchen works a round in parallel, so the round's slowest dish sets its pace.
+  // Later rounds only start when they arrive, so the estimate can move out but never in.
+  const restaurant = await Restaurant.findById(req.restaurantId).select("prepBufferMinutes");
+  const buffer = restaurant?.prepBufferMinutes ?? 0;
+  const roundReadyAt = new Date(Date.now() + (longestPrepMinutes + buffer) * 60 * 1000);
+  if (!order.estimatedReadyAt || roundReadyAt > order.estimatedReadyAt) {
+    order.estimatedReadyAt = roundReadyAt;
+    await order.save();
   }
 
   res.status(201).json(created);
@@ -260,16 +275,16 @@ export const listOrders = asyncHandler(async (req: Request, res: Response) => {
   if (status) filter.status = status;
 
   if (today === "true") {
-    const restaurant = await Restaurant.findById(req.restaurantId).select("dayEndTime");
-    filter.checkinTime = { $gte: getBusinessDayStart(new Date(), restaurant?.dayEndTime) };
+    const restaurant = await Restaurant.findById(req.restaurantId).select("dayEndTime timezone");
+    filter.checkinTime = { $gte: getBusinessDayStart(new Date(), restaurant?.dayEndTime, restaurant?.timezone) };
   } else if (from || to) {
     // "from"/"to" are calendar-date labels (YYYY-MM-DD); each one names a full business day,
     // so late-night orders that spill past midnight (before the day-end cutoff) are still
     // included in the day they were labeled with, not cut off at literal midnight.
-    const restaurant = await Restaurant.findById(req.restaurantId).select("dayEndTime");
+    const restaurant = await Restaurant.findById(req.restaurantId).select("dayEndTime timezone");
     const range: Record<string, Date> = {};
-    if (from) range.$gte = getBusinessDayRangeForDate(from, restaurant?.dayEndTime).start;
-    if (to) range.$lt = getBusinessDayRangeForDate(to, restaurant?.dayEndTime).end;
+    if (from) range.$gte = getBusinessDayRangeForDate(from, restaurant?.dayEndTime, restaurant?.timezone).start;
+    if (to) range.$lt = getBusinessDayRangeForDate(to, restaurant?.dayEndTime, restaurant?.timezone).end;
     filter.checkinTime = range;
   }
 
@@ -282,7 +297,8 @@ export const getOrder = asyncHandler(async (req: Request, res: Response) => {
   const items = await OrderItem.find({ orderId: order._id }).sort({ kotRound: 1, createdAt: 1 });
   const restaurant = await Restaurant.findById(req.restaurantId);
   const totals = computeInvoiceTotals(items, restaurant?.taxRates || [], order.discountAmount);
-  res.json({ order, items, totals });
+  // The template is filled in client-side so {time} lands in the reader's own timezone.
+  res.json({ order, items, totals, prepMessageTemplate: restaurant?.prepMessageTemplate || "", prepBufferMinutes: restaurant?.prepBufferMinutes ?? 2 });
 });
 
 export const getInvoice = asyncHandler(async (req: Request, res: Response) => {
@@ -290,7 +306,7 @@ export const getInvoice = asyncHandler(async (req: Request, res: Response) => {
   const items = await OrderItem.find({ orderId: order._id });
   const restaurant = await Restaurant.findById(req.restaurantId);
   const totals = computeInvoiceTotals(items, restaurant?.taxRates || [], order.discountAmount);
-  res.json({ order, items, totals });
+  res.json({ order, items, totals, prepMessageTemplate: restaurant?.prepMessageTemplate || "", prepBufferMinutes: restaurant?.prepBufferMinutes ?? 2 });
 });
 
 export const getInvoicePdf = asyncHandler(async (req: Request, res: Response) => {
@@ -463,8 +479,8 @@ export const printKot = asyncHandler(async (req: Request, res: Response) => {
   const lastRound = await OrderItem.findOne({ orderId: order._id, kotRound: { $ne: null } }).sort({ kotRound: -1 });
   const round = (lastRound?.kotRound || 0) + 1;
 
-  const restaurant = await Restaurant.findById(req.restaurantId).select("dayEndTime");
-  const { tokenNumber } = await nextTokenNumber(req.restaurantId!, restaurant?.dayEndTime);
+  const restaurant = await Restaurant.findById(req.restaurantId).select("dayEndTime timezone");
+  const { tokenNumber } = await nextTokenNumber(req.restaurantId!, restaurant?.dayEndTime, restaurant?.timezone);
 
   await OrderItem.updateMany(
     { _id: { $in: pending.map((p) => p._id) } },
