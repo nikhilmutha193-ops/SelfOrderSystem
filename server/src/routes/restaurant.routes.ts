@@ -1,6 +1,7 @@
 import { Router } from "express";
 import {
   getRestaurantPublic,
+  getRestaurantLogo,
   getRestaurantSettings,
   updateRestaurantSettings,
   previewKotPdf,
@@ -13,6 +14,8 @@ import { getLandingContent, updateLandingContent } from "../controllers/landingC
 const router = Router();
 
 router.get("/public", getRestaurantPublic);
+// Any signed-in admin can pull the logo for the QR card, regardless of module access.
+router.get("/logo", requireAuth("admin"), getRestaurantLogo);
 router.get("/settings", requireAuth("admin"), requireModule("settings"), getRestaurantSettings);
 router.put("/settings", requireAuth("admin"), requireModule("settings"), updateRestaurantSettings);
 router.post("/kot-preview", requireAuth("admin"), requireModule("settings"), previewKotPdf);

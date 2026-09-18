@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api, extractErrorMessage } from "../../lib/apiClient";
-import { Badge, Button, Card, ErrorText, Input, Select, TableWrap } from "../../components/ui";
+import { Badge, Button, Card, ErrorText, Select, TableWrap } from "../../components/ui";
+import { BestsellerTag, FoodTypeIcon, RatingChip } from "../../components/FoodBadges";
 import { renderPrepMessage } from "../../lib/prepTime";
-import type { MenuCategory, OrderCoupon, OrderDetailResponse, PaymentMethod } from "../../lib/types";
+import type { MenuCategory, MenuFoodItem, OrderCoupon, OrderDetailResponse, PaymentMethod } from "../../lib/types";
 
 const STATUS_TONE = {
   pending: "amber",
@@ -18,10 +19,10 @@ export default function OrderDetail() {
   const navigate = useNavigate();
   const [data, setData] = useState<OrderDetailResponse | null>(null);
   const [menu, setMenu] = useState<MenuCategory[]>([]);
-  const [categoryId, setCategoryId] = useState("");
-  const [subcategoryId, setSubcategoryId] = useState("");
-  const [addingFoodId, setAddingFoodId] = useState<string | null>(null);
-  const [quantity, setQuantity] = useState(1);
+  const [activeCat, setActiveCat] = useState("all");
+  const [cart, setCart] = useState<Record<string, number>>({});
+  const [addingCart, setAddingCart] = useState(false);
+  const [kotBusy, setKotBusy] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
   const [couponCode, setCouponCode] = useState("");
   const [couponError, setCouponError] = useState<string | null>(null);
@@ -53,32 +54,94 @@ export default function OrderDetail() {
     api.get<MenuCategory[]>("/menu").then((res) => setMenu(res.data));
   }, []);
 
-  const subcategoriesForCategory = menu.find((c) => c._id === categoryId)?.subcategories ?? [];
-  const foodsForSubcategory = subcategoriesForCategory.find((s) => s._id === subcategoryId)?.foodItems ?? [];
+  // Every dish across the menu, for cart price/name lookups.
+  const foodById = useMemo(() => {
+    const map = new Map<string, MenuFoodItem>();
+    for (const c of menu) for (const s of c.subcategories) for (const f of s.foodItems) map.set(f._id, f);
+    return map;
+  }, [menu]);
 
-  // Keep the two pickers pointing at something real as the menu loads or the category changes.
+  // "all" is a pseudo-tab that lists every dish across categories.
+  const activeFoods =
+    activeCat === "all"
+      ? Array.from(foodById.values())
+      : menu.find((c) => c._id === activeCat)?.subcategories.flatMap((s) => s.foodItems) ?? [];
+
+  const cartCount = Object.values(cart).reduce((sum, q) => sum + q, 0);
+  const cartTotal = Object.entries(cart).reduce((sum, [id, q]) => sum + (foodById.get(id)?.price ?? 0) * q, 0);
+
+  // If a selected category disappears (menu edited), fall back to the All tab.
   useEffect(() => {
-    if (menu.length > 0 && !menu.some((c) => c._id === categoryId)) setCategoryId(menu[0]._id);
-  }, [menu, categoryId]);
+    if (activeCat !== "all" && menu.length > 0 && !menu.some((c) => c._id === activeCat)) setActiveCat("all");
+  }, [menu, activeCat]);
 
-  useEffect(() => {
-    if (subcategoriesForCategory.length > 0 && !subcategoriesForCategory.some((s) => s._id === subcategoryId)) {
-      setSubcategoryId(subcategoriesForCategory[0]._id);
-    }
-  }, [subcategoriesForCategory, subcategoryId]);
+  function incCart(foodId: string) {
+    setCart((prev) => ({ ...prev, [foodId]: (prev[foodId] ?? 0) + 1 }));
+  }
+  function decCart(foodId: string) {
+    setCart((prev) => {
+      const next = { ...prev };
+      const q = (next[foodId] ?? 0) - 1;
+      if (q <= 0) delete next[foodId];
+      else next[foodId] = q;
+      return next;
+    });
+  }
 
-  async function addItem(foodItemId: string) {
-    if (!orderId || addingFoodId) return;
+  async function addCartToOrder() {
+    if (!orderId || cartCount === 0) return;
     setError(null);
-    setAddingFoodId(foodItemId);
+    setAddingCart(true);
     try {
-      await api.post(`/orders/${orderId}/items`, { items: [{ foodItemId, quantity }] });
-      setQuantity(1);
+      await api.post(`/orders/${orderId}/items`, {
+        items: Object.entries(cart).map(([foodItemId, quantity]) => ({ foodItemId, quantity })),
+      });
+      setCart({});
       load();
     } catch (err) {
       setError(extractErrorMessage(err));
     } finally {
-      setAddingFoodId(null);
+      setAddingCart(false);
+    }
+  }
+
+  /** Sends only the not-yet-printed items to the kitchen: new round, new token. */
+  async function sendNewKot() {
+    if (!orderId || kotBusy) return;
+    setError(null);
+    setKotBusy(true);
+    const pdfTab = window.open("", "_blank");
+    try {
+      const res = await api.post<{ round: number | null; message?: string }>(`/orders/${orderId}/kot/print`);
+      if (!res.data.round) {
+        pdfTab?.close();
+        setError(res.data.message || "No new items to send to the kitchen");
+        return;
+      }
+      const pdf = await api.get(`/orders/${orderId}/kot/${res.data.round}/pdf`, { responseType: "blob" });
+      const url = URL.createObjectURL(pdf.data);
+      if (pdfTab) pdfTab.location.href = url;
+      load();
+    } catch (err) {
+      pdfTab?.close();
+      setError(extractErrorMessage(err));
+    } finally {
+      setKotBusy(false);
+    }
+  }
+
+  /** Re-opens an already-printed round's ticket. Same token - nothing is re-allocated. */
+  async function reprintKot(round: number) {
+    if (!orderId) return;
+    setError(null);
+    const pdfTab = window.open("", "_blank");
+    try {
+      const pdf = await api.get(`/orders/${orderId}/kot/${round}/pdf`, { responseType: "blob" });
+      const url = URL.createObjectURL(pdf.data);
+      if (pdfTab) pdfTab.location.href = url;
+    } catch (err) {
+      pdfTab?.close();
+      setError(extractErrorMessage(err));
     }
   }
 
@@ -156,6 +219,23 @@ export default function OrderDetail() {
       ? renderPrepMessage(data.prepMessageTemplate, order.estimatedReadyAt, items, data.prepBufferMinutes)
       : null;
 
+  // Items not yet sent to the kitchen (their KOT round is still unassigned).
+  const pendingToSend = items.filter((i) => i.kotRound == null && i.status !== "cancelled");
+  const pendingCount = pendingToSend.reduce((sum, i) => sum + i.quantity, 0);
+  // Printed rounds, each with its token, newest first - for reprinting.
+  const printedRounds = Array.from(
+    items
+      .filter((i) => i.kotRound != null)
+      .reduce((map, i) => {
+        const r = i.kotRound as number;
+        const entry = map.get(r) ?? { round: r, token: i.tokenNumber, count: 0 };
+        entry.count += i.quantity;
+        map.set(r, entry);
+        return map;
+      }, new Map<number, { round: number; token: number | null; count: number }>())
+      .values()
+  ).sort((a, b) => b.round - a.round);
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
@@ -227,65 +307,101 @@ export default function OrderDetail() {
         {order.status === "open" && (
           <div className="mt-4 border-t border-slate-100 pt-4">
             <p className="mb-2 text-sm font-semibold text-slate-700">Add items</p>
-            <div className="flex flex-wrap items-end gap-2">
-              <label className="text-sm font-medium text-slate-700">
-                Category
-                <Select className="mt-1" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
-                  {menu.map((c) => (
-                    <option key={c._id} value={c._id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </Select>
-              </label>
-              <label className="text-sm font-medium text-slate-700">
-                Subcategory
-                <Select className="mt-1" value={subcategoryId} onChange={(e) => setSubcategoryId(e.target.value)}>
-                  {subcategoriesForCategory.map((s) => (
-                    <option key={s._id} value={s._id}>
-                      {s.name}
-                    </option>
-                  ))}
-                </Select>
-              </label>
-              <label className="text-sm font-medium text-slate-700">
-                Qty
-                <Input
-                  className="mt-1 w-20"
-                  type="number"
-                  min={1}
-                  value={quantity}
-                  onChange={(e) => setQuantity(Number(e.target.value))}
-                />
-              </label>
-            </div>
 
-            {foodsForSubcategory.length === 0 ? (
-              <p className="mt-3 text-sm text-slate-500">No dishes in this subcategory.</p>
-            ) : (
-              <div className="mt-3 flex flex-wrap gap-2">
-                {foodsForSubcategory.map((f) => (
+            {menu.length > 0 && (
+              <div className="mb-3 flex gap-2 overflow-x-auto pb-1">
+                {[{ _id: "all", name: "All items" }, ...menu].map((c) => (
                   <button
-                    key={f._id}
+                    key={c._id}
                     type="button"
-                    disabled={addingFoodId !== null}
-                    onClick={() => addItem(f._id)}
-                    className="min-h-[44px] rounded-lg border border-slate-300 px-3 py-2 text-left text-sm transition-colors hover:border-orange-500 hover:bg-orange-50 disabled:opacity-50"
+                    onClick={() => setActiveCat(c._id)}
+                    className={`min-h-[36px] shrink-0 whitespace-nowrap rounded-xl px-3.5 text-sm font-semibold transition-colors ${
+                      activeCat === c._id
+                        ? "bg-orange-600 text-white shadow-sm"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    }`}
                   >
-                    <span className="block font-medium text-slate-800">
-                      {addingFoodId === f._id ? "Adding..." : f.name}
-                    </span>
-                    <span className="block text-xs text-slate-500">₹{f.price}</span>
+                    {c.name}
                   </button>
                 ))}
               </div>
             )}
-            <p className="mt-2 text-xs text-slate-500">
-              Tap a dish to add it at the quantity above. The quantity resets to 1 after each add.
-            </p>
+
+            {activeFoods.length === 0 ? (
+              <p className="text-sm text-slate-500">No dishes in this category.</p>
+            ) : (
+              <div className="grid gap-3 sm:grid-cols-2">
+                {activeFoods.map((f) => (
+                  <MenuPickCard
+                    key={f._id}
+                    food={f}
+                    qty={cart[f._id] ?? 0}
+                    onAdd={() => incCart(f._id)}
+                    onRemove={() => decCart(f._id)}
+                  />
+                ))}
+              </div>
+            )}
+
+            {cartCount > 0 && (
+              <div className="mt-4 flex items-center justify-between gap-3 rounded-xl bg-orange-50 px-3 py-2">
+                <span className="text-sm font-semibold text-orange-800">
+                  {cartCount} item{cartCount === 1 ? "" : "s"} · ₹{cartTotal.toFixed(2)}
+                </span>
+                <Button className="rounded-xl" onClick={addCartToOrder} disabled={addingCart}>
+                  {addingCart ? "Adding..." : "Add to order"}
+                </Button>
+              </div>
+            )}
           </div>
         )}
       </Card>
+
+      {(pendingCount > 0 || printedRounds.length > 0) && (
+        <Card>
+          <h2 className="mb-2 text-lg font-semibold text-slate-800">Kitchen tickets (KOT)</h2>
+          {pendingCount > 0 ? (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-amber-50 px-3 py-2">
+              <span className="text-sm font-medium text-amber-900">
+                {pendingCount} item{pendingCount === 1 ? "" : "s"} not sent to the kitchen yet
+              </span>
+              <Button className="rounded-xl" onClick={sendNewKot} disabled={kotBusy}>
+                {kotBusy ? "Sending..." : "Send new items (new token)"}
+              </Button>
+            </div>
+          ) : (
+            <p className="text-sm text-slate-500">All items have been sent to the kitchen.</p>
+          )}
+
+          {printedRounds.length > 0 && (
+            <div className="mt-3 flex flex-col gap-2">
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Printed tickets</p>
+              {printedRounds.map((r) => (
+                <div
+                  key={r.round}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                >
+                  <span className="text-slate-700">
+                    Round {r.round}
+                    {r.token != null && (
+                      <span className="ml-2 rounded-md bg-orange-600 px-2 py-0.5 text-xs font-bold text-white">
+                        TOKEN {r.token}
+                      </span>
+                    )}
+                    <span className="ml-2 text-slate-400">
+                      {r.count} item{r.count === 1 ? "" : "s"}
+                    </span>
+                  </span>
+                  <Button variant="secondary" className="rounded-xl" onClick={() => reprintKot(r.round)}>
+                    Reprint KOT
+                  </Button>
+                </div>
+              ))}
+              <p className="text-xs text-slate-400">Reprinting keeps the same token number - it never issues a new one.</p>
+            </div>
+          )}
+        </Card>
+      )}
 
       {order.status === "open" && (
         <Card>
@@ -370,6 +486,70 @@ export default function OrderDetail() {
         <Button variant="secondary" onClick={printInvoice}>
           Print invoice
         </Button>
+      </div>
+    </div>
+  );
+}
+
+/** A menu-page-style dish card for the counter picker: image, badges, price and a +/- stepper. */
+function MenuPickCard({
+  food,
+  qty,
+  onAdd,
+  onRemove,
+}: {
+  food: MenuFoodItem;
+  qty: number;
+  onAdd: () => void;
+  onRemove: () => void;
+}) {
+  return (
+    <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+      {food.imageUrl ? (
+        <img src={food.imageUrl} alt={food.name} loading="lazy" className="h-16 w-16 shrink-0 rounded-xl object-cover" />
+      ) : (
+        <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-orange-100 to-amber-50 text-xl font-bold text-orange-400">
+          {food.name.charAt(0).toUpperCase()}
+        </div>
+      )}
+
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <FoodTypeIcon type={food.foodType} />
+          <RatingChip rating={food.rating} />
+          {food.isBestseller && <BestsellerTag emoji={food.bestsellerEmoji} />}
+        </div>
+        <p className="mt-1 truncate text-sm font-semibold text-slate-900">{food.name}</p>
+        <p className="text-sm font-bold text-slate-800">₹{food.price.toFixed(2)}</p>
+      </div>
+
+      <div className="w-24 shrink-0">
+        {qty === 0 ? (
+          <button
+            onClick={onAdd}
+            className="flex h-11 w-full items-center justify-center rounded-xl border border-orange-600 bg-white text-base font-bold tracking-wide text-orange-600 shadow-sm hover:bg-orange-50"
+          >
+            ADD
+          </button>
+        ) : (
+          <div className="flex h-11 w-full items-center justify-between rounded-xl bg-orange-600 px-0.5 text-white shadow-sm">
+            <button
+              onClick={onRemove}
+              aria-label={`Remove one ${food.name}`}
+              className="flex h-full w-8 items-center justify-center text-xl font-bold leading-none"
+            >
+              −
+            </button>
+            <span className="text-base font-bold tabular-nums">{qty}</span>
+            <button
+              onClick={onAdd}
+              aria-label={`Add one ${food.name}`}
+              className="flex h-full w-8 items-center justify-center text-xl font-bold leading-none"
+            >
+              +
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

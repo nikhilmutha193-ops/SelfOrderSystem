@@ -23,6 +23,7 @@ export default function QrCodes() {
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
   const [qrSettings, setQrSettings] = useState<QrSettings>(DEFAULT_QR_SETTINGS);
   const [frames, setFrames] = useState<Record<string, FrameState>>({});
+  const [logoSrc, setLogoSrc] = useState<string | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -36,6 +37,29 @@ export default function QrCodes() {
       })
       .catch((err) => setError(extractErrorMessage(err)));
   }, []);
+
+  // Load the logo through our own origin (blob URL) so the QR canvas can draw it - the
+  // public bucket the logo normally sits on has no CORS, which made it silently drop off.
+  useEffect(() => {
+    if (!restaurant?.logoUrl || !qrSettings.showLogo) {
+      setLogoSrc(undefined);
+      return;
+    }
+    let objectUrl: string | undefined;
+    let cancelled = false;
+    api
+      .get("/restaurant/logo", { responseType: "blob" })
+      .then((res) => {
+        if (cancelled) return;
+        objectUrl = URL.createObjectURL(res.data);
+        setLogoSrc(objectUrl);
+      })
+      .catch(() => setLogoSrc(restaurant.logoUrl)); // fall back to the raw URL (works if the bucket allows CORS)
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [restaurant?.logoUrl, qrSettings.showLogo]);
 
   useEffect(() => {
     if (!restaurant || tables.length === 0) return;
@@ -52,7 +76,7 @@ export default function QrCodes() {
         orderUrl,
         tableCode: table.code,
         restaurantName: restaurant.name,
-        logoUrl: restaurant.logoUrl,
+        logoUrl: logoSrc,
         address: restaurant.address,
         instructionText: qrSettings.instructionText,
         accentColor: qrSettings.accentColor,
@@ -66,7 +90,7 @@ export default function QrCodes() {
         );
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [restaurant, tables, qrSettings]);
+  }, [restaurant, tables, qrSettings, logoSrc]);
 
   async function saveQrSettings(e: React.FormEvent) {
     e.preventDefault();

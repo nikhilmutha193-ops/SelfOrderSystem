@@ -87,6 +87,26 @@ export default function KotQueueView({ canCancel }: { canCancel: boolean }) {
     }
   }
 
+  /** Re-opens an already-printed round's ticket. Same token - no new one is issued. */
+  async function reprintKot(orderId: string, round: number) {
+    const pdfTab = window.open("", "_blank");
+    try {
+      const pdfRes = await api.get(`/orders/${orderId}/kot/${round}/pdf`, { responseType: "blob" });
+      const url = URL.createObjectURL(pdfRes.data);
+      if (pdfTab) pdfTab.location.href = url;
+    } catch (err) {
+      pdfTab?.close();
+      setError(extractErrorMessage(err));
+    }
+  }
+
+  /** Distinct printed rounds present in a queue card, newest first, for reprinting. */
+  function printedRounds(items: OrderItem[]): { round: number; token: number | null }[] {
+    const map = new Map<number, number | null>();
+    for (const i of items) if (i.kotRound != null && !map.has(i.kotRound)) map.set(i.kotRound, i.tokenNumber);
+    return Array.from(map, ([round, token]) => ({ round, token })).sort((a, b) => b.round - a.round);
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <ErrorText>{error}</ErrorText>
@@ -121,7 +141,20 @@ export default function KotQueueView({ canCancel }: { canCancel: boolean }) {
               <p className="text-xs text-slate-500">{order.customerName}</p>
               </div>
             </div>
-            <Button className="shrink-0" onClick={() => printKot(order._id)}>Print KOT</Button>
+            <div className="flex shrink-0 flex-wrap justify-end gap-2">
+              {printedRounds(items).map((r) => (
+                <Button
+                  key={r.round}
+                  variant="secondary"
+                  className="shrink-0"
+                  onClick={() => reprintKot(order._id, r.round)}
+                  title="Reprint this ticket - keeps the same token"
+                >
+                  Reprint{r.token != null ? ` T${r.token}` : ""}
+                </Button>
+              ))}
+              <Button className="shrink-0" onClick={() => printKot(order._id)}>Print KOT</Button>
+            </div>
           </div>
           <table className="w-full text-sm">
             <tbody>

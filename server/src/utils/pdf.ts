@@ -141,7 +141,7 @@ async function renderToPaper(
   res.end(pdf);
 }
 
-async function resolveLogoBuffer(logoUrl?: string): Promise<Buffer | null> {
+export async function resolveLogoBuffer(logoUrl?: string): Promise<Buffer | null> {
   if (!logoUrl) return null;
   try {
     if (logoUrl.startsWith("/uploads/")) {
