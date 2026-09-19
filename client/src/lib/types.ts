@@ -189,6 +189,17 @@ export interface Order {
   source?: "guest" | "counter";
   /** When the kitchen should have the order ready; absent until items are added. */
   estimatedReadyAt?: string | null;
+  /** KOT progress summary, attached by the orders list endpoint. */
+  kitchen?: OrderKitchenSummary;
+}
+
+export interface OrderKitchenSummary {
+  active: number;
+  served: number;
+  ready: number;
+  preparing: number;
+  pendingSent: number;
+  pendingUnsent: number;
 }
 
 export type OrderItemStatus = "pending" | "preparing" | "ready" | "served" | "cancelled";

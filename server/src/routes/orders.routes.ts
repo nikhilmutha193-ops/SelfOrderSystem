@@ -10,6 +10,7 @@ import {
   serveOrderItem,
   cancelOrderItem,
   listOrders,
+  clearOrders,
   exportOrdersCsv,
   exportOrdersPdf,
   getOrder,
@@ -39,6 +40,8 @@ router.post("/counter", requireAuth("admin"), requireModule("orders"), startCoun
 router.post("/takeaway", requireAuth("admin"), requireModule("orders"), startTakeawayOrder);
 
 router.get("/", requireAuth("admin"), requireModule("orders"), listOrders);
+// Owner-only bulk clear of the filtered orders (the controller enforces owner).
+router.delete("/", requireAuth("admin"), requireModule("orders"), clearOrders);
 // Report exports - declared before "/:orderId" so "report.csv" isn't taken as an order id.
 router.get("/report.csv", requireAuth("admin"), requireModule("orders"), exportOrdersCsv);
 router.get("/report.pdf", requireAuth("admin"), requireModule("orders"), exportOrdersPdf);

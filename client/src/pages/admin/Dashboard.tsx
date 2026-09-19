@@ -1,12 +1,33 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, extractErrorMessage } from "../../lib/apiClient";
-import { Card, ErrorText, TableWrap } from "../../components/ui";
+import { Badge, Card, ErrorText } from "../../components/ui";
 import type { DashboardSummary, Order } from "../../lib/types";
+
+function orderTypeLabel(o: Order): string {
+  if (o.orderType === "dine-in") {
+    return typeof o.tableId === "object" && o.tableId?.code ? `Table ${o.tableId.code}` : "Counter";
+  }
+  if (o.orderType === "takeaway") return "Take away";
+  return `Delivery${o.deliveryProvider ? ` (${o.deliveryProvider})` : ""}`;
+}
+
+/** A short kitchen-status label + colour derived from the order's KOT progress. */
+function kitchenBadge(o: Order): { label: string; tone: "gray" | "amber" | "blue" | "green" } {
+  const k = o.kitchen;
+  if (!k || k.active === 0) return { label: "No items", tone: "gray" };
+  if (k.served === k.active) return { label: "All served", tone: "green" };
+  if (k.preparing > 0) return { label: "Preparing", tone: "blue" };
+  if (k.ready > 0) return { label: "Ready to serve", tone: "green" };
+  if (k.pendingSent > 0) return { label: "In kitchen", tone: "amber" };
+  if (k.pendingUnsent > 0) return { label: "Not sent to kitchen", tone: "gray" };
+  return { label: "In progress", tone: "amber" };
+}
 
 export default function Dashboard() {
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [todayOrders, setTodayOrders] = useState<Order[]>([]);
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -53,43 +74,87 @@ export default function Dashboard() {
         </div>
       )}
 
-      <Card>
+      <div>
         <h2 className="mb-3 text-lg font-semibold text-slate-800">Today's open orders</h2>
-        <TableWrap>
-          <table className="w-full min-w-[34rem] text-sm">
-          <thead>
-            <tr className="text-left text-slate-500">
-              <th className="pb-2">Customer</th>
-              <th className="pb-2">Type</th>
-              <th className="pb-2">Check-in</th>
-              <th className="pb-2"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {todayOrders.map((order) => (
-              <tr key={order._id} className="border-t border-slate-100">
-                <td className="py-1.5">{order.customerName}</td>
-                <td className="py-1.5 capitalize">{order.orderType}</td>
-                <td className="py-1.5">{new Date(order.checkinTime).toLocaleTimeString()}</td>
-                <td className="py-1.5">
-                  <Link to={`/admin/orders/${order._id}`} className="text-orange-600 hover:underline">
-                    View
-                  </Link>
-                </td>
-              </tr>
-            ))}
-            {todayOrders.length === 0 && (
-              <tr>
-                <td colSpan={4} className="py-4 text-center text-slate-400">
-                  No open orders yet today
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </TableWrap>
-      </Card>
+        {todayOrders.length === 0 ? (
+          <Card>
+            <p className="py-6 text-center text-sm text-slate-400">No open orders yet today</p>
+          </Card>
+        ) : (
+          <div className="flex flex-col gap-4">
+            {ORDER_GROUPS.map((group) => {
+              const groupOrders = todayOrders.filter((o) => group.match(o.orderType));
+              if (groupOrders.length === 0) return null;
+              const isCollapsed = collapsed[group.key];
+              return (
+                <div key={group.key} className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                  <button
+                    type="button"
+                    onClick={() => setCollapsed((c) => ({ ...c, [group.key]: !c[group.key] }))}
+                    className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left hover:bg-slate-50"
+                  >
+                    <span className="flex items-center gap-2 font-semibold text-slate-800">
+                      {group.label}
+                      <span className="rounded-md bg-slate-100 px-2 py-0.5 text-xs font-bold text-slate-500">
+                        {groupOrders.length}
+                      </span>
+                    </span>
+                    <svg
+                      width="18"
+                      height="18"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      className={`text-slate-400 transition-transform ${isCollapsed ? "" : "rotate-180"}`}
+                      aria-hidden="true"
+                    >
+                      <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+                  {!isCollapsed && (
+                    <div className="grid grid-cols-1 gap-3 border-t border-slate-100 p-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                      {groupOrders.map((order) => (
+                        <OrderBox key={order._id} order={order} />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
+  );
+}
+
+const ORDER_GROUPS: { key: string; label: string; match: (t: Order["orderType"]) => boolean }[] = [
+  { key: "dine-in", label: "Dine-in", match: (t) => t === "dine-in" },
+  { key: "takeaway", label: "Take away", match: (t) => t === "takeaway" },
+  { key: "other", label: "Other", match: (t) => t !== "dine-in" && t !== "takeaway" },
+];
+
+function OrderBox({ order }: { order: Order }) {
+  const kb = kitchenBadge(order);
+  return (
+    <Link
+      to={`/admin/orders/${order._id}`}
+      className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-shadow hover:shadow-md"
+    >
+      <div className="flex items-start justify-between gap-2">
+        <span className="min-w-0 truncate text-base font-semibold text-slate-800">{order.customerName || "Guest"}</span>
+        <Badge tone="amber">open</Badge>
+      </div>
+      <span className="text-sm text-slate-600">{orderTypeLabel(order)}</span>
+      <div className="flex items-center gap-2">
+        <span className="text-xs font-medium uppercase tracking-wide text-slate-400">Kitchen</span>
+        <Badge tone={kb.tone}>{kb.label}</Badge>
+      </div>
+      <span className="text-xs text-slate-400">
+        Check-in {new Date(order.checkinTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+      </span>
+    </Link>
   );
 }
 

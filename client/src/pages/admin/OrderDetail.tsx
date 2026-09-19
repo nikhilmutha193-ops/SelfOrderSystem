@@ -14,8 +14,12 @@ const STATUS_TONE = {
   cancelled: "red",
 } as const;
 
-export default function OrderDetail() {
-  const { orderId } = useParams<{ orderId: string }>();
+export default function OrderDetail({
+  orderId: orderIdProp,
+  embedded = false,
+}: { orderId?: string; embedded?: boolean } = {}) {
+  const params = useParams<{ orderId: string }>();
+  const orderId = orderIdProp ?? params.orderId;
   const navigate = useNavigate();
   const [data, setData] = useState<OrderDetailResponse | null>(null);
   const [menu, setMenu] = useState<MenuCategory[]>([]);
@@ -238,12 +242,14 @@ export default function OrderDetail() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-slate-800">Order Detail</h1>
-        <Button variant="secondary" onClick={() => navigate(-1)}>
-          Back
-        </Button>
-      </div>
+      {!embedded && (
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold text-slate-800">Order Detail</h1>
+          <Button variant="secondary" onClick={() => navigate(-1)}>
+            Back
+          </Button>
+        </div>
+      )}
 
       <Card>
         <div className="flex flex-wrap justify-between gap-4">

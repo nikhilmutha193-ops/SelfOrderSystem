@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api, extractErrorMessage } from "../../lib/apiClient";
 import { Badge, Button, Card, ErrorText, Input, Select, TableWrap } from "../../components/ui";
+import { useAdmin } from "../../lib/adminAuth";
 import type { Order, OrderStatus, OrderType } from "../../lib/types";
 
 const STATUS_TONE = { open: "amber", closed: "green", cancelled: "red" } as const;
@@ -14,9 +15,11 @@ export default function Orders() {
   const from = searchParams.get("from") || "";
   const to = searchParams.get("to") || "";
 
+  const { profile } = useAdmin();
   const [orders, setOrders] = useState<Order[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [downloading, setDownloading] = useState<"csv" | "pdf" | null>(null);
+  const [clearing, setClearing] = useState(false);
 
   // Mirrors the active filters into the report request so the download matches the table.
   function currentParams(): Record<string, string> {
@@ -53,21 +56,38 @@ export default function Orders() {
     }
   }
 
-  useEffect(() => {
-    const params: Record<string, string> = {};
-    if (type) params.type = type;
-    if (status) params.status = status;
-    if (today) {
-      params.today = "true";
-    } else {
-      if (from) params.from = from;
-      if (to) params.to = to;
-    }
+  function load() {
     api
-      .get<Order[]>("/orders", { params })
+      .get<Order[]>("/orders", { params: currentParams() })
       .then((res) => setOrders(res.data))
       .catch((err) => setError(extractErrorMessage(err)));
-  }, [type, status, today, from, to]);
+  }
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(load, [type, status, today, from, to]);
+
+  async function clearAll() {
+    const shown = orders.length;
+    if (shown === 0) return;
+    const typeName = type === "takeaway" ? "take-away" : type === "dine-in" ? "dine-in" : type === "delivery" ? "delivery" : "";
+    if (
+      !window.confirm(
+        `Permanently delete all ${shown} ${typeName} order(s) currently shown, including their items and chat? ` +
+          `This cannot be undone.`
+      )
+    )
+      return;
+    setError(null);
+    setClearing(true);
+    try {
+      await api.delete("/orders", { params: currentParams() });
+      load();
+    } catch (err) {
+      setError(extractErrorMessage(err));
+    } finally {
+      setClearing(false);
+    }
+  }
 
   function updateParam(key: string, value: string) {
     const next = new URLSearchParams(searchParams);
@@ -155,13 +175,18 @@ export default function Orders() {
           <Button type="button" variant="secondary" onClick={() => selectDayFromToday(1)}>
             Tomorrow
           </Button>
-          <div className="ml-auto flex gap-2">
+          <div className="ml-auto flex flex-wrap gap-2">
             <Button type="button" onClick={() => downloadReport("csv")} disabled={downloading !== null}>
               {downloading === "csv" ? "Preparing..." : "Download CSV"}
             </Button>
             <Button type="button" onClick={() => downloadReport("pdf")} disabled={downloading !== null}>
               {downloading === "pdf" ? "Preparing..." : "Download PDF"}
             </Button>
+            {profile?.isOwner && (
+              <Button type="button" variant="danger" onClick={clearAll} disabled={clearing || orders.length === 0}>
+                {clearing ? "Clearing..." : "Clear all"}
+              </Button>
+            )}
           </div>
         </div>
         <p className="mt-2 text-xs text-slate-500">

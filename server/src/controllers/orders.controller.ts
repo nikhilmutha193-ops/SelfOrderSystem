@@ -7,6 +7,7 @@ import FoodItem from "../models/FoodItem";
 import Restaurant from "../models/Restaurant";
 import Coupon from "../models/Coupon";
 import ChatMessage from "../models/ChatMessage";
+import Admin from "../models/Admin";
 import { asyncHandler } from "../middleware/errorHandler";
 import { HttpError } from "../utils/httpError";
 import { computeInvoiceTotals } from "../utils/invoice";
@@ -294,8 +295,63 @@ async function buildOrderFilter(req: Request): Promise<Record<string, unknown>> 
 
 export const listOrders = asyncHandler(async (req: Request, res: Response) => {
   const filter = await buildOrderFilter(req);
-  const orders = await Order.find(filter).sort({ checkinTime: -1 }).populate("tableId", "code");
-  res.json(orders);
+  const orders = await Order.find(filter).sort({ checkinTime: -1 }).populate("tableId", "code").lean();
+
+  // Attach a small kitchen summary per order so the dashboard/list can show KOT progress
+  // without a separate request per order.
+  const orderIds = orders.map((o) => o._id);
+  const items = await OrderItem.find({ orderId: { $in: orderIds } }).select("orderId status kotRound").lean();
+  const byOrder = new Map<string, { active: number; served: number; ready: number; preparing: number; pendingSent: number; pendingUnsent: number }>();
+  for (const it of items) {
+    const key = it.orderId.toString();
+    const k = byOrder.get(key) ?? { active: 0, served: 0, ready: 0, preparing: 0, pendingSent: 0, pendingUnsent: 0 };
+    if (it.status !== "cancelled") k.active += 1;
+    if (it.status === "served") k.served += 1;
+    else if (it.status === "ready") k.ready += 1;
+    else if (it.status === "preparing") k.preparing += 1;
+    else if (it.status === "pending") (it.kotRound != null ? (k.pendingSent += 1) : (k.pendingUnsent += 1));
+    byOrder.set(key, k);
+  }
+
+  const withKitchen = orders.map((o) => ({
+    ...o,
+    kitchen: byOrder.get(o._id.toString()) ?? { active: 0, served: 0, ready: 0, preparing: 0, pendingSent: 0, pendingUnsent: 0 },
+  }));
+  res.json(withKitchen);
+});
+
+/**
+ * Permanently deletes every order matching the current filters (type/status/date) along
+ * with their items and chat. This is a bulk, irreversible clear, so it is restricted to
+ * the owner account regardless of who else has "edit" on Orders. Any tables those orders
+ * held are freed so the deletion doesn't strand a table as "occupied".
+ */
+export const clearOrders = asyncHandler(async (req: Request, res: Response) => {
+  const admin = req.admin ?? (await Admin.findById(req.auth!.id));
+  if (!admin?.isOwner) {
+    throw new HttpError(403, "Only the owner account can clear orders");
+  }
+
+  const filter = await buildOrderFilter(req);
+  const orders = await Order.find(filter).select("_id tableId orderType");
+  if (orders.length === 0) return res.json({ deleted: 0 });
+
+  const orderIds = orders.map((o) => o._id);
+  const tableIds = orders
+    .filter((o) => o.orderType === "dine-in" && o.tableId)
+    .map((o) => o.tableId as Types.ObjectId);
+
+  await OrderItem.deleteMany({ orderId: { $in: orderIds } });
+  await ChatMessage.deleteMany({ orderId: { $in: orderIds } });
+  await Order.deleteMany({ _id: { $in: orderIds } });
+  if (tableIds.length > 0) {
+    await TableModel.updateMany(
+      { _id: { $in: tableIds }, isGuest: false },
+      { $set: { status: "available" }, $unset: { sessionId: "", occupiedAt: "" } }
+    );
+  }
+
+  res.json({ deleted: orderIds.length });
 });
 
 interface OrderReportRow {
