@@ -2,12 +2,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, clearStoredToken, extractErrorMessage, setActiveAuth } from "../../lib/apiClient";
 import { useTableSession } from "../../lib/useTableSession";
-import { Button, ErrorText, Input, Select } from "../../components/ui";
+import { Button, ErrorText, Input, Select, Textarea } from "../../components/ui";
 import ChatFab from "../../components/ChatFab";
 import DishDialog, { type DishAddPayload } from "../../components/DishDialog";
 import { BestsellerTag, FoodTypeIcon, RatingChip } from "../../components/FoodBadges";
 import QuickRequests from "../../components/QuickRequests";
-import { ReviewDialog } from "../../components/ReviewFab";
+import { ReviewDialog, StarPicker } from "../../components/ReviewFab";
 import { tr, LANGS, loadLang, saveLang, type Lang } from "../../lib/i18n";
 import { newId } from "../../lib/id";
 import type { CartLine, MenuCategory, MenuFoodItem, OrderDetailResponse } from "../../lib/types";
@@ -79,6 +79,13 @@ export default function Menu() {
   const [activeItemCount, setActiveItemCount] = useState<number | null>(null);
   const [leavingTable, setLeavingTable] = useState(false);
   const leavingRef = useRef(false);
+  // Quick "rate your visit" built into the leave-table dialog itself, since leaving is exactly
+  // when a guest's opinion of the visit is freshest. Entirely optional - leaving works with no
+  // rating picked. Name is pulled from the order (fetched alongside the active-item check)
+  // rather than asked again, since the guest already gave it at check-in.
+  const [leaveRating, setLeaveRating] = useState(0);
+  const [leaveComment, setLeaveComment] = useState("");
+  const [leaveCustomerName, setLeaveCustomerName] = useState("");
 
   const [lang, setLang] = useState<Lang>(loadLang);
   const [search, setSearch] = useState("");
@@ -190,15 +197,19 @@ export default function Menu() {
   }
 
   /** Opens the leave-table confirmation, checking first whether any items are still active so
-   *  the dialog can warn about them rather than understating what "leave" actually means here. */
+   *  the dialog can warn about them rather than understating what "leave" actually means here.
+   *  Also resets and primes the built-in "rate your visit" fields for this fresh open. */
   async function openLeaveConfirm() {
     setLeaveConfirmOpen(true);
     setActiveItemCount(null);
+    setLeaveRating(0);
+    setLeaveComment("");
     if (!orderId) return;
     try {
       const res = await api.get<OrderDetailResponse>(`/orders/${orderId}`);
       const active = res.data.items.filter((it) => ACTIVE_ITEM_STATUSES.has(it.status)).length;
       setActiveItemCount(active);
+      setLeaveCustomerName(res.data.order.customerName || "");
     } catch {
       // Non-critical - the dialog still works without the extra warning if this fails.
     }
@@ -214,6 +225,17 @@ export default function Menu() {
     if (leavingRef.current) return; // guards a double-tap from firing the release twice
     leavingRef.current = true;
     setLeavingTable(true);
+    if (leaveRating > 0) {
+      try {
+        await api.post("/reviews", {
+          customerName: leaveCustomerName || "Guest",
+          rating: leaveRating,
+          comment: leaveComment,
+        });
+      } catch {
+        // Non-critical - a failed review submission shouldn't block leaving the table.
+      }
+    }
     try {
       await api.patch("/tables/session/release");
     } catch {
@@ -566,6 +588,24 @@ export default function Menu() {
               This frees the table for other guests - you can sign back in from this table's QR code or code
               anytime.
             </p>
+
+            <div className="mt-3 rounded-lg border border-slate-200 p-3">
+              <p className="text-sm font-medium text-slate-700">Rate your visit</p>
+              <p className="mt-0.5 text-xs text-slate-400">Optional - tap a star to leave a quick review as you go.</p>
+              <div className="mt-2">
+                <StarPicker value={leaveRating} onChange={setLeaveRating} />
+              </div>
+              {leaveRating > 0 && (
+                <Textarea
+                  className="mt-2"
+                  rows={2}
+                  value={leaveComment}
+                  onChange={(e) => setLeaveComment(e.target.value)}
+                  placeholder="Anything you'd like to add? (optional)"
+                />
+              )}
+            </div>
+
             <div className="mt-4 flex gap-2">
               <Button variant="secondary" className="flex-1" onClick={() => setLeaveConfirmOpen(false)} disabled={leavingTable}>
                 Cancel

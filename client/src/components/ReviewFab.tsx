@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { api, extractErrorMessage } from "../lib/apiClient";
 import { Button, ErrorText, Input, Textarea } from "./ui";
 
-function StarPicker({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+export function StarPicker({ value, onChange }: { value: number; onChange: (v: number) => void }) {
   return (
     <div className="flex gap-1">
       {[1, 2, 3, 4, 5].map((n) => (
@@ -115,14 +115,13 @@ export function ReviewDialog({
               </div>
             </div>
             <label className="text-sm font-medium text-slate-700">
-              Your feedback
+              Your feedback <span className="font-normal text-slate-400">(optional)</span>
               <Textarea
                 className="mt-1"
                 rows={3}
                 value={comment}
                 onChange={(e) => setComment(e.target.value)}
                 placeholder="Tell us what you enjoyed, or what we could do better"
-                required
               />
             </label>
             <ErrorText>{error}</ErrorText>

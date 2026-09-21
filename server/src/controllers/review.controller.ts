@@ -48,8 +48,8 @@ export const submitReview = asyncHandler(async (req: Request, res: Response) => 
     rating?: number;
     comment?: string;
   };
-  if (!customerName?.trim() || !comment?.trim()) {
-    throw new HttpError(400, "customerName and comment are required");
+  if (!customerName?.trim()) {
+    throw new HttpError(400, "customerName is required");
   }
   if (typeof rating !== "number" || !Number.isInteger(rating) || rating < 1 || rating > 5) {
     throw new HttpError(400, "rating must be an integer between 1 and 5");
@@ -60,7 +60,7 @@ export const submitReview = asyncHandler(async (req: Request, res: Response) => 
     tableId: req.auth?.tableId,
     customerName: customerName.trim(),
     rating,
-    comment: comment.trim(),
+    comment: comment?.trim() || "",
     isApproved: false,
   });
   res.status(201).json(review);
