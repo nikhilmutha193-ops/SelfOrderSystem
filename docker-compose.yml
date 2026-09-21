@@ -10,6 +10,9 @@ services:
       RESTAURANT_KEY: ${RESTAURANT_KEY:-resto_demo}
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in a .env file at the repo root - see .env.example}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-8h}
+      # Comma-separated exact-match allow-list of redirect URIs an OAuth client (e.g. an MCP
+      # host) may use with /api/oauth/authorize. Empty means the OAuth flow rejects everything.
+      OAUTH_ALLOWED_REDIRECT_URIS: ${OAUTH_ALLOWED_REDIRECT_URIS:-}
       # Browser traffic reaches the API same-origin through the client's nginx, so this
       # only matters if the API is exposed directly. Set CLIENT_ORIGIN in .env to your
       # real site origin(s), comma-separated, to lock cross-origin access down from "*".

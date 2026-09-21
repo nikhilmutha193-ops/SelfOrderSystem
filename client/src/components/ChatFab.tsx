@@ -1,8 +1,19 @@
 import { useEffect, useRef, useState } from "react";
 import { api, extractErrorMessage } from "../lib/apiClient";
 import { useTableSession } from "../lib/useTableSession";
+import { QUICK_REQUESTS } from "../lib/quickRequests";
 import { Button, ErrorText, Input } from "./ui";
 import type { ChatMessage } from "../lib/types";
+
+/** Support-agent avatar glyph, so the button reads as "talk to someone" at a glance. */
+function SupportIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden>
+      <circle cx="12" cy="7" r="4" />
+      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+    </svg>
+  );
+}
 
 export default function ChatFab() {
   const { orderId } = useTableSession();
@@ -11,6 +22,7 @@ export default function ChatFab() {
   const [draft, setDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
+  const [quickSending, setQuickSending] = useState<string | null>(null);
   const [seenCount, setSeenCount] = useState(0);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
@@ -44,20 +56,34 @@ export default function ChatFab() {
 
   const unread = open ? 0 : messages.length - seenCount;
 
-  async function send(e: React.FormEvent) {
-    e.preventDefault();
-    if (!draft.trim() || !orderId) return;
-    setSending(true);
-    setError(null);
+  async function sendMessage(message: string): Promise<boolean> {
+    if (!message.trim() || !orderId) return false;
     try {
-      const res = await api.post<ChatMessage>(`/orders/${orderId}/chat`, { message: draft.trim() });
+      const res = await api.post<ChatMessage>(`/orders/${orderId}/chat`, { message: message.trim() });
       setMessages((prev) => [...prev, res.data]);
-      setDraft("");
+      return true;
     } catch (err) {
       setError(extractErrorMessage(err));
-    } finally {
-      setSending(false);
+      return false;
     }
+  }
+
+  async function send(e: React.FormEvent) {
+    e.preventDefault();
+    if (!draft.trim()) return;
+    setSending(true);
+    setError(null);
+    if (await sendMessage(draft)) setDraft("");
+    setSending(false);
+  }
+
+  /** One-tap preset request from the "Quick assist" row, sent through the same chat thread. */
+  async function sendQuick(req: (typeof QUICK_REQUESTS)[number]) {
+    if (quickSending) return;
+    setQuickSending(req.label);
+    setError(null);
+    await sendMessage(req.message);
+    setQuickSending(null);
   }
 
   return (
@@ -65,12 +91,12 @@ export default function ChatFab() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        aria-label="Chat with the restaurant"
-        className="fixed bottom-5 left-5 z-20 flex items-center gap-2 rounded-xl bg-slate-800 px-4 py-3 text-sm font-medium text-white shadow-lg hover:bg-slate-900"
+        aria-label="Chat with support"
+        className="fixed bottom-5 left-5 z-20 flex h-14 w-14 items-center justify-center rounded-full bg-slate-800 text-white shadow-lg hover:bg-slate-900"
       >
-        <span aria-hidden>💬</span> Chat
+        <SupportIcon className="h-6 w-6" />
         {unread > 0 && (
-          <span className="flex h-5 min-w-5 items-center justify-center rounded-md bg-red-600 px-1 text-[11px] font-semibold">
+          <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-white bg-red-600 px-1 text-[11px] font-semibold">
             {unread}
           </span>
         )}
@@ -83,13 +109,33 @@ export default function ChatFab() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-2 flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-slate-800">Chat with the restaurant</h2>
+              <h2 className="flex items-center gap-1.5 text-sm font-semibold text-slate-800">
+                <SupportIcon className="h-4 w-4 text-slate-500" /> Chat &amp; assist
+              </h2>
               <button type="button" className="text-slate-400 hover:text-slate-600" onClick={() => setOpen(false)} aria-label="Close">
                 ✕
               </button>
             </div>
 
-            <div className="flex h-72 flex-col gap-2 overflow-y-auto rounded-md border border-slate-100 bg-slate-50 p-3">
+            <div className="mb-2">
+              <p className="mb-1.5 text-xs font-medium text-slate-500">Quick assist</p>
+              <div className="flex flex-wrap gap-1.5">
+                {QUICK_REQUESTS.map((req) => (
+                  <button
+                    key={req.label}
+                    type="button"
+                    onClick={() => sendQuick(req)}
+                    disabled={quickSending === req.label}
+                    className="flex items-center gap-1 rounded-full border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-50 disabled:opacity-60"
+                  >
+                    <span aria-hidden>{req.emoji}</span>
+                    {quickSending === req.label ? "Sending..." : req.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex h-64 flex-col gap-2 overflow-y-auto rounded-md border border-slate-100 bg-slate-50 p-3">
               {messages.length === 0 && (
                 <p className="py-8 text-center text-sm text-slate-400">
                   Send a message if you need anything - extra napkins, a question about a dish, anything at all.

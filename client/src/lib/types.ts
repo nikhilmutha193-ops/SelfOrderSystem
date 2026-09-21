@@ -102,6 +102,25 @@ export interface Subcategory {
 
 export type FoodType = "veg" | "non-veg" | "egg";
 
+export type Translations = Record<string, { name?: string; description?: string }>;
+
+export interface ModifierOption {
+  label: string;
+  priceDelta: number;
+}
+export interface ModifierGroup {
+  name: string;
+  type: "single" | "multi";
+  required: boolean;
+  options: ModifierOption[];
+}
+/** A modifier a guest picked, stored on the cart line / order item. */
+export interface SelectedModifier {
+  groupName: string;
+  label: string;
+  priceDelta: number;
+}
+
 export interface FoodItem {
   _id: string;
   categoryId: string;
@@ -116,6 +135,10 @@ export interface FoodItem {
   foodType?: FoodType;
   rating?: number;
   prepTimeMinutes?: number;
+  translations?: Translations;
+  modifierGroups?: ModifierGroup[];
+  reviewSum?: number;
+  reviewCount?: number;
 }
 
 export interface MenuFoodItem {
@@ -128,12 +151,17 @@ export interface MenuFoodItem {
   bestsellerEmoji?: string;
   foodType?: FoodType;
   rating?: number;
+  translations?: Translations;
+  modifierGroups?: ModifierGroup[];
+  guestRating?: number | null;
+  reviewCount?: number;
 }
 
 export interface MenuSubcategory {
   _id: string;
   name: string;
   description?: string;
+  translations?: Translations;
   foodItems: MenuFoodItem[];
 }
 
@@ -141,6 +169,7 @@ export interface MenuCategory {
   _id: string;
   name: string;
   description?: string;
+  translations?: Translations;
   subcategories: MenuSubcategory[];
 }
 
@@ -185,8 +214,10 @@ export interface Order {
   paymentMethod: PaymentMethod;
   couponCode?: string;
   discountAmount: number;
-  /** "counter" orders are staff-raised and survive a table release. */
-  source?: "guest" | "counter";
+  /** "counter" orders are staff-raised and survive a table release; swiggy/zomato are aggregator orders. */
+  source?: "guest" | "counter" | "swiggy" | "zomato";
+  /** The aggregator's own order reference, when the order came from Swiggy/Zomato. */
+  externalOrderId?: string;
   /** When the kitchen should have the order ready; absent until items are added. */
   estimatedReadyAt?: string | null;
   /** KOT progress summary, attached by the orders list endpoint. */
@@ -218,6 +249,8 @@ export interface OrderItem {
   kotRound: number | null;
   tokenNumber: number | null;
   kotPrintedAt: string | null;
+  modifiers?: SelectedModifier[];
+  note?: string;
 }
 
 export interface InvoiceTaxLine {
@@ -282,10 +315,14 @@ export interface ChatConversation {
 }
 
 export interface CartLine {
+  /** Unique per cart line, so two customizations of the same dish stay separate. */
+  lineId: string;
   foodItemId: string;
   name: string;
   price: number;
   quantity: number;
+  modifiers?: SelectedModifier[];
+  note?: string;
 }
 
 export interface ApiErrorBody {

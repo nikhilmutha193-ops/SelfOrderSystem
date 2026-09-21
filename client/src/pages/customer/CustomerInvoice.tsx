@@ -28,6 +28,16 @@ export default function CustomerInvoice() {
   const [couponCode, setCouponCode] = useState("");
   const [couponError, setCouponError] = useState<string | null>(null);
   const [applyingCoupon, setApplyingCoupon] = useState(false);
+  const [ratedDishes, setRatedDishes] = useState<Record<string, number>>({});
+
+  async function rateDish(foodItemId: string, rating: number) {
+    setRatedDishes((r) => ({ ...r, [foodItemId]: rating }));
+    try {
+      await api.post("/reviews/food", { foodItemId, rating });
+    } catch {
+      // Non-critical (e.g. already rated) - keep the stars shown either way.
+    }
+  }
 
   const load = useCallback(() => {
     if (!orderId) return;
@@ -138,7 +148,7 @@ export default function CustomerInvoice() {
   const orderComplete = order.status === "closed" || (activeItems.length > 0 && pendingCount === 0);
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-6">
+    <div className="mx-auto max-w-2xl px-4 pt-6 pb-32">
       <div className="mb-4 flex items-center justify-between">
         <h1 className="text-xl font-bold text-slate-800">Your order</h1>
         <Badge tone={order.status === "closed" ? "green" : "amber"}>{order.status === "closed" ? "Paid" : "Open"}</Badge>
@@ -167,7 +177,14 @@ export default function CustomerInvoice() {
           <tbody>
             {items.map((item) => (
               <tr key={item._id} className="border-t border-slate-100 align-top">
-                <td className="py-2 pr-2">{item.foodName}</td>
+                <td className="py-2 pr-2">
+                  {item.foodName}
+                  {(item.modifiers?.length || item.note) && (
+                    <span className="mt-0.5 block text-xs text-slate-400">
+                      {[...(item.modifiers?.map((m) => m.label) ?? []), item.note].filter(Boolean).join(", ")}
+                    </span>
+                  )}
+                </td>
                 <td className="py-2 text-center tabular-nums">{item.quantity}</td>
                 <td className="py-2 pl-2 text-right tabular-nums whitespace-nowrap">₹{item.total.toFixed(2)}</td>
                 <td className="py-2 pl-2 text-right">
@@ -234,6 +251,39 @@ export default function CustomerInvoice() {
           <span>₹{totals.grandTotal.toFixed(2)}</span>
         </div>
       </Card>
+
+      {/* Rate each dish (deduped) - guest reviews feed the dish's average on the menu. */}
+      {(() => {
+        const dishes = Array.from(new Map(items.filter((i) => i.status !== "cancelled").map((i) => [i.foodItemId, i.foodName])));
+        if (dishes.length === 0) return null;
+        return (
+          <Card className="mb-4">
+            <h2 className="mb-2 text-sm font-semibold text-slate-700">Rate the dishes</h2>
+            <div className="flex flex-col gap-2">
+              {dishes.map(([foodItemId, foodName]) => (
+                <div key={foodItemId} className="flex items-center justify-between gap-2">
+                  <span className="min-w-0 flex-1 truncate text-sm text-slate-700">{foodName}</span>
+                  <div className="flex shrink-0">
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <button
+                        key={n}
+                        type="button"
+                        aria-label={`Rate ${foodName} ${n} of 5`}
+                        onClick={() => rateDish(foodItemId, n)}
+                        className={`px-0.5 text-xl leading-none ${
+                          (ratedDishes[foodItemId] ?? 0) >= n ? "text-amber-500" : "text-slate-300"
+                        }`}
+                      >
+                        ★
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        );
+      })()}
 
       {checkoutRequested && (
         <p className="mb-3 rounded-md bg-green-50 px-3 py-2 text-sm text-green-800">

@@ -38,6 +38,8 @@ const Reviews = lazy(() => import("./pages/admin/Reviews"));
 const Messages = lazy(() => import("./pages/admin/Messages"));
 const Backup = lazy(() => import("./pages/admin/Backup"));
 const Admins = lazy(() => import("./pages/admin/Admins"));
+const Analytics = lazy(() => import("./pages/admin/Analytics"));
+const AuditLog = lazy(() => import("./pages/admin/AuditLog"));
 const LandingPageEditor = lazy(() => import("./pages/admin/LandingPage"));
 const NoAccess = lazy(() => import("./pages/admin/NoAccess"));
 
@@ -111,6 +113,8 @@ export default function App() {
           <Route path="backup" element={<RequireModule module="backup"><Backup /></RequireModule>} />
           <Route path="landing" element={<RequireModule module="landing"><LandingPageEditor /></RequireModule>} />
           <Route path="admins" element={<RequireModule module="admins"><Admins /></RequireModule>} />
+          <Route path="analytics" element={<RequireModule module="analytics"><Analytics /></RequireModule>} />
+          <Route path="audit" element={<RequireModule module="audit"><AuditLog /></RequireModule>} />
           <Route path="change-password" element={<ChangePassword />} />
           <Route path="no-access" element={<NoAccess />} />
         </Route>

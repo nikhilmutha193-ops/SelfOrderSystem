@@ -10,6 +10,7 @@ import { AdminProfileProvider, can, useAdmin, type ModuleKey } from "../../lib/a
 type NavLinkItem = { to: string; label: string; module: ModuleKey | null };
 const links: NavLinkItem[] = [
   { to: "/admin/dashboard", label: "Dashboard", module: "dashboard" },
+  { to: "/admin/analytics", label: "Analytics", module: "analytics" },
   { to: "/admin/categories", label: "Categories", module: "categories" },
   { to: "/admin/subcategories", label: "Subcategories", module: "subcategories" },
   { to: "/admin/food-items", label: "Food Items", module: "foodItems" },
@@ -29,6 +30,7 @@ const links: NavLinkItem[] = [
   { to: "/admin/landing", label: "Landing Page", module: "landing" },
   { to: "/admin/backup", label: "Backup & Restore", module: "backup" },
   { to: "/admin/admins", label: "Admin Users", module: "admins" },
+  { to: "/admin/audit", label: "Audit Log", module: "audit" },
   { to: "/admin/change-password", label: "Change Password", module: null },
 ];
 

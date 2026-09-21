@@ -18,18 +18,18 @@ export const listCategories = asyncHandler(async (req: Request, res: Response) =
 });
 
 export const createCategory = asyncHandler(async (req: Request, res: Response) => {
-  const { name, description } = req.body as { name?: string; description?: string };
+  const { name, description, translations } = req.body as { name?: string; description?: string; translations?: unknown };
   if (!name) throw new HttpError(400, "name is required");
-  const category = await Category.create({ restaurantId: req.restaurantId, name, description, isActive: true });
+  const category = await Category.create({ restaurantId: req.restaurantId, name, description, translations: sanitizeTranslations(translations), isActive: true });
   res.status(201).json(category);
 });
 
 export const updateCategory = asyncHandler(async (req: Request, res: Response) => {
   validId(req.params.id);
-  const { name, description } = req.body as { name?: string; description?: string };
+  const { name, description, translations } = req.body as { name?: string; description?: string; translations?: unknown };
   const category = await Category.findOneAndUpdate(
     { _id: req.params.id, restaurantId: req.restaurantId },
-    { $set: { ...(name !== undefined && { name }), ...(description !== undefined && { description }) } },
+    { $set: { ...(name !== undefined && { name }), ...(description !== undefined && { description }), ...(translations !== undefined && { translations: sanitizeTranslations(translations) }) } },
     { new: true }
   );
   if (!category) throw new HttpError(404, "Category not found");
@@ -61,10 +61,11 @@ export const listSubcategories = asyncHandler(async (req: Request, res: Response
 });
 
 export const createSubcategory = asyncHandler(async (req: Request, res: Response) => {
-  const { categoryId, name, description } = req.body as {
+  const { categoryId, name, description, translations } = req.body as {
     categoryId?: string;
     name?: string;
     description?: string;
+    translations?: unknown;
   };
   if (!categoryId || !name) throw new HttpError(400, "categoryId and name are required");
   validId(categoryId);
@@ -76,6 +77,7 @@ export const createSubcategory = asyncHandler(async (req: Request, res: Response
     categoryId,
     name,
     description,
+    translations: sanitizeTranslations(translations),
     isActive: true,
   });
   res.status(201).json(subcategory);
@@ -83,10 +85,11 @@ export const createSubcategory = asyncHandler(async (req: Request, res: Response
 
 export const updateSubcategory = asyncHandler(async (req: Request, res: Response) => {
   validId(req.params.id);
-  const { categoryId, name, description } = req.body as {
+  const { categoryId, name, description, translations } = req.body as {
     categoryId?: string;
     name?: string;
     description?: string;
+    translations?: unknown;
   };
   if (categoryId) {
     validId(categoryId);
@@ -100,6 +103,7 @@ export const updateSubcategory = asyncHandler(async (req: Request, res: Response
         ...(categoryId !== undefined && { categoryId }),
         ...(name !== undefined && { name }),
         ...(description !== undefined && { description }),
+        ...(translations !== undefined && { translations: sanitizeTranslations(translations) }),
       },
     },
     { new: true }
@@ -157,8 +161,43 @@ function normalizePrepTime(value: unknown): number {
   return Math.max(0, Math.round(n));
 }
 
+/** Normalizes admin-supplied modifier groups, dropping malformed entries. */
+function sanitizeModifierGroups(value: unknown): { name: string; type: "single" | "multi"; required: boolean; options: { label: string; priceDelta: number }[] }[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((g) => g && typeof g === "object" && typeof (g as any).name === "string" && (g as any).name.trim())
+    .map((g) => {
+      const grp = g as any;
+      return {
+        name: String(grp.name).trim(),
+        type: grp.type === "multi" ? "multi" : "single",
+        required: !!grp.required,
+        options: Array.isArray(grp.options)
+          ? grp.options
+              .filter((o: any) => o && typeof o.label === "string" && o.label.trim())
+              .map((o: any) => ({ label: String(o.label).trim(), priceDelta: Number(o.priceDelta) || 0 }))
+          : [],
+      };
+    });
+}
+
+/** Keeps only { name, description } strings under known language keys. */
+function sanitizeTranslations(value: unknown): Record<string, { name?: string; description?: string }> {
+  if (!value || typeof value !== "object") return {};
+  const out: Record<string, { name?: string; description?: string }> = {};
+  for (const [lang, v] of Object.entries(value as Record<string, unknown>)) {
+    if (!/^[a-z]{2}$/.test(lang) || !v || typeof v !== "object") continue;
+    const entry: { name?: string; description?: string } = {};
+    const rec = v as Record<string, unknown>;
+    if (typeof rec.name === "string" && rec.name.trim()) entry.name = rec.name.trim();
+    if (typeof rec.description === "string" && rec.description.trim()) entry.description = rec.description.trim();
+    if (entry.name || entry.description) out[lang] = entry;
+  }
+  return out;
+}
+
 export const createFoodItem = asyncHandler(async (req: Request, res: Response) => {
-  const { categoryId, subcategoryId, name, price, description, imageUrl, isBestseller, bestsellerEmoji, foodType, rating, prepTimeMinutes } = req.body as {
+  const { categoryId, subcategoryId, name, price, description, imageUrl, isBestseller, bestsellerEmoji, foodType, rating, prepTimeMinutes, modifierGroups, translations } = req.body as {
     categoryId?: string;
     subcategoryId?: string;
     name?: string;
@@ -170,6 +209,8 @@ export const createFoodItem = asyncHandler(async (req: Request, res: Response) =
     foodType?: string;
     rating?: number;
     prepTimeMinutes?: number;
+    modifierGroups?: unknown;
+    translations?: unknown;
   };
   if (!categoryId || !subcategoryId || !name || price === undefined) {
     throw new HttpError(400, "categoryId, subcategoryId, name and price are required");
@@ -199,13 +240,15 @@ export const createFoodItem = asyncHandler(async (req: Request, res: Response) =
     foodType: normalizeFoodType(foodType),
     rating: normalizeRating(rating),
     ...(prepTimeMinutes !== undefined && { prepTimeMinutes: normalizePrepTime(prepTimeMinutes) }),
+    ...(modifierGroups !== undefined && { modifierGroups: sanitizeModifierGroups(modifierGroups) }),
+    ...(translations !== undefined && { translations: sanitizeTranslations(translations) }),
   });
   res.status(201).json(foodItem);
 });
 
 export const updateFoodItem = asyncHandler(async (req: Request, res: Response) => {
   validId(req.params.id);
-  const { categoryId, subcategoryId, name, price, description, imageUrl, isBestseller, bestsellerEmoji, foodType, rating, prepTimeMinutes } = req.body as {
+  const { categoryId, subcategoryId, name, price, description, imageUrl, isBestseller, bestsellerEmoji, foodType, rating, prepTimeMinutes, modifierGroups, translations } = req.body as {
     categoryId?: string;
     subcategoryId?: string;
     name?: string;
@@ -217,6 +260,8 @@ export const updateFoodItem = asyncHandler(async (req: Request, res: Response) =
     foodType?: string;
     rating?: number;
     prepTimeMinutes?: number;
+    modifierGroups?: unknown;
+    translations?: unknown;
   };
   if (price !== undefined && (typeof price !== "number" || price < 0)) {
     throw new HttpError(400, "price must be a non-negative number");
@@ -239,6 +284,8 @@ export const updateFoodItem = asyncHandler(async (req: Request, res: Response) =
         ...(foodType !== undefined && { foodType: normalizeFoodType(foodType) }),
         ...(rating !== undefined && { rating: normalizeRating(rating) }),
         ...(prepTimeMinutes !== undefined && { prepTimeMinutes: normalizePrepTime(prepTimeMinutes) }),
+        ...(modifierGroups !== undefined && { modifierGroups: sanitizeModifierGroups(modifierGroups) }),
+        ...(translations !== undefined && { translations: sanitizeTranslations(translations) }),
       },
     },
     { new: true }
@@ -279,12 +326,14 @@ export const getPublicMenu = asyncHandler(async (req: Request, res: Response) =>
     _id: category._id,
     name: category.name,
     description: category.description,
+    translations: category.translations || {},
     subcategories: visibleSubcategories
       .filter((s) => s.categoryId.toString() === category._id.toString())
       .map((subcategory) => ({
         _id: subcategory._id,
         name: subcategory.name,
         description: subcategory.description,
+        translations: subcategory.translations || {},
         foodItems: visibleFoodItems
           .filter((f) => f.subcategoryId.toString() === subcategory._id.toString())
           .map((f) => ({
@@ -297,6 +346,10 @@ export const getPublicMenu = asyncHandler(async (req: Request, res: Response) =>
             bestsellerEmoji: f.bestsellerEmoji,
             foodType: f.foodType,
             rating: f.rating,
+            translations: f.translations || {},
+            modifierGroups: f.modifierGroups || [],
+            guestRating: f.reviewCount > 0 ? Math.round((f.reviewSum / f.reviewCount) * 10) / 10 : null,
+            reviewCount: f.reviewCount || 0,
           })),
       })),
   }));

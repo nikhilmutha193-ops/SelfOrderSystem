@@ -1,9 +1,12 @@
 import { useState } from "react";
 import { api, extractErrorMessage } from "../../lib/apiClient";
-import { Button, Card, ErrorText, Input } from "../../components/ui";
+import { Button, Card, ErrorText, Input, Select } from "../../components/ui";
+import type { DeliveryProvider } from "../../lib/types";
 import OrderDetail from "./OrderDetail";
 
-type OrderKind = "dine-in" | "takeaway";
+type OrderKind = "dine-in" | "takeaway" | "delivery";
+
+const DELIVERY_PROVIDERS: DeliveryProvider[] = ["Swiggy", "Zomato", "Uber-Eats", "Other"];
 
 /**
  * Staff-taken counter order. The form on the left creates the order; its detail
@@ -12,6 +15,7 @@ type OrderKind = "dine-in" | "takeaway";
  */
 export default function NewOrder() {
   const [kind, setKind] = useState<OrderKind>("dine-in");
+  const [provider, setProvider] = useState<DeliveryProvider>("Swiggy");
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [members, setMembers] = useState(1);
@@ -25,10 +29,15 @@ export default function NewOrder() {
     setError(null);
     setLoading(true);
     try {
-      const endpoint = kind === "takeaway" ? "/orders/takeaway" : "/orders/counter";
-      const res = await api.post(endpoint, { customerName, customerPhone, members });
+      let res;
+      if (kind === "delivery") {
+        res = await api.post("/orders/delivery", { provider, customerName, customerPhone, members });
+      } else {
+        const endpoint = kind === "takeaway" ? "/orders/takeaway" : "/orders/counter";
+        res = await api.post(endpoint, { customerName, customerPhone, members });
+      }
       setActiveOrderId(res.data._id);
-      setActiveName(customerName || "the counter");
+      setActiveName(customerName || (kind === "delivery" ? provider : "the counter"));
       // Clear the form so it's ready for the next order; the right panel keeps the created one.
       setCustomerName("");
       setCustomerPhone("");
@@ -51,24 +60,39 @@ export default function NewOrder() {
           <h2 className="mb-3 text-lg font-semibold text-slate-800">Start an order</h2>
           <form onSubmit={submit} className="flex flex-col gap-3">
             <div className="flex gap-2">
-              {(["dine-in", "takeaway"] as OrderKind[]).map((k) => (
+              {(["dine-in", "takeaway", "delivery"] as OrderKind[]).map((k) => (
                 <button
                   key={k}
                   type="button"
                   onClick={() => setKind(k)}
-                  className={`min-h-[44px] flex-1 rounded-xl border px-3 text-sm font-semibold transition-colors ${
+                  className={`min-h-[44px] flex-1 rounded-xl border px-2 text-sm font-semibold transition-colors ${
                     kind === k
                       ? "border-orange-600 bg-orange-50 text-orange-700"
                       : "border-slate-300 text-slate-600 hover:bg-slate-50"
                   }`}
                 >
-                  {k === "dine-in" ? "Dine-in" : "Take away"}
+                  {k === "dine-in" ? "Dine-in" : k === "takeaway" ? "Take away" : "Delivery"}
                 </button>
               ))}
             </div>
 
+            {kind === "delivery" && (
+              <label className="text-sm font-medium text-slate-700">
+                Delivery partner
+                <Select className="mt-1" value={provider} onChange={(e) => setProvider(e.target.value as DeliveryProvider)}>
+                  {DELIVERY_PROVIDERS.map((p) => (
+                    <option key={p} value={p}>
+                      {p}
+                    </option>
+                  ))}
+                </Select>
+              </label>
+            )}
+
             <p className="rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-500">
-              Taken at the counter, so no table is assigned. Create the order, then add items on the right.
+              {kind === "delivery"
+                ? "Key in a Swiggy/Zomato order taken over the phone or from the partner app, then add its items on the right. Orders sent through the live webhook appear automatically in Orders."
+                : "Taken at the counter, so no table is assigned. Create the order, then add items on the right."}
             </p>
 
             <label className="text-sm font-medium text-slate-700">

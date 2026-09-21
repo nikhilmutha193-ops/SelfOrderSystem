@@ -21,6 +21,8 @@ export const MODULES = {
   landing: "Landing Page",
   backup: "Backup & Restore",
   admins: "Admin Users",
+  analytics: "Analytics",
+  audit: "Audit Log",
 } as const;
 
 export type ModuleKey = keyof typeof MODULES;

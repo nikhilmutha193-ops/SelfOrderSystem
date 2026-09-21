@@ -234,7 +234,7 @@ export default function LandingPageEditor() {
   const { hero, serve, menu, story, outlets, reels, partnership, footer } = content;
 
   return (
-    <div className="flex max-w-3xl flex-col gap-6">
+    <div className="flex flex-col gap-6">
       <div>
         <h1 className="text-2xl font-bold text-slate-800">Landing Page</h1>
         <p className="mt-1 text-sm text-slate-500">
@@ -246,6 +246,8 @@ export default function LandingPageEditor() {
       <ErrorText>{error}</ErrorText>
       {message && <p className="text-sm text-green-700">{message}</p>}
 
+      {/* Sections flow into two columns on wide screens so the page width is used. */}
+      <div className="gap-6 xl:columns-2 [&>*]:mb-6 [&>*]:break-inside-avoid">
       {/* Hero */}
       <Card>
         <h2 className="mb-3 text-lg font-semibold text-slate-800">Hero banner</h2>
@@ -287,7 +289,7 @@ export default function LandingPageEditor() {
           </Button>
           {(hero.slides ?? []).length === 0 && (
             <p className="text-xs text-slate-400">
-              No slides yet - the banners from Restaurant Settings &rarr; Hero slideshow are used.
+              No slides yet - add a banner slide above to show a hero image on the landing page.
             </p>
           )}
         </div>
@@ -645,6 +647,7 @@ export default function LandingPageEditor() {
           </Button>
         </div>
       </Card>
+      </div>
 
       {canEdit && (
         <div className="sticky bottom-0 -mx-3 border-t border-slate-200 bg-white/95 px-3 py-3 backdrop-blur sm:mx-0">

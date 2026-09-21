@@ -17,6 +17,7 @@ import { nextTokenNumber } from "../utils/kotQueue";
 import { signToken } from "../utils/jwt";
 import { getBusinessDayStart, getBusinessDayRangeForDate } from "../utils/businessDay";
 import { moderateMessage } from "../utils/chatModeration";
+import { writeAudit } from "../utils/audit";
 
 function validId(id: string) {
   if (!Types.ObjectId.isValid(id)) throw new HttpError(400, "Invalid id");
@@ -170,7 +171,15 @@ export const addOrderItems = asyncHandler(async (req: Request, res: Response) =>
   const order = await getOwnedOrder(req, req.params.orderId);
   if (order.status !== "open") throw new HttpError(409, "This order is no longer open");
 
-  const { items } = req.body as { items?: { foodItemId: string; quantity: number; isJain?: boolean }[] };
+  const { items } = req.body as {
+    items?: {
+      foodItemId: string;
+      quantity: number;
+      isJain?: boolean;
+      note?: string;
+      modifiers?: { groupName: string; label: string }[];
+    }[];
+  };
   if (!Array.isArray(items) || items.length === 0) throw new HttpError(400, "items must be a non-empty array");
 
   const created = [];
@@ -184,15 +193,28 @@ export const addOrderItems = asyncHandler(async (req: Request, res: Response) =>
     const food = await FoodItem.findOne({ _id: line.foodItemId, restaurantId: req.restaurantId, isActive: true });
     if (!food) throw new HttpError(404, `Food item ${line.foodItemId} is not available`);
 
+    // Resolve chosen modifiers against the dish's real groups so the price delta can't be spoofed.
+    const chosen: { groupName: string; label: string; priceDelta: number }[] = [];
+    if (Array.isArray(line.modifiers)) {
+      for (const sel of line.modifiers) {
+        const group = (food.modifierGroups || []).find((g) => g.name === sel?.groupName);
+        const option = group?.options.find((o) => o.label === sel?.label);
+        if (group && option) chosen.push({ groupName: group.name, label: option.label, priceDelta: option.priceDelta });
+      }
+    }
+    const unitPrice = round2(food.price + chosen.reduce((sum, m) => sum + m.priceDelta, 0));
+
     const orderItem = await OrderItem.create({
       restaurantId: req.restaurantId,
       orderId: order._id,
       foodItemId: food._id,
       foodName: food.name,
-      unitPrice: food.price,
+      unitPrice,
       quantity: line.quantity,
-      total: round2(food.price * line.quantity),
+      total: round2(unitPrice * line.quantity),
       isJain: !!line.isJain,
+      modifiers: chosen,
+      note: typeof line.note === "string" ? line.note.trim().slice(0, 200) : "",
       status: "pending",
       kotRound: null,
     });
@@ -232,7 +254,7 @@ export const markItemReady = asyncHandler(async (req: Request, res: Response) =>
   validId(req.params.itemId);
   const item = await OrderItem.findOneAndUpdate(
     { _id: req.params.itemId, restaurantId: req.restaurantId, status: "preparing" },
-    { $set: { status: "ready" } },
+    { $set: { status: "ready", readyAt: new Date() } },
     { new: true }
   );
   if (!item) throw new HttpError(404, "Item is not currently preparing");
@@ -258,6 +280,7 @@ export const cancelOrderItem = asyncHandler(async (req: Request, res: Response) 
     { new: true }
   );
   if (!item) throw new HttpError(404, "Order item not found");
+  await writeAudit(req, "orderItem.cancel", `Cancelled item "${item.foodName}" x${item.quantity}`);
   res.json(item);
 });
 
@@ -351,6 +374,8 @@ export const clearOrders = asyncHandler(async (req: Request, res: Response) => {
     );
   }
 
+  const { type } = req.query as { type?: string };
+  await writeAudit(req, "order.clear", `Cleared ${orderIds.length} ${type || "all"} order(s)`);
   res.json({ deleted: orderIds.length });
 });
 
@@ -594,6 +619,7 @@ export const payOrder = asyncHandler(async (req: Request, res: Response) => {
     await TableModel.findByIdAndUpdate(order.tableId, { $set: { status: "available" }, $unset: { sessionId: "", occupiedAt: "" } });
   }
 
+  await writeAudit(req, "order.pay", `Closed & paid order for ${order.customerName || "guest"} (${paymentMethod})`);
   res.json(order);
 });
 
@@ -609,6 +635,7 @@ export const cancelOrder = asyncHandler(async (req: Request, res: Response) => {
     await TableModel.findByIdAndUpdate(order.tableId, { $set: { status: "available" }, $unset: { sessionId: "", occupiedAt: "" } });
   }
 
+  await writeAudit(req, "order.cancel", `Cancelled order for ${order.customerName || "guest"}`);
   res.json(order);
 });
 

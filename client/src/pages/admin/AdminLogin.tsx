@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { api, storeToken, setActiveAuth, extractErrorMessage, wasSessionExpired, clearExpiredFlag } from "../../lib/apiClient";
-import { Button, Card, ErrorText, Input } from "../../components/ui";
+import { Button, ErrorText, Input } from "../../components/ui";
 
 export default function AdminLogin() {
   const [searchParams] = useSearchParams();
@@ -11,7 +11,17 @@ export default function AdminLogin() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [brand, setBrand] = useState<{ name: string; logoUrl: string }>({ name: "", logoUrl: "" });
   const navigate = useNavigate();
+
+  useEffect(() => {
+    api
+      .get<{ name?: string; logoUrl?: string }>("/restaurant/public")
+      .then((res) => setBrand({ name: res.data.name || "", logoUrl: res.data.logoUrl || "" }))
+      .catch(() => {
+        /* keep defaults - the form still works without branding */
+      });
+  }, []);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -30,9 +40,22 @@ export default function AdminLogin() {
   }
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-4 px-4">
-      <h1 className="text-center text-2xl font-bold text-slate-800">Admin Login</h1>
-      <Card>
+    <div className="flex min-h-screen flex-col items-center justify-center gap-5 bg-gradient-to-b from-orange-50 via-white to-slate-50 px-4 py-10">
+      <div className="flex flex-col items-center gap-2">
+        {brand.logoUrl ? (
+          <img src={brand.logoUrl} alt="" className="h-16 w-16 rounded-full object-cover shadow-sm ring-1 ring-black/5" />
+        ) : (
+          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-orange-100 text-3xl">☕</div>
+        )}
+        {brand.name && <p className="text-lg font-bold text-slate-800">{brand.name}</p>}
+        <span className="rounded-full bg-orange-100 px-3 py-0.5 text-xs font-semibold uppercase tracking-wide text-orange-700">
+          Admin portal
+        </span>
+      </div>
+
+      <div className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-6 shadow-lg">
+        <h1 className="text-center text-xl font-bold text-slate-800">Welcome back</h1>
+        <p className="mb-5 mt-1 text-center text-sm text-slate-500">Sign in to manage your restaurant.</p>
         <form onSubmit={submit} className="flex flex-col gap-3">
           <label className="text-sm font-medium text-slate-700">
             Username
@@ -54,14 +77,18 @@ export default function AdminLogin() {
             </p>
           )}
           <ErrorText>{error}</ErrorText>
-          <Button type="submit" disabled={loading}>
+          <Button type="submit" disabled={loading} className="mt-1">
             {loading ? "Signing in..." : "Sign in"}
           </Button>
         </form>
-      </Card>
-      <Link to="/admin/forgot-password" className="text-center text-sm text-orange-600 hover:underline">
-        Forgot password?
-      </Link>
+        <Link to="/admin/forgot-password" className="mt-4 block text-center text-sm text-orange-600 hover:underline">
+          Forgot password?
+        </Link>
+      </div>
+
+      <a href="/" className="text-xs text-slate-400 hover:text-slate-600">
+        &larr; Back to site
+      </a>
     </div>
   );
 }

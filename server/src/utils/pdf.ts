@@ -465,6 +465,13 @@ export async function streamKotPdf(
           ];
       y = drawRow(doc, x0, doc.y, rowCols);
       doc.y = y + 3;
+      // Customizations & kitchen note printed under the dish so the line cook sees them.
+      const extras = [...(item.modifiers?.map((m) => m.label) ?? []), item.note].filter(Boolean).join(", ");
+      if (extras) {
+        doc.font("Helvetica-Bold").fontSize(fz(9)).text(`  → ${extras}`, x0 + colWidths[0], doc.y, { width: usableWidth - colWidths[0] });
+        doc.font("Helvetica").fontSize(fz(10));
+        doc.y += 2;
+      }
     });
 
     doc.moveDown(0.3);

@@ -3,8 +3,11 @@ import { Schema, model, Types } from "mongoose";
 /** "delivery" is retained for orders placed before take-away replaced it. */
 export type OrderType = "dine-in" | "takeaway" | "delivery";
 export type OrderStatus = "open" | "closed" | "cancelled";
-/** Who raised the order. Counter orders are staff-owned and are never auto-cancelled. */
-export type OrderSource = "guest" | "counter";
+/**
+ * Who raised the order. Counter orders are staff-owned and are never auto-cancelled.
+ * "swiggy"/"zomato" are pulled in from the delivery aggregators (webhook or manual entry).
+ */
+export type OrderSource = "guest" | "counter" | "swiggy" | "zomato";
 export type PaymentMethod = "pending" | "cash" | "online" | "card";
 export type DeliveryProvider = "Swiggy" | "Zomato" | "Uber-Eats" | "Other";
 
@@ -22,6 +25,8 @@ export interface IOrder {
   checkoutTime?: Date;
   status: OrderStatus;
   source: OrderSource;
+  /** The aggregator's own order id (e.g. Swiggy/Zomato reference), for dedupe and display. */
+  externalOrderId?: string;
   paymentMethod: PaymentMethod;
   couponCode?: string;
   discountAmount: number;
@@ -43,7 +48,8 @@ const orderSchema = new Schema<IOrder>(
     checkinTime: { type: Date, default: Date.now },
     checkoutTime: { type: Date },
     status: { type: String, enum: ["open", "closed", "cancelled"], default: "open", index: true },
-    source: { type: String, enum: ["guest", "counter"], default: "guest" },
+    source: { type: String, enum: ["guest", "counter", "swiggy", "zomato"], default: "guest" },
+    externalOrderId: { type: String, trim: true, index: true },
     paymentMethod: { type: String, enum: ["pending", "cash", "online", "card"], default: "pending" },
     couponCode: { type: String, trim: true, uppercase: true },
     discountAmount: { type: Number, default: 0, min: 0 },

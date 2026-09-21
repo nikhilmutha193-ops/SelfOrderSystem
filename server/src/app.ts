@@ -27,6 +27,11 @@ import landingRoutes from "./routes/landing.routes";
 import uploadRoutes from "./routes/upload.routes";
 import backupRoutes from "./routes/backup.routes";
 import adminsRoutes from "./routes/admins.routes";
+import analyticsRoutes from "./routes/analytics.routes";
+import translateRoutes from "./routes/translate.routes";
+import aggregatorRoutes from "./routes/aggregator.routes";
+import webhookRoutes from "./routes/webhooks.routes";
+import oauthRoutes from "./routes/oauth.routes";
 
 const app = express();
 
@@ -105,6 +110,11 @@ app.use("/api/landing", landingRoutes);
 app.use("/api/uploads", uploadRoutes);
 app.use("/api/backup", backupRoutes);
 app.use("/api/admins", adminsRoutes);
+app.use("/api/analytics", analyticsRoutes);
+app.use("/api/translate", translateRoutes);
+app.use("/api/aggregator", aggregatorRoutes);
+app.use("/api/webhooks", webhookRoutes);
+app.use("/api/oauth", oauthRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, extractErrorMessage, uploadImage } from "../../lib/apiClient";
-import { Badge, Button, Card, ErrorText, Input, Select, TableWrap } from "../../components/ui";
-import type { Category, FoodItem, FoodType, Subcategory } from "../../lib/types";
+import { Badge, Button, Card, ErrorText, Input, Select, Textarea, TableWrap } from "../../components/ui";
+import type { Category, FoodItem, FoodType, ModifierGroup, Subcategory, Translations } from "../../lib/types";
 
 const EMOJI_CHOICES = ["⭐", "🔥", "👑", "💯", "🏆", "❤️"];
+const EMPTY_TR = { kn: { name: "", description: "" }, hi: { name: "", description: "" } };
 
 export default function FoodItems() {
   const [foodItems, setFoodItems] = useState<FoodItem[]>([]);
@@ -21,8 +22,59 @@ export default function FoodItems() {
   const [foodType, setFoodType] = useState<FoodType>("veg");
   const [rating, setRating] = useState<number>(0);
   const [prepTimeMinutes, setPrepTimeMinutes] = useState<number>(10);
+  const [modifierGroups, setModifierGroups] = useState<ModifierGroup[]>([]);
+  const [tr, setTr] = useState<{ kn: { name: string; description: string }; hi: { name: string; description: string } }>(
+    () => structuredClone(EMPTY_TR)
+  );
+  const [translating, setTranslating] = useState(false);
+
+  /** Fill the Kannada + Hindi fields from the English name/description via the translator. */
+  async function autoTranslate() {
+    if (!name.trim() && !description.trim()) {
+      setError("Enter the English name/description first.");
+      return;
+    }
+    setError(null);
+    setTranslating(true);
+    try {
+      const next = { kn: { name: "", description: "" }, hi: { name: "", description: "" } };
+      for (const lng of ["kn", "hi"] as const) {
+        const res = await api.post<{ translations: string[] }>("/translate", { texts: [name, description || ""], to: lng });
+        next[lng] = { name: res.data.translations[0] || "", description: res.data.translations[1] || "" };
+      }
+      setTr(next);
+    } catch (err) {
+      setError(extractErrorMessage(err));
+    } finally {
+      setTranslating(false);
+    }
+  }
   const [editing, setEditing] = useState<FoodItem | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // ---- modifier group editing helpers ----
+  function addGroup() {
+    setModifierGroups((g) => [...g, { name: "", type: "single", required: false, options: [{ label: "", priceDelta: 0 }] }]);
+  }
+  function updateGroup(i: number, patch: Partial<ModifierGroup>) {
+    setModifierGroups((g) => g.map((grp, idx) => (idx === i ? { ...grp, ...patch } : grp)));
+  }
+  function removeGroup(i: number) {
+    setModifierGroups((g) => g.filter((_, idx) => idx !== i));
+  }
+  function addOption(gi: number) {
+    setModifierGroups((g) => g.map((grp, idx) => (idx === gi ? { ...grp, options: [...grp.options, { label: "", priceDelta: 0 }] } : grp)));
+  }
+  function updateOption(gi: number, oi: number, patch: Partial<{ label: string; priceDelta: number }>) {
+    setModifierGroups((g) =>
+      g.map((grp, idx) =>
+        idx === gi ? { ...grp, options: grp.options.map((o, j) => (j === oi ? { ...o, ...patch } : o)) } : grp
+      )
+    );
+  }
+  function removeOption(gi: number, oi: number) {
+    setModifierGroups((g) => g.map((grp, idx) => (idx === gi ? { ...grp, options: grp.options.filter((_, j) => j !== oi) } : grp)));
+  }
 
   function load() {
     Promise.all([
@@ -78,7 +130,17 @@ export default function FoodItems() {
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    const payload = { categoryId, subcategoryId, name, price, description, imageUrl, isBestseller, bestsellerEmoji, foodType, rating, prepTimeMinutes };
+    const translations: Translations = {};
+    for (const lang of ["kn", "hi"] as const) {
+      const entry: { name?: string; description?: string } = {};
+      if (tr[lang].name.trim()) entry.name = tr[lang].name.trim();
+      if (tr[lang].description.trim()) entry.description = tr[lang].description.trim();
+      if (entry.name || entry.description) translations[lang] = entry;
+    }
+    const cleanGroups = modifierGroups
+      .filter((g) => g.name.trim())
+      .map((g) => ({ ...g, name: g.name.trim(), options: g.options.filter((o) => o.label.trim()).map((o) => ({ label: o.label.trim(), priceDelta: Number(o.priceDelta) || 0 })) }));
+    const payload = { categoryId, subcategoryId, name, price, description, imageUrl, isBestseller, bestsellerEmoji, foodType, rating, prepTimeMinutes, modifierGroups: cleanGroups, translations };
     try {
       if (editing) {
         await api.put(`/food-items/${editing._id}`, payload);
@@ -94,6 +156,8 @@ export default function FoodItems() {
       setFoodType("veg");
       setRating(0);
       setPrepTimeMinutes(10);
+      setModifierGroups([]);
+      setTr(structuredClone(EMPTY_TR));
       setEditing(null);
       load();
     } catch (err) {
@@ -114,6 +178,11 @@ export default function FoodItems() {
     setFoodType(food.foodType || "veg");
     setRating(food.rating || 0);
     setPrepTimeMinutes(food.prepTimeMinutes ?? 10);
+    setModifierGroups((food.modifierGroups ?? []).map((g) => ({ ...g, options: g.options.map((o) => ({ ...o })) })));
+    setTr({
+      kn: { name: food.translations?.kn?.name || "", description: food.translations?.kn?.description || "" },
+      hi: { name: food.translations?.hi?.name || "", description: food.translations?.hi?.description || "" },
+    });
   }
 
   async function toggleActive(food: FoodItem) {
@@ -265,6 +334,78 @@ export default function FoodItems() {
             )}
           </div>
 
+          <div className="w-full border-t border-slate-100 pt-3">
+            <div className="mb-2 flex items-center justify-between">
+              <p className="text-sm font-semibold text-slate-700">Customization options</p>
+              <button type="button" onClick={addGroup} className="text-sm font-semibold text-orange-600 hover:underline">
+                + Add group
+              </button>
+            </div>
+            {modifierGroups.length === 0 && (
+              <p className="text-xs text-slate-400">e.g. Size (pick one), Add-ons (pick many). Optional.</p>
+            )}
+            <div className="flex flex-col gap-3">
+              {modifierGroups.map((g, gi) => (
+                <div key={gi} className="rounded-xl border border-slate-200 p-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Input className="w-40" placeholder="Group name (e.g. Size)" value={g.name} onChange={(e) => updateGroup(gi, { name: e.target.value })} />
+                    <Select className="!w-32" value={g.type} onChange={(e) => updateGroup(gi, { type: e.target.value as "single" | "multi" })}>
+                      <option value="single">Pick one</option>
+                      <option value="multi">Pick many</option>
+                    </Select>
+                    <label className="flex items-center gap-1 text-xs text-slate-600">
+                      <input type="checkbox" checked={g.required} onChange={(e) => updateGroup(gi, { required: e.target.checked })} />
+                      Required
+                    </label>
+                    <button type="button" onClick={() => removeGroup(gi)} className="ml-auto text-xs font-semibold text-red-600 hover:underline">
+                      Remove group
+                    </button>
+                  </div>
+                  <div className="mt-2 flex flex-col gap-1.5">
+                    {g.options.map((o, oi) => (
+                      <div key={oi} className="flex items-center gap-2">
+                        <Input className="flex-1" placeholder="Option (e.g. Large)" value={o.label} onChange={(e) => updateOption(gi, oi, { label: e.target.value })} />
+                        <Input className="w-24" type="number" step="0.01" placeholder="+₹0" value={o.priceDelta} onChange={(e) => updateOption(gi, oi, { priceDelta: Number(e.target.value) })} />
+                        <button type="button" onClick={() => removeOption(gi, oi)} className="text-slate-400 hover:text-red-600">✕</button>
+                      </div>
+                    ))}
+                    <button type="button" onClick={() => addOption(gi)} className="self-start text-xs font-semibold text-orange-600 hover:underline">
+                      + Add option
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="w-full border-t border-slate-100 pt-3">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm font-semibold text-slate-700">
+                Translations <span className="font-normal text-slate-400">(optional)</span>
+              </p>
+              <button
+                type="button"
+                onClick={autoTranslate}
+                disabled={translating}
+                className="rounded-lg bg-orange-50 px-2.5 py-1.5 text-xs font-semibold text-orange-700 hover:bg-orange-100 disabled:opacity-50"
+              >
+                {translating ? "Translating..." : "✨ Auto-translate from English"}
+              </button>
+            </div>
+            <p className="mb-2 text-xs text-slate-400">
+              Auto-translate fills these from the English name/description — review and edit before saving.
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {(["kn", "hi"] as const).map((lng) => (
+                <div key={lng} className="rounded-xl border border-slate-200 p-3">
+                  <p className="mb-1.5 text-xs font-bold uppercase tracking-wide text-slate-400">{lng === "kn" ? "ಕನ್ನಡ (Kannada)" : "हिन्दी (Hindi)"}</p>
+                  <Input className="mb-2" placeholder="Name" value={tr[lng].name} onChange={(e) => setTr((t) => ({ ...t, [lng]: { ...t[lng], name: e.target.value } }))} />
+                  <Textarea rows={2} placeholder="Description" value={tr[lng].description} onChange={(e) => setTr((t) => ({ ...t, [lng]: { ...t[lng], description: e.target.value } }))} />
+                </div>
+              ))}
+            </div>
+          </div>
+
           <Button type="submit">{editing ? "Update" : "Add food item"}</Button>
           {editing && (
             <Button
@@ -279,6 +420,8 @@ export default function FoodItems() {
                 setIsBestseller(false);
                 setBestsellerEmoji("⭐");
                 setPrepTimeMinutes(10);
+                setModifierGroups([]);
+                setTr(structuredClone(EMPTY_TR));
               }}
             >
               Cancel
@@ -300,6 +443,7 @@ export default function FoodItems() {
               <th className="pb-2">Name</th>
               <th className="pb-2">Price</th>
               <th className="pb-2">Prep</th>
+              <th className="pb-2">Reviews</th>
               <th className="pb-2">Status</th>
               <th className="pb-2"></th>
             </tr>
@@ -329,6 +473,16 @@ export default function FoodItems() {
                 <td className="py-1.5">{food.name}</td>
                 <td className="py-1.5">₹{food.price.toFixed(2)}</td>
                 <td className="py-1.5 whitespace-nowrap">{food.prepTimeMinutes ?? 10} min</td>
+                <td className="py-1.5 whitespace-nowrap">
+                  {food.reviewCount ? (
+                    <span className="text-slate-700">
+                      ★ {(food.reviewSum! / food.reviewCount).toFixed(1)}{" "}
+                      <span className="text-slate-400">({food.reviewCount})</span>
+                    </span>
+                  ) : (
+                    <span className="text-slate-300">—</span>
+                  )}
+                </td>
                 <td className="py-1.5">
                   <div className="flex gap-1.5">
                     <Badge tone={food.isActive ? "green" : "gray"}>{food.isActive ? "Active" : "Inactive"}</Badge>

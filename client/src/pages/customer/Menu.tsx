@@ -4,9 +4,11 @@ import { api, extractErrorMessage } from "../../lib/apiClient";
 import { useTableSession } from "../../lib/useTableSession";
 import { Button, ErrorText, Input, Select } from "../../components/ui";
 import ChatFab from "../../components/ChatFab";
-import DishDialog from "../../components/DishDialog";
+import DishDialog, { type DishAddPayload } from "../../components/DishDialog";
 import { BestsellerTag, FoodTypeIcon, RatingChip } from "../../components/FoodBadges";
 import QuickRequests from "../../components/QuickRequests";
+import { tr, LANGS, loadLang, saveLang, type Lang } from "../../lib/i18n";
+import { newId } from "../../lib/id";
 import type { CartLine, MenuCategory, MenuFoodItem } from "../../lib/types";
 
 type SortOption = "recommended" | "priceLowHigh" | "priceHighLow" | "nameAsc" | "bestsellerFirst";
@@ -45,6 +47,7 @@ export default function Menu() {
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
 
+  const [lang, setLang] = useState<Lang>(loadLang);
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<SortOption>("recommended");
   const [bestsellerOnly, setBestsellerOnly] = useState(false);
@@ -72,31 +75,57 @@ export default function Menu() {
   const cartTotal = useMemo(() => cart.reduce((sum, l) => sum + l.price * l.quantity, 0), [cart]);
   const cartCount = useMemo(() => cart.reduce((sum, l) => sum + l.quantity, 0), [cart]);
 
+  // The "plain" line for a dish: no modifiers and no note. Customized picks live on their own lines.
+  const isPlain = (l: CartLine) => (!l.modifiers || l.modifiers.length === 0) && !l.note;
+
   function getCartQty(foodItemId: string) {
-    return cart.find((l) => l.foodItemId === foodItemId)?.quantity ?? 0;
+    return cart.find((l) => l.foodItemId === foodItemId && isPlain(l))?.quantity ?? 0;
   }
 
   function incrementCart(food: MenuFoodItem) {
     setCart((prev) => {
-      const idx = prev.findIndex((l) => l.foodItemId === food._id);
+      const idx = prev.findIndex((l) => l.foodItemId === food._id && isPlain(l));
       if (idx >= 0) {
         const next = [...prev];
         next[idx] = { ...next[idx], quantity: next[idx].quantity + 1 };
         return next;
       }
-      return [...prev, { foodItemId: food._id, name: food.name, price: food.price, quantity: 1 }];
+      return [...prev, { lineId: newId(), foodItemId: food._id, name: food.name, price: food.price, quantity: 1 }];
     });
   }
 
   function decrementCart(foodItemId: string) {
     setCart((prev) => {
-      const idx = prev.findIndex((l) => l.foodItemId === foodItemId);
+      const idx = prev.findIndex((l) => l.foodItemId === foodItemId && isPlain(l));
       if (idx < 0) return prev;
       if (prev[idx].quantity <= 1) return prev.filter((_, i) => i !== idx);
       const next = [...prev];
       next[idx] = { ...next[idx], quantity: next[idx].quantity - 1 };
       return next;
     });
+  }
+
+  /** Adds a customized dish (from the dialog) as its own cart line. */
+  function addCustomized(food: MenuFoodItem, payload: DishAddPayload) {
+    const unitPrice = food.price + payload.modifiers.reduce((s, m) => s + m.priceDelta, 0);
+    setCart((prev) => [
+      ...prev,
+      {
+        lineId: newId(),
+        foodItemId: food._id,
+        name: food.name,
+        price: unitPrice,
+        quantity: payload.quantity,
+        modifiers: payload.modifiers,
+        note: payload.note || undefined,
+      },
+    ]);
+  }
+
+  /** Card ADD: dishes with options open the dialog; plain dishes add straight to the cart. */
+  function quickAddOrOpen(food: MenuFoodItem) {
+    if ((food.modifierGroups?.length ?? 0) > 0) setDetailFood(food);
+    else incrementCart(food);
   }
 
   function removeLine(idx: number) {
@@ -109,7 +138,12 @@ export default function Menu() {
     setError(null);
     try {
       await api.post(`/orders/${orderId}/items`, {
-        items: cart.map((l) => ({ foodItemId: l.foodItemId, quantity: l.quantity })),
+        items: cart.map((l) => ({
+          foodItemId: l.foodItemId,
+          quantity: l.quantity,
+          note: l.note,
+          modifiers: l.modifiers?.map((m) => ({ groupName: m.groupName, label: m.label })),
+        })),
       });
       setCart([]);
       navigate("/order/invoice");
@@ -136,8 +170,9 @@ export default function Menu() {
               sub.foodItems.filter((food) => {
                 if (bestsellerOnly && !food.isBestseller) return false;
                 if (vegOnly && (food.foodType ?? "veg") !== "veg") return false;
-                if (query && !food.name.toLowerCase().includes(query) && !food.description?.toLowerCase().includes(query)) {
-                  return false;
+                if (query) {
+                  const hay = `${food.name} ${food.description ?? ""} ${tr(food, lang, "name")} ${tr(food, lang, "description")}`.toLowerCase();
+                  if (!hay.includes(query)) return false;
                 }
                 return true;
               })
@@ -146,7 +181,7 @@ export default function Menu() {
           .filter((sub) => sub.foodItems.length > 0),
       }))
       .filter((category) => category.subcategories.length > 0);
-  }, [menu, search, sortBy, bestsellerOnly, vegOnly]);
+  }, [menu, search, sortBy, bestsellerOnly, vegOnly, lang]);
 
   /**
    * Sorting inside each subcategory looks broken, because most hold only one or two
@@ -199,9 +234,27 @@ export default function Menu() {
             <h1 className="text-xl font-bold tracking-tight text-slate-900">Menu</h1>
             <p className="text-xs text-slate-500">Tap a dish for details</p>
           </div>
-          <Button variant="secondary" className="rounded-xl" onClick={() => navigate("/order/invoice")}>
-            My order
-          </Button>
+          <div className="flex items-center gap-2">
+            <select
+              value={lang}
+              onChange={(e) => {
+                const l = e.target.value as Lang;
+                setLang(l);
+                saveLang(l);
+              }}
+              aria-label="Menu language"
+              className="min-h-[36px] rounded-xl border border-slate-300 px-2 text-sm"
+            >
+              {LANGS.map((l) => (
+                <option key={l.code} value={l.code}>
+                  {l.label}
+                </option>
+              ))}
+            </select>
+            <Button variant="secondary" className="rounded-xl" onClick={() => navigate("/order/invoice")}>
+              My order
+            </Button>
+          </div>
         </div>
 
         <div className="relative px-4 pt-3">
@@ -248,7 +301,7 @@ export default function Menu() {
                     : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                 }`}
               >
-                {category.name}
+                {tr(category, lang, "name")}
               </button>
             ))}
           </div>
@@ -312,8 +365,9 @@ export default function Menu() {
                 <FoodCard
                   key={food._id}
                   food={food}
+                  lang={lang}
                   cartQty={getCartQty(food._id)}
-                  onIncrement={incrementCart}
+                  onAdd={quickAddOrOpen}
                   onDecrement={decrementCart}
                   onOpen={setDetailFood}
                 />
@@ -330,11 +384,11 @@ export default function Menu() {
               }}
               className="scroll-mt-32"
             >
-              <h2 className="mb-3 text-xl font-bold tracking-tight text-slate-900">{category.name}</h2>
+              <h2 className="mb-3 text-xl font-bold tracking-tight text-slate-900">{tr(category, lang, "name")}</h2>
               {category.subcategories.map((sub) => (
                 <div key={sub._id} className="mb-4">
                   <h3 className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-400">
-                    {sub.name}
+                    {tr(sub, lang, "name")}
                     <span className="h-px flex-1 bg-slate-200" />
                     <span className="font-semibold normal-case tracking-normal">{sub.foodItems.length}</span>
                   </h3>
@@ -343,8 +397,9 @@ export default function Menu() {
                       <FoodCard
                         key={food._id}
                         food={food}
+                        lang={lang}
                         cartQty={getCartQty(food._id)}
-                        onIncrement={incrementCart}
+                        onAdd={quickAddOrOpen}
                         onDecrement={decrementCart}
                         onOpen={setDetailFood}
                       />
@@ -382,9 +437,8 @@ export default function Menu() {
 
       <DishDialog
         food={detailFood}
-        qty={detailFood ? getCartQty(detailFood._id) : 0}
-        onIncrement={incrementCart}
-        onDecrement={decrementCart}
+        lang={lang}
+        onAdd={addCustomized}
         onClose={() => setDetailFood(null)}
       />
 
@@ -396,9 +450,16 @@ export default function Menu() {
             {showCart && (
               <div className="mb-3 flex max-h-56 flex-col gap-2 overflow-y-auto rounded-xl bg-slate-50 p-2">
                 {cart.map((line, idx) => (
-                  <div key={idx} className="flex items-center justify-between gap-2 text-sm">
-                    <span className="min-w-0 flex-1 truncate text-slate-700">
-                      {line.name} <span className="text-slate-400">x {line.quantity}</span>
+                  <div key={line.lineId} className="flex items-center justify-between gap-2 text-sm">
+                    <span className="min-w-0 flex-1 text-slate-700">
+                      <span className="truncate">
+                        {line.name} <span className="text-slate-400">x {line.quantity}</span>
+                      </span>
+                      {(line.modifiers?.length || line.note) && (
+                        <span className="block truncate text-xs text-slate-400">
+                          {[...(line.modifiers?.map((m) => m.label) ?? []), line.note].filter(Boolean).join(", ")}
+                        </span>
+                      )}
                     </span>
                     <span className="font-semibold tabular-nums text-slate-800">
                       ₹{(line.price * line.quantity).toFixed(2)}
@@ -439,34 +500,33 @@ export default function Menu() {
 
 function FoodCard({
   food,
+  lang,
   cartQty,
-  onIncrement,
+  onAdd,
   onDecrement,
   onOpen,
 }: {
   food: MenuFoodItem;
+  lang: Lang;
   cartQty: number;
-  onIncrement: (food: MenuFoodItem) => void;
+  onAdd: (food: MenuFoodItem) => void;
   onDecrement: (foodItemId: string) => void;
   onOpen: (food: MenuFoodItem) => void;
 }) {
   const qty = cartQty;
+  const name = tr(food, lang, "name");
+  const description = tr(food, lang, "description");
+  const hasOptions = (food.modifierGroups?.length ?? 0) > 0;
+  const displayRating = food.guestRating ?? food.rating;
 
   return (
     <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm transition-shadow hover:shadow-md">
-      {/* Image and text open the full dish view; the ADD column stays its own
-          control so tapping it never opens the sheet. */}
-      <button type="button" onClick={() => onOpen(food)} aria-label={`View ${food.name}`} className="shrink-0">
+      <button type="button" onClick={() => onOpen(food)} aria-label={`View ${name}`} className="shrink-0">
         {food.imageUrl ? (
-          <img
-            src={food.imageUrl}
-            alt={food.name}
-            loading="lazy"
-            className="h-20 w-20 rounded-xl object-cover shadow-sm"
-          />
+          <img src={food.imageUrl} alt={name} loading="lazy" className="h-20 w-20 rounded-xl object-cover shadow-sm" />
         ) : (
           <div className="flex h-20 w-20 items-center justify-center rounded-xl bg-gradient-to-br from-orange-100 to-amber-50 text-2xl font-bold text-orange-400">
-            {food.name.charAt(0).toUpperCase()}
+            {name.charAt(0).toUpperCase()}
           </div>
         )}
       </button>
@@ -474,44 +534,40 @@ function FoodCard({
       <button type="button" onClick={() => onOpen(food)} className="min-w-0 flex-1 text-left">
         <div className="flex flex-wrap items-center gap-1.5">
           <FoodTypeIcon type={food.foodType} />
-          <RatingChip rating={food.rating} />
+          <RatingChip rating={displayRating} />
+          {food.reviewCount ? <span className="text-[10px] text-slate-400">({food.reviewCount})</span> : null}
           {food.isBestseller && <BestsellerTag emoji={food.bestsellerEmoji} />}
         </div>
 
-        <p className="mt-1 text-[15px] font-semibold leading-snug text-slate-900">{food.name}</p>
+        <p className="mt-1 text-[15px] font-semibold leading-snug text-slate-900">{name}</p>
         <p className="mt-0.5 text-sm font-bold text-slate-800">₹{food.price.toFixed(2)}</p>
 
-        {food.description && (
-          <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-slate-500">
-            {food.description}
-          </p>
-        )}
+        {description && <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-slate-500">{description}</p>}
         <span className="mt-1 inline-block text-[11px] font-semibold text-orange-600">More details</span>
       </button>
 
-      {/* Its own column on the right, so the action sits in one predictable place
-          down the whole list rather than moving with each dish's text length. */}
       <div className="w-24 shrink-0">
-        {qty === 0 ? (
+        {qty === 0 || hasOptions ? (
           <button
-            onClick={() => onIncrement(food)}
-            className="flex h-11 w-full items-center justify-center rounded-xl border border-orange-600 bg-white text-base font-bold tracking-wide text-orange-600 shadow-sm hover:bg-orange-50"
+            onClick={() => onAdd(food)}
+            className="flex h-11 w-full flex-col items-center justify-center rounded-xl border border-orange-600 bg-white text-sm font-bold tracking-wide text-orange-600 shadow-sm hover:bg-orange-50"
           >
             ADD
+            {hasOptions && <span className="text-[9px] font-medium normal-case">customize</span>}
           </button>
         ) : (
           <div className="flex h-11 w-full items-center justify-between rounded-xl bg-orange-600 px-0.5 text-white shadow-sm">
             <button
               onClick={() => onDecrement(food._id)}
-              aria-label={`Remove one ${food.name}`}
+              aria-label={`Remove one ${name}`}
               className="flex h-full w-8 items-center justify-center text-xl font-bold leading-none"
             >
               −
             </button>
             <span className="text-base font-bold tabular-nums">{qty}</span>
             <button
-              onClick={() => onIncrement(food)}
-              aria-label={`Add one ${food.name}`}
+              onClick={() => onAdd(food)}
+              aria-label={`Add one ${name}`}
               className="flex h-full w-8 items-center justify-center text-xl font-bold leading-none"
             >
               +

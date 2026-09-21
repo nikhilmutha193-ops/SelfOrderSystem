@@ -297,6 +297,11 @@ export default function OrderDetail({
               <tr key={item._id} className="border-t border-slate-100">
                 <td className="py-1.5">
                   {item.foodName} {item.isJain && "(Jain)"}
+                  {(item.modifiers?.length || item.note) && (
+                    <span className="mt-0.5 block text-xs text-slate-400">
+                      {[...(item.modifiers?.map((m) => m.label) ?? []), item.note].filter(Boolean).join(", ")}
+                    </span>
+                  )}
                 </td>
                 <td className="py-1.5">{item.quantity}</td>
                 <td className="py-1.5">₹{item.total.toFixed(2)}</td>

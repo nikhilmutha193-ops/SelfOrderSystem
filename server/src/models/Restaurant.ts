@@ -91,6 +91,8 @@ export interface IRestaurant {
   prepMessageTemplate: string;
   /** Abuse/violence filter for the guest<->staff chat. */
   chatModeration: IChatModeration;
+  /** Shared secret an aggregator (Swiggy/Zomato/UrbanPiper) must send to post orders to the webhook. */
+  aggregatorWebhookSecret?: string;
   taxRates: ITaxRate[];
   qrSettings: IQrSettings;
   kotSettings: IKotSettings;
@@ -194,6 +196,7 @@ const restaurantSchema = new Schema<IRestaurant>(
     invoiceSettings: { type: invoiceSettingsSchema, default: () => ({}) },
     backupSchedule: { type: backupScheduleSchema, default: () => ({}) },
     chatModeration: { type: chatModerationSchema, default: () => ({}) },
+    aggregatorWebhookSecret: { type: String, default: "" },
   },
   { timestamps: true }
 );
