@@ -24,6 +24,9 @@ export default function TableLogin() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [brand, setBrand] = useState<{ name: string; logoUrl: string }>({ name: "Benne Kaffi", logoUrl: "" });
+  // Re-scanning/re-signing-in to one's own already-occupied table: offer a choice instead of
+  // silently resuming or showing a raw "already occupied" error - see attemptLogin().
+  const [needsOrderChoice, setNeedsOrderChoice] = useState(false);
   const navigate = useNavigate();
   const session = useTableSession();
 
@@ -36,55 +39,103 @@ export default function TableLogin() {
       });
   }, []);
 
-  async function loginWithQrToken() {
+  /** Exact text of the server's "it's your own table, still occupied" 409 - see auth.controller.ts. */
+  const OWN_TABLE_OCCUPIED_MESSAGE = "You already have an order in progress at this table";
+
+  /**
+   * Shared by both sign-in paths (QR scan and typed code+PIN) - the "your own table is still
+   * occupied" case has to be handled identically either way, since it's the same server check
+   * regardless of how the guest got here. Previously only the QR path had this, so re-logging
+   * into an occupied table by typing the code+PIN just showed a bare "already occupied" error
+   * with no way forward.
+   */
+  async function attemptLogin(opts: { startNewOrder?: boolean; continueOrder?: boolean } = {}) {
     setError(null);
+    setNeedsOrderChoice(false);
     setLoading(true);
     try {
-      const res = await api.post("/auth/table/login", { token: qrToken });
+      const res = await api.post("/auth/table/login", {
+        ...(qrToken ? { token: qrToken } : { code, password }),
+        // Lets the server tell "it's my own table" apart from "someone else is seated
+        // here" - only meaningful (and only sent) when a session already exists.
+        ...(session.tableId ? { currentTableId: session.tableId } : {}),
+        ...(opts.startNewOrder ? { startNewOrder: true } : {}),
+        ...(opts.continueOrder ? { continueOrder: true } : {}),
+      });
       storeToken("table", res.data.token);
       setActiveAuth({ role: "table", token: res.data.token });
-      try { localStorage.setItem("selforder_table_code", res.data.table?.code || ""); } catch { /* ignore */ }
+      try { localStorage.setItem("selforder_table_code", res.data.table?.code || code); } catch { /* ignore */ }
+      // The server embeds orderId in the token when one already exists (continueOrder or an
+      // already-provisioned session) - CustomerDetails' own redirect picks that up and moves
+      // straight on to the menu, so there is no need to branch on it here too.
       navigate("/order/details");
     } catch (err) {
-      setError(extractErrorMessage(err));
+      const message = extractErrorMessage(err);
+      if (message === OWN_TABLE_OCCUPIED_MESSAGE) {
+        // Own table, still occupied - let the guest choose rather than guessing.
+        setNeedsOrderChoice(true);
+        setLoading(false);
+        return;
+      }
+      // Any other failure on the QR path (someone else's table, a network hiccup, etc.) - if a
+      // valid session already exists, fall back to it rather than stranding the guest on a
+      // scary error screen that "Try again" could never get past anyway. Only for QR: a typed
+      // code+PIN is a deliberate attempt at a *specific* table, so silently landing back on a
+      // different, older session there would be confusing rather than helpful.
+      if (qrToken && session.tableId) {
+        navigate(session.orderId ? "/order/menu" : "/order/details", { replace: true });
+        return;
+      }
+      setError(message);
       setLoading(false);
     }
+  }
+
+  /**
+   * "Continue my order" from the occupied-table choice. This device may already have a valid
+   * session for this exact table (e.g. re-scanning its own QR) - then there's nothing to fetch,
+   * just go there. Otherwise (a different/fresh device whose PIN was still correct) it has no
+   * token of its own yet, so it has to actually sign in to rejoin the existing seating rather
+   * than navigating using session data it doesn't have.
+   */
+  function continueExistingOrder() {
+    if (session.tableId) {
+      navigate(session.orderId ? "/order/menu" : "/order/details", { replace: true });
+      return;
+    }
+    attemptLogin({ continueOrder: true });
   }
 
   useEffect(() => {
     clearExpiredFlag("table");
     const token = activateStoredAuth("table");
+
+    if (qrToken) {
+      // A fresh QR scan always gets to decide what happens next - attemptLogin() itself
+      // handles every outcome (a different, available table switches onto it; the guest's own
+      // still-occupied table shows the continue/new-order choice; any other failure falls back
+      // to resuming an existing session). Navigating away here first would race ahead of that
+      // network call and skip straight past the choice prompt before it can ever show.
+      attemptLogin();
+      return;
+    }
+
     if (token && !sessionExpired) {
       if (session.orderId) navigate("/order/menu", { replace: true });
       else if (session.tableId) navigate("/order/details", { replace: true });
+      return;
     }
 
-    if (qrToken) {
-      loginWithQrToken();
-    } else {
-      api
-        .get<TableRow[]>("/tables/available")
-        .then((res) => setAvailable(res.data))
-        .catch(() => setAvailable([]));
-    }
+    api
+      .get<TableRow[]>("/tables/available")
+      .then((res) => setAvailable(res.data))
+      .catch(() => setAvailable([]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function submit(e: React.FormEvent) {
+  function submit(e: React.FormEvent) {
     e.preventDefault();
-    setError(null);
-    setLoading(true);
-    try {
-      const res = await api.post("/auth/table/login", { code, password });
-      storeToken("table", res.data.token);
-      setActiveAuth({ role: "table", token: res.data.token });
-      try { localStorage.setItem("selforder_table_code", res.data.table?.code || code); } catch { /* ignore */ }
-      navigate("/order/details");
-    } catch (err) {
-      setError(extractErrorMessage(err));
-    } finally {
-      setLoading(false);
-    }
+    attemptLogin();
   }
 
   return (
@@ -154,12 +205,39 @@ export default function TableLogin() {
                   Your session has ended. Please scan the QR code again or sign in to continue.
                 </p>
               )}
-              {qrToken && !error && (
+              {qrToken && !error && !needsOrderChoice && (
                 <p className="order-note order-note--info">Table identified from QR code — signing you in…</p>
               )}
               {error && <p className="order-note order-note--error">{error}</p>}
 
-              {!qrToken && (
+              {needsOrderChoice && (
+                <div className="order-choice">
+                  <p className="order-note order-note--info">
+                    You already have an order in progress at this table. Would you like to continue it, or start a
+                    new order?
+                  </p>
+                  <div className="order-choice__actions">
+                    <button
+                      className="btn btn--primary btn--lg btn--block"
+                      type="button"
+                      onClick={continueExistingOrder}
+                      disabled={loading}
+                    >
+                      Continue my order
+                    </button>
+                    <button
+                      className="btn btn--secondary btn--lg btn--block"
+                      type="button"
+                      onClick={() => attemptLogin({ startNewOrder: true })}
+                      disabled={loading}
+                    >
+                      {loading ? "Starting…" : "Start a new order"}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {!qrToken && !needsOrderChoice && (
                 <>
                   <div className="field">
                     <label className="field__label" htmlFor="table-code">
@@ -251,8 +329,13 @@ export default function TableLogin() {
                 </>
               )}
 
-              {qrToken && error && (
-                <button className="btn btn--primary btn--lg btn--block" type="button" onClick={loginWithQrToken} disabled={loading}>
+              {qrToken && error && !needsOrderChoice && (
+                <button
+                  className="btn btn--primary btn--lg btn--block"
+                  type="button"
+                  onClick={() => attemptLogin()}
+                  disabled={loading}
+                >
                   {loading ? "Signing in…" : "Try again"}
                 </button>
               )}

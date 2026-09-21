@@ -35,9 +35,11 @@
 
 .header--scrolled,
 .header--open {
-  /* Deep terracotta (--color-primary-dark) at 96%: the lighter brand tint over
-     a cream page read too bright/orange */
-  background-color: rgba(154, 65, 48, 0.96);
+  /* Fully opaque: this state is meant to read as a solid bar over ordinary page content (or
+     the tail of the hero, right as it scrolls under). Even a couple % of transparency let a
+     bright hero button ghost through right behind the header - not visible over plain page
+     background, but very visible over the hero's own dark/bright elements. */
+  background-color: rgb(154, 65, 48);
   border-bottom-color: rgba(253, 251, 247, 0.12);
   box-shadow: 0 10px 30px rgba(43, 29, 24, 0.25);
 }
@@ -117,8 +119,13 @@
   letter-spacing: 0.01em;
 }
 
-/* Hamburger */
-.nav__toggle {
+/* Hamburger
+   Selector is scoped as ".bk-landing .nav__toggle" (two classes) rather than plain
+   ".nav__toggle" (one class) so it reliably outranks main.css's ".bk-landing button"
+   reset (also two selectors, one class + one element) - a plain single-class selector
+   here loses that specificity fight and silently gets padding:0, stretching the three
+   bars edge-to-edge across the full 44px box instead of a neatly inset icon. */
+.bk-landing .nav__toggle {
   position: relative;
   z-index: 102;
   display: inline-flex;
@@ -237,7 +244,9 @@
 }
 
 @media (min-width: 1024px) {
-  .nav__toggle {
+  /* Must match the base rule's ".bk-landing .nav__toggle" specificity, or this loses the
+     display tie-break and the toggle stays visible on desktop. */
+  .bk-landing .nav__toggle {
     display: none;
   }
 

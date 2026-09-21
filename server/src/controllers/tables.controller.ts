@@ -104,15 +104,15 @@ export const releaseTable = asyncHandler(async (req: Request, res: Response) => 
 });
 
 /**
- * Lets a guest end their own table session before starting an order (e.g. tapping
- * "Change"/"Back" on the visitor-details step). Without this, the table stays marked
- * occupied server-side even though the guest has left, blocking that table for everyone
- * else until an admin releases it by hand or the auto-release timer eventually fires.
- * Only reachable pre-order: the table role's token carries no orderId until an order is
- * actually created, so this can't be used to abandon a table with real items in flight.
+ * Lets a guest end their own table session - either before starting an order (tapping
+ * "Change"/"Back" on the visitor-details step) or mid-order (tapping "Leave table" on the
+ * menu, after confirming past the active-order warning if there was one). Without this, the
+ * table stays marked occupied server-side even though the guest has left, blocking that table
+ * for everyone else until an admin releases it by hand or the auto-release timer eventually
+ * fires. Behaves exactly like an admin releasing the table: anything not yet sent to the
+ * kitchen is cancelled with the seating; anything already fired stays open for staff to settle.
  */
 export const releaseOwnTableSession = asyncHandler(async (req: Request, res: Response) => {
-  if (req.auth?.orderId) throw new HttpError(409, "An order has already started on this table");
   if (!req.auth?.tableId) throw new HttpError(400, "No table session to release");
 
   const table = await TableModel.findOneAndUpdate(

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, storeToken, clearStoredToken, setActiveAuth, extractErrorMessage } from "../../lib/apiClient";
 import { useTableSession } from "../../lib/useTableSession";
@@ -10,6 +10,12 @@ export default function CustomerDetails() {
   const [members, setMembers] = useState(2);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  // A ref, not just the state above: state updates apply on the next render, so two
+  // invocations dispatched in the same tick (a genuine double-tap can be that fast) could
+  // both still read the old "leaving" value before either re-render lands. The ref is
+  // mutated immediately, so the second invocation always sees it synchronously.
+  const leavingRef = useRef(false);
   const navigate = useNavigate();
   const session = useTableSession();
   const tableCode = (() => {
@@ -33,6 +39,12 @@ export default function CustomerDetails() {
   // just bounces the guest right back. Going back to table login has to actually end this
   // table session first, or "Change"/"Back" silently do nothing.
   async function backToTableLogin() {
+    // A double-tap (or the button and the physical browser back-button firing close
+    // together) would otherwise send this release call twice - harmless server-side, but
+    // guard it client-side too so it's never even attempted a second time.
+    if (leavingRef.current) return;
+    leavingRef.current = true;
+    setLeaving(true);
     try {
       // Best-effort: also free the table server-side so it doesn't stay falsely "occupied"
       // for other guests. Still navigate away even if this fails (e.g. offline) - the
@@ -93,7 +105,7 @@ export default function CustomerDetails() {
                 <div className="step__context">
                   <span>Signed in at</span>
                   <span className="step__context-value">{tableCode}</span>
-                  <button type="button" className="step__context-change" onClick={backToTableLogin}>
+                  <button type="button" className="step__context-change" onClick={backToTableLogin} disabled={leaving}>
                     Change
                   </button>
                 </div>
@@ -181,7 +193,7 @@ export default function CustomerDetails() {
               <button className="btn btn--primary btn--lg btn--block" type="submit" disabled={loading}>
                 {loading ? "Starting order…" : "Continue to menu"}
               </button>
-              <button className="step__back" type="button" onClick={backToTableLogin}>
+              <button className="step__back" type="button" onClick={backToTableLogin} disabled={leaving}>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <path d="M19 12H5" />
                   <path d="M12 19l-7-7 7-7" />

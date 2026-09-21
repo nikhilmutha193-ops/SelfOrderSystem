@@ -1,15 +1,36 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { api, extractErrorMessage } from "../../lib/apiClient";
+import { api, clearStoredToken, extractErrorMessage, setActiveAuth } from "../../lib/apiClient";
 import { useTableSession } from "../../lib/useTableSession";
 import { Button, ErrorText, Input, Select } from "../../components/ui";
 import ChatFab from "../../components/ChatFab";
 import DishDialog, { type DishAddPayload } from "../../components/DishDialog";
 import { BestsellerTag, FoodTypeIcon, RatingChip } from "../../components/FoodBadges";
 import QuickRequests from "../../components/QuickRequests";
+import { ReviewDialog } from "../../components/ReviewFab";
 import { tr, LANGS, loadLang, saveLang, type Lang } from "../../lib/i18n";
 import { newId } from "../../lib/id";
-import type { CartLine, MenuCategory, MenuFoodItem } from "../../lib/types";
+import type { CartLine, MenuCategory, MenuFoodItem, OrderDetailResponse } from "../../lib/types";
+
+/** Door-with-arrow "leave" glyph, icon-only so it doesn't compete with "My order" for space. */
+function LeaveIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden>
+      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+      <path d="M16 17l5-5-5-5" />
+      <path d="M21 12H9" />
+    </svg>
+  );
+}
+
+/** Outline star, for the "rate us" affordance - filled stars are reserved for an actual rating. */
+function StarOutlineIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden>
+      <path d="M12 2.5l2.9 6.6 7.1.6-5.4 4.7 1.7 7-6.3-3.8-6.3 3.8 1.7-7-5.4-4.7 7.1-.6z" />
+    </svg>
+  );
+}
 
 type SortOption = "recommended" | "priceLowHigh" | "priceHighLow" | "nameAsc" | "bestsellerFirst";
 
@@ -29,6 +50,10 @@ function sortItems(sortBy: SortOption, items: MenuFoodItem[]): MenuFoodItem[] {
   }
 }
 
+/** Order-item statuses that still count as "active" - not yet served or cancelled, so still
+ *  with the kitchen or waiting to be picked up. Used to warn before leaving the table. */
+const ACTIVE_ITEM_STATUSES = new Set(["pending", "preparing", "ready"]);
+
 const SORT_LABELS: Record<SortOption, string> = {
   recommended: "Recommended",
   bestsellerFirst: "Bestsellers first",
@@ -47,6 +72,13 @@ export default function Menu() {
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false);
+  /** Items still pending/preparing/ready (not yet served or cancelled) on the current order,
+   *  checked right before showing the leave-table confirmation. null = not checked/unknown yet. */
+  const [activeItemCount, setActiveItemCount] = useState<number | null>(null);
+  const [leavingTable, setLeavingTable] = useState(false);
+  const leavingRef = useRef(false);
 
   const [lang, setLang] = useState<Lang>(loadLang);
   const [search, setSearch] = useState("");
@@ -157,6 +189,46 @@ export default function Menu() {
     }
   }
 
+  /** Opens the leave-table confirmation, checking first whether any items are still active so
+   *  the dialog can warn about them rather than understating what "leave" actually means here. */
+  async function openLeaveConfirm() {
+    setLeaveConfirmOpen(true);
+    setActiveItemCount(null);
+    if (!orderId) return;
+    try {
+      const res = await api.get<OrderDetailResponse>(`/orders/${orderId}`);
+      const active = res.data.items.filter((it) => ACTIVE_ITEM_STATUSES.has(it.status)).length;
+      setActiveItemCount(active);
+    } catch {
+      // Non-critical - the dialog still works without the extra warning if this fails.
+    }
+  }
+
+  /**
+   * Leaves and frees this table for the next guest, same as an admin releasing it: anything
+   * not yet sent to the kitchen is cancelled with the seating; anything already fired stays
+   * open for staff to settle. The active-order check above already warned about that before
+   * this runs, so by the time it's called the guest has chosen to proceed anyway.
+   */
+  async function leaveTable() {
+    if (leavingRef.current) return; // guards a double-tap from firing the release twice
+    leavingRef.current = true;
+    setLeavingTable(true);
+    try {
+      await api.patch("/tables/session/release");
+    } catch {
+      /* non-critical - the table auto-releases later if this doesn't go through */
+    }
+    clearStoredToken("table");
+    setActiveAuth(null);
+    try {
+      localStorage.removeItem("selforder_table_code");
+    } catch {
+      /* ignore - the code just won't be prefilled next time */
+    }
+    navigate("/order", { replace: true });
+  }
+
   const isFiltering = search.trim().length > 0 || bestsellerOnly || vegOnly || sortBy !== "recommended";
 
   const filteredMenu = useMemo(() => {
@@ -257,6 +329,24 @@ export default function Menu() {
             <Button variant="secondary" className="rounded-xl" onClick={() => navigate("/order/invoice")}>
               My order
             </Button>
+            <button
+              type="button"
+              onClick={() => setFeedbackOpen(true)}
+              aria-label="Rate us"
+              title="Rate us"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-300 text-slate-500 hover:bg-slate-50 hover:text-amber-500"
+            >
+              <StarOutlineIcon className="h-[18px] w-[18px]" />
+            </button>
+            <button
+              type="button"
+              onClick={openLeaveConfirm}
+              aria-label="Leave table"
+              title="Leave table"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-300 text-slate-500 hover:bg-red-50 hover:text-red-600"
+            >
+              <LeaveIcon className="h-[18px] w-[18px]" />
+            </button>
           </div>
         </div>
 
@@ -444,6 +534,49 @@ export default function Menu() {
         onAdd={addCustomized}
         onClose={() => setDetailFood(null)}
       />
+
+      <ReviewDialog open={feedbackOpen} onClose={() => setFeedbackOpen(false)} />
+
+      {leaveConfirmOpen && (
+        <div
+          className="fixed inset-0 z-40 flex items-end justify-center bg-black/40 p-4 sm:items-center"
+          onClick={() => setLeaveConfirmOpen(false)}
+        >
+          <div
+            className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Leave table"
+          >
+            <h2 className="text-base font-bold text-slate-800">Leave this table?</h2>
+
+            {activeItemCount !== null && activeItemCount > 0 && (
+              <p className="mt-2 flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                <span aria-hidden>⚠️</span>
+                <span>
+                  Active order in progress - {activeItemCount} item{activeItemCount === 1 ? "" : "s"} still on the way
+                  from the kitchen. Anything not yet sent will be cancelled; anything already being prepared stays
+                  with staff to serve.
+                </span>
+              </p>
+            )}
+
+            <p className="mt-1.5 text-sm text-slate-500">
+              This frees the table for other guests - you can sign back in from this table's QR code or code
+              anytime.
+            </p>
+            <div className="mt-4 flex gap-2">
+              <Button variant="secondary" className="flex-1" onClick={() => setLeaveConfirmOpen(false)} disabled={leavingTable}>
+                Cancel
+              </Button>
+              <Button variant="danger" className="flex-1" onClick={leaveTable} disabled={leavingTable}>
+                {leavingTable ? "Leaving…" : "Leave table"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {cartCount === 0 && <ChatFab />}
 

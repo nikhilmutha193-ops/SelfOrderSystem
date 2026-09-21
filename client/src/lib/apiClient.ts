@@ -36,6 +36,15 @@ const LOGIN_PATH: Record<Role, string> = {
 const LOGIN_ENDPOINTS = ["/auth/admin/login", "/auth/chef/login", "/auth/table/login"];
 
 /**
+ * A 401 here is an expected, harmless outcome - not a real auth problem - the moment this
+ * table session has already been ended (e.g. a double-tap on "Change"/"Back" sends this
+ * twice; the first call already released the session, so the second correctly 401s). Forcing
+ * a full "your session expired" logout over that would be a false alarm for something that
+ * already succeeded.
+ */
+const SELF_RELEASE_ENDPOINT = "/tables/session/release";
+
+/**
  * A token that has expired is still *present*, so route guards happily render the
  * page and every request then fails. Drop the dead session and send the user back
  * to the right login instead of leaving them on a broken screen.
@@ -55,7 +64,12 @@ api.interceptors.response.use(
   (error) => {
     const { config, response } = error ?? {};
     const url: string = config?.url ?? "";
-    if (response?.status === 401 && activeAuth && !LOGIN_ENDPOINTS.some((p) => url.includes(p))) {
+    if (
+      response?.status === 401 &&
+      activeAuth &&
+      !LOGIN_ENDPOINTS.some((p) => url.includes(p)) &&
+      !url.includes(SELF_RELEASE_ENDPOINT)
+    ) {
       log.warn("session expired - clearing stored auth", { role: activeAuth.role, url });
       handleExpiredSession(activeAuth.role);
     }

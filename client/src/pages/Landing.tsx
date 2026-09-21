@@ -52,9 +52,15 @@ export default function Landing() {
       .catch((err) => setLoadError(extractErrorMessage(err)));
   }, []);
 
-  // The header turns solid once the hero has mostly scrolled past.
+  // The header turns solid as soon as the page is scrolled at all. This used to wait until
+  // 80% of the viewport height had scrolled by (later, an attempt at waiting for the hero to
+  // fully clear) - but the hero's own CTA buttons ("Order Now"/"Explore Menu") sit near its
+  // *bottom*, so even a small scroll brings them right up to the still-transparent header,
+  // visually overlapping/gluing to it well before either threshold was reached. Switching
+  // solid almost immediately means hero content is safely hidden behind an opaque bar the
+  // moment it would otherwise reach the header, at any viewport size.
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > window.innerHeight * 0.8);
+    const onScroll = () => setScrolled(window.scrollY > 40);
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
@@ -125,7 +131,10 @@ export default function Landing() {
 
   return (
     <div className="bk-landing">
-      <header className={`header${scrolled ? " header--scrolled" : ""}`} id="header">
+      <header
+        className={`header${scrolled ? " header--scrolled" : ""}${navOpen ? " header--open" : ""}`}
+        id="header"
+      >
         <div className="container header__inner">
           <a className="header__logo" href="#top" aria-label={`${restaurant.name} - home`}>
             <img className="header__logo-img" src={logo} alt="" width={48} height={48} />
