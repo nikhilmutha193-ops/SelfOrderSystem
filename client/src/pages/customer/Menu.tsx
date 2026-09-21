@@ -46,6 +46,7 @@ export default function Menu() {
   const [detailFood, setDetailFood] = useState<MenuFoodItem | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
+  const [reviewOpen, setReviewOpen] = useState(false);
 
   const [lang, setLang] = useState<Lang>(loadLang);
   const [search, setSearch] = useState("");
@@ -132,7 +133,8 @@ export default function Menu() {
     setCart((prev) => prev.filter((_, i) => i !== idx));
   }
 
-  async function confirmOrder() {
+  /** Actually submits the cart - only called once the guest confirms in the review popup. */
+  async function placeOrder() {
     if (cart.length === 0 || !orderId) return;
     setConfirming(true);
     setError(null);
@@ -146,6 +148,7 @@ export default function Menu() {
         })),
       });
       setCart([]);
+      setReviewOpen(false);
       navigate("/order/invoice");
     } catch (err) {
       setError(extractErrorMessage(err));
@@ -487,8 +490,86 @@ export default function Menu() {
                   </span>
                 </span>
               </button>
-              <Button className="shrink-0 rounded-xl px-6" onClick={confirmOrder} disabled={confirming}>
-                {confirming ? "Placing..." : "Place order"}
+              <Button className="shrink-0 rounded-xl px-6" onClick={() => setReviewOpen(true)} disabled={confirming}>
+                Place order
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {reviewOpen && (
+        <div
+          className="fixed inset-0 z-40 flex items-end justify-center bg-black/40 p-4 sm:items-center"
+          onClick={() => !confirming && setReviewOpen(false)}
+        >
+          <div
+            className="flex w-full max-w-md flex-col rounded-2xl bg-white p-4 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-1 flex items-center justify-between">
+              <h2 className="text-base font-bold text-slate-800">Confirm your order</h2>
+              <button
+                type="button"
+                className="text-slate-400 hover:text-slate-600"
+                onClick={() => setReviewOpen(false)}
+                disabled={confirming}
+                aria-label="Close"
+              >
+                ✕
+              </button>
+            </div>
+            <p className="mb-3 text-xs text-slate-500">Check everything below before it goes to the kitchen.</p>
+
+            <div className="flex max-h-72 flex-col gap-2 overflow-y-auto rounded-xl bg-slate-50 p-2">
+              {cart.map((line, idx) => (
+                <div key={line.lineId} className="flex items-center justify-between gap-2 rounded-lg bg-white px-2 py-2 text-sm shadow-sm">
+                  <span className="min-w-0 flex-1 text-slate-700">
+                    <span className="block truncate font-medium">
+                      {line.name} <span className="font-normal text-slate-400">x {line.quantity}</span>
+                    </span>
+                    {(line.modifiers?.length || line.note) && (
+                      <span className="block truncate text-xs text-slate-400">
+                        {[...(line.modifiers?.map((m) => m.label) ?? []), line.note].filter(Boolean).join(", ")}
+                      </span>
+                    )}
+                  </span>
+                  <span className="shrink-0 font-semibold tabular-nums text-slate-800">
+                    ₹{(line.price * line.quantity).toFixed(2)}
+                  </span>
+                  <button
+                    className="flex h-8 w-8 shrink-0 items-center justify-center text-red-600"
+                    aria-label={`Remove ${line.name}`}
+                    onClick={() => removeLine(idx)}
+                    disabled={confirming}
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+              {cart.length === 0 && (
+                <p className="py-6 text-center text-sm text-slate-400">Your cart is empty.</p>
+              )}
+            </div>
+
+            <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-3 text-sm font-bold text-slate-900">
+              <span>Total</span>
+              <span className="tabular-nums">₹{cartTotal.toFixed(2)}</span>
+            </div>
+
+            <ErrorText>{error}</ErrorText>
+
+            <div className="mt-3 flex gap-2">
+              <Button
+                variant="secondary"
+                className="flex-1"
+                onClick={() => setReviewOpen(false)}
+                disabled={confirming}
+              >
+                Add more items
+              </Button>
+              <Button className="flex-1" onClick={placeOrder} disabled={confirming || cart.length === 0}>
+                {confirming ? "Placing..." : "Confirm & place order"}
               </Button>
             </div>
           </div>

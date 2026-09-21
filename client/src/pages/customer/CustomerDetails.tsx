@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { api, storeToken, setActiveAuth, extractErrorMessage } from "../../lib/apiClient";
+import { api, storeToken, clearStoredToken, setActiveAuth, extractErrorMessage } from "../../lib/apiClient";
 import { useTableSession } from "../../lib/useTableSession";
 import "../../styles/order.css";
 
@@ -27,6 +27,29 @@ export default function CustomerDetails() {
     else if (!session.tableId) navigate("/order", { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Table login (see TableLogin.tsx) auto-redirects straight back here whenever a valid
+  // table token is still stored - so simply navigating to "/order" while that token remains
+  // just bounces the guest right back. Going back to table login has to actually end this
+  // table session first, or "Change"/"Back" silently do nothing.
+  async function backToTableLogin() {
+    try {
+      // Best-effort: also free the table server-side so it doesn't stay falsely "occupied"
+      // for other guests. Still navigate away even if this fails (e.g. offline) - the
+      // client-side sign-out below is what actually unblocks the Change/Back buttons.
+      await api.patch("/tables/session/release");
+    } catch {
+      /* non-critical - the table auto-releases later if this doesn't go through */
+    }
+    clearStoredToken("table");
+    setActiveAuth(null);
+    try {
+      localStorage.removeItem("selforder_table_code");
+    } catch {
+      /* ignore - the code just won't be prefilled next time */
+    }
+    navigate("/order", { replace: true });
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -70,7 +93,7 @@ export default function CustomerDetails() {
                 <div className="step__context">
                   <span>Signed in at</span>
                   <span className="step__context-value">{tableCode}</span>
-                  <button type="button" className="step__context-change" onClick={() => navigate("/order")}>
+                  <button type="button" className="step__context-change" onClick={backToTableLogin}>
                     Change
                   </button>
                 </div>
@@ -158,7 +181,7 @@ export default function CustomerDetails() {
               <button className="btn btn--primary btn--lg btn--block" type="submit" disabled={loading}>
                 {loading ? "Starting order…" : "Continue to menu"}
               </button>
-              <button className="step__back" type="button" onClick={() => navigate("/order")}>
+              <button className="step__back" type="button" onClick={backToTableLogin}>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <path d="M19 12H5" />
                   <path d="M12 19l-7-7 7-7" />

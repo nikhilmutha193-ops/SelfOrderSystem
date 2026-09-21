@@ -103,6 +103,36 @@ export const releaseTable = asyncHandler(async (req: Request, res: Response) => 
   res.json({ ...table.toObject(), cancelledOrders });
 });
 
+/**
+ * Lets a guest end their own table session before starting an order (e.g. tapping
+ * "Change"/"Back" on the visitor-details step). Without this, the table stays marked
+ * occupied server-side even though the guest has left, blocking that table for everyone
+ * else until an admin releases it by hand or the auto-release timer eventually fires.
+ * Only reachable pre-order: the table role's token carries no orderId until an order is
+ * actually created, so this can't be used to abandon a table with real items in flight.
+ */
+export const releaseOwnTableSession = asyncHandler(async (req: Request, res: Response) => {
+  if (req.auth?.orderId) throw new HttpError(409, "An order has already started on this table");
+  if (!req.auth?.tableId) throw new HttpError(400, "No table session to release");
+
+  const table = await TableModel.findOneAndUpdate(
+    {
+      _id: req.auth.tableId,
+      restaurantId: req.restaurantId,
+      // Only release the exact seating this token was issued for - a stale token from a
+      // seating that already ended (or was already released) must not touch the next guest's.
+      sessionId: req.auth.sessionId,
+    },
+    { $set: { status: "available" }, $unset: { sessionId: "", occupiedAt: "" } },
+    { new: true }
+  );
+  // A guest table (isGuest) is never marked occupied and has no sessionId to match, so a
+  // missing match there is normal, not an error - nothing to release.
+  if (table) await cancelUnsentOrdersForTables([table._id]);
+
+  res.json({ released: !!table });
+});
+
 export const deleteTable = asyncHandler(async (req: Request, res: Response) => {
   validId(req.params.id);
   const table = await TableModel.findOne({ _id: req.params.id, restaurantId: req.restaurantId });

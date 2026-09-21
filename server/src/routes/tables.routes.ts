@@ -5,6 +5,7 @@ import {
   createTable,
   updateTable,
   releaseTable,
+  releaseOwnTableSession,
   deleteTable,
 } from "../controllers/tables.controller";
 import { requireAuth, requireModule } from "../middleware/auth";
@@ -12,6 +13,8 @@ import { requireAuth, requireModule } from "../middleware/auth";
 const router = Router();
 
 router.get("/available", listAvailableTables);
+// Guest self-service: end my own not-yet-ordered table session (e.g. "Change table"/"Back").
+router.patch("/session/release", requireAuth("table"), releaseOwnTableSession);
 
 router.get("/", requireAuth("admin"), requireModule("tables"), listTables);
 router.post("/", requireAuth("admin"), requireModule("tables"), createTable);
