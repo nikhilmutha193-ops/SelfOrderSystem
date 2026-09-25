@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
+
+import { Button, Card, ErrorText, Input } from "../../components/ui";
 import { api, extractErrorMessage } from "../../lib/apiClient";
 import { buildTableQrFrame } from "../../lib/qrFrame";
-import { Button, Card, ErrorText, Input } from "../../components/ui";
 import type { QrSettings, Restaurant, TableRow } from "../../lib/types";
 
 interface FrameState {
@@ -38,8 +39,6 @@ export default function QrCodes() {
       .catch((err) => setError(extractErrorMessage(err)));
   }, []);
 
-  // Load the logo through our own origin (blob URL) so the QR canvas can draw it - the
-  // public bucket the logo normally sits on has no CORS, which made it silently drop off.
   useEffect(() => {
     if (!restaurant?.logoUrl || !qrSettings.showLogo) {
       setLogoSrc(undefined);
@@ -123,17 +122,17 @@ export default function QrCodes() {
         <h1 className="text-2xl font-bold text-slate-800">Table QR Codes</h1>
         <p className="text-sm text-slate-500">
           Each QR code encodes an encrypted, table-specific link (not the plain table code), so a scan takes the
-          customer straight into ordering at that table - no PIN needed, since the encrypted code itself proves
-          it's the physical stand. A PIN is still required if a customer types in a table code manually instead of
-          scanning. Download and print for table stands.
+          customer straight into ordering at that table - no PIN needed, since the encrypted code itself proves it's the
+          physical stand. A PIN is still required if a customer types in a table code manually instead of scanning.
+          Download and print for table stands.
         </p>
       </div>
 
       {!restaurant?.publicUrl && /localhost|127\.0\.0\.1/i.test(window.location.origin) && (
         <div className="rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          You're viewing this on <strong>{window.location.origin}</strong>, so QR codes generated now will encode
-          that address - a phone scanning them won't be able to reach it. Set a <strong>Public URL</strong> (your
-          LAN IP or real domain) in{" "}
+          You're viewing this on <strong>{window.location.origin}</strong>, so QR codes generated now will encode that
+          address - a phone scanning them won't be able to reach it. Set a <strong>Public URL</strong> (your LAN IP or
+          real domain) in{" "}
           <a href="/admin/settings" className="underline">
             Restaurant Settings
           </a>{" "}
@@ -198,7 +197,9 @@ export default function QrCodes() {
 
       <ErrorText>{error}</ErrorText>
 
-      {tables.length === 0 && !error && <p className="text-sm text-slate-400">No tables yet. Add one on the Tables page.</p>}
+      {tables.length === 0 && !error && (
+        <p className="text-sm text-slate-400">No tables yet. Add one on the Tables page.</p>
+      )}
 
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
         {tables.map((table) => {

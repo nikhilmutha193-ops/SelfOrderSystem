@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { api, extractErrorMessage } from "../../lib/apiClient";
+
 import { Badge, Button, Card, ErrorText, Input, Select, TableWrap } from "../../components/ui";
+import { api, extractErrorMessage } from "../../lib/apiClient";
 import type { Coupon, CouponType } from "../../lib/types";
 
 export default function Coupons() {
@@ -93,7 +94,8 @@ export default function Coupons() {
   function describe(coupon: Coupon) {
     const amount = coupon.type === "percent" ? `${coupon.value}% off` : `₹${coupon.value.toFixed(2)} off`;
     const parts = [amount];
-    if (coupon.type === "percent" && coupon.maxDiscountAmount) parts.push(`up to ₹${coupon.maxDiscountAmount.toFixed(2)}`);
+    if (coupon.type === "percent" && coupon.maxDiscountAmount)
+      parts.push(`up to ₹${coupon.maxDiscountAmount.toFixed(2)}`);
     if (coupon.minOrderValue > 0) parts.push(`min order ₹${coupon.minOrderValue.toFixed(2)}`);
     return parts.join(" · ");
   }
@@ -106,8 +108,8 @@ export default function Coupons() {
     <div className="flex flex-col gap-6">
       <h1 className="text-2xl font-bold text-slate-800">Discount Coupons</h1>
       <p className="text-sm text-slate-500">
-        Customers can apply a coupon code on their order/invoice screen; staff can also apply one from an order's
-        detail page at billing time.
+        Customers can apply a coupon code on their order/invoice screen; staff can also apply one from an order's detail
+        page at billing time.
       </p>
 
       <Card>
@@ -204,57 +206,55 @@ export default function Coupons() {
       <Card>
         <TableWrap>
           <table className="w-full min-w-[34rem] text-sm">
-          <thead>
-            <tr className="text-left text-slate-500">
-              <th className="pb-2">Code</th>
-              <th className="pb-2">Discount</th>
-              <th className="pb-2">Usage</th>
-              <th className="pb-2">Expires</th>
-              <th className="pb-2">Status</th>
-              <th className="pb-2"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {coupons.map((coupon) => (
-              <tr key={coupon._id} className="border-t border-slate-100">
-                <td className="py-1.5 font-semibold text-slate-800">{coupon.code}</td>
-                <td className="py-1.5">{describe(coupon)}</td>
-                <td className="py-1.5">
-                  {coupon.usedCount}
-                  {coupon.usageLimit ? ` / ${coupon.usageLimit}` : ""}
-                </td>
-                <td className="py-1.5">
-                  {coupon.expiresAt ? new Date(coupon.expiresAt).toLocaleDateString() : "-"}
-                </td>
-                <td className="py-1.5">
-                  <div className="flex flex-wrap gap-1.5">
-                    <Badge tone={coupon.isActive ? "green" : "gray"}>{coupon.isActive ? "Active" : "Inactive"}</Badge>
-                    {isExpired(coupon) && <Badge tone="red">Expired</Badge>}
-                  </div>
-                </td>
-                <td className="flex gap-2 py-1.5">
-                  <button className="text-orange-600 hover:underline" onClick={() => edit(coupon)}>
-                    Edit
-                  </button>
-                  <button className="text-slate-600 hover:underline" onClick={() => toggleActive(coupon)}>
-                    {coupon.isActive ? "Deactivate" : "Activate"}
-                  </button>
-                  <button className="text-red-600 hover:underline" onClick={() => remove(coupon)}>
-                    Delete
-                  </button>
-                </td>
+            <thead>
+              <tr className="text-left text-slate-500">
+                <th className="pb-2">Code</th>
+                <th className="pb-2">Discount</th>
+                <th className="pb-2">Usage</th>
+                <th className="pb-2">Expires</th>
+                <th className="pb-2">Status</th>
+                <th className="pb-2"></th>
               </tr>
-            ))}
-            {coupons.length === 0 && (
-              <tr>
-                <td colSpan={6} className="py-4 text-center text-slate-400">
-                  No coupons yet.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </TableWrap>
+            </thead>
+            <tbody>
+              {coupons.map((coupon) => (
+                <tr key={coupon._id} className="border-t border-slate-100">
+                  <td className="py-1.5 font-semibold text-slate-800">{coupon.code}</td>
+                  <td className="py-1.5">{describe(coupon)}</td>
+                  <td className="py-1.5">
+                    {coupon.usedCount}
+                    {coupon.usageLimit ? ` / ${coupon.usageLimit}` : ""}
+                  </td>
+                  <td className="py-1.5">{coupon.expiresAt ? new Date(coupon.expiresAt).toLocaleDateString() : "-"}</td>
+                  <td className="py-1.5">
+                    <div className="flex flex-wrap gap-1.5">
+                      <Badge tone={coupon.isActive ? "green" : "gray"}>{coupon.isActive ? "Active" : "Inactive"}</Badge>
+                      {isExpired(coupon) && <Badge tone="red">Expired</Badge>}
+                    </div>
+                  </td>
+                  <td className="flex gap-2 py-1.5">
+                    <button className="text-orange-600 hover:underline" onClick={() => edit(coupon)}>
+                      Edit
+                    </button>
+                    <button className="text-slate-600 hover:underline" onClick={() => toggleActive(coupon)}>
+                      {coupon.isActive ? "Deactivate" : "Activate"}
+                    </button>
+                    <button className="text-red-600 hover:underline" onClick={() => remove(coupon)}>
+                      Delete
+                    </button>
+                  </td>
+                </tr>
+              ))}
+              {coupons.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="py-4 text-center text-slate-400">
+                    No coupons yet.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </TableWrap>
       </Card>
     </div>
   );

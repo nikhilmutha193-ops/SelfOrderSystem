@@ -1,4 +1,4 @@
-import { Schema, model, Types } from "mongoose";
+import { model, Schema, Types } from "mongoose";
 
 export type BackupTrigger = "manual" | "scheduled";
 
@@ -6,7 +6,6 @@ export interface IBackupRecord {
   _id: Types.ObjectId;
   restaurantId: Types.ObjectId;
   filename: string;
-  /** Path on disk, relative to BACKUPS_DIR. */
   storedAs: string;
   sizeBytes: number;
   trigger: BackupTrigger;

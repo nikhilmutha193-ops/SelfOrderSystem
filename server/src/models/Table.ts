@@ -1,4 +1,4 @@
-import { Schema, model, Types } from "mongoose";
+import { model, Schema, Types } from "mongoose";
 
 export type TableStatus = "available" | "occupied";
 
@@ -9,13 +9,9 @@ export interface ITable {
   passwordHash: string;
   password: string;
   status: TableStatus;
-  /** Identifies the guest session currently seated here; cleared when the table is released. */
   sessionId?: string;
-  /** When the table became occupied; drives auto-release. Cleared when it is freed. */
   occupiedAt?: Date;
-  /** A walk-in/counter table: shared, never marked occupied, no PIN gate on seating. */
   isGuest: boolean;
-  /** Overrides the restaurant's auto-release window for this table. null follows the default. */
   autoReleaseMinutes?: number | null;
   createdAt: Date;
   updatedAt: Date;

@@ -1,7 +1,15 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { api, storeToken, setActiveAuth, extractErrorMessage, wasSessionExpired, clearExpiredFlag } from "../../lib/apiClient";
+
 import { Button, ErrorText, Input } from "../../components/ui";
+import {
+  api,
+  clearExpiredFlag,
+  extractErrorMessage,
+  setActiveAuth,
+  storeToken,
+  wasSessionExpired,
+} from "../../lib/apiClient";
 
 export default function AdminLogin() {
   const [searchParams] = useSearchParams();
@@ -18,9 +26,7 @@ export default function AdminLogin() {
     api
       .get<{ name?: string; logoUrl?: string }>("/restaurant/public")
       .then((res) => setBrand({ name: res.data.name || "", logoUrl: res.data.logoUrl || "" }))
-      .catch(() => {
-        /* keep defaults - the form still works without branding */
-      });
+      .catch(() => {});
   }, []);
 
   async function submit(e: React.FormEvent) {
@@ -43,7 +49,11 @@ export default function AdminLogin() {
     <div className="flex min-h-screen flex-col items-center justify-center gap-5 bg-gradient-to-b from-orange-50 via-white to-slate-50 px-4 py-10">
       <div className="flex flex-col items-center gap-2">
         {brand.logoUrl ? (
-          <img src={brand.logoUrl} alt="" className="h-16 w-16 rounded-full object-cover shadow-sm ring-1 ring-black/5" />
+          <img
+            src={brand.logoUrl}
+            alt=""
+            className="h-16 w-16 rounded-full object-cover shadow-sm ring-1 ring-black/5"
+          />
         ) : (
           <div className="flex h-16 w-16 items-center justify-center rounded-full bg-orange-100 text-3xl">☕</div>
         )}

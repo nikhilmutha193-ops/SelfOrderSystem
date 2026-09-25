@@ -1,23 +1,23 @@
 import { Model, Types } from "mongoose";
-import Restaurant from "../models/Restaurant";
+
+import { getR2 } from "../config/r2";
+import Award from "../models/Award";
 import BackupRecord, { BackupTrigger, IBackupRecord } from "../models/BackupRecord";
 import Category from "../models/Category";
-import Subcategory from "../models/Subcategory";
-import FoodItem from "../models/FoodItem";
-import TableModel from "../models/Table";
+import ChatMessage from "../models/ChatMessage";
 import Chef from "../models/Chef";
-import TeamMember from "../models/TeamMember";
-import Award from "../models/Award";
 import Coupon from "../models/Coupon";
-import Review from "../models/Review";
+import FoodItem from "../models/FoodItem";
 import Order from "../models/Order";
 import OrderItem from "../models/OrderItem";
-import ChatMessage from "../models/ChatMessage";
+import Restaurant from "../models/Restaurant";
+import Review from "../models/Review";
+import Subcategory from "../models/Subcategory";
+import TableModel from "../models/Table";
+import TeamMember from "../models/TeamMember";
 import { HttpError } from "./httpError";
 import { deleteObject, getObject, putObject } from "./objectStore";
-import { getR2 } from "../config/r2";
 
-/** How many generated backups (manual + scheduled combined) to keep on disk per restaurant. */
 const RETENTION_LIMIT = 30;
 
 const TENANT_MODELS: { key: string; model: Model<any> }[] = [
@@ -40,7 +40,12 @@ async function buildBackupPayload(restaurantId: Types.ObjectId | string) {
   if (!restaurant) throw new HttpError(404, "Restaurant not found");
 
   const backup: Record<string, unknown> = {
-    meta: { exportedAt: new Date().toISOString(), restaurantKey: restaurant.key, restaurantName: restaurant.name, version: 1 },
+    meta: {
+      exportedAt: new Date().toISOString(),
+      restaurantKey: restaurant.key,
+      restaurantName: restaurant.name,
+      version: 1,
+    },
     restaurant,
   };
   for (const { key, model } of TENANT_MODELS) {
@@ -49,12 +54,6 @@ async function buildBackupPayload(restaurantId: Types.ObjectId | string) {
   return { restaurant, backup };
 }
 
-/**
- * Whether generated backups can be persisted server-side. Saving needs a durable place
- * to write: a private R2 bucket, or a writable local disk. Serverless hosts (Vercel) have
- * a read-only filesystem, so with no private bucket the "save to server" list can't work
- * there - but a direct build-and-download still can, since it never touches storage.
- */
 export function isBackupStorageAvailable(): boolean {
   const r2 = getR2();
   if (r2?.privateBucket) return true;
@@ -62,8 +61,9 @@ export function isBackupStorageAvailable(): boolean {
   return process.env.VERCEL !== "1";
 }
 
-/** Builds the backup JSON in memory without persisting it - safe on read-only hosts. */
-export async function buildBackupJson(restaurantId: Types.ObjectId | string): Promise<{ filename: string; json: string }> {
+export async function buildBackupJson(
+  restaurantId: Types.ObjectId | string
+): Promise<{ filename: string; json: string }> {
   const { restaurant, backup } = await buildBackupPayload(restaurantId);
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
   return { filename: `backup-${restaurant.key}-${timestamp}.json`, json: JSON.stringify(backup, null, 2) };
@@ -102,15 +102,11 @@ export async function generateBackupFile(
   return { record, json };
 }
 
-export async function readBackupFile(
-  record: Pick<IBackupRecord, "restaurantId" | "storedAs">,
-): Promise<string> {
+export async function readBackupFile(record: Pick<IBackupRecord, "restaurantId" | "storedAs">): Promise<string> {
   return (await getObject("backups", record.storedAs)).toString("utf-8");
 }
 
-export async function deleteBackupFile(
-  record: Pick<IBackupRecord, "restaurantId" | "storedAs">,
-): Promise<void> {
+export async function deleteBackupFile(record: Pick<IBackupRecord, "restaurantId" | "storedAs">): Promise<void> {
   await deleteObject("backups", record.storedAs);
 }
 
@@ -122,7 +118,15 @@ export async function applyBackupPayload(restaurantId: Types.ObjectId | string, 
   if (!restaurant) throw new HttpError(404, "Restaurant not found");
 
   if (backup.restaurant && typeof backup.restaurant === "object") {
-    const { _id, key, restaurantId: _rid, createdAt, updatedAt, __v, ...fields } = backup.restaurant as Record<string, unknown>;
+    const {
+      _id,
+      key,
+      restaurantId: _rid,
+      createdAt,
+      updatedAt,
+      __v,
+      ...fields
+    } = backup.restaurant as Record<string, unknown>;
     Object.assign(restaurant, fields);
     await restaurant.save();
   }
@@ -135,11 +139,6 @@ export async function applyBackupPayload(restaurantId: Types.ObjectId | string, 
       continue;
     }
 
-    // Upserting by original _id isn't enough: fields like Table.code or Chef.username carry their
-    // own unique index per restaurantId, so an incoming doc can collide with a DIFFERENT existing
-    // doc (e.g. one this restaurant was freshly seeded with) that happens to share that value under
-    // a different _id. Wiping this restaurant's rows first makes restore a clean point-in-time
-    // replace instead, which also sidesteps the collision entirely.
     await model.deleteMany({ restaurantId });
 
     const ops = docs

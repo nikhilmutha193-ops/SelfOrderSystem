@@ -1,7 +1,3 @@
-/**
- * Vercel rejects request bodies over 4.5MB before they reach the API, so large
- * camera/AI-generated images have to be downscaled in the browser first.
- */
 const MAX_EDGE = 1920;
 const PASSTHROUGH_BYTES = 3.5 * 1024 * 1024;
 const QUALITY = 0.85;

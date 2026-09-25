@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { api, extractErrorMessage } from "../../lib/apiClient";
+
 import { Badge, Button, Card, ErrorText, Input, Select, TableWrap } from "../../components/ui";
+import { api, extractErrorMessage } from "../../lib/apiClient";
 import type { Category, Subcategory } from "../../lib/types";
 
 export default function Subcategories() {
@@ -107,35 +108,35 @@ export default function Subcategories() {
       <Card>
         <TableWrap>
           <table className="w-full min-w-[34rem] text-sm">
-          <thead>
-            <tr className="text-left text-slate-500">
-              <th className="pb-2">Category</th>
-              <th className="pb-2">Name</th>
-              <th className="pb-2">Status</th>
-              <th className="pb-2"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {subcategories.map((sub) => (
-              <tr key={sub._id} className="border-t border-slate-100">
-                <td className="py-1.5">{categoryName(sub.categoryId)}</td>
-                <td className="py-1.5">{sub.name}</td>
-                <td className="py-1.5">
-                  <Badge tone={sub.isActive ? "green" : "gray"}>{sub.isActive ? "Active" : "Inactive"}</Badge>
-                </td>
-                <td className="flex gap-2 py-1.5">
-                  <button className="text-orange-600 hover:underline" onClick={() => edit(sub)}>
-                    Edit
-                  </button>
-                  <button className="text-slate-600 hover:underline" onClick={() => toggleActive(sub)}>
-                    {sub.isActive ? "Deactivate" : "Activate"}
-                  </button>
-                </td>
+            <thead>
+              <tr className="text-left text-slate-500">
+                <th className="pb-2">Category</th>
+                <th className="pb-2">Name</th>
+                <th className="pb-2">Status</th>
+                <th className="pb-2"></th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </TableWrap>
+            </thead>
+            <tbody>
+              {subcategories.map((sub) => (
+                <tr key={sub._id} className="border-t border-slate-100">
+                  <td className="py-1.5">{categoryName(sub.categoryId)}</td>
+                  <td className="py-1.5">{sub.name}</td>
+                  <td className="py-1.5">
+                    <Badge tone={sub.isActive ? "green" : "gray"}>{sub.isActive ? "Active" : "Inactive"}</Badge>
+                  </td>
+                  <td className="flex gap-2 py-1.5">
+                    <button className="text-orange-600 hover:underline" onClick={() => edit(sub)}>
+                      Edit
+                    </button>
+                    <button className="text-slate-600 hover:underline" onClick={() => toggleActive(sub)}>
+                      {sub.isActive ? "Deactivate" : "Activate"}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </TableWrap>
       </Card>
     </div>
   );

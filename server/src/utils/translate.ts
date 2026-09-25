@@ -1,20 +1,13 @@
 import { describeError, logger } from "./logger";
 
-/**
- * Translates English text into a target language.
- *
- * Provider is pluggable via env so a restaurant can point at its own service:
- *  - TRANSLATE_URL (+ optional TRANSLATE_API_KEY) uses a LibreTranslate-compatible endpoint.
- *  - Otherwise it falls back to MyMemory's free, key-less API (fine for one-off menu setup).
- * On any failure it returns the original text, so the admin can still edit by hand.
- */
+export type TargetLang = (typeof SUPPORTED_LANGS)[number];
+
 const LT_URL = process.env.TRANSLATE_URL;
+
 const LT_KEY = process.env.TRANSLATE_API_KEY;
 
 export const SUPPORTED_LANGS = ["kn", "hi"] as const;
-export type TargetLang = (typeof SUPPORTED_LANGS)[number];
 
-/** One MyMemory lookup. Returns null on any failure or a warning/quota message. */
 async function myMemory(text: string, to: TargetLang): Promise<string | null> {
   const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=en|${to}`;
   const res = await fetch(url, { signal: AbortSignal.timeout(9000) });
@@ -38,15 +31,19 @@ export async function translateText(text: string, to: TargetLang): Promise<strin
       const res = await fetch(LT_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ q: trimmed, source: "en", target: to, format: "text", ...(LT_KEY ? { api_key: LT_KEY } : {}) }),
+        body: JSON.stringify({
+          q: trimmed,
+          source: "en",
+          target: to,
+          format: "text",
+          ...(LT_KEY ? { api_key: LT_KEY } : {}),
+        }),
         signal: AbortSignal.timeout(9000),
       });
       const data = (await res.json()) as { translatedText?: string };
       return data.translatedText || trimmed;
     }
 
-    // Whole-phrase first; MyMemory occasionally returns the source unchanged for a
-    // short phrase even when it can translate each word (e.g. "Tomato Soup" -> hi).
     const whole = await myMemory(trimmed, to);
     if (whole && changed(whole, trimmed)) return whole;
 

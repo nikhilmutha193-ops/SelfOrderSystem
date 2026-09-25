@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { BestsellerTag, FoodTypeIcon, RatingChip } from "./FoodBadges";
+
 import { tr, type Lang } from "../lib/i18n";
 import type { MenuFoodItem, SelectedModifier } from "../lib/types";
+import { BestsellerTag, FoodTypeIcon, RatingChip } from "./FoodBadges";
 
 export interface DishAddPayload {
   quantity: number;
@@ -9,7 +10,6 @@ export interface DishAddPayload {
   modifiers: SelectedModifier[];
 }
 
-/** Full dish view with customization: pick sizes/add-ons, add a note, choose quantity. */
 export default function DishDialog({
   food,
   lang = "en",

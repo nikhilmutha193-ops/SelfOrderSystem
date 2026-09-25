@@ -1,4 +1,5 @@
-import { Schema, model, Types } from "mongoose";
+import { model, Schema, Types } from "mongoose";
+
 import { PermissionLevel } from "../utils/permissions";
 
 export interface IAdmin {
@@ -8,9 +9,7 @@ export interface IAdmin {
   passwordHash: string;
   securityQuestion: string;
   securityAnswerHash: string;
-  /** The restaurant's original account: always has every module and can't be locked out. */
   isOwner: boolean;
-  /** Module key -> level. A missing key means no access to that module. */
   permissions: Map<string, PermissionLevel>;
   createdAt: Date;
   updatedAt: Date;

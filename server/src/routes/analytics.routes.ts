@@ -1,5 +1,6 @@
 import { Router } from "express";
-import { getSalesAnalytics, getPrepAnalytics, getAuditLog } from "../controllers/analytics.controller";
+
+import { getAuditLog, getPrepAnalytics, getSalesAnalytics } from "../controllers/analytics.controller";
 import { requireAuth, requireModule } from "../middleware/auth";
 
 const router = Router();

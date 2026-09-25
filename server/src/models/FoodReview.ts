@@ -1,4 +1,4 @@
-import { Schema, model, Types } from "mongoose";
+import { model, Schema, Types } from "mongoose";
 
 export interface IFoodReview {
   _id: Types.ObjectId;
@@ -23,6 +23,9 @@ const foodReviewSchema = new Schema<IFoodReview>(
 );
 
 // One rating per dish per order, so a guest can't inflate a dish's score by tapping repeatedly.
-foodReviewSchema.index({ orderId: 1, foodItemId: 1 }, { unique: true, partialFilterExpression: { orderId: { $exists: true } } });
+foodReviewSchema.index(
+  { orderId: 1, foodItemId: 1 },
+  { unique: true, partialFilterExpression: { orderId: { $exists: true } } }
+);
 
 export default model<IFoodReview>("FoodReview", foodReviewSchema);

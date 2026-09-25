@@ -1,4 +1,3 @@
-/** Full-area loading state - used as the Suspense fallback while a page's code or data loads. */
 export default function PageLoader({ label = "Loading..." }: { label?: string }) {
   return (
     <div

@@ -1,16 +1,17 @@
 import axios from "axios";
-import type { Role } from "./types";
+
 import { compressImage } from "./imageCompress";
 import { log } from "./logger";
-
-// Falls back to a same-origin path so the Vite dev proxy and the nginx container
-// keep working; deployments set VITE_API_BASE_URL to the backend's absolute URL.
-export const api = axios.create({ baseURL: import.meta.env.VITE_API_BASE_URL || "/api" });
+import type { Role } from "./types";
 
 interface ActiveAuth {
   role: Role;
   token: string;
 }
+
+export type UploadFolder = "banner" | "logo" | "product" | "team" | "awards";
+
+export const api = axios.create({ baseURL: import.meta.env.VITE_API_BASE_URL || "/api" });
 
 let activeAuth: ActiveAuth | null = null;
 
@@ -32,23 +33,10 @@ const LOGIN_PATH: Record<Role, string> = {
   table: "/order",
 };
 
-/** Logging in is allowed to 401 - that's a wrong password, not an expired session. */
 const LOGIN_ENDPOINTS = ["/auth/admin/login", "/auth/chef/login", "/auth/table/login"];
 
-/**
- * A 401 here is an expected, harmless outcome - not a real auth problem - the moment this
- * table session has already been ended (e.g. a double-tap on "Change"/"Back" sends this
- * twice; the first call already released the session, so the second correctly 401s). Forcing
- * a full "your session expired" logout over that would be a false alarm for something that
- * already succeeded.
- */
 const SELF_RELEASE_ENDPOINT = "/tables/session/release";
 
-/**
- * A token that has expired is still *present*, so route guards happily render the
- * page and every request then fails. Drop the dead session and send the user back
- * to the right login instead of leaving them on a broken screen.
- */
 function handleExpiredSession(role: Role) {
   clearStoredToken(role);
   setActiveAuth(null);
@@ -105,11 +93,6 @@ export function clearStoredToken(role: Role) {
 
 const EXPIRED_KEY = (role: Role) => `selforder_expired_${role}`;
 
-/**
- * Recorded rather than returned, because clearing the token is what proves it
- * expired - and a second read (React StrictMode re-runs effects) would find the
- * token already gone and wrongly conclude the session was simply absent.
- */
 function markExpired(role: Role) {
   try {
     sessionStorage.setItem(EXPIRED_KEY(role), "1");
@@ -134,7 +117,6 @@ export function clearExpiredFlag(role: Role) {
   }
 }
 
-/** True only when the token carries an `exp` that has already passed. */
 export function isTokenExpired(token: string): boolean {
   const payload = decodeToken<{ exp?: number }>(token);
   if (!payload?.exp) return false; // no exp claim - let the server decide
@@ -162,10 +144,7 @@ export function decodeToken<T = Record<string, unknown>>(token: string): T | nul
   }
 }
 
-/** Vercel rejects request bodies above 4.5MB before they reach the API. */
 const MAX_UPLOAD_BYTES = 4 * 1024 * 1024;
-
-export type UploadFolder = "banner" | "logo" | "product" | "team" | "awards";
 
 export async function uploadImage(file: File, folder: UploadFolder): Promise<string> {
   const compressed = await compressImage(file);

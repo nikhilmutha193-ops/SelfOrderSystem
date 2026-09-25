@@ -1,14 +1,23 @@
 import { useEffect, useRef, useState } from "react";
-import { api, extractErrorMessage } from "../lib/apiClient";
-import { useTableSession } from "../lib/useTableSession";
-import { QUICK_REQUESTS } from "../lib/quickRequests";
-import { Button, ErrorText, Input } from "./ui";
-import type { ChatMessage } from "../lib/types";
 
-/** Support-agent avatar glyph, so the button reads as "talk to someone" at a glance. */
+import { api, extractErrorMessage } from "../lib/apiClient";
+import { QUICK_REQUESTS } from "../lib/quickRequests";
+import type { ChatMessage } from "../lib/types";
+import { useTableSession } from "../lib/useTableSession";
+import { Button, ErrorText, Input } from "./ui";
+
 function SupportIcon({ className }: { className?: string }) {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden>
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden
+    >
       <circle cx="12" cy="7" r="4" />
       <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
     </svg>
@@ -77,7 +86,6 @@ export default function ChatFab() {
     setSending(false);
   }
 
-  /** One-tap preset request from the "Quick assist" row, sent through the same chat thread. */
   async function sendQuick(req: (typeof QUICK_REQUESTS)[number]) {
     if (quickSending) return;
     setQuickSending(req.label);
@@ -103,7 +111,10 @@ export default function ChatFab() {
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-30 flex items-end justify-center bg-black/40 p-4 sm:items-center" onClick={() => setOpen(false)}>
+        <div
+          className="fixed inset-0 z-30 flex items-end justify-center bg-black/40 p-4 sm:items-center"
+          onClick={() => setOpen(false)}
+        >
           <div
             className="flex w-full max-w-md flex-col rounded-lg bg-white p-4 shadow-xl"
             onClick={(e) => e.stopPropagation()}
@@ -112,7 +123,12 @@ export default function ChatFab() {
               <h2 className="flex items-center gap-1.5 text-sm font-semibold text-slate-800">
                 <SupportIcon className="h-4 w-4 text-slate-500" /> Chat &amp; assist
               </h2>
-              <button type="button" className="text-slate-400 hover:text-slate-600" onClick={() => setOpen(false)} aria-label="Close">
+              <button
+                type="button"
+                className="text-slate-400 hover:text-slate-600"
+                onClick={() => setOpen(false)}
+                aria-label="Close"
+              >
                 ✕
               </button>
             </div>
@@ -151,7 +167,9 @@ export default function ChatFab() {
                   }`}
                 >
                   <p>{msg.message}</p>
-                  <p className={`mt-1 text-[10px] ${msg.senderRole === "table" ? "text-orange-100" : "text-slate-400"}`}>
+                  <p
+                    className={`mt-1 text-[10px] ${msg.senderRole === "table" ? "text-orange-100" : "text-slate-400"}`}
+                  >
                     {new Date(msg.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                   </p>
                 </div>

@@ -1,12 +1,9 @@
 import { Request } from "express";
-import AuditLog from "../models/AuditLog";
+
 import Admin from "../models/Admin";
+import AuditLog from "../models/AuditLog";
 import { describeError, logger } from "./logger";
 
-/**
- * Records a staff action for the audit trail. Best-effort: a logging failure must never
- * block the action it describes, so errors are swallowed and logged.
- */
 export async function writeAudit(req: Request, action: string, summary: string): Promise<void> {
   try {
     let actorName = "system";

@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
-import { activateStoredAuth, clearStoredToken, setActiveAuth } from "../../lib/apiClient";
-import { Button } from "../../components/ui";
-import NotificationCenter from "../../components/NotificationCenter";
-import ActiveOrders from "../../components/ActiveOrders";
-import { AdminProfileProvider, can, useAdmin, type ModuleKey } from "../../lib/adminAuth";
 
-/** `module: null` means always visible (self-service). */
+import ActiveOrders from "../../components/ActiveOrders";
+import NotificationCenter from "../../components/NotificationCenter";
+import { Button } from "../../components/ui";
+import { AdminProfileProvider, can, useAdmin, type ModuleKey } from "../../lib/adminAuth";
+import { activateStoredAuth, clearStoredToken, setActiveAuth } from "../../lib/apiClient";
+
 type NavLinkItem = { to: string; label: string; module: ModuleKey | null };
 const links: NavLinkItem[] = [
   { to: "/admin/dashboard", label: "Dashboard", module: "dashboard" },
@@ -71,7 +71,6 @@ function saveOrder(order: string[]) {
   }
 }
 
-/** Sorts the links by the saved order; anything not in the saved list keeps its default place at the end. */
 function applyOrder(list: NavLinkItem[], order: string[]): NavLinkItem[] {
   const rank = new Map(order.map((id, i) => [id, i]));
   return list
@@ -93,8 +92,20 @@ function ArrowButton({ dir, disabled, onClick }: { dir: "up" | "down"; disabled:
       onClick={onClick}
       className="flex h-7 w-7 items-center justify-center rounded-md text-slate-500 hover:bg-slate-200 disabled:opacity-30"
     >
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
-        {dir === "up" ? <path d="M6 15l6-6 6 6" strokeLinecap="round" strokeLinejoin="round" /> : <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />}
+      <svg
+        width="14"
+        height="14"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        aria-hidden="true"
+      >
+        {dir === "up" ? (
+          <path d="M6 15l6-6 6 6" strokeLinecap="round" strokeLinejoin="round" />
+        ) : (
+          <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+        )}
       </svg>
     </button>
   );
@@ -160,7 +171,15 @@ function SidebarContent({
               title="Hide menu"
               className="flex h-8 w-8 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100"
             >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                aria-hidden="true"
+              >
                 <path d="M15 6l-6 6 6 6" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </button>
@@ -277,7 +296,15 @@ export default function AdminLayout() {
               onClick={() => setMenuOpen(true)}
               className="inline-flex h-11 w-11 items-center justify-center rounded-md text-slate-600 hover:bg-slate-100 lg:hidden"
             >
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              <svg
+                width="22"
+                height="22"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                aria-hidden="true"
+              >
                 <path d="M3 6h18M3 12h18M3 18h18" strokeLinecap="round" />
               </svg>
             </button>
@@ -289,7 +316,15 @@ export default function AdminLayout() {
                 onClick={() => toggleCollapsed(false)}
                 className="hidden h-11 w-11 items-center justify-center rounded-md text-slate-600 hover:bg-slate-100 lg:inline-flex"
               >
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                <svg
+                  width="22"
+                  height="22"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  aria-hidden="true"
+                >
                   <path d="M3 6h18M3 12h18M3 18h18" strokeLinecap="round" />
                 </svg>
               </button>

@@ -1,12 +1,7 @@
-import { Schema, model, Types } from "mongoose";
+import { model, Schema, Types } from "mongoose";
 
-/** "delivery" is retained for orders placed before take-away replaced it. */
 export type OrderType = "dine-in" | "takeaway" | "delivery";
 export type OrderStatus = "open" | "closed" | "cancelled";
-/**
- * Who raised the order. Counter orders are staff-owned and are never auto-cancelled.
- * "swiggy"/"zomato" are pulled in from the delivery aggregators (webhook or manual entry).
- */
 export type OrderSource = "guest" | "counter" | "swiggy" | "zomato";
 export type PaymentMethod = "pending" | "cash" | "online" | "card";
 export type DeliveryProvider = "Swiggy" | "Zomato" | "Uber-Eats" | "Other";
@@ -18,19 +13,16 @@ export interface IOrder {
   tableId?: Types.ObjectId;
   deliveryProvider?: DeliveryProvider;
   customerName: string;
-  /** Optional - guests can skip it. */
   customerPhone?: string;
   members: number;
   checkinTime: Date;
   checkoutTime?: Date;
   status: OrderStatus;
   source: OrderSource;
-  /** The aggregator's own order id (e.g. Swiggy/Zomato reference), for dedupe and display. */
   externalOrderId?: string;
   paymentMethod: PaymentMethod;
   couponCode?: string;
   discountAmount: number;
-  /** When the kitchen should have everything ready. Pushed later as rounds are added. */
   estimatedReadyAt?: Date;
   createdAt: Date;
   updatedAt: Date;

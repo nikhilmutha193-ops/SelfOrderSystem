@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { api, extractErrorMessage } from "../../lib/apiClient";
+
 import { Button, Card, ErrorText, Input, TableWrap } from "../../components/ui";
+import { api, extractErrorMessage } from "../../lib/apiClient";
 import type { ChefRow } from "../../lib/types";
 
 export default function Chefs() {
@@ -83,7 +84,13 @@ export default function Chefs() {
           </label>
           <label className="text-sm font-medium text-slate-700">
             Password
-            <Input className="mt-1" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={4} />
+            <Input
+              className="mt-1"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              minLength={4}
+            />
           </label>
           <Button type="submit">Add chef</Button>
         </form>
@@ -94,52 +101,52 @@ export default function Chefs() {
       <Card>
         <TableWrap>
           <table className="w-full min-w-[34rem] text-sm">
-          <thead>
-            <tr className="text-left text-slate-500">
-              <th className="pb-2">Username</th>
-              <th className="pb-2">Password</th>
-              <th className="pb-2"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {chefs.map((chef) => (
-              <tr key={chef._id} className="border-t border-slate-100">
-                <td className="py-1.5">{chef.username}</td>
-                <td className="py-1.5 font-mono">{chef.password || "-"}</td>
-                <td className="py-1.5">
-                  {resettingId === chef._id ? (
-                    <div className="flex items-center gap-2">
-                      <Input
-                        className="w-36"
-                        placeholder="New password"
-                        value={newPassword}
-                        onChange={(e) => setNewPassword(e.target.value)}
-                        autoFocus
-                      />
-                      <Button type="button" onClick={() => submitReset(chef._id)} disabled={!newPassword}>
-                        Save
-                      </Button>
-                      <button className="text-slate-600 hover:underline" onClick={cancelReset}>
-                        Cancel
-                      </button>
-                      {resetError && <span className="text-xs text-red-600">{resetError}</span>}
-                    </div>
-                  ) : (
-                    <div className="flex gap-3">
-                      <button className="text-orange-600 hover:underline" onClick={() => startReset(chef)}>
-                        Reset password
-                      </button>
-                      <button className="text-red-600 hover:underline" onClick={() => remove(chef)}>
-                        Remove
-                      </button>
-                    </div>
-                  )}
-                </td>
+            <thead>
+              <tr className="text-left text-slate-500">
+                <th className="pb-2">Username</th>
+                <th className="pb-2">Password</th>
+                <th className="pb-2"></th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </TableWrap>
+            </thead>
+            <tbody>
+              {chefs.map((chef) => (
+                <tr key={chef._id} className="border-t border-slate-100">
+                  <td className="py-1.5">{chef.username}</td>
+                  <td className="py-1.5 font-mono">{chef.password || "-"}</td>
+                  <td className="py-1.5">
+                    {resettingId === chef._id ? (
+                      <div className="flex items-center gap-2">
+                        <Input
+                          className="w-36"
+                          placeholder="New password"
+                          value={newPassword}
+                          onChange={(e) => setNewPassword(e.target.value)}
+                          autoFocus
+                        />
+                        <Button type="button" onClick={() => submitReset(chef._id)} disabled={!newPassword}>
+                          Save
+                        </Button>
+                        <button className="text-slate-600 hover:underline" onClick={cancelReset}>
+                          Cancel
+                        </button>
+                        {resetError && <span className="text-xs text-red-600">{resetError}</span>}
+                      </div>
+                    ) : (
+                      <div className="flex gap-3">
+                        <button className="text-orange-600 hover:underline" onClick={() => startReset(chef)}>
+                          Reset password
+                        </button>
+                        <button className="text-red-600 hover:underline" onClick={() => remove(chef)}>
+                          Remove
+                        </button>
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </TableWrap>
       </Card>
     </div>
   );

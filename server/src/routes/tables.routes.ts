@@ -1,12 +1,13 @@
 import { Router } from "express";
+
 import {
-  listTables,
-  listAvailableTables,
   createTable,
-  updateTable,
-  releaseTable,
-  releaseOwnTableSession,
   deleteTable,
+  listAvailableTables,
+  listTables,
+  releaseOwnTableSession,
+  releaseTable,
+  updateTable,
 } from "../controllers/tables.controller";
 import { requireAuth, requireModule } from "../middleware/auth";
 

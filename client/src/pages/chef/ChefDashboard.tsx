@@ -1,8 +1,9 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { activateStoredAuth, clearStoredToken, setActiveAuth } from "../../lib/apiClient";
-import { Button } from "../../components/ui";
+
 import KotQueueView from "../../components/KotQueueView";
+import { Button } from "../../components/ui";
+import { activateStoredAuth, clearStoredToken, setActiveAuth } from "../../lib/apiClient";
 
 export default function ChefDashboard() {
   const navigate = useNavigate();

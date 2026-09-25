@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { api, storeToken, clearStoredToken, setActiveAuth, extractErrorMessage } from "../../lib/apiClient";
+
+import { api, clearStoredToken, extractErrorMessage, setActiveAuth, storeToken } from "../../lib/apiClient";
 import { useTableSession } from "../../lib/useTableSession";
+
 import "../../styles/order.css";
 
 export default function CustomerDetails() {
@@ -11,10 +13,6 @@ export default function CustomerDetails() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [leaving, setLeaving] = useState(false);
-  // A ref, not just the state above: state updates apply on the next render, so two
-  // invocations dispatched in the same tick (a genuine double-tap can be that fast) could
-  // both still read the old "leaving" value before either re-render lands. The ref is
-  // mutated immediately, so the second invocation always sees it synchronously.
   const leavingRef = useRef(false);
   const navigate = useNavigate();
   const session = useTableSession();
@@ -26,40 +24,24 @@ export default function CustomerDetails() {
     }
   })();
 
-  // Once an order has started the guest belongs on the menu - block coming back here.
-  // And a guest who somehow lands here without a table session is sent to sign in.
   useEffect(() => {
     if (session.orderId) navigate("/order/menu", { replace: true });
     else if (!session.tableId) navigate("/order", { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Table login (see TableLogin.tsx) auto-redirects straight back here whenever a valid
-  // table token is still stored - so simply navigating to "/order" while that token remains
-  // just bounces the guest right back. Going back to table login has to actually end this
-  // table session first, or "Change"/"Back" silently do nothing.
   async function backToTableLogin() {
-    // A double-tap (or the button and the physical browser back-button firing close
-    // together) would otherwise send this release call twice - harmless server-side, but
-    // guard it client-side too so it's never even attempted a second time.
     if (leavingRef.current) return;
     leavingRef.current = true;
     setLeaving(true);
     try {
-      // Best-effort: also free the table server-side so it doesn't stay falsely "occupied"
-      // for other guests. Still navigate away even if this fails (e.g. offline) - the
-      // client-side sign-out below is what actually unblocks the Change/Back buttons.
       await api.patch("/tables/session/release");
-    } catch {
-      /* non-critical - the table auto-releases later if this doesn't go through */
-    }
+    } catch {}
     clearStoredToken("table");
     setActiveAuth(null);
     try {
       localStorage.removeItem("selforder_table_code");
-    } catch {
-      /* ignore - the code just won't be prefilled next time */
-    }
+    } catch {}
     navigate("/order", { replace: true });
   }
 
@@ -92,11 +74,15 @@ export default function CustomerDetails() {
             <form className="order-form" onSubmit={submit} noValidate>
               <ol className="stepper" aria-label="Progress">
                 <li className="stepper__step stepper__step--done">
-                  <span className="stepper__num" aria-hidden>1</span>
+                  <span className="stepper__num" aria-hidden>
+                    1
+                  </span>
                   <span className="stepper__label">Your table</span>
                 </li>
                 <li className="stepper__step stepper__step--active" aria-current="step">
-                  <span className="stepper__num" aria-hidden>2</span>
+                  <span className="stepper__num" aria-hidden>
+                    2
+                  </span>
                   <span className="stepper__label">Your visit</span>
                 </li>
               </ol>
@@ -137,7 +123,9 @@ export default function CustomerDetails() {
                   Phone number <span className="field__optional">(optional)</span>
                 </label>
                 <div className="field__phone">
-                  <span className="field__prefix" aria-hidden>+91</span>
+                  <span className="field__prefix" aria-hidden>
+                    +91
+                  </span>
                   <input
                     className="field__input field__input--phone"
                     id="phone"
@@ -194,7 +182,15 @@ export default function CustomerDetails() {
                 {loading ? "Starting order…" : "Continue to menu"}
               </button>
               <button className="step__back" type="button" onClick={backToTableLogin} disabled={leaving}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
                   <path d="M19 12H5" />
                   <path d="M12 19l-7-7 7-7" />
                 </svg>

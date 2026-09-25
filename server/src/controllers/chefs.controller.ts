@@ -1,7 +1,8 @@
 import { Request, Response } from "express";
 import { Types } from "mongoose";
-import Chef from "../models/Chef";
+
 import { asyncHandler } from "../middleware/errorHandler";
+import Chef from "../models/Chef";
 import { HttpError } from "../utils/httpError";
 import { hashPassword } from "../utils/password";
 

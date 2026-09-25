@@ -1,7 +1,8 @@
-import { Request, Response, NextFunction } from "express";
+import { NextFunction, Request, Response } from "express";
+
 import Admin, { IAdmin } from "../models/Admin";
 import TableModel from "../models/Table";
-import { verifyToken, AuthTokenPayload, Role } from "../utils/jwt";
+import { AuthTokenPayload, Role, verifyToken } from "../utils/jwt";
 import { ModuleKey } from "../utils/permissions";
 
 declare global {
@@ -28,15 +29,11 @@ export function requireAuth(...roles: Role[]) {
         return res.status(403).json({ message: "Insufficient permissions" });
       }
 
-      // A table token stays cryptographically valid after staff release the table,
-      // so check the seating is still the one the token was issued for.
       if (payload.role === "table" && payload.tableId) {
         const table = await TableModel.findById(payload.tableId).select("sessionId isGuest");
         if (!table) {
           return res.status(401).json({ message: "This table session has ended" });
         }
-        // Guest tables host several walk-ins at once, so there is no single seating
-        // to match against; their sessions end with the token or the order.
         if (!table.isGuest && (!table.sessionId || table.sessionId !== payload.sessionId)) {
           return res.status(401).json({ message: "This table session has ended" });
         }
@@ -52,11 +49,6 @@ export function requireAuth(...roles: Role[]) {
 
 const READ_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
-/**
- * Gates a route on one admin module. Permissions are read from the database per
- * request rather than the token, so revoking access takes effect immediately.
- * Non-admin roles pass through - requireAuth already scoped them.
- */
 export function requireModule(module: ModuleKey) {
   return async (req: Request, res: Response, next: NextFunction) => {
     if (req.auth?.role !== "admin") return next();

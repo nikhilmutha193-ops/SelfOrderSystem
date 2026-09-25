@@ -1,11 +1,12 @@
 import { Router } from "express";
+
 import {
+  createAdmin,
+  deleteAdmin,
   listAdmins,
   listModules,
-  createAdmin,
-  updateAdminPermissions,
   resetAdminPassword,
-  deleteAdmin,
+  updateAdminPermissions,
 } from "../controllers/admins.controller";
 import { requireAuth, requireModule } from "../middleware/auth";
 

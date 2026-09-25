@@ -5,17 +5,6 @@ import { cancelUnsentOrdersForTables } from "./tableRelease";
 
 const CHECK_INTERVAL_MS = 60 * 1000;
 
-/**
- * Releases tables that have sat occupied longer than their limit, so an abandoned
- * table doesn't stay blocked (and the guest's stale session token doesn't stay
- * usable) until staff notice. Orders that never reached the kitchen are cancelled
- * along with the seating.
- *
- * A table's own `autoReleaseMinutes` wins over the restaurant's default, which is
- * why every occupied table is examined rather than only those under a restaurant
- * with the feature switched on: an override can enable it for one table alone.
- * An effective value of 0 means "never expire".
- */
 async function releaseExpiredTables(): Promise<void> {
   const occupied = await TableModel.find({ isGuest: false, status: "occupied", occupiedAt: { $ne: null } }).select(
     "restaurantId occupiedAt autoReleaseMinutes"
@@ -39,8 +28,6 @@ async function releaseExpiredTables(): Promise<void> {
       if (expiredIds.length === 0) continue;
       await TableModel.updateMany(
         { _id: { $in: expiredIds } },
-        // Clearing sessionId invalidates the guest's token immediately (same
-        // check requireAuth already does for a manual release).
         { $set: { status: "available" }, $unset: { sessionId: "", occupiedAt: "" } }
       );
       const cancelledOrders = await cancelUnsentOrdersForTables(expiredIds);
@@ -59,7 +46,6 @@ async function releaseExpiredTables(): Promise<void> {
   }
 }
 
-/** Polls every minute for tables that have outstayed their restaurant's auto-release limit. */
 export function initTableReleaseScheduler(): void {
   setInterval(() => {
     releaseExpiredTables().catch((err) => logger.error("table-release-scheduler: tick failed", describeError(err)));

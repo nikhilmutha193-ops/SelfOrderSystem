@@ -1,14 +1,11 @@
-import { Schema, model, Types } from "mongoose";
+import { model, Schema, Types } from "mongoose";
 
 export interface IAuditLog {
   _id: Types.ObjectId;
   restaurantId: Types.ObjectId;
-  /** Admin username (or "system") who performed the action. */
   actorName: string;
   actorId?: Types.ObjectId;
-  /** Machine action key, e.g. "order.cancel", "order.clear", "order.pay". */
   action: string;
-  /** Human-readable summary shown in the log. */
   summary: string;
   createdAt: Date;
   updatedAt: Date;

@@ -1,14 +1,13 @@
 import { lazy, Suspense } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
-import ProtectedRoute from "./components/ProtectedRoute";
+
 import ErrorBoundary from "./components/ErrorBoundary";
 import PageLoader from "./components/PageLoader";
+import ProtectedRoute from "./components/ProtectedRoute";
 import RouteProgress from "./components/RouteProgress";
-import { useSiteBranding } from "./lib/useSiteBranding";
 import { AdminHomeRedirect, RequireModule } from "./lib/adminAuth";
+import { useSiteBranding } from "./lib/useSiteBranding";
 
-// Routes are code-split: each page's JS loads on first visit, shrinking the initial
-// bundle and letting the Suspense fallback below act as a real page loader.
 const Landing = lazy(() => import("./pages/Landing"));
 const TableLogin = lazy(() => import("./pages/customer/TableLogin"));
 const CustomerDetails = lazy(() => import("./pages/customer/CustomerDetails"));
@@ -52,86 +51,240 @@ export default function App() {
   return (
     <ErrorBoundary>
       <BrowserRouter>
-      <RouteProgress />
-      <Suspense fallback={<PageLoader />}>
-      <Routes>
-        <Route path="/" element={<Landing />} />
-        <Route path="/order" element={<TableLogin />} />
-        <Route
-          path="/order/details"
-          element={
-            <ProtectedRoute role="table" redirectTo="/order">
-              <CustomerDetails />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/order/menu"
-          element={
-            <ProtectedRoute role="table" redirectTo="/order">
-              <Menu />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/order/invoice"
-          element={
-            <ProtectedRoute role="table" redirectTo="/order">
-              <CustomerInvoice />
-            </ProtectedRoute>
-          }
-        />
+        <RouteProgress />
+        <Suspense fallback={<PageLoader />}>
+          <Routes>
+            <Route path="/" element={<Landing />} />
+            <Route path="/order" element={<TableLogin />} />
+            <Route
+              path="/order/details"
+              element={
+                <ProtectedRoute role="table" redirectTo="/order">
+                  <CustomerDetails />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/order/menu"
+              element={
+                <ProtectedRoute role="table" redirectTo="/order">
+                  <Menu />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/order/invoice"
+              element={
+                <ProtectedRoute role="table" redirectTo="/order">
+                  <CustomerInvoice />
+                </ProtectedRoute>
+              }
+            />
 
-        <Route path="/admin/login" element={<AdminLogin />} />
-        <Route path="/admin/forgot-password" element={<ForgotPassword />} />
-        <Route
-          path="/admin"
-          element={
-            <ProtectedRoute role="admin" redirectTo="/admin/login">
-              <AdminLayout />
-            </ProtectedRoute>
-          }
-        >
-          <Route index element={<AdminHomeRedirect />} />
-          <Route path="dashboard" element={<RequireModule module="dashboard"><Dashboard /></RequireModule>} />
-          <Route path="categories" element={<RequireModule module="categories"><Categories /></RequireModule>} />
-          <Route path="subcategories" element={<RequireModule module="subcategories"><Subcategories /></RequireModule>} />
-          <Route path="food-items" element={<RequireModule module="foodItems"><FoodItems /></RequireModule>} />
-          <Route path="tables" element={<RequireModule module="tables"><Tables /></RequireModule>} />
-          <Route path="qr-codes" element={<RequireModule module="tables"><QrCodes /></RequireModule>} />
-          <Route path="kot" element={<RequireModule module="kot"><AdminKot /></RequireModule>} />
-          <Route path="messages" element={<RequireModule module="messages"><Messages /></RequireModule>} />
-          <Route path="chefs" element={<RequireModule module="chefs"><Chefs /></RequireModule>} />
-          <Route path="orders" element={<RequireModule module="orders"><Orders /></RequireModule>} />
-          <Route path="orders/:orderId" element={<RequireModule module="orders"><OrderDetail /></RequireModule>} />
-          <Route path="delivery/new" element={<RequireModule module="orders"><NewDeliveryOrder /></RequireModule>} />
-          <Route path="team" element={<RequireModule module="team"><Team /></RequireModule>} />
-          <Route path="awards" element={<RequireModule module="awards"><Awards /></RequireModule>} />
-          <Route path="coupons" element={<RequireModule module="coupons"><Coupons /></RequireModule>} />
-          <Route path="reviews" element={<RequireModule module="reviews"><Reviews /></RequireModule>} />
-          <Route path="settings" element={<RequireModule module="settings"><RestaurantSettings /></RequireModule>} />
-          <Route path="backup" element={<RequireModule module="backup"><Backup /></RequireModule>} />
-          <Route path="landing" element={<RequireModule module="landing"><LandingPageEditor /></RequireModule>} />
-          <Route path="admins" element={<RequireModule module="admins"><Admins /></RequireModule>} />
-          <Route path="analytics" element={<RequireModule module="analytics"><Analytics /></RequireModule>} />
-          <Route path="audit" element={<RequireModule module="audit"><AuditLog /></RequireModule>} />
-          <Route path="change-password" element={<ChangePassword />} />
-          <Route path="no-access" element={<NoAccess />} />
-        </Route>
+            <Route path="/admin/login" element={<AdminLogin />} />
+            <Route path="/admin/forgot-password" element={<ForgotPassword />} />
+            <Route
+              path="/admin"
+              element={
+                <ProtectedRoute role="admin" redirectTo="/admin/login">
+                  <AdminLayout />
+                </ProtectedRoute>
+              }
+            >
+              <Route index element={<AdminHomeRedirect />} />
+              <Route
+                path="dashboard"
+                element={
+                  <RequireModule module="dashboard">
+                    <Dashboard />
+                  </RequireModule>
+                }
+              />
+              <Route
+                path="categories"
+                element={
+                  <RequireModule module="categories">
+                    <Categories />
+                  </RequireModule>
+                }
+              />
+              <Route
+                path="subcategories"
+                element={
+                  <RequireModule module="subcategories">
+                    <Subcategories />
+                  </RequireModule>
+                }
+              />
+              <Route
+                path="food-items"
+                element={
+                  <RequireModule module="foodItems">
+                    <FoodItems />
+                  </RequireModule>
+                }
+              />
+              <Route
+                path="tables"
+                element={
+                  <RequireModule module="tables">
+                    <Tables />
+                  </RequireModule>
+                }
+              />
+              <Route
+                path="qr-codes"
+                element={
+                  <RequireModule module="tables">
+                    <QrCodes />
+                  </RequireModule>
+                }
+              />
+              <Route
+                path="kot"
+                element={
+                  <RequireModule module="kot">
+                    <AdminKot />
+                  </RequireModule>
+                }
+              />
+              <Route
+                path="messages"
+                element={
+                  <RequireModule module="messages">
+                    <Messages />
+                  </RequireModule>
+                }
+              />
+              <Route
+                path="chefs"
+                element={
+                  <RequireModule module="chefs">
+                    <Chefs />
+                  </RequireModule>
+                }
+              />
+              <Route
+                path="orders"
+                element={
+                  <RequireModule module="orders">
+                    <Orders />
+                  </RequireModule>
+                }
+              />
+              <Route
+                path="orders/:orderId"
+                element={
+                  <RequireModule module="orders">
+                    <OrderDetail />
+                  </RequireModule>
+                }
+              />
+              <Route
+                path="delivery/new"
+                element={
+                  <RequireModule module="orders">
+                    <NewDeliveryOrder />
+                  </RequireModule>
+                }
+              />
+              <Route
+                path="team"
+                element={
+                  <RequireModule module="team">
+                    <Team />
+                  </RequireModule>
+                }
+              />
+              <Route
+                path="awards"
+                element={
+                  <RequireModule module="awards">
+                    <Awards />
+                  </RequireModule>
+                }
+              />
+              <Route
+                path="coupons"
+                element={
+                  <RequireModule module="coupons">
+                    <Coupons />
+                  </RequireModule>
+                }
+              />
+              <Route
+                path="reviews"
+                element={
+                  <RequireModule module="reviews">
+                    <Reviews />
+                  </RequireModule>
+                }
+              />
+              <Route
+                path="settings"
+                element={
+                  <RequireModule module="settings">
+                    <RestaurantSettings />
+                  </RequireModule>
+                }
+              />
+              <Route
+                path="backup"
+                element={
+                  <RequireModule module="backup">
+                    <Backup />
+                  </RequireModule>
+                }
+              />
+              <Route
+                path="landing"
+                element={
+                  <RequireModule module="landing">
+                    <LandingPageEditor />
+                  </RequireModule>
+                }
+              />
+              <Route
+                path="admins"
+                element={
+                  <RequireModule module="admins">
+                    <Admins />
+                  </RequireModule>
+                }
+              />
+              <Route
+                path="analytics"
+                element={
+                  <RequireModule module="analytics">
+                    <Analytics />
+                  </RequireModule>
+                }
+              />
+              <Route
+                path="audit"
+                element={
+                  <RequireModule module="audit">
+                    <AuditLog />
+                  </RequireModule>
+                }
+              />
+              <Route path="change-password" element={<ChangePassword />} />
+              <Route path="no-access" element={<NoAccess />} />
+            </Route>
 
-        <Route path="/chef/login" element={<ChefLogin />} />
-        <Route
-          path="/chef/dashboard"
-          element={
-            <ProtectedRoute role="chef" redirectTo="/chef/login">
-              <ChefDashboard />
-            </ProtectedRoute>
-          }
-        />
+            <Route path="/chef/login" element={<ChefLogin />} />
+            <Route
+              path="/chef/dashboard"
+              element={
+                <ProtectedRoute role="chef" redirectTo="/chef/login">
+                  <ChefDashboard />
+                </ProtectedRoute>
+              }
+            />
 
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-      </Suspense>
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </Suspense>
       </BrowserRouter>
     </ErrorBoundary>
   );

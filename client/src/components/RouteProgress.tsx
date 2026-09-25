@@ -1,11 +1,6 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 
-/**
- * Thin progress bar at the top of the window that runs on every route change, giving
- * instant "the page is loading" feedback. It is driven by navigation, not API calls, so
- * it never flickers from the app's background polling (chat/invoice refresh on a timer).
- */
 export default function RouteProgress() {
   const location = useLocation();
   const [width, setWidth] = useState(0);

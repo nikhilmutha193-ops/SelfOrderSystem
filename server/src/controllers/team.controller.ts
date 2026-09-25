@@ -1,7 +1,8 @@
 import { Request, Response } from "express";
 import { Types } from "mongoose";
-import TeamMember from "../models/TeamMember";
+
 import { asyncHandler } from "../middleware/errorHandler";
+import TeamMember from "../models/TeamMember";
 import { HttpError } from "../utils/httpError";
 
 function validId(id: string) {

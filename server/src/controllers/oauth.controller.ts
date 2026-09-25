@@ -1,25 +1,26 @@
-import { randomBytes, createHash, timingSafeEqual } from "crypto";
+import { createHash, randomBytes, timingSafeEqual } from "crypto";
 import { Request, Response } from "express";
+
+import { asyncHandler } from "../middleware/errorHandler";
 import Admin from "../models/Admin";
 import OAuthAuthCode from "../models/OAuthAuthCode";
-import { asyncHandler } from "../middleware/errorHandler";
 import { HttpError } from "../utils/httpError";
-import { comparePassword } from "../utils/password";
 import { signToken } from "../utils/jwt";
+import { comparePassword } from "../utils/password";
 
-/**
- * OAuth 2.1 Authorization Code + PKCE flow, so an external client (an MCP host such as
- * Claude, or any other integration) can obtain a bearer token scoped to one admin's
- * existing permissions - without ever seeing that admin's password. The issued token is
- * the same JWT shape used by the regular admin login, so it works unchanged with the
- * existing requireAuth/requireModule middleware on every other route.
- *
- * Redirect URIs are validated against an explicit allow-list (OAUTH_ALLOWED_REDIRECT_URIS,
- * comma-separated, exact match) rather than accepted as-is, since accepting any client-
- * supplied redirect_uri is an open-redirect / token-theft vector.
- */
+interface AuthorizeParams {
+  client_id?: unknown;
+  redirect_uri?: unknown;
+  response_type?: unknown;
+  state?: unknown;
+  code_challenge?: unknown;
+  code_challenge_method?: unknown;
+  scope?: unknown;
+}
 
-const CODE_TTL_MS = 5 * 60 * 1000; // 5 minutes - authorization codes are meant to be used immediately
+const CODE_TTL_MS = 5 * 60 * 1000;
+
+// 5 minutes - authorization codes are meant to be used immediately
 const ACCESS_TOKEN_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "8h";
 
 function allowedRedirectUris(): string[] {
@@ -37,7 +38,10 @@ function isAllowedRedirectUri(uri: string): boolean {
 }
 
 function escapeHtml(s: string): string {
-  return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] as string));
+  return s.replace(
+    /[&<>"']/g,
+    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] as string
+  );
 }
 
 function renderLoginPage(opts: {
@@ -90,16 +94,6 @@ function renderLoginPage(opts: {
 </html>`;
 }
 
-interface AuthorizeParams {
-  client_id?: unknown;
-  redirect_uri?: unknown;
-  response_type?: unknown;
-  state?: unknown;
-  code_challenge?: unknown;
-  code_challenge_method?: unknown;
-  scope?: unknown;
-}
-
 function parseAuthorizeParams(q: AuthorizeParams) {
   const clientId = typeof q.client_id === "string" ? q.client_id : "";
   const redirectUri = typeof q.redirect_uri === "string" ? q.redirect_uri : "";
@@ -111,7 +105,6 @@ function parseAuthorizeParams(q: AuthorizeParams) {
   return { clientId, redirectUri, responseType, state, codeChallenge, codeChallengeMethod, scope };
 }
 
-/** GET /oauth/authorize - shows the login/consent form. POST - verifies credentials and redirects with a code. */
 export const oauthAuthorize = asyncHandler(async (req: Request, res: Response) => {
   const source = req.method === "GET" ? req.query : req.body;
   const { clientId, redirectUri, responseType, state, codeChallenge, codeChallengeMethod, scope } =
@@ -121,9 +114,10 @@ export const oauthAuthorize = asyncHandler(async (req: Request, res: Response) =
     throw new HttpError(400, "Only response_type=code is supported");
   }
   if (!redirectUri || !isAllowedRedirectUri(redirectUri)) {
-    // Do not redirect on a bad/unregistered redirect_uri - that is exactly the open-redirect
-    // case this allow-list exists to prevent. Show a plain error instead.
-    throw new HttpError(400, "Unknown or unregistered redirect_uri. Ask the site owner to add it to OAUTH_ALLOWED_REDIRECT_URIS.");
+    throw new HttpError(
+      400,
+      "Unknown or unregistered redirect_uri. Ask the site owner to add it to OAUTH_ALLOWED_REDIRECT_URIS."
+    );
   }
   if (!clientId) throw new HttpError(400, "client_id is required");
   if (codeChallengeMethod !== "S256" || !codeChallenge) {
@@ -175,7 +169,6 @@ export const oauthAuthorize = asyncHandler(async (req: Request, res: Response) =
   res.redirect(redirect.toString());
 });
 
-/** POST /oauth/token - exchanges an authorization code (+ PKCE verifier) for a bearer token. */
 export const oauthToken = asyncHandler(async (req: Request, res: Response) => {
   const grantType = req.body?.grant_type;
   if (grantType !== "authorization_code") {
@@ -211,9 +204,11 @@ export const oauthToken = asyncHandler(async (req: Request, res: Response) => {
   const admin = await Admin.findById(record.adminId);
   if (!admin) throw new HttpError(401, "This admin account no longer exists");
 
-  // Same JWT shape as a normal admin login, so it works unchanged with every existing
-  // requireAuth("admin") + requireModule(...) route - no separate authorization path to maintain.
-  const accessToken = signToken({ role: "admin", restaurantId: record.restaurantId.toString(), id: admin._id.toString() });
+  const accessToken = signToken({
+    role: "admin",
+    restaurantId: record.restaurantId.toString(),
+    id: admin._id.toString(),
+  });
 
   res.json({
     access_token: accessToken,
@@ -223,7 +218,6 @@ export const oauthToken = asyncHandler(async (req: Request, res: Response) => {
   });
 });
 
-/** Best-effort parse of jsonwebtoken's "8h"/"3600"/"30m" style expiresIn into seconds, for the token response. */
 function expiresInSeconds(expiresIn: string): number {
   const match = /^(\d+)([smhd])?$/.exec(expiresIn.trim());
   if (!match) return 28800; // 8h fallback
@@ -233,12 +227,6 @@ function expiresInSeconds(expiresIn: string): number {
   return n * mult;
 }
 
-/**
- * Demo/testing callback - this app's own stand-in "client" redirect target, so the full
- * authorize -> token round trip can be exercised end-to-end against this same deployment
- * before a real external client (e.g. an MCP host) is registered. Not used by production
- * clients, which register their own redirect_uri.
- */
 export const oauthDemoCallback = asyncHandler(async (req: Request, res: Response) => {
   const code = typeof req.query.code === "string" ? req.query.code : "";
   const state = typeof req.query.state === "string" ? req.query.state : "";

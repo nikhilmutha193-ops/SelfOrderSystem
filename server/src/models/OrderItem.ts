@@ -1,4 +1,4 @@
-import { Schema, model, Types } from "mongoose";
+import { model, Schema, Types } from "mongoose";
 
 export type OrderItemStatus = "pending" | "preparing" | "ready" | "served" | "cancelled";
 
@@ -6,23 +6,18 @@ export interface IOrderItem {
   _id: Types.ObjectId;
   restaurantId: Types.ObjectId;
   orderId: Types.ObjectId;
-  /** Absent for aggregator (Swiggy/Zomato) lines that don't map to a local menu item. */
   foodItemId?: Types.ObjectId;
   foodName: string;
   unitPrice: number;
   quantity: number;
   total: number;
   isJain: boolean;
-  /** Chosen customizations, e.g. [{ groupName:"Size", label:"Large", priceDelta:40 }]. */
   modifiers: { groupName: string; label: string; priceDelta: number }[];
-  /** Free-text kitchen note, e.g. "no onions". */
   note: string;
   status: OrderItemStatus;
   kotRound: number | null;
-  /** Token number for the business day the ticket was printed on. */
   tokenNumber: number | null;
   kotPrintedAt: Date | null;
-  /** When the kitchen marked it ready; with kotPrintedAt gives the actual prep time. */
   readyAt: Date | null;
   createdAt: Date;
   updatedAt: Date;

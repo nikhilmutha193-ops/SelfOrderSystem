@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+
 import { api } from "./apiClient";
 
 interface PublicRestaurant {
@@ -16,11 +17,6 @@ function setFavicon(href: string) {
   document.head.appendChild(link);
 }
 
-/**
- * Applies the restaurant's browser-tab title and favicon. Runs once for the whole
- * app so every page - landing, ordering, admin - carries the same branding rather
- * than the build-time placeholder in index.html.
- */
 export function useSiteBranding() {
   useEffect(() => {
     api

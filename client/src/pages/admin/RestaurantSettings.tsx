@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { api, extractErrorMessage, uploadImage } from "../../lib/apiClient";
+
 import { Button, Card, ErrorText, Input, Select, Textarea } from "../../components/ui";
+import { api, extractErrorMessage, uploadImage } from "../../lib/apiClient";
 import {
   PRINT_FONT_SIZE_LABELS,
   PRINT_PAPER_SIZE_LABELS,
@@ -12,8 +13,6 @@ import {
   type TaxRate,
 } from "../../lib/types";
 
-// Older browsers lack supportedValuesOf, so fall back to the zones this app is
-// realistically deployed in rather than leaving the picker empty.
 const TIMEZONE_CHOICES: string[] =
   typeof Intl.supportedValuesOf === "function"
     ? Intl.supportedValuesOf("timeZone")
@@ -58,19 +57,16 @@ export default function RestaurantSettings() {
   const [publicUrl, setPublicUrl] = useState("");
   const [dayEndTime, setDayEndTime] = useState("00:00");
   const [timezone, setTimezone] = useState("Asia/Kolkata");
-  // Everything before the cutoff is filed under the previous date. Past the small hours that
-  // stops being "late-night trading" and starts back-dating most of a normal day, which reads
-  // as the Orders filter being broken, so say so plainly before it is saved.
   const dayEndTimeWarning = useMemo(() => {
     const [hour] = dayEndTime.split(":").map(Number);
     if (!Number.isFinite(hour) || hour < 5) return null;
-    const label = new Date(`2000-01-01T${dayEndTime}:00`).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    const label = new Date(`2000-01-01T${dayEndTime}:00`).toLocaleTimeString([], {
+      hour: "numeric",
+      minute: "2-digit",
+    });
     return `Heads up: with a ${label} cutoff, every order taken between midnight and ${label} is filed under the previous date - that is most of a trading day, so the Orders date filter and daily sales will look shifted by one day. Only keep this if you genuinely serve through ${label}; otherwise use 00:00.`;
   }, [dayEndTime]);
 
-  // Browsers disagree on zone aliases (Chromium lists Asia/Calcutta, not Asia/Kolkata), and a
-  // <select> whose value matches no option silently shows the first one - which a Save would
-  // then persist as the restaurant's zone. Keep the saved value in the list whatever it is.
   const timezoneOptions = useMemo(
     () => (TIMEZONE_CHOICES.includes(timezone) ? TIMEZONE_CHOICES : [timezone, ...TIMEZONE_CHOICES]),
     [timezone]
@@ -101,9 +97,7 @@ export default function RestaurantSettings() {
         setAggSecret(res.data.secret || "");
         setAggBaseUrl(res.data.baseUrl || "");
       })
-      .catch(() => {
-        /* non-critical - the card just shows an empty secret until generated */
-      });
+      .catch(() => {});
   }, []);
 
   async function regenerateSecret() {
@@ -126,9 +120,7 @@ export default function RestaurantSettings() {
         setCopied(key);
         setTimeout(() => setCopied((c) => (c === key ? null : c)), 1500);
       })
-      .catch(() => {
-        /* clipboard blocked - the value is still visible to copy by hand */
-      });
+      .catch(() => {});
   }
 
   useEffect(() => {
@@ -210,11 +202,7 @@ export default function RestaurantSettings() {
     const pdfTab = window.open("", "_blank");
     setPreviewingKot(true);
     try {
-      const res = await api.post(
-        "/restaurant/kot-preview",
-        { name, logoUrl, kotSettings },
-        { responseType: "blob" }
-      );
+      const res = await api.post("/restaurant/kot-preview", { name, logoUrl, kotSettings }, { responseType: "blob" });
       const url = URL.createObjectURL(res.data);
       if (pdfTab) pdfTab.location.href = url;
     } catch (err) {
@@ -266,7 +254,10 @@ export default function RestaurantSettings() {
         chatModeration: {
           enabled: chatModEnabled,
           mode: chatModMode,
-          customWords: chatModWords.split(/[\n,]/).map((w) => w.trim()).filter(Boolean),
+          customWords: chatModWords
+            .split(/[\n,]/)
+            .map((w) => w.trim())
+            .filter(Boolean),
         },
         taxRates,
         kotSettings,
@@ -307,7 +298,9 @@ export default function RestaurantSettings() {
           <div className="text-sm font-medium text-slate-700">
             Favicon
             <div className="mt-1 flex flex-wrap items-center gap-3">
-              {faviconUrl && <img src={faviconUrl} alt="" className="h-8 w-8 rounded border border-slate-200 object-cover" />}
+              {faviconUrl && (
+                <img src={faviconUrl} alt="" className="h-8 w-8 rounded border border-slate-200 object-cover" />
+              )}
               <input type="file" accept="image/*" onChange={handleFaviconFile} className="text-xs" />
               {uploadingFavicon && <span className="text-xs text-slate-400">Uploading...</span>}
               {faviconUrl && (
@@ -331,9 +324,9 @@ export default function RestaurantSettings() {
             />
             <p className="mt-1 text-xs font-normal text-slate-400">
               The address customers' phones should use to reach this site - required if you're running this behind
-              Docker/a LAN IP, since QR codes would otherwise encode whatever address you happen to be viewing the
-              admin panel from (e.g. "localhost", which only works on this machine). Leave blank to use the current
-              browser address automatically.
+              Docker/a LAN IP, since QR codes would otherwise encode whatever address you happen to be viewing the admin
+              panel from (e.g. "localhost", which only works on this machine). Leave blank to use the current browser
+              address automatically.
             </p>
           </label>
           <div className="flex flex-wrap gap-3">
@@ -400,12 +393,7 @@ export default function RestaurantSettings() {
               >
                 Open past midnight <span className="font-normal text-slate-400">(e.g. closes 2am)</span>
               </button>
-              <Input
-                className="w-40"
-                type="time"
-                value={dayEndTime}
-                onChange={(e) => setDayEndTime(e.target.value)}
-              />
+              <Input className="w-40" type="time" value={dayEndTime} onChange={(e) => setDayEndTime(e.target.value)} />
             </div>
             <p className="mt-1 text-xs text-slate-500">
               This is when one business day <em>rolls over</em> into the next - not your closing time. If you shut
@@ -430,9 +418,9 @@ export default function RestaurantSettings() {
               </Select>
             </label>
             <p className="mt-1 text-xs text-slate-500">
-              The zone your business day is measured in. Reports, the dashboard's "today", the Orders date filter
-              and kitchen token numbers all use it, so it must match where the restaurant actually is - not where
-              the server happens to run. Current local time here:{" "}
+              The zone your business day is measured in. Reports, the dashboard's "today", the Orders date filter and
+              kitchen token numbers all use it, so it must match where the restaurant actually is - not where the server
+              happens to run. Current local time here:{" "}
               <strong>{new Date().toLocaleString([], { timeZone: timezone })}</strong>.
             </p>
           </div>
@@ -461,11 +449,11 @@ export default function RestaurantSettings() {
               </label>
             </div>
             <p className="mt-1 text-xs text-slate-500">
-              Each dish carries its own prep time under Food Items; the slowest dish in a round plus this buffer
-              sets when the order is due. Ordering more later pushes the estimate out, never forward. Use{" "}
+              Each dish carries its own prep time under Food Items; the slowest dish in a round plus this buffer sets
+              when the order is due. Ordering more later pushes the estimate out, never forward. Use{" "}
               <code className="rounded bg-slate-100 px-1">{"{minutes}"}</code> for the wait still left and{" "}
-              <code className="rounded bg-slate-100 px-1">{"{time}"}</code> for the clock time it should be ready.
-              Clear the field to hide the message entirely.
+              <code className="rounded bg-slate-100 px-1">{"{time}"}</code> for the clock time it should be ready. Clear
+              the field to hide the message entirely.
             </p>
           </div>
 
@@ -568,7 +556,11 @@ export default function RestaurantSettings() {
         </p>
 
         {(() => {
-          const base = (aggBaseUrl || publicUrl || (typeof window !== "undefined" ? window.location.origin : "")).replace(/\/$/, "");
+          const base = (
+            aggBaseUrl ||
+            publicUrl ||
+            (typeof window !== "undefined" ? window.location.origin : "")
+          ).replace(/\/$/, "");
           const swiggyUrl = `${base}/api/webhooks/aggregator/swiggy`;
           const zomatoUrl = `${base}/api/webhooks/aggregator/zomato`;
           const UrlRow = ({ label, url, k }: { label: string; url: string; k: string }) => (
@@ -597,9 +589,10 @@ export default function RestaurantSettings() {
               <div className="flex flex-col gap-2 rounded-md border border-slate-200 p-3">
                 <p className="text-sm font-medium text-slate-700">2. Webhook secret</p>
                 <p className="-mt-1 text-xs text-slate-500">
-                  The aggregator must send this as an <code className="rounded bg-slate-100 px-1">x-webhook-secret</code>{" "}
-                  header (or <code className="rounded bg-slate-100 px-1">?secret=</code> query). Keep it private;
-                  regenerating it invalidates the old one.
+                  The aggregator must send this as an{" "}
+                  <code className="rounded bg-slate-100 px-1">x-webhook-secret</code> header (or{" "}
+                  <code className="rounded bg-slate-100 px-1">?secret=</code> query). Keep it private; regenerating it
+                  invalidates the old one.
                 </p>
                 <div className="flex gap-2">
                   <Input
@@ -627,7 +620,7 @@ export default function RestaurantSettings() {
                   time); unmatched items are kept as free-form lines using the price you send.
                 </p>
                 <pre className="mt-2 overflow-x-auto rounded bg-slate-900 p-3 text-[11px] leading-relaxed text-slate-100">
-{`{
+                  {`{
   "externalOrderId": "SW-123456",
   "customerName": "Ananya",
   "customerPhone": "+91 98765 43210",
@@ -655,9 +648,7 @@ export default function RestaurantSettings() {
               <Select
                 className="mt-1"
                 value={kotSettings.paperSize}
-                onChange={(e) =>
-                  setKotSettings((prev) => ({ ...prev, paperSize: e.target.value as PrintPaperSize }))
-                }
+                onChange={(e) => setKotSettings((prev) => ({ ...prev, paperSize: e.target.value as PrintPaperSize }))}
               >
                 {PAPER_SIZE_OPTIONS.map(([value, label]) => (
                   <option key={value} value={value}>
@@ -765,9 +756,7 @@ export default function RestaurantSettings() {
               <Select
                 className="mt-1"
                 value={invoiceSettings.fontSize}
-                onChange={(e) =>
-                  setInvoiceSettings((prev) => ({ ...prev, fontSize: e.target.value as PrintFontSize }))
-                }
+                onChange={(e) => setInvoiceSettings((prev) => ({ ...prev, fontSize: e.target.value as PrintFontSize }))}
               >
                 {FONT_SIZE_OPTIONS.map(([value, label]) => (
                   <option key={value} value={value}>
@@ -778,8 +767,7 @@ export default function RestaurantSettings() {
             </label>
           </div>
           <p className="text-xs text-slate-500">
-            GST number and FSSAI registration number (set above) print automatically on the invoice header when
-            present.
+            GST number and FSSAI registration number (set above) print automatically on the invoice header when present.
           </p>
           <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
             <input

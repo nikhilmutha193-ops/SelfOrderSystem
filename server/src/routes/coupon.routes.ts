@@ -1,5 +1,12 @@
 import { Router } from "express";
-import { listCoupons, createCoupon, updateCoupon, setCouponActive, deleteCoupon } from "../controllers/coupon.controller";
+
+import {
+  createCoupon,
+  deleteCoupon,
+  listCoupons,
+  setCouponActive,
+  updateCoupon,
+} from "../controllers/coupon.controller";
 import { requireAuth, requireModule } from "../middleware/auth";
 
 const router = Router();

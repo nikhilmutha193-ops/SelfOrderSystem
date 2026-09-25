@@ -1,6 +1,6 @@
 import Restaurant from "../models/Restaurant";
-import { isValidDayEndTime } from "./businessDay";
 import { generateBackupFile } from "./backupService";
+import { isValidDayEndTime } from "./businessDay";
 import { describeError, logger } from "./logger";
 
 const CHECK_INTERVAL_MS = 60 * 1000;
@@ -35,7 +35,6 @@ async function runDueBackups(): Promise<void> {
   }
 }
 
-/** Polls every minute for restaurants whose daily backup schedule is due. */
 export function initBackupScheduler(): void {
   setInterval(() => {
     runDueBackups().catch((err) => logger.error("backup-scheduler: tick failed", describeError(err)));

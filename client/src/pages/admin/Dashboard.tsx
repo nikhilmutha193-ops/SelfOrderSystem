@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { api, extractErrorMessage } from "../../lib/apiClient";
+
 import { Badge, Card, ErrorText } from "../../components/ui";
+import { api, extractErrorMessage } from "../../lib/apiClient";
 import type { DashboardSummary, Order } from "../../lib/types";
 
 function orderTypeLabel(o: Order): string {
@@ -12,7 +13,6 @@ function orderTypeLabel(o: Order): string {
   return `Delivery${o.deliveryProvider ? ` (${o.deliveryProvider})` : ""}`;
 }
 
-/** A short kitchen-status label + colour derived from the order's KOT progress. */
 function kitchenBadge(o: Order): { label: string; tone: "gray" | "amber" | "blue" | "green" } {
   const k = o.kitchen;
   if (!k || k.active === 0) return { label: "No items", tone: "gray" };
@@ -55,7 +55,8 @@ export default function Dashboard() {
       </div>
       {summary && (
         <p className="-mt-4 text-xs text-slate-400">
-          "Today" is since {new Date(summary.businessDayStart).toLocaleString([], {
+          "Today" is since{" "}
+          {new Date(summary.businessDayStart).toLocaleString([], {
             weekday: "short",
             hour: "2-digit",
             minute: "2-digit",

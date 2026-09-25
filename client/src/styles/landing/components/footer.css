@@ -1,11 +1,3 @@
-/* ==========================================================================
-   Benne Kaffi — components/footer.css
-   Styles for <Footer />. Depends on the tokens and shared classes in css/main.css.
-   ========================================================================== */
-
-/* --------------------------------------------------------------------------
-   Footer  →  <Footer />
-   -------------------------------------------------------------------------- */
 .footer {
   padding-top: var(--space-8);
   color: var(--color-footer-text);
@@ -56,7 +48,9 @@
 .footer__link {
   font-size: var(--fs-sm);
   color: var(--color-footer-text);
-  transition: color var(--transition), padding-left var(--transition);
+  transition:
+    color var(--transition),
+    padding-left var(--transition);
 }
 
 .footer__link:hover {

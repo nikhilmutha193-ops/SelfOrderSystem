@@ -1,7 +1,8 @@
 import { Request, Response } from "express";
 import { HydratedDocument } from "mongoose";
-import Admin, { IAdmin } from "../models/Admin";
+
 import { asyncHandler } from "../middleware/errorHandler";
+import Admin, { IAdmin } from "../models/Admin";
 import { HttpError } from "../utils/httpError";
 import { hashPassword } from "../utils/password";
 import { MODULES, sanitizePermissions } from "../utils/permissions";

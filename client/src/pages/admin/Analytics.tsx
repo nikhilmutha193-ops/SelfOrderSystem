@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { api, extractErrorMessage } from "../../lib/apiClient";
+
 import { Card, ErrorText, TableWrap } from "../../components/ui";
+import { api, extractErrorMessage } from "../../lib/apiClient";
 
 interface SalesData {
   days: number;
@@ -17,16 +18,31 @@ interface PrepData {
 }
 
 const rupee = (n: number) => `₹${n.toFixed(2)}`;
-const typeLabel = (t: string) => (t === "dine-in" ? "Dine-in" : t === "takeaway" ? "Take away" : t === "delivery" ? "Delivery" : t);
+const typeLabel = (t: string) =>
+  t === "dine-in" ? "Dine-in" : t === "takeaway" ? "Take away" : t === "delivery" ? "Delivery" : t;
 
-/** Minimal dependency-free bar chart. */
-function BarChart({ data, color = "#ea580c", valueFormat }: { data: { label: string; value: number }[]; color?: string; valueFormat?: (n: number) => string }) {
+function BarChart({
+  data,
+  color = "#ea580c",
+  valueFormat,
+}: {
+  data: { label: string; value: number }[];
+  color?: string;
+  valueFormat?: (n: number) => string;
+}) {
   const max = Math.max(1, ...data.map((d) => d.value));
   return (
     <div className="flex items-end gap-1 overflow-x-auto" style={{ height: 160 }}>
       {data.map((d, i) => (
-        <div key={i} className="flex min-w-[24px] flex-1 flex-col items-center justify-end gap-1" title={`${d.label}: ${valueFormat ? valueFormat(d.value) : d.value}`}>
-          <div className="w-full rounded-t" style={{ height: `${(d.value / max) * 120}px`, minHeight: d.value > 0 ? 2 : 0, background: color }} />
+        <div
+          key={i}
+          className="flex min-w-[24px] flex-1 flex-col items-center justify-end gap-1"
+          title={`${d.label}: ${valueFormat ? valueFormat(d.value) : d.value}`}
+        >
+          <div
+            className="w-full rounded-t"
+            style={{ height: `${(d.value / max) * 120}px`, minHeight: d.value > 0 ? 2 : 0, background: color }}
+          />
           <span className="whitespace-nowrap text-[9px] text-slate-400">{d.label}</span>
         </div>
       ))}
@@ -104,10 +120,7 @@ export default function Analytics() {
           <Card>
             <h2 className="mb-1 text-lg font-semibold text-slate-800">Orders by hour (peak times)</h2>
             <p className="mb-3 text-xs text-slate-500">When orders come in, across the period.</p>
-            <BarChart
-              data={sales.byHour.map((h) => ({ label: String(h.hour), value: h.orders }))}
-              color="#2563eb"
-            />
+            <BarChart data={sales.byHour.map((h) => ({ label: String(h.hour), value: h.orders }))} color="#2563eb" />
           </Card>
 
           <div className="grid gap-6 lg:grid-cols-2">
@@ -123,7 +136,9 @@ export default function Analytics() {
                       <div key={t.type}>
                         <div className="mb-0.5 flex justify-between text-sm">
                           <span className="text-slate-700">{typeLabel(t.type)}</span>
-                          <span className="text-slate-500">{t.orders} · {rupee(t.revenue)} ({pct}%)</span>
+                          <span className="text-slate-500">
+                            {t.orders} · {rupee(t.revenue)} ({pct}%)
+                          </span>
                         </div>
                         <div className="h-2 w-full rounded-full bg-slate-100">
                           <div className="h-2 rounded-full bg-orange-500" style={{ width: `${pct}%` }} />
@@ -170,7 +185,9 @@ export default function Analytics() {
           Actual is measured from KOT print to "ready". Use it to tune each dish's prep time under Food Items.
         </p>
         {!prep || prep.rows.length === 0 ? (
-          <p className="text-sm text-slate-400">No measured prep times yet — they appear once items are marked ready in the kitchen.</p>
+          <p className="text-sm text-slate-400">
+            No measured prep times yet — they appear once items are marked ready in the kitchen.
+          </p>
         ) : (
           <TableWrap>
             <table className="w-full min-w-[30rem] text-sm">
@@ -189,7 +206,9 @@ export default function Analytics() {
                     <td className="py-1.5">{r.name}</td>
                     <td className="py-1.5 text-right tabular-nums">{r.estimate}m</td>
                     <td className="py-1.5 text-right tabular-nums">{r.actualAvg}m</td>
-                    <td className={`py-1.5 text-right tabular-nums font-medium ${r.diff > 0 ? "text-red-600" : "text-green-600"}`}>
+                    <td
+                      className={`py-1.5 text-right tabular-nums font-medium ${r.diff > 0 ? "text-red-600" : "text-green-600"}`}
+                    >
                       {r.diff > 0 ? "+" : ""}
                       {r.diff}m
                     </td>

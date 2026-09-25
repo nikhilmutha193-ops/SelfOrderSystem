@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
+
 import { api } from "../lib/apiClient";
 import type { DashboardSummary } from "../lib/types";
 
@@ -8,7 +9,10 @@ interface Toast {
   text: string;
 }
 
+type Note = { freq: number; at: number; dur: number; type?: OscillatorType };
+
 let toastId = 0;
+
 let audioCtx: AudioContext | null = null;
 
 function showDesktopNotification(text: string) {
@@ -21,42 +25,59 @@ function showDesktopNotification(text: string) {
   }
 }
 
-// One "note" in a tone: an oscillator that starts `at` seconds into the tone,
-// rings for `dur` seconds. Tones are synthesized so there are no audio files to ship.
-type Note = { freq: number; at: number; dur: number; type?: OscillatorType };
-
 // Each admin picks the tone their own device plays; these are the choices.
 export const NOTIFICATION_TONES: { id: string; label: string; notes: Note[] }[] = [
-  { id: "bell", label: "Bell", notes: [
-    { freq: 988, at: 0, dur: 0.9 },
-    { freq: 1480, at: 0, dur: 0.9 },
-  ] },
-  { id: "chime", label: "Chime (3 notes)", notes: [
-    { freq: 784, at: 0, dur: 0.4 },
-    { freq: 988, at: 0.16, dur: 0.4 },
-    { freq: 1319, at: 0.32, dur: 0.7 },
-  ] },
-  { id: "ding", label: "Ding", notes: [
-    { freq: 1047, at: 0, dur: 0.6 },
-  ] },
-  { id: "doorbell", label: "Doorbell (ding-dong)", notes: [
-    { freq: 660, at: 0, dur: 0.5 },
-    { freq: 523, at: 0.35, dur: 0.7 },
-  ] },
-  { id: "marimba", label: "Marimba (soft)", notes: [
-    { freq: 523, at: 0, dur: 0.35, type: "triangle" },
-    { freq: 659, at: 0.12, dur: 0.35, type: "triangle" },
-    { freq: 784, at: 0.24, dur: 0.5, type: "triangle" },
-  ] },
-  { id: "beep", label: "Beep", notes: [
-    { freq: 880, at: 0, dur: 0.12, type: "square" },
-    { freq: 880, at: 0.2, dur: 0.12, type: "square" },
-  ] },
+  {
+    id: "bell",
+    label: "Bell",
+    notes: [
+      { freq: 988, at: 0, dur: 0.9 },
+      { freq: 1480, at: 0, dur: 0.9 },
+    ],
+  },
+  {
+    id: "chime",
+    label: "Chime (3 notes)",
+    notes: [
+      { freq: 784, at: 0, dur: 0.4 },
+      { freq: 988, at: 0.16, dur: 0.4 },
+      { freq: 1319, at: 0.32, dur: 0.7 },
+    ],
+  },
+  { id: "ding", label: "Ding", notes: [{ freq: 1047, at: 0, dur: 0.6 }] },
+  {
+    id: "doorbell",
+    label: "Doorbell (ding-dong)",
+    notes: [
+      { freq: 660, at: 0, dur: 0.5 },
+      { freq: 523, at: 0.35, dur: 0.7 },
+    ],
+  },
+  {
+    id: "marimba",
+    label: "Marimba (soft)",
+    notes: [
+      { freq: 523, at: 0, dur: 0.35, type: "triangle" },
+      { freq: 659, at: 0.12, dur: 0.35, type: "triangle" },
+      { freq: 784, at: 0.24, dur: 0.5, type: "triangle" },
+    ],
+  },
+  {
+    id: "beep",
+    label: "Beep",
+    notes: [
+      { freq: 880, at: 0, dur: 0.12, type: "square" },
+      { freq: 880, at: 0.2, dur: 0.12, type: "square" },
+    ],
+  },
 ];
 
 const TONE_KEY = "admin_notif_tone";
+
 const VOLUME_KEY = "admin_notif_volume";
+
 const DEFAULT_TONE = "bell";
+
 const DEFAULT_VOLUME = 0.25;
 
 function readTone(): string {
@@ -76,7 +97,6 @@ function readVolume(): number {
   }
 }
 
-/** Plays a specific tone at a given volume; used both for real alerts and the Test button. */
 export function playTone(toneId: string, volume: number) {
   if (volume <= 0) return; // muted
   const tone = NOTIFICATION_TONES.find((t) => t.id === toneId) ?? NOTIFICATION_TONES[0];
@@ -106,7 +126,6 @@ export function playTone(toneId: string, volume: number) {
   }
 }
 
-/** Plays the tone this device has been configured with. */
 function playNotificationSound() {
   playTone(readTone(), readVolume());
 }
@@ -127,9 +146,7 @@ export default function NotificationCenter() {
     setTone(id);
     try {
       localStorage.setItem(TONE_KEY, id);
-    } catch {
-      /* ignore - preference just won't persist */
-    }
+    } catch {}
     playTone(id, volume);
   }
 
@@ -137,18 +154,14 @@ export default function NotificationCenter() {
     setVolume(v);
     try {
       localStorage.setItem(VOLUME_KEY, String(v));
-    } catch {
-      /* ignore */
-    }
+    } catch {}
   }
 
   async function enableDesktopAlerts() {
     try {
       const perm = await Notification.requestPermission();
       setNotifPerm(perm);
-    } catch {
-      /* ignore */
-    }
+    } catch {}
   }
 
   useEffect(() => {
@@ -182,11 +195,6 @@ export default function NotificationCenter() {
     return () => clearInterval(interval);
   }, []);
 
-  /**
-   * Counts are derived from live data, so "clear" dismisses the toasts and marks
-   * table messages read. Items still waiting for KOT are real outstanding work and
-   * stay on the badge until they're actually sent to the kitchen.
-   */
   async function clearNotifications() {
     setClearing(true);
     setToasts([]);
@@ -212,7 +220,14 @@ export default function NotificationCenter() {
         onClick={() => setOpen((o) => !o)}
         className="relative flex h-10 w-10 items-center justify-center rounded-full text-slate-600 hover:bg-slate-100"
       >
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-6 w-6">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          className="h-6 w-6"
+        >
           <path
             strokeLinecap="round"
             strokeLinejoin="round"

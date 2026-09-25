@@ -1,11 +1,10 @@
-import { Schema, model, Types } from "mongoose";
+import { model, Schema, Types } from "mongoose";
 
 export interface ICategory {
   _id: Types.ObjectId;
   restaurantId: Types.ObjectId;
   name: string;
   description?: string;
-  /** Per-language overrides, keyed by language code (e.g. "kn", "hi"): { name?, description? }. */
   translations?: Record<string, { name?: string; description?: string }>;
   isActive: boolean;
   createdAt: Date;

@@ -1,16 +1,18 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+
 import {
-  api,
   activateStoredAuth,
-  storeToken,
-  setActiveAuth,
-  extractErrorMessage,
-  wasSessionExpired,
+  api,
   clearExpiredFlag,
+  extractErrorMessage,
+  setActiveAuth,
+  storeToken,
+  wasSessionExpired,
 } from "../../lib/apiClient";
 import type { TableRow } from "../../lib/types";
 import { useTableSession } from "../../lib/useTableSession";
+
 import "../../styles/order.css";
 
 export default function TableLogin() {
@@ -24,8 +26,6 @@ export default function TableLogin() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [brand, setBrand] = useState<{ name: string; logoUrl: string }>({ name: "Benne Kaffi", logoUrl: "" });
-  // Re-scanning/re-signing-in to one's own already-occupied table: offer a choice instead of
-  // silently resuming or showing a raw "already occupied" error - see attemptLogin().
   const [needsOrderChoice, setNeedsOrderChoice] = useState(false);
   const navigate = useNavigate();
   const session = useTableSession();
@@ -34,21 +34,11 @@ export default function TableLogin() {
     api
       .get<{ name?: string; logoUrl?: string }>("/restaurant/public")
       .then((res) => setBrand({ name: res.data.name || "Benne Kaffi", logoUrl: res.data.logoUrl || "" }))
-      .catch(() => {
-        /* keep defaults */
-      });
+      .catch(() => {});
   }, []);
 
-  /** Exact text of the server's "it's your own table, still occupied" 409 - see auth.controller.ts. */
   const OWN_TABLE_OCCUPIED_MESSAGE = "You already have an order in progress at this table";
 
-  /**
-   * Shared by both sign-in paths (QR scan and typed code+PIN) - the "your own table is still
-   * occupied" case has to be handled identically either way, since it's the same server check
-   * regardless of how the guest got here. Previously only the QR path had this, so re-logging
-   * into an occupied table by typing the code+PIN just showed a bare "already occupied" error
-   * with no way forward.
-   */
   async function attemptLogin(opts: { startNewOrder?: boolean; continueOrder?: boolean } = {}) {
     setError(null);
     setNeedsOrderChoice(false);
@@ -56,18 +46,17 @@ export default function TableLogin() {
     try {
       const res = await api.post("/auth/table/login", {
         ...(qrToken ? { token: qrToken } : { code, password }),
-        // Lets the server tell "it's my own table" apart from "someone else is seated
-        // here" - only meaningful (and only sent) when a session already exists.
         ...(session.tableId ? { currentTableId: session.tableId } : {}),
         ...(opts.startNewOrder ? { startNewOrder: true } : {}),
         ...(opts.continueOrder ? { continueOrder: true } : {}),
       });
       storeToken("table", res.data.token);
       setActiveAuth({ role: "table", token: res.data.token });
-      try { localStorage.setItem("selforder_table_code", res.data.table?.code || code); } catch { /* ignore */ }
-      // The server embeds orderId in the token when one already exists (continueOrder or an
-      // already-provisioned session) - CustomerDetails' own redirect picks that up and moves
-      // straight on to the menu, so there is no need to branch on it here too.
+      try {
+        localStorage.setItem("selforder_table_code", res.data.table?.code || code);
+      } catch {
+        /* ignore */
+      }
       navigate("/order/details");
     } catch (err) {
       const message = extractErrorMessage(err);
@@ -77,11 +66,6 @@ export default function TableLogin() {
         setLoading(false);
         return;
       }
-      // Any other failure on the QR path (someone else's table, a network hiccup, etc.) - if a
-      // valid session already exists, fall back to it rather than stranding the guest on a
-      // scary error screen that "Try again" could never get past anyway. Only for QR: a typed
-      // code+PIN is a deliberate attempt at a *specific* table, so silently landing back on a
-      // different, older session there would be confusing rather than helpful.
       if (qrToken && session.tableId) {
         navigate(session.orderId ? "/order/menu" : "/order/details", { replace: true });
         return;
@@ -91,13 +75,6 @@ export default function TableLogin() {
     }
   }
 
-  /**
-   * "Continue my order" from the occupied-table choice. This device may already have a valid
-   * session for this exact table (e.g. re-scanning its own QR) - then there's nothing to fetch,
-   * just go there. Otherwise (a different/fresh device whose PIN was still correct) it has no
-   * token of its own yet, so it has to actually sign in to rejoin the existing seating rather
-   * than navigating using session data it doesn't have.
-   */
   function continueExistingOrder() {
     if (session.tableId) {
       navigate(session.orderId ? "/order/menu" : "/order/details", { replace: true });
@@ -111,11 +88,6 @@ export default function TableLogin() {
     const token = activateStoredAuth("table");
 
     if (qrToken) {
-      // A fresh QR scan always gets to decide what happens next - attemptLogin() itself
-      // handles every outcome (a different, available table switches onto it; the guest's own
-      // still-occupied table shows the continue/new-order choice; any other failure falls back
-      // to resuming an existing session). Navigating away here first would race ahead of that
-      // network call and skip straight past the choice prompt before it can ever show.
       attemptLogin();
       return;
     }
@@ -146,14 +118,26 @@ export default function TableLogin() {
             {brand.logoUrl ? (
               <img className="order-header__logo" src={brand.logoUrl} alt="" width={40} height={40} />
             ) : (
-              <span className="order-header__logo" aria-hidden style={{ display: "grid", placeItems: "center", background: "var(--color-primary-tint)", fontSize: 20 }}>
+              <span
+                className="order-header__logo"
+                aria-hidden
+                style={{ display: "grid", placeItems: "center", background: "var(--color-primary-tint)", fontSize: 20 }}
+              >
                 ☕
               </span>
             )}
             <span className="order-header__name">{brand.name}</span>
           </a>
           <a className="order-header__back" href="/">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
               <path d="M19 12H5" />
               <path d="M12 19l-7-7 7-7" />
             </svg>
@@ -168,7 +152,9 @@ export default function TableLogin() {
             {brand.logoUrl ? (
               <img className="order__aside-art order__aside-art--logo" src={brand.logoUrl} alt="" aria-hidden />
             ) : (
-              <div className="order__aside-art" aria-hidden>☕</div>
+              <div className="order__aside-art" aria-hidden>
+                ☕
+              </div>
             )}
             <div className="order__aside-copy">
               <p className="order__aside-eyebrow">Dine-in ordering</p>
@@ -188,11 +174,15 @@ export default function TableLogin() {
             <form className="order-form" onSubmit={submit} noValidate>
               <ol className="stepper" aria-label="Progress">
                 <li className="stepper__step stepper__step--active" aria-current="step">
-                  <span className="stepper__num" aria-hidden>1</span>
+                  <span className="stepper__num" aria-hidden>
+                    1
+                  </span>
                   <span className="stepper__label">Your table</span>
                 </li>
                 <li className="stepper__step">
-                  <span className="stepper__num" aria-hidden>2</span>
+                  <span className="stepper__num" aria-hidden>
+                    2
+                  </span>
                   <span className="stepper__label">Your visit</span>
                 </li>
               </ol>
@@ -213,8 +203,8 @@ export default function TableLogin() {
               {needsOrderChoice && (
                 <div className="order-choice">
                   <p className="order-note order-note--info">
-                    You already have an order in progress at this table. Would you like to continue it, or start a
-                    new order?
+                    You already have an order in progress at this table. Would you like to continue it, or start a new
+                    order?
                   </p>
                   <div className="order-choice__actions">
                     <button
@@ -284,14 +274,32 @@ export default function TableLogin() {
                         onClick={() => setShowPin((v) => !v)}
                       >
                         {showPin ? (
-                          <svg className="field__toggle-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <svg
+                            className="field__toggle-icon"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            aria-hidden="true"
+                          >
                             <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
                             <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
                             <path d="M14.12 14.12a3 3 0 1 1-4.24-4.24" />
                             <path d="M1 1l22 22" />
                           </svg>
                         ) : (
-                          <svg className="field__toggle-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <svg
+                            className="field__toggle-icon"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            aria-hidden="true"
+                          >
                             <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
                             <circle cx="12" cy="12" r="3" />
                           </svg>
@@ -314,11 +322,7 @@ export default function TableLogin() {
                       <ul className="tables__list" aria-label="Available tables">
                         {available.map((t) => (
                           <li key={t._id}>
-                            <button
-                              type="button"
-                              className="table-chip"
-                              onClick={() => setCode(t.code)}
-                            >
+                            <button type="button" className="table-chip" onClick={() => setCode(t.code)}>
                               <span className="table-chip__code">{t.code}</span>
                             </button>
                           </li>
@@ -345,7 +349,9 @@ export default function TableLogin() {
       </main>
 
       <footer className="order-footer">
-        <p className="order-footer__copy">© {new Date().getFullYear()} {brand.name} · Taste of Bengaluru</p>
+        <p className="order-footer__copy">
+          © {new Date().getFullYear()} {brand.name} · Taste of Bengaluru
+        </p>
       </footer>
     </div>
   );

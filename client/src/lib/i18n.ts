@@ -14,21 +14,16 @@ export function loadLang(): Lang {
   try {
     const v = localStorage.getItem(KEY);
     if (v === "en" || v === "kn" || v === "hi") return v;
-  } catch {
-    /* ignore */
-  }
+  } catch {}
   return "en";
 }
 
 export function saveLang(lang: Lang) {
   try {
     localStorage.setItem(KEY, lang);
-  } catch {
-    /* ignore */
-  }
+  } catch {}
 }
 
-/** Translated field with fallback to the base (English) value. */
 export function tr(
   obj: { name: string; description?: string; translations?: Translations },
   lang: Lang,

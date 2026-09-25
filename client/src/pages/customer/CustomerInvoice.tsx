@@ -1,12 +1,13 @@
-import { useEffect, useState, useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { api, clearStoredToken, extractErrorMessage, setActiveAuth } from "../../lib/apiClient";
-import { useTableSession } from "../../lib/useTableSession";
-import { Badge, Button, Card, ErrorText, Input } from "../../components/ui";
-import { ReviewDialog } from "../../components/ReviewFab";
+
 import ChatFab from "../../components/ChatFab";
+import { ReviewDialog } from "../../components/ReviewFab";
+import { Badge, Button, Card, ErrorText, Input } from "../../components/ui";
+import { api, clearStoredToken, extractErrorMessage, setActiveAuth } from "../../lib/apiClient";
 import { renderPrepMessage } from "../../lib/prepTime";
 import type { OrderDetailResponse } from "../../lib/types";
+import { useTableSession } from "../../lib/useTableSession";
 
 const STATUS_TONE = {
   pending: "amber",
@@ -63,8 +64,6 @@ export default function CustomerInvoice() {
     navigate("/", { replace: true });
   }
 
-  /** Payment happens at the counter, so this just notifies staff through the chat
-   *  thread they already watch - it raises their unread badge like any message. */
   async function requestCheckout() {
     if (!orderId) return;
     setError(null);
@@ -74,8 +73,6 @@ export default function CustomerInvoice() {
         message: "We'd like to checkout please - we'll pay at the counter.",
       });
       setCheckoutRequested(true);
-      // Checkout ends the visit, so the table session closes with it - otherwise the
-      // next guest on this device would inherit the previous order.
       setTimeout(logout, 4000);
     } catch (err) {
       setError(extractErrorMessage(err));
@@ -151,7 +148,9 @@ export default function CustomerInvoice() {
     <div className="mx-auto max-w-2xl px-4 pt-6 pb-32">
       <div className="mb-4 flex items-center justify-between">
         <h1 className="text-xl font-bold text-slate-800">Your order</h1>
-        <Badge tone={order.status === "closed" ? "green" : "amber"}>{order.status === "closed" ? "Paid" : "Open"}</Badge>
+        <Badge tone={order.status === "closed" ? "green" : "amber"}>
+          {order.status === "closed" ? "Paid" : "Open"}
+        </Badge>
       </div>
 
       <Card className="mb-4">
@@ -163,8 +162,6 @@ export default function CustomerInvoice() {
         {prepMessage && (
           <p className="mb-3 rounded-md bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900">{prepMessage}</p>
         )}
-        {/* Four short columns fit a phone, so this lays out as a plain table - a
-            forced min-width only produced a sideways scroll over empty space. */}
         <table className="w-full table-auto text-sm">
           <thead>
             <tr className="text-left text-slate-500">
@@ -252,9 +249,10 @@ export default function CustomerInvoice() {
         </div>
       </Card>
 
-      {/* Rate each dish (deduped) - guest reviews feed the dish's average on the menu. */}
       {(() => {
-        const dishes = Array.from(new Map(items.filter((i) => i.status !== "cancelled").map((i) => [i.foodItemId, i.foodName])));
+        const dishes = Array.from(
+          new Map(items.filter((i) => i.status !== "cancelled").map((i) => [i.foodItemId, i.foodName]))
+        );
         if (dishes.length === 0) return null;
         return (
           <Card className="mb-4">
@@ -314,11 +312,7 @@ export default function CustomerInvoice() {
         </Button>
       </div>
 
-      <ReviewDialog
-        open={feedbackOpen}
-        onClose={() => setFeedbackOpen(false)}
-        defaultName={order.customerName}
-      />
+      <ReviewDialog open={feedbackOpen} onClose={() => setFeedbackOpen(false)} defaultName={order.customerName} />
       <ChatFab />
     </div>
   );

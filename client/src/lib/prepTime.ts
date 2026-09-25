@@ -1,11 +1,3 @@
-/**
- * Fills the admin's template with the wait still left on an order.
- *
- * While food is still outstanding the target rolls forward in buffer-sized steps
- * rather than lapsing, so a slow kitchen keeps reading "a few minutes more" instead
- * of counting down to zero and leaving a blank where the message was. Once nothing
- * is left to cook it returns null and the message disappears for good.
- */
 export function renderPrepMessage(
   template: string | undefined,
   estimatedReadyAt: string | null | undefined,

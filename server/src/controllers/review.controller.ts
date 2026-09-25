@@ -1,20 +1,16 @@
 import { Request, Response } from "express";
 import { Types } from "mongoose";
-import Review from "../models/Review";
-import FoodReview from "../models/FoodReview";
-import FoodItem from "../models/FoodItem";
+
 import { asyncHandler } from "../middleware/errorHandler";
+import FoodItem from "../models/FoodItem";
+import FoodReview from "../models/FoodReview";
+import Review from "../models/Review";
 import { HttpError } from "../utils/httpError";
 
 function validId(id: string) {
   if (!Types.ObjectId.isValid(id)) throw new HttpError(400, "Invalid id");
 }
 
-/**
- * A guest rating (1-5) for a single dish, tied to their order so each dish is rated once.
- * The dish's running total (reviewSum/reviewCount) is bumped so the menu average stays cheap
- * to read without scanning every review.
- */
 export const submitFoodReview = asyncHandler(async (req: Request, res: Response) => {
   const { foodItemId, rating, comment } = req.body as { foodItemId?: string; rating?: number; comment?: string };
   if (!foodItemId || !Types.ObjectId.isValid(foodItemId)) throw new HttpError(400, "A valid foodItemId is required");

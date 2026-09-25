@@ -1,10 +1,11 @@
 import { Router } from "express";
+
 import {
-  adminLogin,
-  adminSecurityQuestion,
-  adminForgotPassword,
   adminChangePassword,
+  adminForgotPassword,
+  adminLogin,
   adminMe,
+  adminSecurityQuestion,
   chefLogin,
   tableLogin,
 } from "../controllers/auth.controller";

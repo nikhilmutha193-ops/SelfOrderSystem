@@ -1,5 +1,12 @@
 import { Router } from "express";
-import { listTeam, createTeamMember, updateTeamMember, setTeamMemberActive, deleteTeamMember } from "../controllers/team.controller";
+
+import {
+  createTeamMember,
+  deleteTeamMember,
+  listTeam,
+  setTeamMemberActive,
+  updateTeamMember,
+} from "../controllers/team.controller";
 import { requireAuth, requireModule } from "../middleware/auth";
 
 const router = Router();

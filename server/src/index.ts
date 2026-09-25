@@ -1,7 +1,7 @@
 import app from "./app";
-import { describeError, logger } from "./utils/logger";
 import { connectDb } from "./config/db";
 import { initBackupScheduler } from "./utils/backupScheduler";
+import { describeError, logger } from "./utils/logger";
 import { initTableReleaseScheduler } from "./utils/tableReleaseScheduler";
 
 const PORT = process.env.PORT || 5000;

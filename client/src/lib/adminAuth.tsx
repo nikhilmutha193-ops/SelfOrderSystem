@@ -1,8 +1,19 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { Navigate } from "react-router-dom";
+
 import { activateStoredAuth, api } from "./apiClient";
 
-/** Mirrors MODULES on the server. Labels drive the permissions editor. */
+export type ModuleKey = keyof typeof MODULES;
+
+export type PermissionLevel = "view" | "edit";
+
+export interface AdminProfile {
+  id: string;
+  username: string;
+  isOwner: boolean;
+  permissions: Partial<Record<ModuleKey, PermissionLevel>>;
+}
+
 export const MODULES = {
   dashboard: "Dashboard",
   categories: "Categories",
@@ -25,17 +36,7 @@ export const MODULES = {
   audit: "Audit Log",
 } as const;
 
-export type ModuleKey = keyof typeof MODULES;
-export type PermissionLevel = "view" | "edit";
-
 export const MODULE_KEYS = Object.keys(MODULES) as ModuleKey[];
-
-export interface AdminProfile {
-  id: string;
-  username: string;
-  isOwner: boolean;
-  permissions: Partial<Record<ModuleKey, PermissionLevel>>;
-}
 
 const AdminContext = createContext<{ profile: AdminProfile | null; loading: boolean }>({
   profile: null,
@@ -47,8 +48,6 @@ export function AdminProfileProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Child effects run before the parent layout's, so the token isn't attached yet
-    // on a fresh load - activate it here or this request goes out unauthenticated.
     activateStoredAuth("admin");
     api
       .get<AdminProfile>("/auth/admin/me")
@@ -72,13 +71,11 @@ export function can(profile: AdminProfile | null, module: ModuleKey, level: Perm
   return level === "view" ? true : granted === "edit";
 }
 
-/** Convenience for hiding save/delete controls on a page the user can only view. */
 export function useCanEdit(module: ModuleKey): boolean {
   const { profile } = useAdmin();
   return can(profile, module, "edit");
 }
 
-/** Landing order for /admin - the first module the user can actually open. */
 const HOME_ROUTES: { module: ModuleKey; to: string }[] = [
   { module: "dashboard", to: "/admin/dashboard" },
   { module: "orders", to: "/admin/orders?type=dine-in" },

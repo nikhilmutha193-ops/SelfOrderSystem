@@ -13,9 +13,6 @@ interface Cache {
   fetchedAt: number;
 }
 
-const CACHE_TTL_MS = 12 * 60 * 60 * 1000; // 12 hours, to stay within SerpApi's rate limits/cost
-let cache: Cache | null = null;
-
 interface SerpApiReviewEntry {
   user?: { name?: string; link?: string; thumbnail?: string };
   rating?: number;
@@ -24,9 +21,11 @@ interface SerpApiReviewEntry {
   date?: string;
 }
 
-// Fetches Google Maps reviews via SerpApi (https://serpapi.com/google-maps-reviews-api), if configured.
-// Returns [] (never throws) when SERPAPI_API_KEY/GOOGLE_PLACE_ID are unset or the request fails, so the
-// public landing page never breaks because of a third-party outage or missing credentials.
+const CACHE_TTL_MS = 12 * 60 * 60 * 1000;
+
+// 12 hours, to stay within SerpApi's rate limits/cost
+let cache: Cache | null = null;
+
 export async function getGoogleReviews(): Promise<GoogleReview[]> {
   const apiKey = process.env.SERPAPI_API_KEY;
   const placeId = process.env.GOOGLE_PLACE_ID;

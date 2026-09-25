@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+
 import { api, extractErrorMessage } from "../lib/apiClient";
-import { Badge, Button, Card, ErrorText } from "./ui";
 import type { KotQueueGroup, OrderItem } from "../lib/types";
+import { Badge, Button, Card, ErrorText } from "./ui";
 
 function statusBadge(item: OrderItem): { tone: "gray" | "amber" | "blue" | "green"; label: string } {
   if (item.status === "preparing") return { tone: "blue", label: "Preparing" };
@@ -67,9 +68,6 @@ export default function KotQueueView({ canCancel }: { canCancel: boolean }) {
   }
 
   async function printKot(orderId: string) {
-    // Open the tab synchronously, inside the click handler, so browsers still
-    // treat it as user-initiated - opening it after the awaited requests below
-    // would fall outside the user-gesture window and get popup-blocked.
     const pdfTab = window.open("", "_blank");
     try {
       const res = await api.post(`/orders/${orderId}/kot/print`);
@@ -87,7 +85,6 @@ export default function KotQueueView({ canCancel }: { canCancel: boolean }) {
     }
   }
 
-  /** Re-opens an already-printed round's ticket. Same token - no new one is issued. */
   async function reprintKot(orderId: string, round: number) {
     const pdfTab = window.open("", "_blank");
     try {
@@ -100,7 +97,6 @@ export default function KotQueueView({ canCancel }: { canCancel: boolean }) {
     }
   }
 
-  /** Distinct printed rounds present in a queue card, newest first, for reprinting. */
   function printedRounds(items: OrderItem[]): { round: number; token: number | null }[] {
     const map = new Map<number, number | null>();
     for (const i of items) if (i.kotRound != null && !map.has(i.kotRound)) map.set(i.kotRound, i.tokenNumber);
@@ -126,19 +122,21 @@ export default function KotQueueView({ canCancel }: { canCancel: boolean }) {
                 </span>
               )}
               <div className="min-w-0">
-              <p className="flex flex-wrap items-center gap-2 font-semibold text-slate-800">
-                {order.orderType === "dine-in"
-                  ? (typeof order.tableId === "object" && order.tableId?.code
+                <p className="flex flex-wrap items-center gap-2 font-semibold text-slate-800">
+                  {order.orderType === "dine-in"
+                    ? typeof order.tableId === "object" && order.tableId?.code
                       ? `Table: ${order.tableId.code}`
-                      : "Counter")
-                  : order.orderType === "takeaway" ? "Take away" : `Delivery: ${order.deliveryProvider}`}
-                {order.orderType !== "dine-in" && (
-                  <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-amber-900">
-                    PACK
-                  </span>
-                )}
-              </p>
-              <p className="text-xs text-slate-500">{order.customerName}</p>
+                      : "Counter"
+                    : order.orderType === "takeaway"
+                      ? "Take away"
+                      : `Delivery: ${order.deliveryProvider}`}
+                  {order.orderType !== "dine-in" && (
+                    <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-amber-900">
+                      PACK
+                    </span>
+                  )}
+                </p>
+                <p className="text-xs text-slate-500">{order.customerName}</p>
               </div>
             </div>
             <div className="flex shrink-0 flex-wrap justify-end gap-2">
@@ -153,7 +151,9 @@ export default function KotQueueView({ canCancel }: { canCancel: boolean }) {
                   Reprint{r.token != null ? ` T${r.token}` : ""}
                 </Button>
               ))}
-              <Button className="shrink-0" onClick={() => printKot(order._id)}>Print KOT</Button>
+              <Button className="shrink-0" onClick={() => printKot(order._id)}>
+                Print KOT
+              </Button>
             </div>
           </div>
           <table className="w-full text-sm">

@@ -1,5 +1,5 @@
-import { ITaxRate } from "../models/Restaurant";
 import { IOrderItem } from "../models/OrderItem";
+import { ITaxRate } from "../models/Restaurant";
 
 export interface InvoiceTaxLine {
   name: string;

@@ -1,7 +1,3 @@
-/**
- * Structured JSON logging. Vercel captures stdout/stderr per invocation, so lines
- * are emitted as single-line JSON to stay searchable there and in `docker logs`.
- */
 export type LogLevel = "error" | "warn" | "info" | "debug";
 
 const ORDER: Record<LogLevel, number> = { error: 0, warn: 1, info: 2, debug: 3 };
@@ -12,7 +8,6 @@ function activeLevel(): LogLevel {
   return process.env.NODE_ENV === "production" ? "info" : "debug";
 }
 
-/** Values that must never reach a log line, whatever the caller passes. */
 const REDACT = new Set([
   "password",
   "newpassword",
@@ -61,7 +56,6 @@ export const logger = {
   debug: (message: string, context?: Record<string, unknown>) => emit("debug", message, context),
 };
 
-/** Turns an unknown throwable into something safe to serialize. */
 export function describeError(err: unknown): Record<string, unknown> {
   if (err instanceof Error) {
     return { name: err.name, error: err.message, stack: err.stack?.split("\n").slice(0, 5).join("\n") };

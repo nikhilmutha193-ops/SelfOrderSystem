@@ -1,14 +1,5 @@
 import crypto from "crypto";
 
-/**
- * Table QR codes used to encode the table's plain code (e.g. "tbl3") directly in the
- * URL - guessable/sequential, and lets anyone construct a login link for any table
- * without ever scanning its QR. This encrypts the table's identity into an opaque
- * token instead, so the printed QR is the only practical way to reach that table's
- * login (a PIN is still required either way - this closes the "just guess the code"
- * shortcut, it doesn't replace the PIN).
- */
-
 function deriveKey(): Buffer {
   const secret = process.env.JWT_SECRET;
   if (!secret) throw new Error("JWT_SECRET is not set");

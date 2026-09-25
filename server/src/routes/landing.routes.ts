@@ -1,4 +1,5 @@
 import { Router } from "express";
+
 import { getLandingPage } from "../controllers/landing.controller";
 
 const router = Router();

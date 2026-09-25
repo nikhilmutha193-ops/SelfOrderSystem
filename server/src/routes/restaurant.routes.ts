@@ -1,15 +1,16 @@
 import { Router } from "express";
+
+import { getLandingContent, updateLandingContent } from "../controllers/landingContent.controller";
 import {
-  getRestaurantPublic,
   getRestaurantLogo,
+  getRestaurantPublic,
   getRestaurantSettings,
-  updateRestaurantSettings,
-  previewKotPdf,
   previewInvoicePdf,
+  previewKotPdf,
   seedLandingSampleContent,
+  updateRestaurantSettings,
 } from "../controllers/restaurant.controller";
 import { requireAuth, requireModule } from "../middleware/auth";
-import { getLandingContent, updateLandingContent } from "../controllers/landingContent.controller";
 
 const router = Router();
 

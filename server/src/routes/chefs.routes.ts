@@ -1,5 +1,6 @@
 import { Router } from "express";
-import { listChefs, createChef, updateChef, deleteChef } from "../controllers/chefs.controller";
+
+import { createChef, deleteChef, listChefs, updateChef } from "../controllers/chefs.controller";
 import { requireAuth, requireModule } from "../middleware/auth";
 
 const router = Router();

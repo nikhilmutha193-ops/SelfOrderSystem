@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { api, extractErrorMessage } from "../../lib/apiClient";
+
 import { Badge, Button, Card, ErrorText, Input, Select, TableWrap } from "../../components/ui";
 import { useAdmin } from "../../lib/adminAuth";
+import { api, extractErrorMessage } from "../../lib/apiClient";
 import type { Order, OrderStatus, OrderType } from "../../lib/types";
 
 const STATUS_TONE = { open: "amber", closed: "green", cancelled: "red" } as const;
@@ -69,7 +70,8 @@ export default function Orders() {
   async function clearAll() {
     const shown = orders.length;
     if (shown === 0) return;
-    const typeName = type === "takeaway" ? "take-away" : type === "dine-in" ? "dine-in" : type === "delivery" ? "delivery" : "";
+    const typeName =
+      type === "takeaway" ? "take-away" : type === "dine-in" ? "dine-in" : type === "delivery" ? "delivery" : "";
     if (
       !window.confirm(
         `Permanently delete all ${shown} ${typeName} order(s) currently shown, including their items and chat? ` +
@@ -95,8 +97,6 @@ export default function Orders() {
     else next.delete(key);
     if (key === "from" || key === "to") {
       next.delete("today");
-      // Picking one date reads as "show me that day", so mirror it into the empty end of
-      // the range. Leaving it open would quietly list every order from then on instead.
       const other = key === "from" ? "to" : "from";
       if (value && !next.get(other)) next.set(other, value);
     }
@@ -111,8 +111,6 @@ export default function Orders() {
     setSearchParams(next);
   }
 
-  // Yesterday/Tomorrow are always relative to the actual current date, not to
-  // whatever day happens to be selected right now.
   function selectDayFromToday(offsetDays: number) {
     const base = new Date();
     base.setDate(base.getDate() + offsetDays);
@@ -190,9 +188,9 @@ export default function Orders() {
           </div>
         </div>
         <p className="mt-2 text-xs text-slate-500">
-          "Today" and the From/To range use your restaurant's day-end time (Restaurant Settings), so late-night
-          orders placed after midnight but before that cutoff still count toward the previous business day instead
-          of splitting at midnight.
+          "Today" and the From/To range use your restaurant's day-end time (Restaurant Settings), so late-night orders
+          placed after midnight but before that cutoff still count toward the previous business day instead of splitting
+          at midnight.
         </p>
       </Card>
 
@@ -201,49 +199,49 @@ export default function Orders() {
       <Card>
         <TableWrap>
           <table className="w-full min-w-[34rem] text-sm">
-          <thead>
-            <tr className="text-left text-slate-500">
-              <th className="pb-2">Customer</th>
-              <th className="pb-2">Type</th>
-              <th className="pb-2">Check-in</th>
-              <th className="pb-2">Status</th>
-              <th className="pb-2">Payment</th>
-              <th className="pb-2"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {orders.map((order) => (
-              <tr key={order._id} className="border-t border-slate-100">
-                <td className="py-1.5">{order.customerName}</td>
-                <td className="py-1.5 capitalize">
-                  {order.orderType === "delivery"
-                    ? `Delivery (${order.deliveryProvider})`
-                    : order.orderType === "takeaway"
-                      ? "Take away"
-                      : "Dine-in"}
-                </td>
-                <td className="py-1.5">{new Date(order.checkinTime).toLocaleString()}</td>
-                <td className="py-1.5">
-                  <Badge tone={STATUS_TONE[order.status]}>{order.status}</Badge>
-                </td>
-                <td className="py-1.5 capitalize">{order.paymentMethod}</td>
-                <td className="py-1.5">
-                  <Link className="text-orange-600 hover:underline" to={`/admin/orders/${order._id}`}>
-                    View
-                  </Link>
-                </td>
+            <thead>
+              <tr className="text-left text-slate-500">
+                <th className="pb-2">Customer</th>
+                <th className="pb-2">Type</th>
+                <th className="pb-2">Check-in</th>
+                <th className="pb-2">Status</th>
+                <th className="pb-2">Payment</th>
+                <th className="pb-2"></th>
               </tr>
-            ))}
-            {orders.length === 0 && (
-              <tr>
-                <td colSpan={6} className="py-4 text-center text-slate-400">
-                  No orders found
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </TableWrap>
+            </thead>
+            <tbody>
+              {orders.map((order) => (
+                <tr key={order._id} className="border-t border-slate-100">
+                  <td className="py-1.5">{order.customerName}</td>
+                  <td className="py-1.5 capitalize">
+                    {order.orderType === "delivery"
+                      ? `Delivery (${order.deliveryProvider})`
+                      : order.orderType === "takeaway"
+                        ? "Take away"
+                        : "Dine-in"}
+                  </td>
+                  <td className="py-1.5">{new Date(order.checkinTime).toLocaleString()}</td>
+                  <td className="py-1.5">
+                    <Badge tone={STATUS_TONE[order.status]}>{order.status}</Badge>
+                  </td>
+                  <td className="py-1.5 capitalize">{order.paymentMethod}</td>
+                  <td className="py-1.5">
+                    <Link className="text-orange-600 hover:underline" to={`/admin/orders/${order._id}`}>
+                      View
+                    </Link>
+                  </td>
+                </tr>
+              ))}
+              {orders.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="py-4 text-center text-slate-400">
+                    No orders found
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </TableWrap>
       </Card>
     </div>
   );

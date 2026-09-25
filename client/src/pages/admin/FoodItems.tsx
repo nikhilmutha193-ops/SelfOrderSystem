@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
+
+import { Badge, Button, Card, ErrorText, Input, Select, TableWrap, Textarea } from "../../components/ui";
 import { api, extractErrorMessage, uploadImage } from "../../lib/apiClient";
-import { Badge, Button, Card, ErrorText, Input, Select, Textarea, TableWrap } from "../../components/ui";
 import type { Category, FoodItem, FoodType, ModifierGroup, Subcategory, Translations } from "../../lib/types";
 
 const EMOJI_CHOICES = ["⭐", "🔥", "👑", "💯", "🏆", "❤️"];
@@ -23,12 +24,12 @@ export default function FoodItems() {
   const [rating, setRating] = useState<number>(0);
   const [prepTimeMinutes, setPrepTimeMinutes] = useState<number>(10);
   const [modifierGroups, setModifierGroups] = useState<ModifierGroup[]>([]);
-  const [tr, setTr] = useState<{ kn: { name: string; description: string }; hi: { name: string; description: string } }>(
-    () => structuredClone(EMPTY_TR)
-  );
+  const [tr, setTr] = useState<{
+    kn: { name: string; description: string };
+    hi: { name: string; description: string };
+  }>(() => structuredClone(EMPTY_TR));
   const [translating, setTranslating] = useState(false);
 
-  /** Fill the Kannada + Hindi fields from the English name/description via the translator. */
   async function autoTranslate() {
     if (!name.trim() && !description.trim()) {
       setError("Enter the English name/description first.");
@@ -39,7 +40,10 @@ export default function FoodItems() {
     try {
       const next = { kn: { name: "", description: "" }, hi: { name: "", description: "" } };
       for (const lng of ["kn", "hi"] as const) {
-        const res = await api.post<{ translations: string[] }>("/translate", { texts: [name, description || ""], to: lng });
+        const res = await api.post<{ translations: string[] }>("/translate", {
+          texts: [name, description || ""],
+          to: lng,
+        });
         next[lng] = { name: res.data.translations[0] || "", description: res.data.translations[1] || "" };
       }
       setTr(next);
@@ -54,7 +58,10 @@ export default function FoodItems() {
 
   // ---- modifier group editing helpers ----
   function addGroup() {
-    setModifierGroups((g) => [...g, { name: "", type: "single", required: false, options: [{ label: "", priceDelta: 0 }] }]);
+    setModifierGroups((g) => [
+      ...g,
+      { name: "", type: "single", required: false, options: [{ label: "", priceDelta: 0 }] },
+    ]);
   }
   function updateGroup(i: number, patch: Partial<ModifierGroup>) {
     setModifierGroups((g) => g.map((grp, idx) => (idx === i ? { ...grp, ...patch } : grp)));
@@ -63,7 +70,9 @@ export default function FoodItems() {
     setModifierGroups((g) => g.filter((_, idx) => idx !== i));
   }
   function addOption(gi: number) {
-    setModifierGroups((g) => g.map((grp, idx) => (idx === gi ? { ...grp, options: [...grp.options, { label: "", priceDelta: 0 }] } : grp)));
+    setModifierGroups((g) =>
+      g.map((grp, idx) => (idx === gi ? { ...grp, options: [...grp.options, { label: "", priceDelta: 0 }] } : grp))
+    );
   }
   function updateOption(gi: number, oi: number, patch: Partial<{ label: string; priceDelta: number }>) {
     setModifierGroups((g) =>
@@ -73,7 +82,9 @@ export default function FoodItems() {
     );
   }
   function removeOption(gi: number, oi: number) {
-    setModifierGroups((g) => g.map((grp, idx) => (idx === gi ? { ...grp, options: grp.options.filter((_, j) => j !== oi) } : grp)));
+    setModifierGroups((g) =>
+      g.map((grp, idx) => (idx === gi ? { ...grp, options: grp.options.filter((_, j) => j !== oi) } : grp))
+    );
   }
 
   function load() {
@@ -139,8 +150,28 @@ export default function FoodItems() {
     }
     const cleanGroups = modifierGroups
       .filter((g) => g.name.trim())
-      .map((g) => ({ ...g, name: g.name.trim(), options: g.options.filter((o) => o.label.trim()).map((o) => ({ label: o.label.trim(), priceDelta: Number(o.priceDelta) || 0 })) }));
-    const payload = { categoryId, subcategoryId, name, price, description, imageUrl, isBestseller, bestsellerEmoji, foodType, rating, prepTimeMinutes, modifierGroups: cleanGroups, translations };
+      .map((g) => ({
+        ...g,
+        name: g.name.trim(),
+        options: g.options
+          .filter((o) => o.label.trim())
+          .map((o) => ({ label: o.label.trim(), priceDelta: Number(o.priceDelta) || 0 })),
+      }));
+    const payload = {
+      categoryId,
+      subcategoryId,
+      name,
+      price,
+      description,
+      imageUrl,
+      isBestseller,
+      bestsellerEmoji,
+      foodType,
+      rating,
+      prepTimeMinutes,
+      modifierGroups: cleanGroups,
+      translations,
+    };
     try {
       if (editing) {
         await api.put(`/food-items/${editing._id}`, payload);
@@ -337,7 +368,11 @@ export default function FoodItems() {
           <div className="w-full border-t border-slate-100 pt-3">
             <div className="mb-2 flex items-center justify-between">
               <p className="text-sm font-semibold text-slate-700">Customization options</p>
-              <button type="button" onClick={addGroup} className="text-sm font-semibold text-orange-600 hover:underline">
+              <button
+                type="button"
+                onClick={addGroup}
+                className="text-sm font-semibold text-orange-600 hover:underline"
+              >
                 + Add group
               </button>
             </div>
@@ -348,28 +383,67 @@ export default function FoodItems() {
               {modifierGroups.map((g, gi) => (
                 <div key={gi} className="rounded-xl border border-slate-200 p-3">
                   <div className="flex flex-wrap items-center gap-2">
-                    <Input className="w-40" placeholder="Group name (e.g. Size)" value={g.name} onChange={(e) => updateGroup(gi, { name: e.target.value })} />
-                    <Select className="!w-32" value={g.type} onChange={(e) => updateGroup(gi, { type: e.target.value as "single" | "multi" })}>
+                    <Input
+                      className="w-40"
+                      placeholder="Group name (e.g. Size)"
+                      value={g.name}
+                      onChange={(e) => updateGroup(gi, { name: e.target.value })}
+                    />
+                    <Select
+                      className="!w-32"
+                      value={g.type}
+                      onChange={(e) => updateGroup(gi, { type: e.target.value as "single" | "multi" })}
+                    >
                       <option value="single">Pick one</option>
                       <option value="multi">Pick many</option>
                     </Select>
                     <label className="flex items-center gap-1 text-xs text-slate-600">
-                      <input type="checkbox" checked={g.required} onChange={(e) => updateGroup(gi, { required: e.target.checked })} />
+                      <input
+                        type="checkbox"
+                        checked={g.required}
+                        onChange={(e) => updateGroup(gi, { required: e.target.checked })}
+                      />
                       Required
                     </label>
-                    <button type="button" onClick={() => removeGroup(gi)} className="ml-auto text-xs font-semibold text-red-600 hover:underline">
+                    <button
+                      type="button"
+                      onClick={() => removeGroup(gi)}
+                      className="ml-auto text-xs font-semibold text-red-600 hover:underline"
+                    >
                       Remove group
                     </button>
                   </div>
                   <div className="mt-2 flex flex-col gap-1.5">
                     {g.options.map((o, oi) => (
                       <div key={oi} className="flex items-center gap-2">
-                        <Input className="flex-1" placeholder="Option (e.g. Large)" value={o.label} onChange={(e) => updateOption(gi, oi, { label: e.target.value })} />
-                        <Input className="w-24" type="number" step="0.01" placeholder="+₹0" value={o.priceDelta} onChange={(e) => updateOption(gi, oi, { priceDelta: Number(e.target.value) })} />
-                        <button type="button" onClick={() => removeOption(gi, oi)} className="text-slate-400 hover:text-red-600">✕</button>
+                        <Input
+                          className="flex-1"
+                          placeholder="Option (e.g. Large)"
+                          value={o.label}
+                          onChange={(e) => updateOption(gi, oi, { label: e.target.value })}
+                        />
+                        <Input
+                          className="w-24"
+                          type="number"
+                          step="0.01"
+                          placeholder="+₹0"
+                          value={o.priceDelta}
+                          onChange={(e) => updateOption(gi, oi, { priceDelta: Number(e.target.value) })}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeOption(gi, oi)}
+                          className="text-slate-400 hover:text-red-600"
+                        >
+                          ✕
+                        </button>
                       </div>
                     ))}
-                    <button type="button" onClick={() => addOption(gi)} className="self-start text-xs font-semibold text-orange-600 hover:underline">
+                    <button
+                      type="button"
+                      onClick={() => addOption(gi)}
+                      className="self-start text-xs font-semibold text-orange-600 hover:underline"
+                    >
                       + Add option
                     </button>
                   </div>
@@ -398,9 +472,21 @@ export default function FoodItems() {
             <div className="grid gap-3 sm:grid-cols-2">
               {(["kn", "hi"] as const).map((lng) => (
                 <div key={lng} className="rounded-xl border border-slate-200 p-3">
-                  <p className="mb-1.5 text-xs font-bold uppercase tracking-wide text-slate-400">{lng === "kn" ? "ಕನ್ನಡ (Kannada)" : "हिन्दी (Hindi)"}</p>
-                  <Input className="mb-2" placeholder="Name" value={tr[lng].name} onChange={(e) => setTr((t) => ({ ...t, [lng]: { ...t[lng], name: e.target.value } }))} />
-                  <Textarea rows={2} placeholder="Description" value={tr[lng].description} onChange={(e) => setTr((t) => ({ ...t, [lng]: { ...t[lng], description: e.target.value } }))} />
+                  <p className="mb-1.5 text-xs font-bold uppercase tracking-wide text-slate-400">
+                    {lng === "kn" ? "ಕನ್ನಡ (Kannada)" : "हिन्दी (Hindi)"}
+                  </p>
+                  <Input
+                    className="mb-2"
+                    placeholder="Name"
+                    value={tr[lng].name}
+                    onChange={(e) => setTr((t) => ({ ...t, [lng]: { ...t[lng], name: e.target.value } }))}
+                  />
+                  <Textarea
+                    rows={2}
+                    placeholder="Description"
+                    value={tr[lng].description}
+                    onChange={(e) => setTr((t) => ({ ...t, [lng]: { ...t[lng], description: e.target.value } }))}
+                  />
                 </div>
               ))}
             </div>
@@ -435,73 +521,73 @@ export default function FoodItems() {
       <Card>
         <TableWrap>
           <table className="w-full min-w-[34rem] text-sm">
-          <thead>
-            <tr className="text-left text-slate-500">
-              <th className="pb-2">Image</th>
-              <th className="pb-2">Category</th>
-              <th className="pb-2">Subcategory</th>
-              <th className="pb-2">Name</th>
-              <th className="pb-2">Price</th>
-              <th className="pb-2">Prep</th>
-              <th className="pb-2">Reviews</th>
-              <th className="pb-2">Status</th>
-              <th className="pb-2"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {foodItems.map((food) => (
-              <tr key={food._id} className="border-t border-slate-100">
-                <td className="py-1.5">
-                  <div className="relative h-10 w-10">
-                    {food.imageUrl ? (
-                      <img src={food.imageUrl} alt="" className="h-10 w-10 rounded-md object-cover" />
-                    ) : (
-                      <div className="h-10 w-10 rounded-md bg-slate-100" />
-                    )}
-                    {food.isBestseller && (
-                      <span
-                        className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-white text-[10px] shadow"
-                        title="Bestseller"
-                      >
-                        {food.bestsellerEmoji || "⭐"}
-                      </span>
-                    )}
-                  </div>
-                </td>
-                <td className="py-1.5">{categoryName(food.categoryId)}</td>
-                <td className="py-1.5">{subcategoryName(food.subcategoryId)}</td>
-                <td className="py-1.5">{food.name}</td>
-                <td className="py-1.5">₹{food.price.toFixed(2)}</td>
-                <td className="py-1.5 whitespace-nowrap">{food.prepTimeMinutes ?? 10} min</td>
-                <td className="py-1.5 whitespace-nowrap">
-                  {food.reviewCount ? (
-                    <span className="text-slate-700">
-                      ★ {(food.reviewSum! / food.reviewCount).toFixed(1)}{" "}
-                      <span className="text-slate-400">({food.reviewCount})</span>
-                    </span>
-                  ) : (
-                    <span className="text-slate-300">—</span>
-                  )}
-                </td>
-                <td className="py-1.5">
-                  <div className="flex gap-1.5">
-                    <Badge tone={food.isActive ? "green" : "gray"}>{food.isActive ? "Active" : "Inactive"}</Badge>
-                    {food.isBestseller && <Badge tone="amber">{food.bestsellerEmoji || "⭐"} Bestseller</Badge>}
-                  </div>
-                </td>
-                <td className="flex gap-2 py-1.5">
-                  <button className="text-orange-600 hover:underline" onClick={() => edit(food)}>
-                    Edit
-                  </button>
-                  <button className="text-slate-600 hover:underline" onClick={() => toggleActive(food)}>
-                    {food.isActive ? "Deactivate" : "Activate"}
-                  </button>
-                </td>
+            <thead>
+              <tr className="text-left text-slate-500">
+                <th className="pb-2">Image</th>
+                <th className="pb-2">Category</th>
+                <th className="pb-2">Subcategory</th>
+                <th className="pb-2">Name</th>
+                <th className="pb-2">Price</th>
+                <th className="pb-2">Prep</th>
+                <th className="pb-2">Reviews</th>
+                <th className="pb-2">Status</th>
+                <th className="pb-2"></th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </TableWrap>
+            </thead>
+            <tbody>
+              {foodItems.map((food) => (
+                <tr key={food._id} className="border-t border-slate-100">
+                  <td className="py-1.5">
+                    <div className="relative h-10 w-10">
+                      {food.imageUrl ? (
+                        <img src={food.imageUrl} alt="" className="h-10 w-10 rounded-md object-cover" />
+                      ) : (
+                        <div className="h-10 w-10 rounded-md bg-slate-100" />
+                      )}
+                      {food.isBestseller && (
+                        <span
+                          className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-white text-[10px] shadow"
+                          title="Bestseller"
+                        >
+                          {food.bestsellerEmoji || "⭐"}
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="py-1.5">{categoryName(food.categoryId)}</td>
+                  <td className="py-1.5">{subcategoryName(food.subcategoryId)}</td>
+                  <td className="py-1.5">{food.name}</td>
+                  <td className="py-1.5">₹{food.price.toFixed(2)}</td>
+                  <td className="py-1.5 whitespace-nowrap">{food.prepTimeMinutes ?? 10} min</td>
+                  <td className="py-1.5 whitespace-nowrap">
+                    {food.reviewCount ? (
+                      <span className="text-slate-700">
+                        ★ {(food.reviewSum! / food.reviewCount).toFixed(1)}{" "}
+                        <span className="text-slate-400">({food.reviewCount})</span>
+                      </span>
+                    ) : (
+                      <span className="text-slate-300">—</span>
+                    )}
+                  </td>
+                  <td className="py-1.5">
+                    <div className="flex gap-1.5">
+                      <Badge tone={food.isActive ? "green" : "gray"}>{food.isActive ? "Active" : "Inactive"}</Badge>
+                      {food.isBestseller && <Badge tone="amber">{food.bestsellerEmoji || "⭐"} Bestseller</Badge>}
+                    </div>
+                  </td>
+                  <td className="flex gap-2 py-1.5">
+                    <button className="text-orange-600 hover:underline" onClick={() => edit(food)}>
+                      Edit
+                    </button>
+                    <button className="text-slate-600 hover:underline" onClick={() => toggleActive(food)}>
+                      {food.isActive ? "Deactivate" : "Activate"}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </TableWrap>
       </Card>
     </div>
   );

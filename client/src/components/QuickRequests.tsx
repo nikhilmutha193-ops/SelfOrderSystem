@@ -1,7 +1,8 @@
 import { useState } from "react";
+
 import { api, extractErrorMessage } from "../lib/apiClient";
-import { useTableSession } from "../lib/useTableSession";
 import { QUICK_REQUESTS } from "../lib/quickRequests";
+import { useTableSession } from "../lib/useTableSession";
 
 export default function QuickRequests() {
   const { orderId } = useTableSession();

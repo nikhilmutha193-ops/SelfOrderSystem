@@ -1,5 +1,12 @@
 import { Router } from "express";
-import { submitReview, submitFoodReview, listReviews, setReviewApproved, deleteReview } from "../controllers/review.controller";
+
+import {
+  deleteReview,
+  listReviews,
+  setReviewApproved,
+  submitFoodReview,
+  submitReview,
+} from "../controllers/review.controller";
 import { requireAuth, requireModule } from "../middleware/auth";
 
 const router = Router();

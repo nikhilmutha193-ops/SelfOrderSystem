@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { api, extractErrorMessage, uploadImage } from "../../lib/apiClient";
+
 import { Badge, Button, Card, ErrorText, Input, Textarea } from "../../components/ui";
+import { api, extractErrorMessage, uploadImage } from "../../lib/apiClient";
 import type { Award } from "../../lib/types";
 
 export default function Awards() {
@@ -106,7 +107,9 @@ export default function Awards() {
   return (
     <div className="flex flex-col gap-6">
       <h1 className="text-2xl font-bold text-slate-800">Awards &amp; Recognition</h1>
-      <p className="text-sm text-slate-500">These appear in the "Awards & Recognition" section of your public landing page.</p>
+      <p className="text-sm text-slate-500">
+        These appear in the "Awards & Recognition" section of your public landing page.
+      </p>
 
       <Card>
         <form onSubmit={submit} className="flex flex-col gap-4">
@@ -194,9 +197,7 @@ export default function Awards() {
               )}
               <div>
                 <p className="font-semibold text-slate-800">{award.title}</p>
-                <p className="text-xs text-slate-500">
-                  {[award.issuer, award.year].filter(Boolean).join(" · ")}
-                </p>
+                <p className="text-xs text-slate-500">{[award.issuer, award.year].filter(Boolean).join(" · ")}</p>
               </div>
             </div>
             {award.description && <p className="text-sm text-slate-600">{award.description}</p>}

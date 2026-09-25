@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { api, extractErrorMessage } from "../../lib/apiClient";
-import { Badge, Button, Card, ErrorText, Select, TableWrap } from "../../components/ui";
+
 import { BestsellerTag, FoodTypeIcon, RatingChip } from "../../components/FoodBadges";
+import { Badge, Button, Card, ErrorText, Select, TableWrap } from "../../components/ui";
+import { api, extractErrorMessage } from "../../lib/apiClient";
 import { renderPrepMessage } from "../../lib/prepTime";
 import type { MenuCategory, MenuFoodItem, OrderCoupon, OrderDetailResponse, PaymentMethod } from "../../lib/types";
 
@@ -69,7 +70,7 @@ export default function OrderDetail({
   const activeFoods =
     activeCat === "all"
       ? Array.from(foodById.values())
-      : menu.find((c) => c._id === activeCat)?.subcategories.flatMap((s) => s.foodItems) ?? [];
+      : (menu.find((c) => c._id === activeCat)?.subcategories.flatMap((s) => s.foodItems) ?? []);
 
   const cartCount = Object.values(cart).reduce((sum, q) => sum + q, 0);
   const cartTotal = Object.entries(cart).reduce((sum, [id, q]) => sum + (foodById.get(id)?.price ?? 0) * q, 0);
@@ -109,7 +110,6 @@ export default function OrderDetail({
     }
   }
 
-  /** Sends only the not-yet-printed items to the kitchen: new round, new token. */
   async function sendNewKot() {
     if (!orderId || kotBusy) return;
     setError(null);
@@ -134,7 +134,6 @@ export default function OrderDetail({
     }
   }
 
-  /** Re-opens an already-printed round's ticket. Same token - nothing is re-allocated. */
   async function reprintKot(round: number) {
     if (!orderId) return;
     setError(null);
@@ -283,37 +282,37 @@ export default function OrderDetail({
         )}
         <TableWrap>
           <table className="w-full min-w-[34rem] text-sm">
-          <thead>
-            <tr className="text-left text-slate-500">
-              <th className="pb-2">Item</th>
-              <th className="pb-2">Qty</th>
-              <th className="pb-2">Amount</th>
-              <th className="pb-2">Status</th>
-              <th className="pb-2">KOT round</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((item) => (
-              <tr key={item._id} className="border-t border-slate-100">
-                <td className="py-1.5">
-                  {item.foodName} {item.isJain && "(Jain)"}
-                  {(item.modifiers?.length || item.note) && (
-                    <span className="mt-0.5 block text-xs text-slate-400">
-                      {[...(item.modifiers?.map((m) => m.label) ?? []), item.note].filter(Boolean).join(", ")}
-                    </span>
-                  )}
-                </td>
-                <td className="py-1.5">{item.quantity}</td>
-                <td className="py-1.5">₹{item.total.toFixed(2)}</td>
-                <td className="py-1.5">
-                  <Badge tone={STATUS_TONE[item.status]}>{item.status}</Badge>
-                </td>
-                <td className="py-1.5">{item.kotRound ?? "-"}</td>
+            <thead>
+              <tr className="text-left text-slate-500">
+                <th className="pb-2">Item</th>
+                <th className="pb-2">Qty</th>
+                <th className="pb-2">Amount</th>
+                <th className="pb-2">Status</th>
+                <th className="pb-2">KOT round</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </TableWrap>
+            </thead>
+            <tbody>
+              {items.map((item) => (
+                <tr key={item._id} className="border-t border-slate-100">
+                  <td className="py-1.5">
+                    {item.foodName} {item.isJain && "(Jain)"}
+                    {(item.modifiers?.length || item.note) && (
+                      <span className="mt-0.5 block text-xs text-slate-400">
+                        {[...(item.modifiers?.map((m) => m.label) ?? []), item.note].filter(Boolean).join(", ")}
+                      </span>
+                    )}
+                  </td>
+                  <td className="py-1.5">{item.quantity}</td>
+                  <td className="py-1.5">₹{item.total.toFixed(2)}</td>
+                  <td className="py-1.5">
+                    <Badge tone={STATUS_TONE[item.status]}>{item.status}</Badge>
+                  </td>
+                  <td className="py-1.5">{item.kotRound ?? "-"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </TableWrap>
 
         {order.status === "open" && (
           <div className="mt-4 border-t border-slate-100 pt-4">
@@ -408,7 +407,9 @@ export default function OrderDetail({
                   </Button>
                 </div>
               ))}
-              <p className="text-xs text-slate-400">Reprinting keeps the same token number - it never issues a new one.</p>
+              <p className="text-xs text-slate-400">
+                Reprinting keeps the same token number - it never issues a new one.
+              </p>
             </div>
           )}
         </Card>
@@ -430,14 +431,8 @@ export default function OrderDetail({
             <div className="flex flex-wrap items-end gap-2">
               <label className="text-sm font-medium text-slate-700">
                 Select coupon
-                <Select
-                  className="mt-1 !w-64"
-                  value={couponCode}
-                  onChange={(e) => setCouponCode(e.target.value)}
-                >
-                  <option value="">
-                    {offers.length === 0 ? "No coupons available" : "Select coupon"}
-                  </option>
+                <Select className="mt-1 !w-64" value={couponCode} onChange={(e) => setCouponCode(e.target.value)}>
+                  <option value="">{offers.length === 0 ? "No coupons available" : "Select coupon"}</option>
                   {offers.map((offer) => (
                     <option key={offer.code} value={offer.code} disabled={!offer.eligible}>
                       {offer.code} - {offer.type === "percent" ? `${offer.value}% off` : `₹${offer.value} off`}
@@ -483,7 +478,11 @@ export default function OrderDetail({
       <div className="flex flex-wrap items-center gap-3">
         {order.status === "open" && (
           <>
-            <Select className="w-40" value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}>
+            <Select
+              className="w-40"
+              value={paymentMethod}
+              onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
+            >
               <option value="cash">Cash</option>
               <option value="online">Online</option>
               <option value="card">Card</option>
@@ -502,7 +501,6 @@ export default function OrderDetail({
   );
 }
 
-/** A menu-page-style dish card for the counter picker: image, badges, price and a +/- stepper. */
 function MenuPickCard({
   food,
   qty,
@@ -517,7 +515,12 @@ function MenuPickCard({
   return (
     <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
       {food.imageUrl ? (
-        <img src={food.imageUrl} alt={food.name} loading="lazy" className="h-16 w-16 shrink-0 rounded-xl object-cover" />
+        <img
+          src={food.imageUrl}
+          alt={food.name}
+          loading="lazy"
+          className="h-16 w-16 shrink-0 rounded-xl object-cover"
+        />
       ) : (
         <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-orange-100 to-amber-50 text-xl font-bold text-orange-400">
           {food.name.charAt(0).toUpperCase()}

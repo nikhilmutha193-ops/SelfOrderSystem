@@ -1,10 +1,9 @@
 import multer from "multer";
+
 import { HttpError } from "../utils/httpError";
 
 const ALLOWED_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
 
-// Buffered rather than written straight to disk: a serverless filesystem is
-// read-only, so the controller decides between Blob storage and local disk.
 export const uploadImage = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 4 * 1024 * 1024 }, // Vercel rejects request bodies over 4.5MB before they reach us

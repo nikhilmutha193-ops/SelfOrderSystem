@@ -1,14 +1,12 @@
-import { Schema, model, Types } from "mongoose";
+import { model, Schema, Types } from "mongoose";
 
 export type FoodType = "veg" | "non-veg" | "egg";
 
-/** A choice within a modifier group, e.g. "Large (+40)" or "Extra cheese (+30)". */
 export interface IModifierOption {
   label: string;
   priceDelta: number;
 }
 
-/** A group of choices, e.g. "Size" (pick one) or "Add-ons" (pick many). */
 export interface IModifierGroup {
   name: string;
   type: "single" | "multi";
@@ -29,15 +27,10 @@ export interface IFoodItem {
   isBestseller: boolean;
   bestsellerEmoji?: string;
   foodType: FoodType;
-  /** 0 means unrated - the menu shows a "New" chip rather than inventing stars. */
   rating: number;
-  /** Kitchen time for this dish, in minutes; drives an order's estimated ready time. */
   prepTimeMinutes: number;
-  /** Per-language overrides, keyed by language code ("kn", "hi"): { name?, description? }. */
   translations?: Record<string, { name?: string; description?: string }>;
-  /** Customization groups a guest can pick from when ordering this dish. */
   modifierGroups: IModifierGroup[];
-  /** Guest star reviews (1-5) aggregated for this dish. */
   reviewSum: number;
   reviewCount: number;
   createdAt: Date;

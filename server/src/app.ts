@@ -1,54 +1,48 @@
 import "dotenv/config";
-import express from "express";
+
 import cors from "cors";
+import express from "express";
 import helmet from "helmet";
 import mongoose from "mongoose";
-import { connectDb } from "./config/db";
-import { requestLogger } from "./middleware/requestLogger";
-import { describeError, logger } from "./utils/logger";
-import { resolveTenant } from "./middleware/tenant";
-import { sanitizeRequest } from "./middleware/sanitize";
-import { authLimiter, apiLimiter } from "./middleware/rateLimit";
-import { notFoundHandler, errorHandler } from "./middleware/errorHandler";
-import { UPLOADS_DIR } from "./utils/objectStore";
 
-import authRoutes from "./routes/auth.routes";
-import catalogRoutes from "./routes/catalog.routes";
-import tablesRoutes from "./routes/tables.routes";
-import chefsRoutes from "./routes/chefs.routes";
-import restaurantRoutes from "./routes/restaurant.routes";
-import ordersRoutes from "./routes/orders.routes";
-import dashboardRoutes from "./routes/dashboard.routes";
-import teamRoutes from "./routes/team.routes";
-import reviewRoutes from "./routes/review.routes";
-import awardRoutes from "./routes/award.routes";
-import couponRoutes from "./routes/coupon.routes";
-import landingRoutes from "./routes/landing.routes";
-import uploadRoutes from "./routes/upload.routes";
-import backupRoutes from "./routes/backup.routes";
+import { connectDb } from "./config/db";
+import { errorHandler, notFoundHandler } from "./middleware/errorHandler";
+import { apiLimiter, authLimiter } from "./middleware/rateLimit";
+import { requestLogger } from "./middleware/requestLogger";
+import { sanitizeRequest } from "./middleware/sanitize";
+import { resolveTenant } from "./middleware/tenant";
 import adminsRoutes from "./routes/admins.routes";
-import analyticsRoutes from "./routes/analytics.routes";
-import translateRoutes from "./routes/translate.routes";
 import aggregatorRoutes from "./routes/aggregator.routes";
-import webhookRoutes from "./routes/webhooks.routes";
+import analyticsRoutes from "./routes/analytics.routes";
+import authRoutes from "./routes/auth.routes";
+import awardRoutes from "./routes/award.routes";
+import backupRoutes from "./routes/backup.routes";
+import catalogRoutes from "./routes/catalog.routes";
+import chefsRoutes from "./routes/chefs.routes";
+import couponRoutes from "./routes/coupon.routes";
+import dashboardRoutes from "./routes/dashboard.routes";
+import landingRoutes from "./routes/landing.routes";
 import oauthRoutes from "./routes/oauth.routes";
+import ordersRoutes from "./routes/orders.routes";
+import restaurantRoutes from "./routes/restaurant.routes";
+import reviewRoutes from "./routes/review.routes";
+import tablesRoutes from "./routes/tables.routes";
+import teamRoutes from "./routes/team.routes";
+import translateRoutes from "./routes/translate.routes";
+import uploadRoutes from "./routes/upload.routes";
+import webhookRoutes from "./routes/webhooks.routes";
+import { describeError, logger } from "./utils/logger";
+import { UPLOADS_DIR } from "./utils/objectStore";
 
 const app = express();
 
-// Behind Vercel/Docker's nginx, so trust the proxy for correct client IPs (rate limiting)
-// and protocol (secure cookies / HSTS). "1" = the single proxy in front of us.
 app.set("trust proxy", 1);
 // Don't advertise the framework.
 app.disable("x-powered-by");
 
 app.use(requestLogger);
-// Sensible security headers (HSTS, nosniff, frame-deny, referrer policy). The API serves
-// JSON and PDFs, not an HTML app, so the default CSP is dropped to avoid breaking the
-// separately-hosted client and the /uploads images it references.
 app.use(helmet({ contentSecurityPolicy: false, crossOriginResourcePolicy: { policy: "cross-origin" } }));
 
-// An explicit allowlist beats a reflected wildcard. CLIENT_ORIGIN may be a comma-separated
-// list; "*" is honoured only if set on purpose, and credentials are never combined with it.
 const allowedOrigins = (process.env.CLIENT_ORIGIN || "*")
   .split(",")
   .map((o) => o.trim())
@@ -82,8 +76,6 @@ app.get("/health", async (_req, res) => {
 
 app.use("/uploads", express.static(UPLOADS_DIR));
 
-// Serverless (Vercel) invocations get a fresh module per cold start, so make sure
-// the DB is connected before any /api route runs; connectDb() memoizes the connection.
 app.use("/api", async (_req, res, next) => {
   try {
     await connectDb();

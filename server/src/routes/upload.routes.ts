@@ -1,7 +1,8 @@
 import { Router } from "express";
+
 import { handleImageUpload } from "../controllers/upload.controller";
-import { uploadImage } from "../middleware/upload";
 import { requireAuth } from "../middleware/auth";
+import { uploadImage } from "../middleware/upload";
 
 const router = Router();
 

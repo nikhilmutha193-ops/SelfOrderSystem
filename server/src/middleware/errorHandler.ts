@@ -1,4 +1,5 @@
-import { Request, Response, NextFunction } from "express";
+import { NextFunction, Request, Response } from "express";
+
 import { describeError, logger } from "../utils/logger";
 
 export function asyncHandler<T extends (req: Request, res: Response, next: NextFunction) => Promise<unknown>>(fn: T) {
@@ -22,8 +23,6 @@ export function errorHandler(err: any, req: Request, res: Response, next: NextFu
   if (status >= 500) logger.error("unhandled error", context);
   else logger.warn("request error", context);
 
-  // 4xx messages are written for the user; 5xx ones can leak internals (file paths,
-  // driver errors), so those are kept to the log and the client gets the id instead.
   const message = status >= 500 ? "Something went wrong. Please try again." : err.message || "Request failed";
   res.status(status).json({ message, requestId: req.requestId });
 }

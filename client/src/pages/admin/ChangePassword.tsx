@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { api, extractErrorMessage } from "../../lib/apiClient";
+
 import { Button, Card, ErrorText, Input } from "../../components/ui";
+import { api, extractErrorMessage } from "../../lib/apiClient";
 
 export default function ChangePassword() {
   const [oldPassword, setOldPassword] = useState("");

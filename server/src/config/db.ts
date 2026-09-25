@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+
 import { logger } from "../utils/logger";
 
 let connection: Promise<void> | null = null;
@@ -12,8 +13,6 @@ export function connectDb(): Promise<void> {
   }
 
   connection = mongoose
-    // default 30s server selection outlives a serverless function's timeout,
-    // turning an unreachable DB into a 504 instead of a clean error
     .connect(uri, { serverSelectionTimeoutMS: 8000 })
     .then(() => {
       logger.info("MongoDB connected");

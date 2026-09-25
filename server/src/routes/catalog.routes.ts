@@ -1,18 +1,19 @@
 import { Router } from "express";
+
 import {
-  listCategories,
   createCategory,
-  updateCategory,
-  setCategoryActive,
-  listSubcategories,
-  createSubcategory,
-  updateSubcategory,
-  setSubcategoryActive,
-  listFoodItems,
   createFoodItem,
-  updateFoodItem,
-  setFoodItemActive,
+  createSubcategory,
   getPublicMenu,
+  listCategories,
+  listFoodItems,
+  listSubcategories,
+  setCategoryActive,
+  setFoodItemActive,
+  setSubcategoryActive,
+  updateCategory,
+  updateFoodItem,
+  updateSubcategory,
 } from "../controllers/catalog.controller";
 import { requireAuth, requireModule } from "../middleware/auth";
 

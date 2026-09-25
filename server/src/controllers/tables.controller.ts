@@ -1,12 +1,13 @@
 import { Request, Response } from "express";
 import { Types } from "mongoose";
-import TableModel from "../models/Table";
-import Order from "../models/Order";
+
 import { asyncHandler } from "../middleware/errorHandler";
+import Order from "../models/Order";
+import TableModel from "../models/Table";
 import { HttpError } from "../utils/httpError";
 import { hashPassword } from "../utils/password";
-import { encryptTableToken } from "../utils/tableToken";
 import { cancelUnsentOrdersForTables } from "../utils/tableRelease";
+import { encryptTableToken } from "../utils/tableToken";
 
 function validId(id: string) {
   if (!Types.ObjectId.isValid(id)) throw new HttpError(400, "Invalid id");
@@ -89,29 +90,16 @@ export const releaseTable = asyncHandler(async (req: Request, res: Response) => 
   validId(req.params.id);
   const table = await TableModel.findOneAndUpdate(
     { _id: req.params.id, restaurantId: req.restaurantId },
-    // Clearing the session id invalidates the guest's token immediately - without
-    // it their JWT stays valid and they can keep ordering after being released.
     { $set: { status: "available" }, $unset: { sessionId: "", occupiedAt: "" } },
     { new: true }
   ).select("-passwordHash");
   if (!table) throw new HttpError(404, "Table not found");
 
-  // Anything the guest queued but never sent to the kitchen dies with the seating,
-  // so a walked-away table doesn't leave a phantom open order behind.
   const cancelledOrders = await cancelUnsentOrdersForTables([table._id]);
 
   res.json({ ...table.toObject(), cancelledOrders });
 });
 
-/**
- * Lets a guest end their own table session - either before starting an order (tapping
- * "Change"/"Back" on the visitor-details step) or mid-order (tapping "Leave table" on the
- * menu, after confirming past the active-order warning if there was one). Without this, the
- * table stays marked occupied server-side even though the guest has left, blocking that table
- * for everyone else until an admin releases it by hand or the auto-release timer eventually
- * fires. Behaves exactly like an admin releasing the table: anything not yet sent to the
- * kitchen is cancelled with the seating; anything already fired stays open for staff to settle.
- */
 export const releaseOwnTableSession = asyncHandler(async (req: Request, res: Response) => {
   if (!req.auth?.tableId) throw new HttpError(400, "No table session to release");
 
@@ -119,15 +107,11 @@ export const releaseOwnTableSession = asyncHandler(async (req: Request, res: Res
     {
       _id: req.auth.tableId,
       restaurantId: req.restaurantId,
-      // Only release the exact seating this token was issued for - a stale token from a
-      // seating that already ended (or was already released) must not touch the next guest's.
       sessionId: req.auth.sessionId,
     },
     { $set: { status: "available" }, $unset: { sessionId: "", occupiedAt: "" } },
     { new: true }
   );
-  // A guest table (isGuest) is never marked occupied and has no sessionId to match, so a
-  // missing match there is normal, not an error - nothing to release.
   if (table) await cancelUnsentOrdersForTables([table._id]);
 
   res.json({ released: !!table });

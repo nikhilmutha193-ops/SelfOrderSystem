@@ -1,4 +1,4 @@
-import { Schema, model, Types } from "mongoose";
+import { model, Schema, Types } from "mongoose";
 
 export type ChatSenderRole = "table" | "admin";
 
@@ -9,7 +9,6 @@ export interface IChatMessage {
   senderRole: ChatSenderRole;
   senderName: string;
   message: string;
-  /** True when the abuse filter masked or would have blocked content in this message. */
   flagged: boolean;
   readByAdmin: boolean;
   readByTable: boolean;

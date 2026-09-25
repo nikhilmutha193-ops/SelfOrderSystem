@@ -15,20 +15,8 @@ export interface QrSettings {
 }
 
 export type PrintPaperSize = "thermal58" | "thermal80" | "a5" | "a4";
+
 export type PrintFontSize = "compact" | "normal" | "large";
-
-export const PRINT_PAPER_SIZE_LABELS: Record<PrintPaperSize, string> = {
-  thermal58: "Thermal 58mm",
-  thermal80: "Thermal 80mm",
-  a5: "A5",
-  a4: "A4",
-};
-
-export const PRINT_FONT_SIZE_LABELS: Record<PrintFontSize, string> = {
-  compact: "Compact",
-  normal: "Normal",
-  large: "Large",
-};
 
 export interface KotSettings {
   headerText: string;
@@ -108,13 +96,14 @@ export interface ModifierOption {
   label: string;
   priceDelta: number;
 }
+
 export interface ModifierGroup {
   name: string;
   type: "single" | "multi";
   required: boolean;
   options: ModifierOption[];
 }
-/** A modifier a guest picked, stored on the cart line / order item. */
+
 export interface SelectedModifier {
   groupName: string;
   label: string;
@@ -179,11 +168,8 @@ export interface TableRow {
   password?: string;
   qrToken?: string;
   status: "available" | "occupied";
-  /** Shared walk-in/counter table: never marked occupied, no seating lock. */
   isGuest?: boolean;
-  /** When the table became occupied; used to show how long it's been sat. */
   occupiedAt?: string;
-  /** Per-table override of the restaurant's auto-release window. null follows the default. */
   autoReleaseMinutes?: number | null;
 }
 
@@ -193,10 +179,12 @@ export interface ChefRow {
   password?: string;
 }
 
-/** "delivery" is retained for orders placed before take-away replaced it. */
 export type OrderType = "dine-in" | "takeaway" | "delivery";
+
 export type OrderStatus = "open" | "closed" | "cancelled";
+
 export type PaymentMethod = "pending" | "cash" | "online" | "card";
+
 export type DeliveryProvider = "Swiggy" | "Zomato" | "Uber-Eats" | "Other";
 
 export interface Order {
@@ -214,13 +202,9 @@ export interface Order {
   paymentMethod: PaymentMethod;
   couponCode?: string;
   discountAmount: number;
-  /** "counter" orders are staff-raised and survive a table release; swiggy/zomato are aggregator orders. */
   source?: "guest" | "counter" | "swiggy" | "zomato";
-  /** The aggregator's own order reference, when the order came from Swiggy/Zomato. */
   externalOrderId?: string;
-  /** When the kitchen should have the order ready; absent until items are added. */
   estimatedReadyAt?: string | null;
-  /** KOT progress summary, attached by the orders list endpoint. */
   kitchen?: OrderKitchenSummary;
 }
 
@@ -243,7 +227,6 @@ export interface OrderItem {
   unitPrice: number;
   quantity: number;
   total: number;
-  /** Retained for orders placed while the Jain option existed. */
   isJain: boolean;
   status: OrderItemStatus;
   kotRound: number | null;
@@ -270,16 +253,13 @@ export interface OrderDetailResponse {
   order: Order;
   items: OrderItem[];
   totals: InvoiceTotals;
-  /** Admin-authored text with {minutes} and {time} placeholders. */
   prepMessageTemplate?: string;
-  /** Step size the estimate rolls forward by when the kitchen runs late. */
   prepBufferMinutes?: number;
 }
 
 export interface KotQueueGroup {
   order: Order;
   items: OrderItem[];
-  /** Lowest token number in this group; null until a ticket is printed. */
   tokenNumber: number | null;
 }
 
@@ -300,7 +280,6 @@ export interface ChatMessage {
   senderRole: ChatSenderRole;
   senderName: string;
   message: string;
-  /** Set when the abuse filter masked content in this message. */
   flagged?: boolean;
   createdAt: string;
 }
@@ -315,7 +294,6 @@ export interface ChatConversation {
 }
 
 export interface CartLine {
-  /** Unique per cart line, so two customizations of the same dish stay separate. */
   lineId: string;
   foodItemId: string;
   name: string;
@@ -445,7 +423,6 @@ export interface LandingContent {
     showSubtitle: boolean;
     primaryLabel: string;
     secondaryLabel: string;
-    /** Blank means "use the design's own colour". */
     eyebrowColor: string;
     headlineColor: string;
     subtitleColor: string;
@@ -455,7 +432,13 @@ export interface LandingContent {
     verticalAlignMobile: "" | "top" | "center" | "bottom";
     verticalAlignDesktop: "" | "top" | "center" | "bottom";
   };
-  serve: { enabled: boolean; title: string; lead: string; hint: string; items: { title: string; text: string; imageUrl: string }[] };
+  serve: {
+    enabled: boolean;
+    title: string;
+    lead: string;
+    hint: string;
+    items: { title: string; text: string; imageUrl: string }[];
+  };
   menu: { enabled: boolean; eyebrow: string; title: string; lead: string; ctaLabel: string };
   story: {
     enabled: boolean;
@@ -484,3 +467,16 @@ export interface LandingContent {
   partnership: { enabled: boolean; title: string; text: string; ctaLabel: string; ctaUrl: string };
   footer: { tagline: string; contacts: LandingLink[]; socials: LandingLink[] };
 }
+
+export const PRINT_PAPER_SIZE_LABELS: Record<PrintPaperSize, string> = {
+  thermal58: "Thermal 58mm",
+  thermal80: "Thermal 80mm",
+  a5: "A5",
+  a4: "A4",
+};
+
+export const PRINT_FONT_SIZE_LABELS: Record<PrintFontSize, string> = {
+  compact: "Compact",
+  normal: "Normal",
+  large: "Large",
+};

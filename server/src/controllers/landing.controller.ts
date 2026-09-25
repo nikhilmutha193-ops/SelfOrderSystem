@@ -1,13 +1,14 @@
 import { Request, Response } from "express";
-import Restaurant from "../models/Restaurant";
-import TeamMember from "../models/TeamMember";
-import FoodItem from "../models/FoodItem";
-import Review from "../models/Review";
-import Award from "../models/Award";
+
 import { asyncHandler } from "../middleware/errorHandler";
-import { getOrCreateLandingContent } from "./landingContent.controller";
-import { HttpError } from "../utils/httpError";
+import Award from "../models/Award";
+import FoodItem from "../models/FoodItem";
+import Restaurant from "../models/Restaurant";
+import Review from "../models/Review";
+import TeamMember from "../models/TeamMember";
 import { getGoogleReviews } from "../utils/googleReviews";
+import { HttpError } from "../utils/httpError";
+import { getOrCreateLandingContent } from "./landingContent.controller";
 
 export const getLandingPage = asyncHandler(async (req: Request, res: Response) => {
   const [restaurant, team, bestsellers, reviews, awards, googleReviews, content] = await Promise.all([

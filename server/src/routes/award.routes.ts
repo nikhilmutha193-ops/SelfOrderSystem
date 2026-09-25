@@ -1,5 +1,6 @@
 import { Router } from "express";
-import { listAwards, createAward, updateAward, setAwardActive, deleteAward } from "../controllers/award.controller";
+
+import { createAward, deleteAward, listAwards, setAwardActive, updateAward } from "../controllers/award.controller";
 import { requireAuth, requireModule } from "../middleware/auth";
 
 const router = Router();

@@ -1,8 +1,3 @@
-/**
- * Browser-side logging. Keeps a rolling buffer of recent entries so a user hitting
- * a bug can hand over what happened, and stays quiet in production except for
- * warnings and errors.
- */
 export type LogLevel = "error" | "warn" | "info" | "debug";
 
 export interface LogEntry {
@@ -42,7 +37,8 @@ export function getRecentLogs(): LogEntry[] {
   return [...buffer];
 }
 
-/** Copy-pasteable text for a bug report. */
 export function exportLogs(): string {
-  return buffer.map((e) => `${e.time} [${e.level}] ${e.message}${e.context ? " " + JSON.stringify(e.context) : ""}`).join("\n");
+  return buffer
+    .map((e) => `${e.time} [${e.level}] ${e.message}${e.context ? " " + JSON.stringify(e.context) : ""}`)
+    .join("\n");
 }

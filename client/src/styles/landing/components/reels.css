@@ -1,13 +1,3 @@
-/* ==========================================================================
-   Benne Kaffi — components/reels.css
-   Styles for <ReelsGallery /> and <ReelCard />. Depends on the tokens and shared classes in css/main.css.
-   ========================================================================== */
-
-/* --------------------------------------------------------------------------
-   Catch Our Reels  →  <ReelsGallery /> + <ReelCard />
-   Terracotta band with a centered cream heading and four 9:16 reels:
-   2-up on phones (grid capped at 768px wide), 4-up from 1024px.
-   -------------------------------------------------------------------------- */
 .reels {
   position: relative;
   overflow: hidden;
@@ -15,7 +5,6 @@
   background-color: var(--color-primary);
 }
 
-/* Faint dotted texture, like the reference band */
 .reels::before {
   content: "";
   position: absolute;
@@ -62,7 +51,9 @@
   background-color: var(--color-primary-dark);
   box-shadow: 0 24px 48px rgba(43, 29, 24, 0.35);
   color: #fff;
-  transition: transform 300ms ease-out, box-shadow 300ms ease-out;
+  transition:
+    transform 300ms ease-out,
+    box-shadow 300ms ease-out;
 }
 
 .reel-card__link:hover,
@@ -86,16 +77,10 @@
   transform: scale(1.05);
 }
 
-/* Placeholder variant for the terracotta band (swap for real <video>/<img>) */
 .placeholder--dark {
   color: rgba(253, 251, 247, 0.8);
   background-color: var(--color-primary-dark);
-  background-image:
-    repeating-linear-gradient(
-      45deg,
-      transparent 0 14px,
-      rgba(253, 251, 247, 0.06) 14px 16px
-    );
+  background-image: repeating-linear-gradient(45deg, transparent 0 14px, rgba(253, 251, 247, 0.06) 14px 16px);
   border: 1px dashed rgba(253, 251, 247, 0.35);
   align-content: start;
   padding-top: var(--space-5);
@@ -107,7 +92,6 @@
   background: linear-gradient(to top, rgba(0, 0, 0, 0.8), rgba(0, 0, 0, 0.2) 50%, transparent);
 }
 
-/* Play badge: revealed on hover/focus, like the reference */
 .reel-card__play {
   position: absolute;
   top: 50%;

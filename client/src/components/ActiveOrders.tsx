@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
+
+import { can, useAdmin } from "../lib/adminAuth";
 import { api, extractErrorMessage } from "../lib/apiClient";
-import { useAdmin, can } from "../lib/adminAuth";
 import type { Order, PaymentMethod } from "../lib/types";
 
-/** Open orders older than this need a staff decision: complete & close, or cancel. */
 const STALE_MS = 6 * 60 * 60 * 1000;
 
 function orderLabel(o: Order): string {
@@ -22,7 +22,6 @@ function ageLabel(iso: string): string {
   return h > 0 ? `${h}h ${m}m old` : `${m}m old`;
 }
 
-/** Quick access to every open order, and a resolve prompt for ones sitting open past 6 hours. */
 export default function ActiveOrders() {
   const { profile } = useAdmin();
   const allowed = can(profile, "orders");
@@ -38,9 +37,7 @@ export default function ActiveOrders() {
     api
       .get<Order[]>("/orders", { params: { status: "open" } })
       .then((res) => setOrders(res.data))
-      .catch(() => {
-        /* transient - keep the last known list */
-      });
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -65,7 +62,8 @@ export default function ActiveOrders() {
   const fresh = orders.filter((o) => Date.now() - new Date(o.checkinTime).getTime() <= STALE_MS);
 
   async function closeOrder(o: Order) {
-    if (!window.confirm(`Complete & close ${o.customerName || "this order"}? It will be marked paid (${method}).`)) return;
+    if (!window.confirm(`Complete & close ${o.customerName || "this order"}? It will be marked paid (${method}).`))
+      return;
     setError(null);
     setBusy(true);
     try {
@@ -106,8 +104,20 @@ export default function ActiveOrders() {
         aria-expanded={open}
         className="relative inline-flex h-11 items-center gap-2 rounded-md px-2 text-sm font-medium text-slate-600 hover:bg-slate-100 sm:px-3"
       >
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-          <path d="M9 5h6M9 5a2 2 0 1 0 4 0M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2" strokeLinecap="round" strokeLinejoin="round" />
+        <svg
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          aria-hidden="true"
+        >
+          <path
+            d="M9 5h6M9 5a2 2 0 1 0 4 0M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
           <path d="M9 12h6M9 16h4" strokeLinecap="round" />
         </svg>
         <span className="hidden sm:inline">Active orders</span>
@@ -142,7 +152,9 @@ export default function ActiveOrders() {
                   <div key={o._id} className="border-b border-slate-50 px-3 py-2.5 last:border-b-0">
                     <div className="flex items-center justify-between gap-2">
                       <Link to={`/admin/orders/${o._id}`} onClick={() => setOpen(false)} className="min-w-0">
-                        <span className="block truncate text-sm font-medium text-slate-800">{o.customerName || "Guest"}</span>
+                        <span className="block truncate text-sm font-medium text-slate-800">
+                          {o.customerName || "Guest"}
+                        </span>
                         <span className="block text-xs text-slate-500">
                           {orderLabel(o)} · <span className="font-medium text-red-600">{ageLabel(o.checkinTime)}</span>
                         </span>

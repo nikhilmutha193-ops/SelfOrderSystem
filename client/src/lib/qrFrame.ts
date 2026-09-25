@@ -71,7 +71,14 @@ export async function buildTableQrFrame(options: QrFrameOptions): Promise<string
 
   ctx.strokeStyle = "#1e293b";
   ctx.lineWidth = 2;
-  drawRoundedRect(ctx, BORDER + 10, BORDER + 10, CANVAS_WIDTH - (BORDER + 10) * 2, CANVAS_HEIGHT - (BORDER + 10) * 2, 16);
+  drawRoundedRect(
+    ctx,
+    BORDER + 10,
+    BORDER + 10,
+    CANVAS_WIDTH - (BORDER + 10) * 2,
+    CANVAS_HEIGHT - (BORDER + 10) * 2,
+    16
+  );
   ctx.stroke();
 
   let cursorY = 70;
@@ -143,7 +150,14 @@ export async function buildTableQrFrame(options: QrFrameOptions): Promise<string
   return canvas.toDataURL("image/png");
 }
 
-function wrapText(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, maxWidth: number, lineHeight: number) {
+function wrapText(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+  maxWidth: number,
+  lineHeight: number
+) {
   const words = text.split(" ");
   let line = "";
   const lines: string[] = [];

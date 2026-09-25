@@ -1,12 +1,9 @@
 import { Request, Response } from "express";
 import { Types } from "mongoose";
-import Coupon, { CouponType } from "../models/Coupon";
-import { asyncHandler } from "../middleware/errorHandler";
-import { HttpError } from "../utils/httpError";
 
-function validId(id: string) {
-  if (!Types.ObjectId.isValid(id)) throw new HttpError(400, "Invalid id");
-}
+import { asyncHandler } from "../middleware/errorHandler";
+import Coupon, { CouponType } from "../models/Coupon";
+import { HttpError } from "../utils/httpError";
 
 interface CouponBody {
   code?: string;
@@ -16,6 +13,10 @@ interface CouponBody {
   maxDiscountAmount?: number | null;
   usageLimit?: number | null;
   expiresAt?: string | null;
+}
+
+function validId(id: string) {
+  if (!Types.ObjectId.isValid(id)) throw new HttpError(400, "Invalid id");
 }
 
 function validateCouponBody(body: CouponBody, requireCore: boolean) {
@@ -90,7 +91,7 @@ export const updateCoupon = asyncHandler(async (req: Request, res: Response) => 
   }
 
   const set: Record<string, unknown> = {};
-  const unset: Record<string, "" > = {};
+  const unset: Record<string, ""> = {};
 
   if (body.code !== undefined) set.code = body.code.trim().toUpperCase();
   if (body.type !== undefined) set.type = body.type;
@@ -110,11 +111,9 @@ export const updateCoupon = asyncHandler(async (req: Request, res: Response) => 
   if (Object.keys(set).length > 0) update.$set = set;
   if (Object.keys(unset).length > 0) update.$unset = unset;
 
-  const coupon = await Coupon.findOneAndUpdate(
-    { _id: req.params.id, restaurantId: req.restaurantId },
-    update,
-    { new: true }
-  );
+  const coupon = await Coupon.findOneAndUpdate({ _id: req.params.id, restaurantId: req.restaurantId }, update, {
+    new: true,
+  });
   if (!coupon) throw new HttpError(404, "Coupon not found");
   res.json(coupon);
 });

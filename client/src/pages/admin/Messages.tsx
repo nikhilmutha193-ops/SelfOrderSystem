@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, extractErrorMessage } from "../../lib/apiClient";
+
 import { Badge, Button, Card, ErrorText, Input } from "../../components/ui";
 import { useCanEdit } from "../../lib/adminAuth";
+import { api, extractErrorMessage } from "../../lib/apiClient";
 import type { ChatConversation, ChatMessage } from "../../lib/types";
 
 export default function Messages() {
@@ -142,11 +143,15 @@ export default function Messages() {
                   >
                     <p className="pr-5">{msg.message}</p>
                     {msg.flagged && (
-                      <p className={`mt-0.5 text-[10px] font-semibold ${msg.senderRole === "admin" ? "text-orange-100" : "text-red-500"}`}>
+                      <p
+                        className={`mt-0.5 text-[10px] font-semibold ${msg.senderRole === "admin" ? "text-orange-100" : "text-red-500"}`}
+                      >
                         ⚠ filtered for language
                       </p>
                     )}
-                    <p className={`mt-1 text-[10px] ${msg.senderRole === "admin" ? "text-orange-100" : "text-slate-400"}`}>
+                    <p
+                      className={`mt-1 text-[10px] ${msg.senderRole === "admin" ? "text-orange-100" : "text-slate-400"}`}
+                    >
                       {new Date(msg.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                     </p>
                     {canEdit && (

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { api, extractErrorMessage, uploadImage } from "../../lib/apiClient";
+
 import { Badge, Button, Card, ErrorText, Input, Select, Textarea } from "../../components/ui";
+import { api, extractErrorMessage, uploadImage } from "../../lib/apiClient";
 import type { TeamMember, TeamMemberRole } from "../../lib/types";
 
 export default function Team() {

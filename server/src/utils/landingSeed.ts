@@ -1,8 +1,9 @@
 import { Types } from "mongoose";
-import Restaurant from "../models/Restaurant";
-import TeamMember from "../models/TeamMember";
+
 import Award from "../models/Award";
+import Restaurant from "../models/Restaurant";
 import Review from "../models/Review";
+import TeamMember from "../models/TeamMember";
 import { HttpError } from "./httpError";
 
 const SAMPLE_TAGLINE = "Filter coffee, dosas and everything in between.";
@@ -10,12 +11,6 @@ const SAMPLE_ABOUT =
   "We started as a small neighbourhood kitchen with one idea: serve the food we grew up on, " +
   "made fresh every morning. Everything on our menu is cooked to order, so pull up a chair and stay a while.";
 
-/**
- * Fills empty landing-page content with obviously-sample records. Only ever fills
- * blanks, so running it twice - or after an admin has written real copy - changes
- * nothing. Hero images are left alone: there is no placeholder artwork worth
- * inventing, and overwriting uploads would be destructive.
- */
 export async function seedLandingContent(restaurantId: Types.ObjectId | string): Promise<string[]> {
   const restaurant = await Restaurant.findById(restaurantId);
   if (!restaurant) throw new HttpError(404, "Restaurant not found");

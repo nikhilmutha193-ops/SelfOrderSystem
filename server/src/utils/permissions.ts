@@ -1,4 +1,7 @@
-/** Admin modules that can be granted individually. Keys are stored on Admin.permissions. */
+export type ModuleKey = keyof typeof MODULES;
+
+export type PermissionLevel = "view" | "edit";
+
 export const MODULES = {
   dashboard: "Dashboard",
   categories: "Categories",
@@ -21,12 +24,7 @@ export const MODULES = {
   audit: "Audit Log",
 } as const;
 
-export type ModuleKey = keyof typeof MODULES;
-
 export const MODULE_KEYS = Object.keys(MODULES) as ModuleKey[];
-
-/** "view" is read-only; "edit" also allows mutations. A missing entry means no access. */
-export type PermissionLevel = "view" | "edit";
 
 export const PERMISSION_LEVELS: PermissionLevel[] = ["view", "edit"];
 
@@ -38,7 +36,6 @@ export function isPermissionLevel(value: unknown): value is PermissionLevel {
   return value === "view" || value === "edit";
 }
 
-/** Normalizes an untrusted permissions object, dropping unknown modules and levels. */
 export function sanitizePermissions(input: unknown): Record<string, PermissionLevel> {
   const result: Record<string, PermissionLevel> = {};
   if (!input || typeof input !== "object") return result;

@@ -1,14 +1,16 @@
 import "dotenv/config";
+
 import mongoose from "mongoose";
-import Restaurant from "../models/Restaurant";
+
 import Admin from "../models/Admin";
-import Chef from "../models/Chef";
-import TableModel from "../models/Table";
 import Category from "../models/Category";
-import Subcategory from "../models/Subcategory";
+import Chef from "../models/Chef";
 import FoodItem from "../models/FoodItem";
-import { hashPassword } from "./password";
+import Restaurant from "../models/Restaurant";
+import Subcategory from "../models/Subcategory";
+import TableModel from "../models/Table";
 import { seedLandingContent } from "./landingSeed";
+import { hashPassword } from "./password";
 
 async function seed() {
   const uri = process.env.MONGO_URI;

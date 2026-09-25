@@ -1,23 +1,29 @@
 import { Request, Response } from "express";
 import { Types } from "mongoose";
+
+import { asyncHandler } from "../middleware/errorHandler";
+import Admin from "../models/Admin";
+import ChatMessage from "../models/ChatMessage";
+import Coupon from "../models/Coupon";
+import FoodItem from "../models/FoodItem";
 import Order, { DeliveryProvider, OrderStatus, OrderType, PaymentMethod } from "../models/Order";
 import OrderItem from "../models/OrderItem";
-import TableModel from "../models/Table";
-import FoodItem from "../models/FoodItem";
 import Restaurant from "../models/Restaurant";
-import Coupon from "../models/Coupon";
-import ChatMessage from "../models/ChatMessage";
-import Admin from "../models/Admin";
-import { asyncHandler } from "../middleware/errorHandler";
+import TableModel from "../models/Table";
+import { writeAudit } from "../utils/audit";
+import { getBusinessDayRangeForDate, getBusinessDayStart } from "../utils/businessDay";
+import { moderateMessage } from "../utils/chatModeration";
+import { computeDiscountAmount, findValidCoupon } from "../utils/coupon";
 import { HttpError } from "../utils/httpError";
 import { computeInvoiceTotals } from "../utils/invoice";
-import { findValidCoupon, computeDiscountAmount } from "../utils/coupon";
-import { streamInvoicePdf, streamKotPdf, streamOrdersReportPdf } from "../utils/pdf";
-import { nextTokenNumber } from "../utils/kotQueue";
 import { signToken } from "../utils/jwt";
-import { getBusinessDayStart, getBusinessDayRangeForDate } from "../utils/businessDay";
-import { moderateMessage } from "../utils/chatModeration";
-import { writeAudit } from "../utils/audit";
+import { nextTokenNumber } from "../utils/kotQueue";
+import { streamInvoicePdf, streamKotPdf, streamOrdersReportPdf } from "../utils/pdf";
+
+interface OrderReportRow {
+  order: import("../models/Order").IOrder & { tableId?: { code?: string } };
+  grandTotal: number;
+}
 
 function validId(id: string) {
   if (!Types.ObjectId.isValid(id)) throw new HttpError(400, "Invalid id");
@@ -95,11 +101,6 @@ export const startDeliveryOrder = asyncHandler(async (req: Request, res: Respons
   res.status(201).json(order);
 });
 
-/**
- * Counter order taken by staff. Unlike the guest flow this issues no table token -
- * the order is worked from the admin panel - so a regular table is marked occupied
- * here and freed when the order is paid or cancelled.
- */
 export const startTakeawayOrder = asyncHandler(async (req: Request, res: Response) => {
   const { customerName, customerPhone, members } = req.body as {
     customerName?: string;
@@ -138,8 +139,6 @@ export const startCounterOrder = asyncHandler(async (req: Request, res: Response
     validId(tableId);
     table = await TableModel.findOne({ _id: tableId, restaurantId: req.restaurantId });
     if (!table) throw new HttpError(404, "Table not found");
-    // Staff can deliberately open a second order on a seated table (a split bill, or a
-    // party that joins later); without the flag an accidental duplicate is still blocked.
     if (!table.isGuest && table.status === "occupied" && !allowOccupied) {
       throw new HttpError(409, "This table is already occupied");
     }
@@ -188,8 +187,6 @@ export const addOrderItems = asyncHandler(async (req: Request, res: Response) =>
     if (!line.foodItemId || !Types.ObjectId.isValid(line.foodItemId)) throw new HttpError(400, "Invalid foodItemId");
     if (!line.quantity || line.quantity < 1) throw new HttpError(400, "quantity must be at least 1");
 
-    // Server always re-derives price from the current menu record; the client's
-    // displayed price is never trusted for the amount actually charged.
     const food = await FoodItem.findOne({ _id: line.foodItemId, restaurantId: req.restaurantId, isActive: true });
     if (!food) throw new HttpError(404, `Food item ${line.foodItemId} is not available`);
 
@@ -222,8 +219,6 @@ export const addOrderItems = asyncHandler(async (req: Request, res: Response) =>
     longestPrepMinutes = Math.max(longestPrepMinutes, food.prepTimeMinutes ?? 0);
   }
 
-  // The kitchen works a round in parallel, so the round's slowest dish sets its pace.
-  // Later rounds only start when they arrive, so the estimate can move out but never in.
   const restaurant = await Restaurant.findById(req.restaurantId).select("prepBufferMinutes");
   const buffer = restaurant?.prepBufferMinutes ?? 0;
   const roundReadyAt = new Date(Date.now() + (longestPrepMinutes + buffer) * 60 * 1000);
@@ -286,7 +281,6 @@ export const cancelOrderItem = asyncHandler(async (req: Request, res: Response) 
 
 // ---------- Order lifecycle ----------
 
-/** Turns the shared type/status/date query params into a Mongo filter (used by the list and the reports). */
 async function buildOrderFilter(req: Request): Promise<Record<string, unknown>> {
   const { type, status, today, from, to } = req.query as {
     type?: OrderType;
@@ -304,9 +298,6 @@ async function buildOrderFilter(req: Request): Promise<Record<string, unknown>> 
     const restaurant = await Restaurant.findById(req.restaurantId).select("dayEndTime timezone");
     filter.checkinTime = { $gte: getBusinessDayStart(new Date(), restaurant?.dayEndTime, restaurant?.timezone) };
   } else if (from || to) {
-    // "from"/"to" are calendar-date labels (YYYY-MM-DD); each one names a full business day,
-    // so late-night orders that spill past midnight (before the day-end cutoff) are still
-    // included in the day they were labeled with, not cut off at literal midnight.
     const restaurant = await Restaurant.findById(req.restaurantId).select("dayEndTime timezone");
     const range: Record<string, Date> = {};
     if (from) range.$gte = getBusinessDayRangeForDate(from, restaurant?.dayEndTime, restaurant?.timezone).start;
@@ -320,11 +311,14 @@ export const listOrders = asyncHandler(async (req: Request, res: Response) => {
   const filter = await buildOrderFilter(req);
   const orders = await Order.find(filter).sort({ checkinTime: -1 }).populate("tableId", "code").lean();
 
-  // Attach a small kitchen summary per order so the dashboard/list can show KOT progress
-  // without a separate request per order.
   const orderIds = orders.map((o) => o._id);
-  const items = await OrderItem.find({ orderId: { $in: orderIds } }).select("orderId status kotRound").lean();
-  const byOrder = new Map<string, { active: number; served: number; ready: number; preparing: number; pendingSent: number; pendingUnsent: number }>();
+  const items = await OrderItem.find({ orderId: { $in: orderIds } })
+    .select("orderId status kotRound")
+    .lean();
+  const byOrder = new Map<
+    string,
+    { active: number; served: number; ready: number; preparing: number; pendingSent: number; pendingUnsent: number }
+  >();
   for (const it of items) {
     const key = it.orderId.toString();
     const k = byOrder.get(key) ?? { active: 0, served: 0, ready: 0, preparing: 0, pendingSent: 0, pendingUnsent: 0 };
@@ -332,23 +326,24 @@ export const listOrders = asyncHandler(async (req: Request, res: Response) => {
     if (it.status === "served") k.served += 1;
     else if (it.status === "ready") k.ready += 1;
     else if (it.status === "preparing") k.preparing += 1;
-    else if (it.status === "pending") (it.kotRound != null ? (k.pendingSent += 1) : (k.pendingUnsent += 1));
+    else if (it.status === "pending") it.kotRound != null ? (k.pendingSent += 1) : (k.pendingUnsent += 1);
     byOrder.set(key, k);
   }
 
   const withKitchen = orders.map((o) => ({
     ...o,
-    kitchen: byOrder.get(o._id.toString()) ?? { active: 0, served: 0, ready: 0, preparing: 0, pendingSent: 0, pendingUnsent: 0 },
+    kitchen: byOrder.get(o._id.toString()) ?? {
+      active: 0,
+      served: 0,
+      ready: 0,
+      preparing: 0,
+      pendingSent: 0,
+      pendingUnsent: 0,
+    },
   }));
   res.json(withKitchen);
 });
 
-/**
- * Permanently deletes every order matching the current filters (type/status/date) along
- * with their items and chat. This is a bulk, irreversible clear, so it is restricted to
- * the owner account regardless of who else has "edit" on Orders. Any tables those orders
- * held are freed so the deletion doesn't strand a table as "occupied".
- */
 export const clearOrders = asyncHandler(async (req: Request, res: Response) => {
   const admin = req.admin ?? (await Admin.findById(req.auth!.id));
   if (!admin?.isOwner) {
@@ -360,9 +355,7 @@ export const clearOrders = asyncHandler(async (req: Request, res: Response) => {
   if (orders.length === 0) return res.json({ deleted: 0 });
 
   const orderIds = orders.map((o) => o._id);
-  const tableIds = orders
-    .filter((o) => o.orderType === "dine-in" && o.tableId)
-    .map((o) => o.tableId as Types.ObjectId);
+  const tableIds = orders.filter((o) => o.orderType === "dine-in" && o.tableId).map((o) => o.tableId as Types.ObjectId);
 
   await OrderItem.deleteMany({ orderId: { $in: orderIds } });
   await ChatMessage.deleteMany({ orderId: { $in: orderIds } });
@@ -379,16 +372,6 @@ export const clearOrders = asyncHandler(async (req: Request, res: Response) => {
   res.json({ deleted: orderIds.length });
 });
 
-interface OrderReportRow {
-  order: import("../models/Order").IOrder & { tableId?: { code?: string } };
-  grandTotal: number;
-}
-
-/**
- * Loads the filtered orders plus a computed grand total for each, in two queries
- * (orders, then all their items at once) rather than per-order, so a big date range
- * doesn't fan out into hundreds of round-trips.
- */
 async function buildOrderReport(req: Request): Promise<{ rows: OrderReportRow[]; total: number; count: number }> {
   const filter = await buildOrderFilter(req);
   const orders = await Order.find(filter).sort({ checkinTime: -1 }).populate("tableId", "code").lean();
@@ -396,7 +379,9 @@ async function buildOrderReport(req: Request): Promise<{ rows: OrderReportRow[];
   const taxRates = restaurant?.taxRates || [];
 
   const orderIds = orders.map((o) => o._id);
-  const items = await OrderItem.find({ orderId: { $in: orderIds } }).select("orderId status total").lean();
+  const items = await OrderItem.find({ orderId: { $in: orderIds } })
+    .select("orderId status total")
+    .lean();
   const itemsByOrder = new Map<string, { status: string; total: number }[]>();
   for (const it of items) {
     const key = it.orderId.toString();
@@ -409,7 +394,9 @@ async function buildOrderReport(req: Request): Promise<{ rows: OrderReportRow[];
     const orderItems = itemsByOrder.get(order._id.toString()) || [];
     // A cancelled order collects no money, so it reports as 0 regardless of items.
     const grandTotal =
-      order.status === "cancelled" ? 0 : computeInvoiceTotals(orderItems as any, taxRates, order.discountAmount).grandTotal;
+      order.status === "cancelled"
+        ? 0
+        : computeInvoiceTotals(orderItems as any, taxRates, order.discountAmount).grandTotal;
     total += grandTotal;
     return { order: order as OrderReportRow["order"], grandTotal };
   });
@@ -422,7 +409,6 @@ function orderTypeLabel(order: { orderType: string; deliveryProvider?: string })
   return "Dine-in";
 }
 
-/** Escapes a value for CSV: wrap in quotes and double any inner quotes. */
 function csvCell(value: unknown): string {
   const s = value == null ? "" : String(value);
   return `"${s.replace(/"/g, '""')}"`;
@@ -469,8 +455,7 @@ export const exportOrdersPdf = asyncHandler(async (req: Request, res: Response) 
   if (!restaurant) throw new HttpError(404, "Restaurant not found");
   const { rows, total, count } = await buildOrderReport(req);
   const { type, from, to, today } = req.query as Record<string, string>;
-  const rangeLabel =
-    today === "true" ? "Today" : from || to ? [from, to].filter(Boolean).join(" to ") : "All dates";
+  const rangeLabel = today === "true" ? "Today" : from || to ? [from, to].filter(Boolean).join(" to ") : "All dates";
 
   await streamOrdersReportPdf(res, {
     restaurant,
@@ -496,7 +481,13 @@ export const getOrder = asyncHandler(async (req: Request, res: Response) => {
   const restaurant = await Restaurant.findById(req.restaurantId);
   const totals = computeInvoiceTotals(items, restaurant?.taxRates || [], order.discountAmount);
   // The template is filled in client-side so {time} lands in the reader's own timezone.
-  res.json({ order, items, totals, prepMessageTemplate: restaurant?.prepMessageTemplate || "", prepBufferMinutes: restaurant?.prepBufferMinutes ?? 2 });
+  res.json({
+    order,
+    items,
+    totals,
+    prepMessageTemplate: restaurant?.prepMessageTemplate || "",
+    prepBufferMinutes: restaurant?.prepBufferMinutes ?? 2,
+  });
 });
 
 export const getInvoice = asyncHandler(async (req: Request, res: Response) => {
@@ -504,7 +495,13 @@ export const getInvoice = asyncHandler(async (req: Request, res: Response) => {
   const items = await OrderItem.find({ orderId: order._id });
   const restaurant = await Restaurant.findById(req.restaurantId);
   const totals = computeInvoiceTotals(items, restaurant?.taxRates || [], order.discountAmount);
-  res.json({ order, items, totals, prepMessageTemplate: restaurant?.prepMessageTemplate || "", prepBufferMinutes: restaurant?.prepBufferMinutes ?? 2 });
+  res.json({
+    order,
+    items,
+    totals,
+    prepMessageTemplate: restaurant?.prepMessageTemplate || "",
+    prepBufferMinutes: restaurant?.prepBufferMinutes ?? 2,
+  });
 });
 
 export const getInvoicePdf = asyncHandler(async (req: Request, res: Response) => {
@@ -518,11 +515,6 @@ export const getInvoicePdf = asyncHandler(async (req: Request, res: Response) =>
 
 // ---------- Coupons ----------
 
-/**
- * Coupons staff can offer on this order. Lives on the orders module rather than the
- * coupons one, so someone who only takes orders can still see what's available, and
- * each is scored against this order's subtotal so unusable ones say why.
- */
 export const listOrderCoupons = asyncHandler(async (req: Request, res: Response) => {
   const order = await getOwnedOrder(req, req.params.orderId);
   const items = await OrderItem.find({ orderId: order._id });
@@ -581,7 +573,11 @@ export const applyCoupon = asyncHandler(async (req: Request, res: Response) => {
   order.discountAmount = discountAmount;
   await order.save();
 
-  const totals = computeInvoiceTotals(items, (await Restaurant.findById(req.restaurantId))?.taxRates || [], discountAmount);
+  const totals = computeInvoiceTotals(
+    items,
+    (await Restaurant.findById(req.restaurantId))?.taxRates || [],
+    discountAmount
+  );
   res.json({ order, totals });
 });
 
@@ -616,7 +612,10 @@ export const payOrder = asyncHandler(async (req: Request, res: Response) => {
   await order.save();
 
   if (order.orderType === "dine-in" && order.tableId) {
-    await TableModel.findByIdAndUpdate(order.tableId, { $set: { status: "available" }, $unset: { sessionId: "", occupiedAt: "" } });
+    await TableModel.findByIdAndUpdate(order.tableId, {
+      $set: { status: "available" },
+      $unset: { sessionId: "", occupiedAt: "" },
+    });
   }
 
   await writeAudit(req, "order.pay", `Closed & paid order for ${order.customerName || "guest"} (${paymentMethod})`);
@@ -632,7 +631,10 @@ export const cancelOrder = asyncHandler(async (req: Request, res: Response) => {
   await OrderItem.updateMany({ orderId: order._id, status: "pending" }, { $set: { status: "cancelled" } });
 
   if (order.orderType === "dine-in" && order.tableId) {
-    await TableModel.findByIdAndUpdate(order.tableId, { $set: { status: "available" }, $unset: { sessionId: "", occupiedAt: "" } });
+    await TableModel.findByIdAndUpdate(order.tableId, {
+      $set: { status: "available" },
+      $unset: { sessionId: "", occupiedAt: "" },
+    });
   }
 
   await writeAudit(req, "order.cancel", `Cancelled order for ${order.customerName || "guest"}`);
@@ -779,8 +781,6 @@ export const sendChatMessage = asyncHandler(async (req: Request, res: Response) 
 
   const senderName = role === "admin" ? "Restaurant" : order.customerName || "Guest";
 
-  // Run the abuse/violence filter before storing. Block mode rejects outright; mask mode
-  // stores a cleaned copy and flags it so staff can see something was filtered.
   const restaurant = await Restaurant.findById(req.restaurantId).select("chatModeration");
   const moderation = restaurant?.chatModeration ?? { enabled: true, mode: "mask" as const, customWords: [] };
   const { clean, flagged } = moderateMessage(message.trim(), moderation);
@@ -813,7 +813,6 @@ export const deleteChatMessage = asyncHandler(async (req: Request, res: Response
   res.json({ message: "Message deleted" });
 });
 
-/** Clears the unread badge without opening every conversation one by one. */
 export const markAllChatsRead = asyncHandler(async (req: Request, res: Response) => {
   const result = await ChatMessage.updateMany(
     { restaurantId: req.restaurantId, senderRole: "table", readByAdmin: false },

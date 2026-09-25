@@ -1,4 +1,5 @@
-import { Schema, model, Types } from "mongoose";
+import { model, Schema, Types } from "mongoose";
+
 import { DEFAULT_TIMEZONE } from "../utils/businessDay";
 
 export interface ITaxRate {
@@ -15,10 +16,8 @@ export interface IQrSettings {
 }
 
 export type PrintPaperSize = "thermal58" | "thermal80" | "a5" | "a4";
-export type PrintFontSize = "compact" | "normal" | "large";
 
-export const PRINT_PAPER_SIZES: PrintPaperSize[] = ["thermal58", "thermal80", "a5", "a4"];
-export const PRINT_FONT_SIZES: PrintFontSize[] = ["compact", "normal", "large"];
+export type PrintFontSize = "compact" | "normal" | "large";
 
 export interface IKotSettings {
   headerText: string;
@@ -45,16 +44,13 @@ export interface IInvoiceSettings {
 
 export interface IBackupSchedule {
   enabled: boolean;
-  /** "HH:mm" - server-local time of day the automatic daily backup runs. */
   time: string;
   lastRunAt?: Date;
 }
 
 export interface IChatModeration {
   enabled: boolean;
-  /** "mask" replaces banned words with ***; "block" rejects the whole message. */
   mode: "mask" | "block";
-  /** Extra banned words on top of the built-in list. */
   customWords: string[];
 }
 
@@ -63,7 +59,6 @@ export interface IRestaurant {
   name: string;
   key: string;
   logoUrl?: string;
-  /** Browser tab title; falls back to the restaurant name when blank. */
   siteTitle?: string;
   faviconUrl?: string;
   address?: string;
@@ -71,27 +66,14 @@ export interface IRestaurant {
   fssaiLicense?: string;
   tagline?: string;
   aboutText?: string;
-  /**
-   * Base URL customers' phones should use to reach this deployment (e.g. "http://192.168.1.20:8080"
-   * or a real domain). QR codes embed this instead of the admin browser's own origin, since an admin
-   * generating QR codes over "localhost" would otherwise bake in an address only that machine can reach.
-   * Empty string means "fall back to whatever origin the admin's browser is on" (single-machine dev).
-   */
   publicUrl?: string;
   heroImages: string[];
-  /** "HH:mm" - when the business day rolls over, for orders placed past midnight. */
   dayEndTime: string;
-  /** IANA zone the business day is measured in, independent of where the server runs. */
   timezone: string;
-  /** Minutes an occupied table is auto-released after with no staff action. 0 disables it. */
   tableAutoReleaseMinutes: number;
-  /** Padding added to every prep estimate so a small kitchen delay doesn't read as late. */
   prepBufferMinutes: number;
-  /** Shown above the items on the order and invoice screens. {minutes} and {time} are filled in. */
   prepMessageTemplate: string;
-  /** Abuse/violence filter for the guest<->staff chat. */
   chatModeration: IChatModeration;
-  /** Shared secret an aggregator (Swiggy/Zomato/UrbanPiper) must send to post orders to the webhook. */
   aggregatorWebhookSecret?: string;
   taxRates: ITaxRate[];
   qrSettings: IQrSettings;
@@ -101,6 +83,10 @@ export interface IRestaurant {
   createdAt: Date;
   updatedAt: Date;
 }
+
+export const PRINT_PAPER_SIZES: PrintPaperSize[] = ["thermal58", "thermal80", "a5", "a4"];
+
+export const PRINT_FONT_SIZES: PrintFontSize[] = ["compact", "normal", "large"];
 
 const taxRateSchema = new Schema<ITaxRate>(
   {

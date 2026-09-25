@@ -1,15 +1,15 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+
 import { api, extractErrorMessage } from "../lib/apiClient";
 import type { LandingContent, LandingData } from "../lib/types";
+
 import "../styles/landing/index.css";
 
 const ASSET = "/landing";
 
-/** Shown until hero images are uploaded under Restaurant Settings. */
 const FALLBACK_SLIDE = { desktop: `${ASSET}/desktop_banner.png`, mobile: `${ASSET}/mobile_banner.png` };
 
-/** Used when no "What We Serve" cards have been added in admin yet. */
 const FALLBACK_SERVE = [
   { title: "Benne Dosa", text: "Crisp, golden crepes from hand-ground batter.", imageUrl: `${ASSET}/dosa.png` },
   { title: "Thatte Idli", text: "Soft, plate-sized idlis steamed to order.", imageUrl: `${ASSET}/idly.png` },
@@ -17,7 +17,6 @@ const FALLBACK_SERVE = [
   { title: "Filter Kaffi", text: "Slow decoction, frothy milk, brass dabara.", imageUrl: `${ASSET}/coffee.png` },
 ];
 
-/** Standard visually-hidden technique: removed from sight, kept for screen readers. */
 const VISUALLY_HIDDEN: React.CSSProperties = {
   position: "absolute",
   width: 1,
@@ -52,13 +51,6 @@ export default function Landing() {
       .catch((err) => setLoadError(extractErrorMessage(err)));
   }, []);
 
-  // The header turns solid as soon as the page is scrolled at all. This used to wait until
-  // 80% of the viewport height had scrolled by (later, an attempt at waiting for the hero to
-  // fully clear) - but the hero's own CTA buttons ("Order Now"/"Explore Menu") sit near its
-  // *bottom*, so even a small scroll brings them right up to the still-transparent header,
-  // visually overlapping/gluing to it well before either threshold was reached. Switching
-  // solid almost immediately means hero content is safely hidden behind an opaque bar the
-  // moment it would otherwise reach the header, at any viewport size.
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 40);
     onScroll();
@@ -110,9 +102,6 @@ export default function Landing() {
   const storyQuote = c?.story.quote || founder?.bio || "";
   const outletItems = c?.outlets.items ?? [];
 
-  // Vertical position lives on the section (a grid, positioned via align-items);
-  // text alignment lives on the content block itself. Each is independent per
-  // screen size - an unset tier keeps the design's own default (see hero.css).
   const heroClassName = [
     "hero",
     c?.hero.verticalAlignMobile && `hero--valign-mobile-${c.hero.verticalAlignMobile}`,
@@ -131,10 +120,7 @@ export default function Landing() {
 
   return (
     <div className="bk-landing">
-      <header
-        className={`header${scrolled ? " header--scrolled" : ""}${navOpen ? " header--open" : ""}`}
-        id="header"
-      >
+      <header className={`header${scrolled ? " header--scrolled" : ""}${navOpen ? " header--open" : ""}`} id="header">
         <div className="container header__inner">
           <a className="header__logo" href="#top" aria-label={`${restaurant.name} - home`}>
             <img className="header__logo-img" src={logo} alt="" width={48} height={48} />
@@ -203,9 +189,6 @@ export default function Landing() {
             <h1
               className="hero__title"
               id="hero-title"
-              // Kept in the DOM (rather than removed) so the section's
-              // aria-labelledby still resolves to a name when the headline
-              // is hidden - "hidden" here means visual, not from a screen reader.
               style={{
                 ...(c?.hero.headlineColor ? { color: c.hero.headlineColor } : undefined),
                 ...(c?.hero.showHeadline === false ? VISUALLY_HIDDEN : undefined),
@@ -381,7 +364,8 @@ export default function Landing() {
                   <blockquote className="story__quote">
                     {storyQuote}
                     <cite className="story__cite">
-                      {c?.story.quoteCite || (founder ? `${founder.name}${founder.title ? `, ${founder.title}` : ""}` : "")}
+                      {c?.story.quoteCite ||
+                        (founder ? `${founder.name}${founder.title ? `, ${founder.title}` : ""}` : "")}
                     </cite>
                   </blockquote>
                 )}

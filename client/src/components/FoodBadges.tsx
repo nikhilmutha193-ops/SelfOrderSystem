@@ -12,10 +12,6 @@ const TYPE_LABEL: Record<FoodType, string> = {
   egg: "Contains egg",
 };
 
-/**
- * The square-with-marker symbol Indian menus use: a dot for veg/egg and a
- * triangle for non-veg, so it reads correctly without colour alone.
- */
 export function FoodTypeIcon({ type = "veg", size = 14 }: { type?: FoodType; size?: number }) {
   const color = TYPE_COLOR[type] ?? TYPE_COLOR.veg;
   return (
@@ -45,7 +41,6 @@ export function BestsellerTag({ emoji }: { emoji?: string }) {
   );
 }
 
-/** Unrated dishes show "New" - inventing a star score would misrepresent them. */
 export function RatingChip({ rating }: { rating?: number }) {
   if (!rating || rating <= 0) {
     return (

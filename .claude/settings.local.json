@@ -1,7 +1,13 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npm run *)"
+      "Bash(npm run *)",
+      "Bash(grep -rc \"/\\\\*\" client/src --include=*.css)",
+      "Bash(npm init *)",
+      "Bash(npm install *)",
+      "Bash(npx prettier *)",
+      "Bash(node -e \"console.log\\(require\\('./node_modules/@ianvs/prettier-plugin-sort-imports/package.json'\\).version\\)\")",
+      "Bash(C:/Users/mohda/AppData/Local/Temp/claude/c--Users-mohda-OneDrive-Documents-SelfOrderSystem/7560e59d-9a0c-4afa-8717-80c87a50fd80/scratchpad/node_modules/.bin/prettier --config C:/Users/mohda/AppData/Local/Temp/claude/c--Users-mohda-OneDrive-Documents-SelfOrderSystem/7560e59d-9a0c-4afa-8717-80c87a50fd80/scratchpad/prettier.config.cjs --no-editorconfig --ignore-path '' --write server/src/**/*.ts server/api/**/*.ts 'client/src/**/*.{ts,tsx,css}')"
     ]
   }
 }

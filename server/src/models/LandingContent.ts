@@ -1,10 +1,5 @@
-import { Schema, model, Types } from "mongoose";
+import { model, Schema, Types } from "mongoose";
 
-/**
- * Editable copy for the public landing page - one document per restaurant.
- * Kept separate from Restaurant so the marketing copy can grow without
- * bloating the record every order lookup already loads.
- */
 export interface ILandingLink {
   label: string;
   url: string;
@@ -23,18 +18,12 @@ export interface ILandingContent {
     showSubtitle: boolean;
     primaryLabel: string;
     secondaryLabel: string;
-    /** Blank means "use the design's own colour". */
     eyebrowColor: string;
     headlineColor: string;
     subtitleColor: string;
-    /** Per-slide artwork. A portrait `mobileUrl` avoids cropping on phones. */
     slides: { desktopUrl: string; mobileUrl: string }[];
-    /** "" keeps the design's own default for that tier (centered on phones,
-     *  left on tablet/desktop) - each screen size is set independently. */
     textAlignMobile: "" | "left" | "center" | "right";
     textAlignDesktop: "" | "left" | "center" | "right";
-    /** "" keeps the design's own default (bottom on phones, centered from
-     *  tablet up) - set independently per screen size, like the horizontal one. */
     verticalAlignMobile: "" | "top" | "center" | "bottom";
     verticalAlignDesktop: "" | "top" | "center" | "bottom";
   };
@@ -180,7 +169,7 @@ const landingContentSchema = new Schema<ILandingContent>(
               mapUrl: String,
               comingSoon: { type: Boolean, default: false },
             },
-            { _id: false },
+            { _id: false }
           ),
         ],
         default: [],
@@ -213,7 +202,7 @@ const landingContentSchema = new Schema<ILandingContent>(
       socials: { type: [linkSchema], default: [] },
     },
   },
-  { timestamps: true },
+  { timestamps: true }
 );
 
 export default model<ILandingContent>("LandingContent", landingContentSchema);

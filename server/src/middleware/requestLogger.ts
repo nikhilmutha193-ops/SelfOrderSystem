@@ -1,5 +1,6 @@
 import { randomUUID } from "crypto";
-import { Request, Response, NextFunction } from "express";
+import { NextFunction, Request, Response } from "express";
+
 import { logger } from "../utils/logger";
 
 declare global {
@@ -11,7 +12,6 @@ declare global {
   }
 }
 
-/** Logs one line per request once the response finishes, tagged with an id the client can quote. */
 export function requestLogger(req: Request, res: Response, next: NextFunction) {
   const requestId = req.header("x-request-id") || randomUUID();
   req.requestId = requestId;

@@ -1,20 +1,7 @@
-/* ==========================================================================
-   Benne Kaffi — components/hero.css
-   Styles for <Hero /> (full-screen banner + background slider). Depends on the tokens and shared classes in css/main.css.
-   ========================================================================== */
-
-/* --------------------------------------------------------------------------
-   Hero  →  <Hero />
-   Full-viewport banner that sits underneath the transparent fixed header.
-   Background is a stack of .hero__slide elements; JS crossfades them when
-   SITE_CONFIG.heroSlider.enabled is true.
-   -------------------------------------------------------------------------- */
 .hero {
   position: relative;
   display: grid;
   align-items: end;
-  /* Full first screen, capped for very tall monitors; min-height uses min() so
-     the cap actually wins (a separate max-height would lose to min-height) */
   min-height: min(100vh, 1000px);
   min-height: min(100svh, 1000px);
   padding-top: var(--header-h);
@@ -47,32 +34,31 @@
   height: 100%;
   object-fit: cover;
   object-position: center;
-  /* Slow settle-in on load, like the reference banner */
   animation: hero-settle 1500ms cubic-bezier(0.25, 0.4, 0.25, 1) both;
 }
 
 @keyframes hero-settle {
-  from { transform: scale(1.1); }
-  to   { transform: scale(1); }
+  from {
+    transform: scale(1.1);
+  }
+  to {
+    transform: scale(1);
+  }
 }
 
 .hero__overlay {
   position: absolute;
   inset: 0;
   z-index: -1;
-  background:
-    linear-gradient(
-      to top,
-      rgba(43, 29, 24, 0.92) 0%,
-      rgba(43, 29, 24, 0.62) 40%,
-      rgba(43, 29, 24, 0.15) 75%,
-      rgba(43, 29, 24, 0.35) 100%
-    );
+  background: linear-gradient(
+    to top,
+    rgba(43, 29, 24, 0.92) 0%,
+    rgba(43, 29, 24, 0.62) 40%,
+    rgba(43, 29, 24, 0.15) 75%,
+    rgba(43, 29, 24, 0.35) 100%
+  );
 }
 
-/* Brass pendant lamp hanging from the top-left corner (matches the reference
-   site: top-0, left-2, ~20vh tall, drops in with a fade on load). Kept small
-   on phones so it doesn't crowd the banner. */
 .hero__light {
   position: absolute;
   top: 0;
@@ -151,17 +137,8 @@
 
   .hero__overlay {
     background:
-      linear-gradient(
-        to right,
-        rgba(43, 29, 24, 0.88) 0%,
-        rgba(43, 29, 24, 0.55) 45%,
-        rgba(43, 29, 24, 0.05) 100%
-      ),
-      linear-gradient(
-        to bottom,
-        rgba(43, 29, 24, 0.45) 0%,
-        rgba(43, 29, 24, 0) 25%
-      );
+      linear-gradient(to right, rgba(43, 29, 24, 0.88) 0%, rgba(43, 29, 24, 0.55) 45%, rgba(43, 29, 24, 0.05) 100%),
+      linear-gradient(to bottom, rgba(43, 29, 24, 0.45) 0%, rgba(43, 29, 24, 0) 25%);
   }
 
   .hero__light {
@@ -186,14 +163,6 @@
   }
 }
 
-/*
- * Admin-set text alignment (Landing Page > Hero banner), independent per
- * screen size. Left unset for a tier, it keeps the design's own default
- * above (centered on phones, left from tablet up). Same specificity as the
- * base .hero__content rules, so winning is purely a matter of appearing
- * later in this file - each block is scoped to its own media query, so a
- * mobile choice can never affect desktop and vice versa.
- */
 @media (max-width: 767px) {
   .hero__content--mobile-left {
     text-align: left;
@@ -258,12 +227,6 @@
   }
 }
 
-/*
- * Admin-set vertical position, same pattern as the text-alignment overrides
- * above but on .hero itself (a grid, positioned via align-items) rather than
- * .hero__content. Unset for a tier, it keeps the design's own default: the
- * content sits at the bottom on phones, vertically centered from tablet up.
- */
 @media (max-width: 767px) {
   .hero--valign-mobile-top {
     align-items: start;

@@ -1,14 +1,16 @@
-import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from "react";
+import type {
+  ButtonHTMLAttributes,
+  InputHTMLAttributes,
+  ReactNode,
+  SelectHTMLAttributes,
+  TextareaHTMLAttributes,
+} from "react";
 
-// Controls are sized to a 44px touch target on phones and tablets (per WCAG 2.5.5)
-// and tighten up from `sm:` where a mouse is the likely input.
 const TOUCH_TARGET = "min-h-[44px] sm:min-h-[38px] touch-manipulation";
 
 // 16px on mobile stops iOS Safari from auto-zooming when a field takes focus.
 const FIELD_TEXT = "text-base sm:text-sm";
 
-// max-w-full keeps a caller-supplied fixed width (w-40, w-64) from overflowing a
-// narrow screen; min-w-0 lets these shrink inside a flex row.
 const FIELD = `w-full min-w-0 max-w-full rounded-md border border-slate-300 px-3 py-2 ${FIELD_TEXT} ${TOUCH_TARGET} focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500`;
 
 export function Button({
@@ -63,11 +65,6 @@ export function Badge({ tone, children }: { tone: "green" | "gray" | "red" | "am
   return <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${tones[tone]}`}>{children}</span>;
 }
 
-/**
- * Lets a wide table scroll sideways instead of stretching the page. The negative
- * margin makes it scroll edge-to-edge on a phone, which reads as intentional
- * rather than clipped.
- */
 export function TableWrap({ children }: { children: ReactNode }) {
   return (
     <div className="-mx-3 overflow-x-auto sm:mx-0">

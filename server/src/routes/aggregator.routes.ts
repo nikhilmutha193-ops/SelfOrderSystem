@@ -1,9 +1,6 @@
 import { Router } from "express";
-import {
-  createOnlineOrder,
-  getAggregatorConfig,
-  regenerateWebhookSecret,
-} from "../controllers/aggregator.controller";
+
+import { createOnlineOrder, getAggregatorConfig, regenerateWebhookSecret } from "../controllers/aggregator.controller";
 import { requireAuth, requireModule } from "../middleware/auth";
 
 const router = Router();

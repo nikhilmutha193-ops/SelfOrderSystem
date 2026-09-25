@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { api, extractErrorMessage } from "../../lib/apiClient";
+
 import { Button, Card, ErrorText, Input, Select } from "../../components/ui";
+import { api, extractErrorMessage } from "../../lib/apiClient";
 import type { DeliveryProvider } from "../../lib/types";
 import OrderDetail from "./OrderDetail";
 
@@ -8,11 +9,6 @@ type OrderKind = "dine-in" | "takeaway" | "delivery";
 
 const DELIVERY_PROVIDERS: DeliveryProvider[] = ["Swiggy", "Zomato", "Uber-Eats", "Other"];
 
-/**
- * Staff-taken counter order. The form on the left creates the order; its detail
- * workspace (menu picker, KOT, payment) opens on the right, on the same screen, so
- * the whole counter flow is one view. The columns stack on narrow screens.
- */
 export default function NewOrder() {
   const [kind, setKind] = useState<OrderKind>("dine-in");
   const [provider, setProvider] = useState<DeliveryProvider>("Swiggy");
@@ -55,7 +51,6 @@ export default function NewOrder() {
       <h1 className="text-2xl font-bold text-slate-800">New Order</h1>
 
       <div className="grid items-start gap-6 lg:grid-cols-[340px_1fr]">
-        {/* Left: create form (always visible) */}
         <Card>
           <h2 className="mb-3 text-lg font-semibold text-slate-800">Start an order</h2>
           <form onSubmit={submit} className="flex flex-col gap-3">
@@ -79,7 +74,11 @@ export default function NewOrder() {
             {kind === "delivery" && (
               <label className="text-sm font-medium text-slate-700">
                 Delivery partner
-                <Select className="mt-1" value={provider} onChange={(e) => setProvider(e.target.value as DeliveryProvider)}>
+                <Select
+                  className="mt-1"
+                  value={provider}
+                  onChange={(e) => setProvider(e.target.value as DeliveryProvider)}
+                >
                   {DELIVERY_PROVIDERS.map((p) => (
                     <option key={p} value={p}>
                       {p}
@@ -101,7 +100,12 @@ export default function NewOrder() {
             </label>
             <label className="text-sm font-medium text-slate-700">
               Customer phone <span className="font-normal text-slate-400">(optional)</span>
-              <Input className="mt-1" type="tel" value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} />
+              <Input
+                className="mt-1"
+                type="tel"
+                value={customerPhone}
+                onChange={(e) => setCustomerPhone(e.target.value)}
+              />
             </label>
             <label className="text-sm font-medium text-slate-700">
               Members / items count
@@ -121,7 +125,6 @@ export default function NewOrder() {
           </form>
         </Card>
 
-        {/* Right: the created order's workspace, or a prompt */}
         <div className="min-w-0">
           {activeOrderId ? (
             <>

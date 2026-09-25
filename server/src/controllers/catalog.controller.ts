@@ -1,9 +1,10 @@
 import { Request, Response } from "express";
 import { Types } from "mongoose";
-import Category from "../models/Category";
-import Subcategory from "../models/Subcategory";
-import FoodItem from "../models/FoodItem";
+
 import { asyncHandler } from "../middleware/errorHandler";
+import Category from "../models/Category";
+import FoodItem from "../models/FoodItem";
+import Subcategory from "../models/Subcategory";
 import { HttpError } from "../utils/httpError";
 
 function validId(id: string) {
@@ -18,18 +19,38 @@ export const listCategories = asyncHandler(async (req: Request, res: Response) =
 });
 
 export const createCategory = asyncHandler(async (req: Request, res: Response) => {
-  const { name, description, translations } = req.body as { name?: string; description?: string; translations?: unknown };
+  const { name, description, translations } = req.body as {
+    name?: string;
+    description?: string;
+    translations?: unknown;
+  };
   if (!name) throw new HttpError(400, "name is required");
-  const category = await Category.create({ restaurantId: req.restaurantId, name, description, translations: sanitizeTranslations(translations), isActive: true });
+  const category = await Category.create({
+    restaurantId: req.restaurantId,
+    name,
+    description,
+    translations: sanitizeTranslations(translations),
+    isActive: true,
+  });
   res.status(201).json(category);
 });
 
 export const updateCategory = asyncHandler(async (req: Request, res: Response) => {
   validId(req.params.id);
-  const { name, description, translations } = req.body as { name?: string; description?: string; translations?: unknown };
+  const { name, description, translations } = req.body as {
+    name?: string;
+    description?: string;
+    translations?: unknown;
+  };
   const category = await Category.findOneAndUpdate(
     { _id: req.params.id, restaurantId: req.restaurantId },
-    { $set: { ...(name !== undefined && { name }), ...(description !== undefined && { description }), ...(translations !== undefined && { translations: sanitizeTranslations(translations) }) } },
+    {
+      $set: {
+        ...(name !== undefined && { name }),
+        ...(description !== undefined && { description }),
+        ...(translations !== undefined && { translations: sanitizeTranslations(translations) }),
+      },
+    },
     { new: true }
   );
   if (!category) throw new HttpError(404, "Category not found");
@@ -147,22 +168,21 @@ function normalizeFoodType(value: unknown): string {
   return value;
 }
 
-/** Ratings are set by staff, so clamp rather than reject a slightly-off number. */
 function normalizeRating(value: unknown): number {
   const n = Number(value);
   if (!Number.isFinite(n)) return 0;
   return Math.min(5, Math.max(0, Math.round(n * 10) / 10));
 }
 
-/** Clamped like the rating: staff-entered, so a stray value is corrected rather than rejected. */
 function normalizePrepTime(value: unknown): number {
   const n = Number(value);
   if (!Number.isFinite(n)) return 0;
   return Math.max(0, Math.round(n));
 }
 
-/** Normalizes admin-supplied modifier groups, dropping malformed entries. */
-function sanitizeModifierGroups(value: unknown): { name: string; type: "single" | "multi"; required: boolean; options: { label: string; priceDelta: number }[] }[] {
+function sanitizeModifierGroups(
+  value: unknown
+): { name: string; type: "single" | "multi"; required: boolean; options: { label: string; priceDelta: number }[] }[] {
   if (!Array.isArray(value)) return [];
   return value
     .filter((g) => g && typeof g === "object" && typeof (g as any).name === "string" && (g as any).name.trim())
@@ -181,7 +201,6 @@ function sanitizeModifierGroups(value: unknown): { name: string; type: "single" 
     });
 }
 
-/** Keeps only { name, description } strings under known language keys. */
 function sanitizeTranslations(value: unknown): Record<string, { name?: string; description?: string }> {
   if (!value || typeof value !== "object") return {};
   const out: Record<string, { name?: string; description?: string }> = {};
@@ -197,7 +216,21 @@ function sanitizeTranslations(value: unknown): Record<string, { name?: string; d
 }
 
 export const createFoodItem = asyncHandler(async (req: Request, res: Response) => {
-  const { categoryId, subcategoryId, name, price, description, imageUrl, isBestseller, bestsellerEmoji, foodType, rating, prepTimeMinutes, modifierGroups, translations } = req.body as {
+  const {
+    categoryId,
+    subcategoryId,
+    name,
+    price,
+    description,
+    imageUrl,
+    isBestseller,
+    bestsellerEmoji,
+    foodType,
+    rating,
+    prepTimeMinutes,
+    modifierGroups,
+    translations,
+  } = req.body as {
     categoryId?: string;
     subcategoryId?: string;
     name?: string;
@@ -248,7 +281,21 @@ export const createFoodItem = asyncHandler(async (req: Request, res: Response) =
 
 export const updateFoodItem = asyncHandler(async (req: Request, res: Response) => {
   validId(req.params.id);
-  const { categoryId, subcategoryId, name, price, description, imageUrl, isBestseller, bestsellerEmoji, foodType, rating, prepTimeMinutes, modifierGroups, translations } = req.body as {
+  const {
+    categoryId,
+    subcategoryId,
+    name,
+    price,
+    description,
+    imageUrl,
+    isBestseller,
+    bestsellerEmoji,
+    foodType,
+    rating,
+    prepTimeMinutes,
+    modifierGroups,
+    translations,
+  } = req.body as {
     categoryId?: string;
     subcategoryId?: string;
     name?: string;

@@ -1,13 +1,3 @@
-/* ==========================================================================
-   Benne Kaffi — components/what-we-serve.css
-   Styles for <WhatWeServe /> and <FoodCard />. Depends on the tokens and shared classes in css/main.css.
-   ========================================================================== */
-
-/* --------------------------------------------------------------------------
-   What We Serve  →  <WhatWeServe /> + <FoodCard />
-   2-up on mobile, 4-up on desktop. Each card is a 3D flip: the front face is
-   the transparent food illustration, the back face is a terracotta info panel.
-   -------------------------------------------------------------------------- */
 .serve__grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -58,7 +48,6 @@
   -webkit-backface-visibility: hidden;
 }
 
-/* Front: the illustration floats on the cream background, no box */
 .food-card__img {
   width: 100%;
   height: 100%;
@@ -67,7 +56,6 @@
   transition: transform 400ms ease-out;
 }
 
-/* The coffee tumbler is a taller illustration; inset it like the reference */
 .food-card__img--inset {
   padding: var(--space-4);
 }
@@ -77,7 +65,6 @@
   transform: scale(1.08);
 }
 
-/* Back: terracotta info panel */
 .food-card__face--back {
   padding: var(--space-4);
   text-align: center;

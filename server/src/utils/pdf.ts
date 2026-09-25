@@ -1,20 +1,34 @@
-import PDFDocument from "pdfkit";
-import { Response } from "express";
-import path from "path";
-import fs from "fs/promises";
 import dns from "dns/promises";
+import fs from "fs/promises";
 import net from "net";
-import { IRestaurant, PrintFontSize, PrintPaperSize } from "../models/Restaurant";
+import path from "path";
+import { Response } from "express";
+import PDFDocument from "pdfkit";
+
 import { IOrder } from "../models/Order";
 import { IOrderItem } from "../models/OrderItem";
+import { IRestaurant, PrintFontSize, PrintPaperSize } from "../models/Restaurant";
 import { InvoiceTotals } from "./invoice";
-import { UPLOADS_DIR, putObject } from "./objectStore";
 import { describeError, logger } from "./logger";
+import { putObject, UPLOADS_DIR } from "./objectStore";
+
+interface Column {
+  text: string;
+  width: number;
+  align?: "left" | "right" | "center";
+}
+
+interface OrdersReportRow {
+  customer: string;
+  type: string;
+  checkin: string;
+  status: string;
+  payment: string;
+  total: number;
+}
 
 const MAX_LOGO_BYTES = 5 * 1024 * 1024;
 
-// Blocks SSRF: an admin-supplied logo URL must not resolve to a private/loopback/
-// link-local address before we let the server fetch it.
 async function isPublicHttpUrl(rawUrl: string): Promise<boolean> {
   let url: URL;
   try {
@@ -76,6 +90,7 @@ const FIXED_PAPER_HEIGHT: Partial<Record<PrintPaperSize, number>> = {
 };
 
 const THERMAL_MIN_HEIGHT = 160;
+
 const THERMAL_MAX_HEIGHT = 2200;
 
 function isThermal(paperSize: PrintPaperSize): boolean {
@@ -88,16 +103,6 @@ const FONT_SCALE: Record<PrintFontSize, number> = {
   large: 1.2,
 };
 
-interface Column {
-  text: string;
-  width: number;
-  align?: "left" | "right" | "center";
-}
-
-// Thermal receipts print on a continuous roll, not a fixed sheet - a hardcoded
-// tall page wastes paper (and looked like an A4 sheet). We render the ticket
-// once on a throwaway oversized page purely to measure how tall the content
-// actually is, then render it for real onto a page sized to fit that content.
 async function renderToPaper(
   res: Response,
   filename: string,
@@ -116,8 +121,6 @@ async function renderToPaper(
     height = Math.min(THERMAL_MAX_HEIGHT, Math.max(THERMAL_MIN_HEIGHT, Math.ceil(measureDoc.y + margin)));
   }
 
-  // Buffered rather than piped: a serverless function can freeze once the response
-  // ends, so the archive upload has to finish first.
   const pdf = await new Promise<Buffer>((resolve, reject) => {
     const doc = new PDFDocument({ size: [width, height], margin });
     const chunks: Buffer[] = [];
@@ -228,131 +231,138 @@ export async function streamInvoicePdf(
   const archive = (pdf: Buffer) =>
     putObject("invoices", `${restaurant._id}/${order._id}.pdf`, pdf, "application/pdf").then(() => undefined);
 
-  await renderToPaper(res, `invoice-${order._id}.pdf`, paperSize, (doc, x0, usableWidth) => {
-    if (logo) drawLogo(doc, logo, x0, usableWidth);
+  await renderToPaper(
+    res,
+    `invoice-${order._id}.pdf`,
+    paperSize,
+    (doc, x0, usableWidth) => {
+      if (logo) drawLogo(doc, logo, x0, usableWidth);
 
-    doc.fontSize(fz(16)).text(restaurant.name, { align: "center" });
-    if (restaurant.address) doc.fontSize(fz(9)).text(restaurant.address, { align: "center" });
-    if (restaurant.gstin) doc.fontSize(fz(9)).text(`GSTIN: ${restaurant.gstin}`, { align: "center" });
-    if (restaurant.fssaiLicense) doc.fontSize(fz(9)).text(`FSSAI Reg. No: ${restaurant.fssaiLicense}`, { align: "center" });
-    doc.moveDown(0.5);
-    doc.fontSize(fz(12)).text("Invoice", { align: "center" });
-    doc.moveDown(0.5);
-    drawSeparator(doc, x0, usableWidth, true);
+      doc.fontSize(fz(16)).text(restaurant.name, { align: "center" });
+      if (restaurant.address) doc.fontSize(fz(9)).text(restaurant.address, { align: "center" });
+      if (restaurant.gstin) doc.fontSize(fz(9)).text(`GSTIN: ${restaurant.gstin}`, { align: "center" });
+      if (restaurant.fssaiLicense)
+        doc.fontSize(fz(9)).text(`FSSAI Reg. No: ${restaurant.fssaiLicense}`, { align: "center" });
+      doc.moveDown(0.5);
+      doc.fontSize(fz(12)).text("Invoice", { align: "center" });
+      doc.moveDown(0.5);
+      drawSeparator(doc, x0, usableWidth, true);
 
-    doc.fontSize(fz(10));
-    doc.text(`Order: ${order.orderType === "dine-in" ? "Dine-in" : `Delivery (${order.deliveryProvider})`}`);
-    doc.text(
-      `Customer: ${order.customerName}` +
-        (settings?.showCustomerPhone !== false && order.customerPhone ? `  (${order.customerPhone})` : "")
-    );
-    doc.text(`Date: ${new Date(order.checkinTime).toLocaleString()}`);
-    doc.moveDown(0.3);
-    drawSeparator(doc, x0, usableWidth);
+      doc.fontSize(fz(10));
+      doc.text(`Order: ${order.orderType === "dine-in" ? "Dine-in" : `Delivery (${order.deliveryProvider})`}`);
+      doc.text(
+        `Customer: ${order.customerName}` +
+          (settings?.showCustomerPhone !== false && order.customerPhone ? `  (${order.customerPhone})` : "")
+      );
+      doc.text(`Date: ${new Date(order.checkinTime).toLocaleString()}`);
+      doc.moveDown(0.3);
+      drawSeparator(doc, x0, usableWidth);
 
-    const showUnitPrice = settings?.showUnitPrice !== false;
-    const showJainTag = settings?.showJainTag !== false;
+      const showUnitPrice = settings?.showUnitPrice !== false;
+      const showJainTag = settings?.showJainTag !== false;
 
-    const cols = showUnitPrice
-      ? [
-          { key: "item", width: usableWidth * 0.4 },
-          { key: "qty", width: usableWidth * 0.15, align: "right" as const },
-          { key: "price", width: usableWidth * 0.2, align: "right" as const },
-          { key: "total", width: usableWidth * 0.25, align: "right" as const },
-        ]
-      : [
-          { key: "item", width: usableWidth * 0.55 },
-          { key: "qty", width: usableWidth * 0.2, align: "right" as const },
-          { key: "total", width: usableWidth * 0.25, align: "right" as const },
-        ];
-
-    doc.fontSize(fz(10));
-    let y = drawRow(
-      doc,
-      x0,
-      doc.y,
-      cols.map((c) => ({
-        text: c.key === "item" ? "Item" : c.key === "qty" ? "Qty" : c.key === "price" ? "Price" : "Total",
-        width: c.width,
-        align: c.align,
-      })),
-      true
-    );
-    doc.y = y + 3;
-    drawSeparator(doc, x0, usableWidth);
-
-    for (const item of items.filter((i) => i.status !== "cancelled")) {
-      const name = item.foodName + (showJainTag && item.isJain ? " (Jain)" : "");
-      const rowCols: Column[] = showUnitPrice
+      const cols = showUnitPrice
         ? [
-            { text: name, width: cols[0].width },
-            { text: String(item.quantity), width: cols[1].width, align: "right" },
-            { text: item.unitPrice.toFixed(2), width: cols[2].width, align: "right" },
-            { text: item.total.toFixed(2), width: cols[3].width, align: "right" },
+            { key: "item", width: usableWidth * 0.4 },
+            { key: "qty", width: usableWidth * 0.15, align: "right" as const },
+            { key: "price", width: usableWidth * 0.2, align: "right" as const },
+            { key: "total", width: usableWidth * 0.25, align: "right" as const },
           ]
         : [
-            { text: name, width: cols[0].width },
-            { text: String(item.quantity), width: cols[1].width, align: "right" },
-            { text: item.total.toFixed(2), width: cols[2].width, align: "right" },
+            { key: "item", width: usableWidth * 0.55 },
+            { key: "qty", width: usableWidth * 0.2, align: "right" as const },
+            { key: "total", width: usableWidth * 0.25, align: "right" as const },
           ];
-      y = drawRow(doc, x0, doc.y, rowCols);
+
+      doc.fontSize(fz(10));
+      let y = drawRow(
+        doc,
+        x0,
+        doc.y,
+        cols.map((c) => ({
+          text: c.key === "item" ? "Item" : c.key === "qty" ? "Qty" : c.key === "price" ? "Price" : "Total",
+          width: c.width,
+          align: c.align,
+        })),
+        true
+      );
       doc.y = y + 3;
-    }
+      drawSeparator(doc, x0, usableWidth);
 
-    doc.moveDown(0.3);
-    drawSeparator(doc, x0, usableWidth);
+      for (const item of items.filter((i) => i.status !== "cancelled")) {
+        const name = item.foodName + (showJainTag && item.isJain ? " (Jain)" : "");
+        const rowCols: Column[] = showUnitPrice
+          ? [
+              { text: name, width: cols[0].width },
+              { text: String(item.quantity), width: cols[1].width, align: "right" },
+              { text: item.unitPrice.toFixed(2), width: cols[2].width, align: "right" },
+              { text: item.total.toFixed(2), width: cols[3].width, align: "right" },
+            ]
+          : [
+              { text: name, width: cols[0].width },
+              { text: String(item.quantity), width: cols[1].width, align: "right" },
+              { text: item.total.toFixed(2), width: cols[2].width, align: "right" },
+            ];
+        y = drawRow(doc, x0, doc.y, rowCols);
+        doc.y = y + 3;
+      }
 
-    doc.moveDown(0.3);
-    const totalsLabelWidth = usableWidth * 0.6;
-    const totalsAmountWidth = usableWidth * 0.4;
-
-    doc.fontSize(fz(10));
-    let ty = drawRow(doc, x0, doc.y, [
-      { text: "Subtotal", width: totalsLabelWidth },
-      { text: totals.subtotal.toFixed(2), width: totalsAmountWidth, align: "right" },
-    ]);
-    doc.y = ty + 2;
-
-    if (totals.discount > 0) {
-      ty = drawRow(doc, x0, doc.y, [
-        { text: order.couponCode ? `Discount (${order.couponCode})` : "Discount", width: totalsLabelWidth },
-        { text: `-${totals.discount.toFixed(2)}`, width: totalsAmountWidth, align: "right" },
-      ]);
-      doc.y = ty + 2;
-    }
-
-    for (const tax of totals.taxLines) {
-      ty = drawRow(doc, x0, doc.y, [
-        { text: `${tax.name} (${tax.percent}%)`, width: totalsLabelWidth },
-        { text: tax.amount.toFixed(2), width: totalsAmountWidth, align: "right" },
-      ]);
-      doc.y = ty + 2;
-    }
-
-    doc.moveDown(0.2);
-    doc.fontSize(fz(11));
-    ty = drawRow(
-      doc,
-      x0,
-      doc.y,
-      [
-        { text: "Grand Total", width: totalsLabelWidth },
-        { text: totals.grandTotal.toFixed(2), width: totalsAmountWidth, align: "right" },
-      ],
-      true
-    );
-    doc.y = ty;
-
-    doc.moveDown(0.3);
-    drawSeparator(doc, x0, usableWidth, true);
-
-    if (settings?.termsText) {
-      doc.fontSize(fz(8)).text(settings.termsText, { align: "left" });
       doc.moveDown(0.3);
-    }
+      drawSeparator(doc, x0, usableWidth);
 
-    doc.fontSize(fz(9)).text(settings?.footerNote || "Thank you for dining with us!", { align: "center" });
-  }, archive);
+      doc.moveDown(0.3);
+      const totalsLabelWidth = usableWidth * 0.6;
+      const totalsAmountWidth = usableWidth * 0.4;
+
+      doc.fontSize(fz(10));
+      let ty = drawRow(doc, x0, doc.y, [
+        { text: "Subtotal", width: totalsLabelWidth },
+        { text: totals.subtotal.toFixed(2), width: totalsAmountWidth, align: "right" },
+      ]);
+      doc.y = ty + 2;
+
+      if (totals.discount > 0) {
+        ty = drawRow(doc, x0, doc.y, [
+          { text: order.couponCode ? `Discount (${order.couponCode})` : "Discount", width: totalsLabelWidth },
+          { text: `-${totals.discount.toFixed(2)}`, width: totalsAmountWidth, align: "right" },
+        ]);
+        doc.y = ty + 2;
+      }
+
+      for (const tax of totals.taxLines) {
+        ty = drawRow(doc, x0, doc.y, [
+          { text: `${tax.name} (${tax.percent}%)`, width: totalsLabelWidth },
+          { text: tax.amount.toFixed(2), width: totalsAmountWidth, align: "right" },
+        ]);
+        doc.y = ty + 2;
+      }
+
+      doc.moveDown(0.2);
+      doc.fontSize(fz(11));
+      ty = drawRow(
+        doc,
+        x0,
+        doc.y,
+        [
+          { text: "Grand Total", width: totalsLabelWidth },
+          { text: totals.grandTotal.toFixed(2), width: totalsAmountWidth, align: "right" },
+        ],
+        true
+      );
+      doc.y = ty;
+
+      doc.moveDown(0.3);
+      drawSeparator(doc, x0, usableWidth, true);
+
+      if (settings?.termsText) {
+        doc.fontSize(fz(8)).text(settings.termsText, { align: "left" });
+        doc.moveDown(0.3);
+      }
+
+      doc.fontSize(fz(9)).text(settings?.footerNote || "Thank you for dining with us!", { align: "center" });
+    },
+    archive
+  );
 }
 
 export async function streamKotPdf(
@@ -379,7 +389,9 @@ export async function streamKotPdf(
     if (logo) drawLogo(doc, logo, x0, usableWidth);
 
     doc.fontSize(fz(14)).text(restaurant.name, { align: "center" });
-    doc.fontSize(fz(12)).text(`${settings?.headerText || "Kitchen Order Ticket"} - Round ${round}`, { align: "center" });
+    doc
+      .fontSize(fz(12))
+      .text(`${settings?.headerText || "Kitchen Order Ticket"} - Round ${round}`, { align: "center" });
     if (tokenNumber) {
       // The number the kitchen calls out - biggest thing on the ticket.
       doc.moveDown(0.2);
@@ -389,8 +401,6 @@ export async function streamKotPdf(
     doc.moveDown(0.5);
     drawSeparator(doc, x0, usableWidth, true);
 
-    // Packing is a kitchen instruction, not table info, so it prints even when
-    // table info is switched off - otherwise a take-away could be plated to serve.
     if (order.orderType !== "dine-in") {
       doc
         .font("Helvetica-Bold")
@@ -468,7 +478,10 @@ export async function streamKotPdf(
       // Customizations & kitchen note printed under the dish so the line cook sees them.
       const extras = [...(item.modifiers?.map((m) => m.label) ?? []), item.note].filter(Boolean).join(", ");
       if (extras) {
-        doc.font("Helvetica-Bold").fontSize(fz(9)).text(`  → ${extras}`, x0 + colWidths[0], doc.y, { width: usableWidth - colWidths[0] });
+        doc
+          .font("Helvetica-Bold")
+          .fontSize(fz(9))
+          .text(`  → ${extras}`, x0 + colWidths[0], doc.y, { width: usableWidth - colWidths[0] });
         doc.font("Helvetica").fontSize(fz(10));
         doc.y += 2;
       }
@@ -483,20 +496,6 @@ export async function streamKotPdf(
   });
 }
 
-interface OrdersReportRow {
-  customer: string;
-  type: string;
-  checkin: string;
-  status: string;
-  payment: string;
-  total: number;
-}
-
-/**
- * Multi-page A4 table of orders with a grand total. Unlike the ticket renderer this
- * lets PDFKit paginate naturally (rows can run to many pages), but still buffers the
- * whole document before responding so it works on serverless too.
- */
 export async function streamOrdersReportPdf(
   res: Response,
   data: {
@@ -569,7 +568,9 @@ export async function streamOrdersReportPdf(
         const h = doc.heightOfString(String(val), { width: w });
         if (h > maxH) maxH = h;
       });
-      cells.forEach((val, i) => doc.text(String(val), xs[i], y, { width: cols[i].w * width - 4, align: cols[i].align }));
+      cells.forEach((val, i) =>
+        doc.text(String(val), xs[i], y, { width: cols[i].w * width - 4, align: cols[i].align })
+      );
       doc.y = y + maxH + 3;
     }
 

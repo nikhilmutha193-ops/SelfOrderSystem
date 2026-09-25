@@ -11,7 +11,6 @@ const base: SVGProps<SVGSVGElement> = {
   strokeLinejoin: "round",
 };
 
-/** A steaming filter-coffee tumbler & davara, sketched. */
 export function CoffeeCupDoodle(props: DoodleProps) {
   return (
     <svg {...base} {...props}>
@@ -25,7 +24,6 @@ export function CoffeeCupDoodle(props: DoodleProps) {
   );
 }
 
-/** A rolled dosa / spiral doodle. */
 export function DosaSwirlDoodle(props: DoodleProps) {
   return (
     <svg {...base} {...props}>
@@ -35,7 +33,6 @@ export function DosaSwirlDoodle(props: DoodleProps) {
   );
 }
 
-/** A curled chili, sketched. */
 export function ChiliDoodle(props: DoodleProps) {
   return (
     <svg {...base} {...props}>
@@ -45,7 +42,6 @@ export function ChiliDoodle(props: DoodleProps) {
   );
 }
 
-/** A simple leaf with a center vein. */
 export function LeafDoodle(props: DoodleProps) {
   return (
     <svg {...base} {...props}>
@@ -55,7 +51,6 @@ export function LeafDoodle(props: DoodleProps) {
   );
 }
 
-/** Freestanding steam wisps, for pairing near cups or floating alone. */
 export function SteamDoodle(props: DoodleProps) {
   return (
     <svg {...base} {...props}>
@@ -66,7 +61,6 @@ export function SteamDoodle(props: DoodleProps) {
   );
 }
 
-/** Three stacked idlis on a small plate, sketched. */
 export function IdliDoodle(props: DoodleProps) {
   return (
     <svg {...base} {...props}>
@@ -78,7 +72,6 @@ export function IdliDoodle(props: DoodleProps) {
   );
 }
 
-/** A ring-shaped medu vada, sketched with an irregular hand-drawn edge. */
 export function VadaDoodle(props: DoodleProps) {
   return (
     <svg {...base} {...props}>
@@ -88,7 +81,6 @@ export function VadaDoodle(props: DoodleProps) {
   );
 }
 
-/** A bowl of sambar/curry with steam, sketched. */
 export function CurryBowlDoodle(props: DoodleProps) {
   return (
     <svg {...base} {...props}>
@@ -101,7 +93,6 @@ export function CurryBowlDoodle(props: DoodleProps) {
   );
 }
 
-/** A halved coconut shell with texture lines, sketched. */
 export function CoconutDoodle(props: DoodleProps) {
   return (
     <svg {...base} {...props}>

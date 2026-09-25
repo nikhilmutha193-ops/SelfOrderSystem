@@ -1,16 +1,16 @@
 import { Request, Response } from "express";
+
+import { asyncHandler } from "../middleware/errorHandler";
+import AuditLog from "../models/AuditLog";
+import FoodItem from "../models/FoodItem";
 import Order from "../models/Order";
 import OrderItem from "../models/OrderItem";
-import FoodItem from "../models/FoodItem";
 import Restaurant from "../models/Restaurant";
-import AuditLog from "../models/AuditLog";
-import { asyncHandler } from "../middleware/errorHandler";
 import { HttpError } from "../utils/httpError";
 import { computeInvoiceTotals } from "../utils/invoice";
 
 const DEFAULT_TZ = "Asia/Kolkata";
 
-/** Local date "YYYY-MM-DD" and hour (0-23) of an instant in the restaurant's timezone. */
 function localParts(at: Date, timeZone: string): { date: string; hour: number } {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone,
@@ -21,14 +21,9 @@ function localParts(at: Date, timeZone: string): { date: string; hour: number } 
     hour12: false,
   }).formatToParts(at);
   const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
-  return { date: `${get("year")}-${get("month")}-${get("day")}`, hour: (Number(get("hour")) % 24) || 0 };
+  return { date: `${get("year")}-${get("month")}-${get("day")}`, hour: Number(get("hour")) % 24 || 0 };
 }
 
-/**
- * Revenue and mix over the last N days (default 14), computed from closed (paid) orders.
- * Grand totals mirror the invoice logic (subtotal - discount + tax) so the numbers match
- * what guests were actually charged. Days/hours are bucketed in the restaurant's timezone.
- */
 export const getSalesAnalytics = asyncHandler(async (req: Request, res: Response) => {
   const days = Math.min(90, Math.max(1, Number((req.query as { days?: string }).days) || 14));
   const restaurant = await Restaurant.findById(req.restaurantId).select("taxRates timezone");
@@ -45,7 +40,9 @@ export const getSalesAnalytics = asyncHandler(async (req: Request, res: Response
     .lean();
 
   const orderIds = orders.map((o) => o._id);
-  const items = await OrderItem.find({ orderId: { $in: orderIds } }).select("orderId status total foodName quantity").lean();
+  const items = await OrderItem.find({ orderId: { $in: orderIds } })
+    .select("orderId status total foodName quantity")
+    .lean();
   const itemsByOrder = new Map<string, { status: string; total: number }[]>();
   for (const it of items) {
     const key = it.orderId.toString();
@@ -59,7 +56,11 @@ export const getSalesAnalytics = asyncHandler(async (req: Request, res: Response
   let totalRevenue = 0;
 
   for (const o of orders) {
-    const grand = computeInvoiceTotals(itemsByOrder.get(o._id.toString()) as any, taxRates, o.discountAmount).grandTotal;
+    const grand = computeInvoiceTotals(
+      itemsByOrder.get(o._id.toString()) as any,
+      taxRates,
+      o.discountAmount
+    ).grandTotal;
     totalRevenue += grand;
     const when = o.checkoutTime ? new Date(o.checkoutTime) : new Date();
     const { date, hour } = localParts(when, tz);
@@ -108,7 +109,6 @@ export const getSalesAnalytics = asyncHandler(async (req: Request, res: Response
   });
 });
 
-/** Per-dish actual prep time (ready - KOT printed) vs the configured estimate. */
 export const getPrepAnalytics = asyncHandler(async (req: Request, res: Response) => {
   const items = await OrderItem.find({
     restaurantId: req.restaurantId,
@@ -132,7 +132,9 @@ export const getPrepAnalytics = asyncHandler(async (req: Request, res: Response)
   }
 
   const foods = await FoodItem.find({ restaurantId: req.restaurantId }).select("name prepTimeMinutes").lean();
-  const estimateById = new Map(foods.map((f) => [f._id.toString(), { name: f.name, estimate: f.prepTimeMinutes ?? 0 }]));
+  const estimateById = new Map(
+    foods.map((f) => [f._id.toString(), { name: f.name, estimate: f.prepTimeMinutes ?? 0 }])
+  );
 
   const rows = Array.from(agg, ([id, a]) => {
     const est = estimateById.get(id);

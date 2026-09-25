@@ -1,13 +1,14 @@
 import { Request, Response } from "express";
-import Restaurant, { IInvoiceSettings, IKotSettings, IQrSettings, IRestaurant, ITaxRate } from "../models/Restaurant";
+
+import { asyncHandler } from "../middleware/errorHandler";
 import { IOrder } from "../models/Order";
 import { IOrderItem } from "../models/OrderItem";
-import { asyncHandler } from "../middleware/errorHandler";
-import { seedLandingContent } from "../utils/landingSeed";
+import Restaurant, { IInvoiceSettings, IKotSettings, IQrSettings, IRestaurant, ITaxRate } from "../models/Restaurant";
+import { isValidDayEndTime, isValidTimezone } from "../utils/businessDay";
 import { HttpError } from "../utils/httpError";
 import { computeInvoiceTotals } from "../utils/invoice";
+import { seedLandingContent } from "../utils/landingSeed";
 import { resolveLogoBuffer, streamInvoicePdf, streamKotPdf } from "../utils/pdf";
-import { isValidDayEndTime, isValidTimezone } from "../utils/businessDay";
 
 const SAMPLE_ITEMS: Pick<IOrderItem, "foodName" | "isJain" | "quantity" | "unitPrice" | "total" | "status">[] = [
   { foodName: "Paneer Butter Masala", isJain: false, quantity: 2, unitPrice: 220, total: 440, status: "pending" },
@@ -44,7 +45,10 @@ async function buildPreviewRestaurant(req: Request, overrides: Record<string, un
     ...(overrides.fssaiLicense !== undefined && { fssaiLicense: overrides.fssaiLicense }),
     ...(overrides.taxRates !== undefined && { taxRates: overrides.taxRates }),
     kotSettings: { ...base.kotSettings, ...(overrides.kotSettings as Partial<IKotSettings> | undefined) },
-    invoiceSettings: { ...base.invoiceSettings, ...(overrides.invoiceSettings as Partial<IInvoiceSettings> | undefined) },
+    invoiceSettings: {
+      ...base.invoiceSettings,
+      ...(overrides.invoiceSettings as Partial<IInvoiceSettings> | undefined),
+    },
   } as unknown as IRestaurant;
 }
 
@@ -60,12 +64,6 @@ export const getRestaurantSettings = asyncHandler(async (req: Request, res: Resp
   res.json(restaurant);
 });
 
-/**
- * Streams the restaurant's logo through our own origin. The logo usually lives on the
- * public image bucket (a different origin), which the QR-card canvas can't read without
- * CORS - so the logo silently dropped off the printed QR. Serving it same-origin here
- * lets the browser draw it onto the canvas and export the card with the logo intact.
- */
 export const getRestaurantLogo = asyncHandler(async (req: Request, res: Response) => {
   const restaurant = await Restaurant.findById(req.restaurantId).select("logoUrl");
   if (!restaurant?.logoUrl) throw new HttpError(404, "No logo is set");

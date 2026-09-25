@@ -1,46 +1,30 @@
-/* ==========================================================================
-   Benne Kaffi — main.css
-   Shared foundation only: design tokens, reset, layout helpers, buttons,
-   section headers and placeholders. Nothing section-specific lives here.
-
-   Per-section styles are in css/components/*.css (one file per future React
-   component) and are linked from index.html after this file.
-   Mobile-first. Breakpoints: 768px (tablet), 1024px (desktop).
-   ========================================================================== */
-
-/* --------------------------------------------------------------------------
-   Design tokens
-   -------------------------------------------------------------------------- */
 :root {
-  /* Brand palette */
-  --color-primary:        #B8503C;   /* rust red / terracotta */
-  --color-primary-dark:   #9A4130;
-  --color-primary-light:  #D9765F;
-  --color-primary-tint:   #F6E6E0;   /* very light terracotta wash */
+  --color-primary: #b8503c;
+  --color-primary-dark: #9a4130;
+  --color-primary-light: #d9765f;
+  --color-primary-tint: #f6e6e0;
 
-  --color-bg:             #FDFBF7;   /* warm cream */
-  --color-bg-tint:        #F6F0E6;   /* slightly deeper cream for alternating sections */
-  --color-surface:        #FFFFFF;
+  --color-bg: #fdfbf7;
+  --color-bg-tint: #f6f0e6;
+  --color-surface: #ffffff;
 
-  --color-text:           #33241E;   /* deep espresso */
-  --color-text-muted:     #6F5C54;
-  --color-border:         #E8DED2;
+  --color-text: #33241e;
+  --color-text-muted: #6f5c54;
+  --color-border: #e8ded2;
 
-  --color-footer-bg:      #2B1D18;
-  --color-footer-text:    #E9DFD6;
+  --color-footer-bg: #2b1d18;
+  --color-footer-text: #e9dfd6;
 
-  /* Typography */
   --font-heading: "Fraunces", Georgia, "Times New Roman", serif;
-  --font-body:    "DM Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-body: "DM Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 
-  --fs-xs:  0.8125rem;
-  --fs-sm:  0.9375rem;
-  --fs-md:  1.0625rem;
-  --fs-lg:  1.25rem;
-  --fs-xl:  clamp(1.75rem, 1.35rem + 1.6vw, 2.5rem);   /* section titles */
-  --fs-hero: clamp(2.5rem, 1.4rem + 4vw, 5rem);         /* hero headline */
+  --fs-xs: 0.8125rem;
+  --fs-sm: 0.9375rem;
+  --fs-md: 1.0625rem;
+  --fs-lg: 1.25rem;
+  --fs-xl: clamp(1.75rem, 1.35rem + 1.6vw, 2.5rem);
+  --fs-hero: clamp(2.5rem, 1.4rem + 4vw, 5rem);
 
-  /* Spacing & shape */
   --space-1: 0.25rem;
   --space-2: 0.5rem;
   --space-3: 0.75rem;
@@ -57,7 +41,7 @@
   --radius-pill: 999px;
 
   --shadow-sm: 0 1px 2px rgba(51, 36, 30, 0.06), 0 2px 8px rgba(51, 36, 30, 0.06);
-  --shadow-md: 0 6px 20px rgba(51, 36, 30, 0.10);
+  --shadow-md: 0 6px 20px rgba(51, 36, 30, 0.1);
   --shadow-lg: 0 16px 40px rgba(51, 36, 30, 0.16);
 
   --container-max: 1200px;
@@ -67,9 +51,6 @@
   --transition: 200ms ease;
 }
 
-/* --------------------------------------------------------------------------
-   Base / reset
-   -------------------------------------------------------------------------- */
 .bk-landing,
 .bk-landing *,
 .bk-landing *::before,
@@ -167,9 +148,6 @@ body.no-scroll {
   }
 }
 
-/* --------------------------------------------------------------------------
-   Shared: layout, buttons, section headers, placeholders
-   -------------------------------------------------------------------------- */
 .container {
   width: 100%;
   max-width: var(--container-max);
@@ -193,7 +171,6 @@ body.no-scroll {
   color: #fff;
 }
 
-/* Sections */
 .section {
   padding-block: var(--space-8);
 }
@@ -212,7 +189,6 @@ body.no-scroll {
   text-align: center;
 }
 
-/* Larger display size, used where the heading is the section's only label */
 .section__title--display {
   font-size: clamp(2.25rem, 1.5rem + 3vw, 3.75rem);
   color: var(--color-primary);
@@ -236,7 +212,6 @@ body.no-scroll {
   color: var(--color-text-muted);
 }
 
-/* Buttons */
 .btn {
   display: inline-flex;
   align-items: center;
@@ -335,7 +310,6 @@ body.no-scroll {
   color: var(--color-primary-dark);
 }
 
-/* Image placeholders (swap for real <img> later) */
 .placeholder {
   display: grid;
   place-items: center;
@@ -348,12 +322,7 @@ body.no-scroll {
   letter-spacing: 0.04em;
   color: var(--color-primary-dark);
   background-color: var(--color-primary-tint);
-  background-image:
-    repeating-linear-gradient(
-      45deg,
-      transparent 0 14px,
-      rgba(184, 80, 60, 0.08) 14px 16px
-    );
+  background-image: repeating-linear-gradient(45deg, transparent 0 14px, rgba(184, 80, 60, 0.08) 14px 16px);
   border: 1px dashed var(--color-primary-light);
 }
 

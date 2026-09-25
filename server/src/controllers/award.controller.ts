@@ -1,7 +1,8 @@
 import { Request, Response } from "express";
 import { Types } from "mongoose";
-import Award from "../models/Award";
+
 import { asyncHandler } from "../middleware/errorHandler";
+import Award from "../models/Award";
 import { HttpError } from "../utils/httpError";
 
 function validId(id: string) {

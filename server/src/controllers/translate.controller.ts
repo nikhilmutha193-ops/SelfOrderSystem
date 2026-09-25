@@ -1,9 +1,9 @@
 import { Request, Response } from "express";
+
 import { asyncHandler } from "../middleware/errorHandler";
 import { HttpError } from "../utils/httpError";
 import { SUPPORTED_LANGS, TargetLang, translateText } from "../utils/translate";
 
-/** Translates a batch of strings to one target language for the admin translation editor. */
 export const translateTexts = asyncHandler(async (req: Request, res: Response) => {
   const { texts, to } = req.body as { texts?: unknown; to?: string };
   if (!Array.isArray(texts) || texts.some((t) => typeof t !== "string")) {
