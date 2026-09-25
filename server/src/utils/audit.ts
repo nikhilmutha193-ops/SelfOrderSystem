@@ -4,7 +4,9 @@ import Admin from "../models/Admin";
 import AuditLog from "../models/AuditLog";
 import { describeError, logger } from "./logger";
 
-export async function writeAudit(req: Request, action: string, summary: string): Promise<void> {
+export type AuditActor = Pick<Request, "auth" | "admin" | "restaurantId">;
+
+export async function writeAudit(req: AuditActor, action: string, summary: string): Promise<void> {
   try {
     let actorName = "system";
     const actorId = req.auth?.id;

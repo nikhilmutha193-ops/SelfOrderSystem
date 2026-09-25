@@ -7,7 +7,21 @@
       "Bash(npm install *)",
       "Bash(npx prettier *)",
       "Bash(node -e \"console.log\\(require\\('./node_modules/@ianvs/prettier-plugin-sort-imports/package.json'\\).version\\)\")",
-      "Bash(C:/Users/mohda/AppData/Local/Temp/claude/c--Users-mohda-OneDrive-Documents-SelfOrderSystem/7560e59d-9a0c-4afa-8717-80c87a50fd80/scratchpad/node_modules/.bin/prettier --config C:/Users/mohda/AppData/Local/Temp/claude/c--Users-mohda-OneDrive-Documents-SelfOrderSystem/7560e59d-9a0c-4afa-8717-80c87a50fd80/scratchpad/prettier.config.cjs --no-editorconfig --ignore-path '' --write server/src/**/*.ts server/api/**/*.ts 'client/src/**/*.{ts,tsx,css}')"
+      "Bash(C:/Users/mohda/AppData/Local/Temp/claude/c--Users-mohda-OneDrive-Documents-SelfOrderSystem/7560e59d-9a0c-4afa-8717-80c87a50fd80/scratchpad/node_modules/.bin/prettier --config C:/Users/mohda/AppData/Local/Temp/claude/c--Users-mohda-OneDrive-Documents-SelfOrderSystem/7560e59d-9a0c-4afa-8717-80c87a50fd80/scratchpad/prettier.config.cjs --no-editorconfig --ignore-path '' --write server/src/**/*.ts server/api/**/*.ts 'client/src/**/*.{ts,tsx,css}')",
+      "Bash(awk -F/ '{print $1}')",
+      "Bash(grep -rnE \"api\\\\.\\(get|post|put|patch|delete\\)[^\\(]*\\\\\\(\\\\s*[\\\\`\\\\\"]/orders\" client/src -A3)",
+      "Bash(grep -vE \"^\\\\s*--$\")",
+      "Bash(grep -rn \"kot/queue\\\\|chat/active\\\\|/chat\\\\`\" client/src)",
+      "Bash(node -e \"console.log\\(require\\('mongoose/package.json'\\).version\\)\")",
+      "Bash(git rm *)",
+      "Bash(npx tsc *)",
+      "Bash(echo \"tsc exit $?\")",
+      "Bash(node harness.js C:/Users/mohda/AppData/Local/Temp/claude/c--Users-mohda-OneDrive-Documents-SelfOrderSystem/7560e59d-9a0c-4afa-8717-80c87a50fd80/scratchpad/old/server C:/Users/mohda/AppData/Local/Temp/claude/c--Users-mohda-OneDrive-Documents-SelfOrderSystem/7560e59d-9a0c-4afa-8717-80c87a50fd80/scratchpad/run-old.json)",
+      "Bash(node -e ' *)",
+      "Bash(node -e 'const a=require\\(\"./run-old.json\"\\);for\\(const e of a\\) if\\(e.status>=500\\) console.log\\(\"old 5xx:\",e.name\\)')",
+      "Bash(grep -E '\\\\.\\(ts|tsx|css\\)$')",
+      "Bash(cd \"C:/Users/mohda/OneDrive/Documents/SelfOrderSystem/server/src\" && cat utils/invoice.ts; echo ----; cat middleware/rateLimit.ts; echo ----; grep -rnE \"setInterval\\\\\\(|refetch|POLL|_MS =\" ../../client/src | cut -c1-150)",
+      "Read(//c/Users/mohda/OneDrive/client/**)"
     ]
   }
 }

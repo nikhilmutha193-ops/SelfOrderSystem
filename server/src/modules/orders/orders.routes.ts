@@ -1,37 +1,26 @@
 import { Router } from "express";
 
+import { requireAuth, requireModule } from "../../middleware/auth";
 import {
   addOrderItems,
   applyCoupon,
   cancelOrder,
   cancelOrderItem,
   clearOrders,
-  deleteChatMessage,
   exportOrdersCsv,
   exportOrdersPdf,
-  getChatMessages,
   getInvoice,
   getInvoicePdf,
-  getKotPdf,
-  getKotQueue,
   getOrder,
-  listActiveChats,
   listOrderCoupons,
   listOrders,
-  markAllChatsRead,
-  markItemReady,
   payOrder,
-  printKot,
   removeCoupon,
-  sendChatMessage,
-  serveOrderItem,
   startCounterOrder,
   startDeliveryOrder,
   startDineInOrder,
-  startPreparingItem,
   startTakeawayOrder,
-} from "../controllers/orders.controller";
-import { requireAuth, requireModule } from "../middleware/auth";
+} from "./orders.controller";
 
 const router = Router();
 
@@ -41,14 +30,10 @@ router.post("/counter", requireAuth("admin"), requireModule("orders"), startCoun
 router.post("/takeaway", requireAuth("admin"), requireModule("orders"), startTakeawayOrder);
 
 router.get("/", requireAuth("admin"), requireModule("orders"), listOrders);
-// Owner-only bulk clear of the filtered orders (the controller enforces owner).
 router.delete("/", requireAuth("admin"), requireModule("orders"), clearOrders);
-// Report exports - declared before "/:orderId" so "report.csv" isn't taken as an order id.
 router.get("/report.csv", requireAuth("admin"), requireModule("orders"), exportOrdersCsv);
 router.get("/report.pdf", requireAuth("admin"), requireModule("orders"), exportOrdersPdf);
-router.get("/chat/active", requireAuth("admin"), requireModule("messages"), listActiveChats);
-router.patch("/chat/read-all", requireAuth("admin"), requireModule("messages"), markAllChatsRead);
-router.delete("/chat/:messageId", requireAuth("admin"), requireModule("messages"), deleteChatMessage);
+
 router.get("/:orderId", requireAuth("table", "admin", "chef"), requireModule("orders"), getOrder);
 router.get("/:orderId/invoice", requireAuth("table", "admin"), requireModule("orders"), getInvoice);
 router.get("/:orderId/invoice/pdf", requireAuth("table", "admin"), requireModule("orders"), getInvoicePdf);
@@ -56,21 +41,10 @@ router.patch("/:orderId/pay", requireAuth("admin"), requireModule("orders"), pay
 router.patch("/:orderId/cancel", requireAuth("admin"), requireModule("orders"), cancelOrder);
 
 router.post("/:orderId/items", requireAuth("table", "admin"), requireModule("orders"), addOrderItems);
+router.patch("/items/:itemId/cancel", requireAuth("admin"), requireModule("orders"), cancelOrderItem);
 
 router.get("/:orderId/coupons", requireAuth("table", "admin"), requireModule("orders"), listOrderCoupons);
 router.post("/:orderId/coupon", requireAuth("table", "admin"), requireModule("orders"), applyCoupon);
 router.delete("/:orderId/coupon", requireAuth("table", "admin"), requireModule("orders"), removeCoupon);
-
-router.get("/:orderId/chat", requireAuth("table", "admin"), requireModule("messages"), getChatMessages);
-router.post("/:orderId/chat", requireAuth("table", "admin"), requireModule("messages"), sendChatMessage);
-
-router.get("/kot/queue", requireAuth("chef", "admin"), requireModule("kot"), getKotQueue);
-router.post("/:orderId/kot/print", requireAuth("chef", "admin"), requireModule("kot"), printKot);
-router.get("/:orderId/kot/:round/pdf", requireAuth("chef", "admin"), requireModule("kot"), getKotPdf);
-
-router.patch("/items/:itemId/preparing", requireAuth("chef", "admin"), requireModule("kot"), startPreparingItem);
-router.patch("/items/:itemId/ready", requireAuth("chef", "admin"), requireModule("kot"), markItemReady);
-router.patch("/items/:itemId/serve", requireAuth("chef", "admin"), requireModule("kot"), serveOrderItem);
-router.patch("/items/:itemId/cancel", requireAuth("admin"), requireModule("orders"), cancelOrderItem);
 
 export default router;
