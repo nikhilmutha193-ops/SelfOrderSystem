@@ -6,6 +6,7 @@ export interface IChef {
   username: string;
   passwordHash: string;
   password: string;
+  tokenVersion: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -16,6 +17,7 @@ const chefSchema = new Schema<IChef>(
     username: { type: String, required: true, trim: true },
     passwordHash: { type: String, required: true },
     password: { type: String, required: true },
+    tokenVersion: { type: Number, default: 0 },
   },
   { timestamps: true }
 );

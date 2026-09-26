@@ -4,13 +4,16 @@ import { ITaxRate } from "../models/Restaurant";
 export interface InvoiceTaxLine {
   name: string;
   percent: number;
+  base: number;
   amount: number;
 }
 
 export interface InvoiceTotals {
   subtotal: number;
   discount: number;
+  taxableAmount: number;
   taxLines: InvoiceTaxLine[];
+  roundOff: number;
   grandTotal: number;
 }
 
@@ -26,14 +29,23 @@ export function computeInvoiceTotals(
   const taxLines: InvoiceTaxLine[] = taxRates.map((rate) => ({
     name: rate.name,
     percent: rate.percent,
+    base: taxableAmount,
     amount: round2((taxableAmount * rate.percent) / 100),
   }));
 
-  const grandTotal = round2(taxableAmount + taxLines.reduce((sum, t) => sum + t.amount, 0));
+  const exactTotal = round2(taxableAmount + taxLines.reduce((sum, t) => sum + t.amount, 0));
+  const grandTotal = Math.round(exactTotal);
 
-  return { subtotal: round2(rawSubtotal), discount, taxLines, grandTotal };
+  return {
+    subtotal: round2(rawSubtotal),
+    discount,
+    taxableAmount,
+    taxLines,
+    roundOff: round2(grandTotal - exactTotal),
+    grandTotal,
+  };
 }
 
-function round2(n: number): number {
+export function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }

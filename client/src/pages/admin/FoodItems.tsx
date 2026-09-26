@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 
-import { Badge, Button, Card, ErrorText, Input, Select, TableWrap, Textarea } from "../../components/ui";
-import { api, extractErrorMessage, uploadImage } from "../../lib/apiClient";
 import type { Category, FoodItem, FoodType, ModifierGroup, Subcategory, Translations } from "../../lib/types";
+import { api, extractErrorMessage, uploadImage } from "../../shared/api/client";
+import { Badge, Button, Card, ErrorText, Input, Select, TableWrap, Textarea } from "../../shared/ui/ui";
 
 const EMOJI_CHOICES = ["⭐", "🔥", "👑", "💯", "🏆", "❤️"];
 const EMPTY_TR = { kn: { name: "", description: "" }, hi: { name: "", description: "" } };

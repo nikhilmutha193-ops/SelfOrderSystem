@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 
-import { api, extractErrorMessage } from "../lib/apiClient";
-import { Button, ErrorText, Input, Textarea } from "./ui";
+import { api, extractErrorMessage } from "../shared/api/client";
+import { Button, ErrorText, Input, Textarea } from "../shared/ui/ui";
 
 export function StarPicker({ value, onChange }: { value: number; onChange: (v: number) => void }) {
   return (

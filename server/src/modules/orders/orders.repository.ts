@@ -1,4 +1,4 @@
-import { FilterQuery, HydratedDocument, Types } from "mongoose";
+import { ClientSession, FilterQuery, HydratedDocument, Types } from "mongoose";
 
 import Admin from "../../models/Admin";
 import ChatMessage from "../../models/ChatMessage";
@@ -27,8 +27,48 @@ export class OrdersRepository {
     return Order.create({ ...data, restaurantId: this.restaurantId });
   }
 
-  saveOrder(order: HydratedDocument<IOrder>) {
-    return order.save();
+  saveOrder(order: HydratedDocument<IOrder>, session?: ClientSession) {
+    return order.save({ session });
+  }
+
+  async transitionOrder(
+    orderId: Types.ObjectId,
+    fromStatus: IOrder["status"],
+    changes: Partial<IOrder>,
+    session?: ClientSession
+  ): Promise<boolean> {
+    const result = await Order.updateOne(
+      this.scoped<IOrder>({ _id: orderId, status: fromStatus }),
+      { $set: changes },
+      { session }
+    );
+    return result.modifiedCount === 1;
+  }
+
+  findSessionOrder(tableId: Types.ObjectId, sessionId: string) {
+    return Order.findOne(this.scoped<IOrder>({ tableId, sessionId, status: { $in: ["open", "billed"] } })).sort({
+      createdAt: -1,
+    });
+  }
+
+  findInvoices(filter: FilterQuery<IOrder>) {
+    return Order.find(this.scoped<IOrder>({ ...filter, invoiceNumber: { $type: "string" } }))
+      .sort({ billedAt: 1, invoiceNumber: 1 })
+      .lean();
+  }
+
+  findClosedOrdersWithoutBill() {
+    return Order.find(this.scoped<IOrder>({ status: "closed", $or: [{ bill: null }, { bill: { $exists: false } }] }));
+  }
+
+  archiveOrders(orderIds: Types.ObjectId[]) {
+    return Order.updateMany(this.scoped<IOrder>({ _id: { $in: orderIds } }), { $set: { archivedAt: new Date() } });
+  }
+
+  findOrderIdsWithSentItems(orderIds: Types.ObjectId[]) {
+    return OrderItem.find(this.scoped<IOrderItem>({ orderId: { $in: orderIds }, kotRound: { $ne: null } })).distinct(
+      "orderId"
+    );
   }
 
   findOrdersWithTable(filter: FilterQuery<IOrder>) {
@@ -36,7 +76,7 @@ export class OrdersRepository {
   }
 
   findOrdersForClearing(filter: FilterQuery<IOrder>) {
-    return Order.find(this.scoped(filter)).select("_id tableId orderType");
+    return Order.find(this.scoped(filter)).select("_id tableId orderType status invoiceNumber");
   }
 
   async deleteOrdersCascade(orderIds: Types.ObjectId[]) {
@@ -56,6 +96,10 @@ export class OrdersRepository {
       .lean();
   }
 
+  findItem(itemId: string) {
+    return OrderItem.findOne(this.scoped<IOrderItem>({ _id: itemId }));
+  }
+
   findItemTotals(orderIds: Types.ObjectId[]) {
     return OrderItem.find(this.scoped<IOrderItem>({ orderId: { $in: orderIds } }))
       .select("orderId status total")
@@ -66,10 +110,10 @@ export class OrdersRepository {
     return OrderItem.create({ ...data, restaurantId: this.restaurantId });
   }
 
-  cancelItem(itemId: string) {
+  cancelItem(itemId: string, reason?: string, note?: string) {
     return OrderItem.findOneAndUpdate(
       this.scoped<IOrderItem>({ _id: itemId, status: { $ne: "cancelled" } }),
-      { $set: { status: "cancelled" } },
+      { $set: { status: "cancelled", cancelReason: reason, cancelNote: note, cancelledAt: new Date() } },
       { new: true }
     );
   }
@@ -121,11 +165,23 @@ export class OrdersRepository {
     return Coupon.find(this.scoped({ isActive: true })).sort({ code: 1 });
   }
 
-  incrementCouponUsage(couponId: Types.ObjectId) {
-    return Coupon.updateOne(this.scoped({ _id: couponId }), { $inc: { usedCount: 1 } });
+  findCoupon(code: string) {
+    return Coupon.findOne(this.scoped({ code }));
   }
 
-  decrementCouponUsage(code: string) {
-    return Coupon.updateOne(this.scoped({ code }), { $inc: { usedCount: -1 } });
+  async claimCouponUse(couponId: Types.ObjectId, session: ClientSession): Promise<boolean> {
+    const result = await Coupon.updateOne(
+      this.scoped({
+        _id: couponId,
+        $or: [{ usageLimit: null }, { $expr: { $lt: ["$usedCount", "$usageLimit"] } }],
+      }),
+      { $inc: { usedCount: 1 } },
+      { session }
+    );
+    return result.modifiedCount === 1;
+  }
+
+  releaseCouponUse(code: string, session?: ClientSession) {
+    return Coupon.updateOne(this.scoped({ code, usedCount: { $gt: 0 } }), { $inc: { usedCount: -1 } }, { session });
   }
 }

@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 
-import { Badge, Card, ErrorText } from "../../components/ui";
-import { api, extractErrorMessage } from "../../lib/apiClient";
 import type { Review } from "../../lib/types";
+import { api, extractErrorMessage } from "../../shared/api/client";
+import { Badge, Card, ErrorText } from "../../shared/ui/ui";
 
 function Stars({ rating }: { rating: number }) {
   return (

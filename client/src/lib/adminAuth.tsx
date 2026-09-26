@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { Navigate } from "react-router-dom";
 
-import { activateStoredAuth, api } from "./apiClient";
+import { activateStoredAuth, api } from "../shared/api/client";
 
 export type ModuleKey = keyof typeof MODULES;
 

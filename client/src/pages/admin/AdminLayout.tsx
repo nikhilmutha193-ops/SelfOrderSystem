@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 
-import ActiveOrders from "../../components/ActiveOrders";
-import NotificationCenter from "../../components/NotificationCenter";
-import { Button } from "../../components/ui";
+import NotificationCenter from "../../features/dashboard/components/NotificationCenter";
+import ActiveOrders from "../../features/orders/components/ActiveOrders";
 import { AdminProfileProvider, can, useAdmin, type ModuleKey } from "../../lib/adminAuth";
-import { activateStoredAuth, clearStoredToken, setActiveAuth } from "../../lib/apiClient";
+import { activateStoredAuth, clearStoredToken, setActiveAuth } from "../../shared/api/client";
+import { Button } from "../../shared/ui/ui";
 
 type NavLinkItem = { to: string; label: string; module: ModuleKey | null };
 const links: NavLinkItem[] = [
@@ -22,6 +22,7 @@ const links: NavLinkItem[] = [
   { to: "/admin/orders?type=dine-in", label: "Dine-in Orders", module: "orders" },
   { to: "/admin/orders?type=takeaway", label: "Take-away Orders", module: "orders" },
   { to: "/admin/delivery/new", label: "New Order", module: "orders" },
+  { to: "/admin/invoices", label: "Invoices", module: "orders" },
   { to: "/admin/team", label: "Team", module: "team" },
   { to: "/admin/awards", label: "Awards", module: "awards" },
   { to: "/admin/coupons", label: "Coupons", module: "coupons" },

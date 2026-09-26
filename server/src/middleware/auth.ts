@@ -1,6 +1,7 @@
 import { NextFunction, Request, Response } from "express";
 
 import Admin, { IAdmin } from "../models/Admin";
+import Chef from "../models/Chef";
 import TableModel from "../models/Table";
 import { AuthTokenPayload, Role, verifyToken } from "../utils/jwt";
 import { ModuleKey } from "../utils/permissions";
@@ -27,6 +28,20 @@ export function requireAuth(...roles: Role[]) {
       const payload = verifyToken(token);
       if (roles.length > 0 && !roles.includes(payload.role)) {
         return res.status(403).json({ message: "Insufficient permissions" });
+      }
+
+      if (payload.role === "admin" || payload.role === "chef") {
+        const account =
+          payload.role === "admin"
+            ? await Admin.findById(payload.id)
+            : await Chef.findById(payload.id).select("tokenVersion");
+        if (!account) {
+          return res.status(401).json({ message: "This account no longer exists" });
+        }
+        if ((account.tokenVersion ?? 0) !== (payload.tv ?? 0)) {
+          return res.status(401).json({ message: "Your session has ended. Please sign in again." });
+        }
+        if (payload.role === "admin") req.admin = account as IAdmin;
       }
 
       if (payload.role === "table" && payload.tableId) {

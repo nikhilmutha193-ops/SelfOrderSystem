@@ -21,7 +21,19 @@
       "Bash(node -e 'const a=require\\(\"./run-old.json\"\\);for\\(const e of a\\) if\\(e.status>=500\\) console.log\\(\"old 5xx:\",e.name\\)')",
       "Bash(grep -E '\\\\.\\(ts|tsx|css\\)$')",
       "Bash(cd \"C:/Users/mohda/OneDrive/Documents/SelfOrderSystem/server/src\" && cat utils/invoice.ts; echo ----; cat middleware/rateLimit.ts; echo ----; grep -rnE \"setInterval\\\\\\(|refetch|POLL|_MS =\" ../../client/src | cut -c1-150)",
-      "Read(//c/Users/mohda/OneDrive/client/**)"
+      "Read(//c/Users/mohda/OneDrive/client/**)",
+      "Bash(timeout 60 bash -c 'until grep -q '\\\\''MONGO READY'\\\\'' '\\\\''C:/Users/mohda/AppData/Local/Temp/claude/c--Users-mohda-OneDrive-Documents-SelfOrderSystem/7560e59d-9a0c-4afa-8717-80c87a50fd80/tasks/bpjxut9dl.output'\\\\''; do sleep 1; done')",
+      "Bash(MONGO_URI=\"mongodb://127.0.0.1:27018/selforder\" RESTAURANT_KEY=resto_demo npm run seed)",
+      "Bash(PORT=5000 MONGO_URI=\"mongodb://127.0.0.1:27018/selforder\" RESTAURANT_KEY=resto_demo JWT_SECRET=local-dev-secret-not-for-production JWT_EXPIRES_IN=8h CLIENT_ORIGIN=http://localhost:5173 npm run dev)",
+      "Bash(command -v chromium-cli)",
+      "Read(//c/Program Files/Google/Chrome/Application/**)",
+      "Bash(sed -i \"s|'input\\\\[autocomplete=\\\\\"username\\\\\"\\\\], input\\\\[name=\\\\\"username\\\\\"\\\\], input\\\\[type=\\\\\"text\\\\\"\\\\]'|'form input:not\\([type=\\\\\"password\\\\\"]\\)'|\" drive.js)",
+      "Bash(node drive.js)",
+      "Bash(node -e \"for \\(const p of ['express-rate-limit','mongodb','mongoose','express']\\) console.log\\(p, require\\(p+'/package.json'\\).version\\)\")",
+      "Bash(npm ls *)",
+      "Bash(npm pkg *)",
+      "Bash(grep -n \"return order;\\\\|return { token, order };\\\\|return created;\\\\|return item;\\\\|createOrder\\({\\\\|export async function\\\\|await writeAudit\" orders/orders.service.ts)",
+      "Bash(grep -n \"return { round, tokenNumber, items };\\\\|export async function printKot\" kitchen/kitchen.service.ts)"
     ]
   }
 }

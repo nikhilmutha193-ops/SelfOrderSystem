@@ -123,7 +123,7 @@ export const deleteTable = asyncHandler(async (req: Request, res: Response) => {
   if (!table) throw new HttpError(404, "Table not found");
 
   // Deleting a table mid-service would orphan a live order, so block it while one is open.
-  const openOrders = await Order.countDocuments({ tableId: table._id, status: "open" });
+  const openOrders = await Order.countDocuments({ tableId: table._id, status: { $in: ["open", "billed"] } });
   if (openOrders > 0) {
     throw new HttpError(409, `This table has ${openOrders} open order(s). Close or cancel them first.`);
   }

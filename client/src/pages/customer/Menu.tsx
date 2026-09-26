@@ -1,17 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import ChatFab from "../../components/ChatFab";
 import DishDialog, { type DishAddPayload } from "../../components/DishDialog";
 import { BestsellerTag, FoodTypeIcon, RatingChip } from "../../components/FoodBadges";
-import QuickRequests from "../../components/QuickRequests";
 import { ReviewDialog, StarPicker } from "../../components/ReviewFab";
-import { Button, ErrorText, Input, Select, Textarea } from "../../components/ui";
-import { api, clearStoredToken, extractErrorMessage, setActiveAuth } from "../../lib/apiClient";
+import ChatFab from "../../features/chat/components/ChatFab";
+import QuickRequests from "../../features/chat/components/QuickRequests";
+import { ordersApi } from "../../features/orders/api";
+import { useAddOrderItems } from "../../features/orders/queries";
 import { LANGS, loadLang, saveLang, tr, type Lang } from "../../lib/i18n";
 import { newId } from "../../lib/id";
-import type { CartLine, MenuCategory, MenuFoodItem, OrderDetailResponse } from "../../lib/types";
+import type { CartLine, MenuCategory, MenuFoodItem } from "../../lib/types";
 import { useTableSession } from "../../lib/useTableSession";
+import { api, clearStoredToken, extractErrorMessage, setActiveAuth } from "../../shared/api/client";
+import { Button, ErrorText, Input, Select, Textarea } from "../../shared/ui/ui";
 
 type SortOption = "recommended" | "priceLowHigh" | "priceHighLow" | "nameAsc" | "bestsellerFirst";
 
@@ -79,6 +81,7 @@ const SORT_LABELS: Record<SortOption, string> = {
 
 export default function Menu() {
   const { orderId } = useTableSession();
+  const addOrderItems = useAddOrderItems();
   const navigate = useNavigate();
   const [menu, setMenu] = useState<MenuCategory[]>([]);
   const [cart, setCart] = useState<CartLine[]>([]);
@@ -184,7 +187,8 @@ export default function Menu() {
     setConfirming(true);
     setError(null);
     try {
-      await api.post(`/orders/${orderId}/items`, {
+      await addOrderItems.mutateAsync({
+        orderId,
         items: cart.map((l) => ({
           foodItemId: l.foodItemId,
           quantity: l.quantity,
@@ -209,10 +213,10 @@ export default function Menu() {
     setLeaveComment("");
     if (!orderId) return;
     try {
-      const res = await api.get<OrderDetailResponse>(`/orders/${orderId}`);
-      const active = res.data.items.filter((it) => ACTIVE_ITEM_STATUSES.has(it.status)).length;
+      const detail = await ordersApi.get(orderId);
+      const active = detail.items.filter((it) => ACTIVE_ITEM_STATUSES.has(it.status)).length;
       setActiveItemCount(active);
-      setLeaveCustomerName(res.data.order.customerName || "");
+      setLeaveCustomerName(detail.order.customerName || "");
     } catch {
       // Non-critical - the dialog still works without the extra warning if this fails.
     }

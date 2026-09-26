@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 
-import { Button, Card, ErrorText } from "../../components/ui";
-import { api, extractErrorMessage } from "../../lib/apiClient";
+import { api, extractErrorMessage } from "../../shared/api/client";
+import { Button, Card, ErrorText } from "../../shared/ui/ui";
 
 interface RestoreSummary {
   message: string;

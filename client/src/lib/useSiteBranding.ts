@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 
-import { api } from "./apiClient";
+import { api } from "../shared/api/client";
 
 interface PublicRestaurant {
   name: string;

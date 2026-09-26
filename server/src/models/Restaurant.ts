@@ -32,6 +32,8 @@ export interface IKotSettings {
 }
 
 export interface IInvoiceSettings {
+  invoicePrefix: string;
+  placeOfSupply: string;
   showCustomerPhone: boolean;
   footerNote: string;
   termsText: string;
@@ -124,6 +126,8 @@ const kotSettingsSchema = new Schema<IKotSettings>(
 
 const invoiceSettingsSchema = new Schema<IInvoiceSettings>(
   {
+    invoicePrefix: { type: String, default: "INV", trim: true, uppercase: true },
+    placeOfSupply: { type: String, default: "", trim: true },
     showCustomerPhone: { type: Boolean, default: true },
     footerNote: { type: String, default: "Thank you for dining with us!" },
     termsText: { type: String, default: "" },

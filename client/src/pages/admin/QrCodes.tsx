@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 
-import { Button, Card, ErrorText, Input } from "../../components/ui";
-import { api, extractErrorMessage } from "../../lib/apiClient";
 import { buildTableQrFrame } from "../../lib/qrFrame";
 import type { QrSettings, Restaurant, TableRow } from "../../lib/types";
+import { api, extractErrorMessage } from "../../shared/api/client";
+import { Button, Card, ErrorText, Input } from "../../shared/ui/ui";
 
 interface FrameState {
   status: "loading" | "ready" | "error";

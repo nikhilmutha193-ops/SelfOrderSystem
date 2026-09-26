@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
-import { Button, ErrorText, Input } from "../../components/ui";
 import {
   api,
   clearExpiredFlag,
@@ -9,7 +8,8 @@ import {
   setActiveAuth,
   storeToken,
   wasSessionExpired,
-} from "../../lib/apiClient";
+} from "../../shared/api/client";
+import { Button, ErrorText, Input } from "../../shared/ui/ui";
 
 export default function AdminLogin() {
   const [searchParams] = useSearchParams();

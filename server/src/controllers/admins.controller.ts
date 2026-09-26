@@ -76,6 +76,7 @@ export const resetAdminPassword = asyncHandler(async (req: Request, res: Respons
   }
   const admin = await findOwnAdmin(req);
   admin.passwordHash = await hashPassword(newPassword);
+  admin.tokenVersion = (admin.tokenVersion ?? 0) + 1;
   await admin.save();
   res.json({ message: "Password updated successfully" });
 });

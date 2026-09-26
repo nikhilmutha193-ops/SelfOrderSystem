@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
+import type { TableRow } from "../../lib/types";
+import { useTableSession } from "../../lib/useTableSession";
 import {
   activateStoredAuth,
   api,
@@ -9,9 +11,7 @@ import {
   setActiveAuth,
   storeToken,
   wasSessionExpired,
-} from "../../lib/apiClient";
-import type { TableRow } from "../../lib/types";
-import { useTableSession } from "../../lib/useTableSession";
+} from "../../shared/api/client";
 
 import "../../styles/order.css";
 

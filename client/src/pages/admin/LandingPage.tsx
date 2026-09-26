@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 
-import { Button, Card, ErrorText, Input, Textarea } from "../../components/ui";
 import { useCanEdit } from "../../lib/adminAuth";
-import { api, extractErrorMessage, uploadImage } from "../../lib/apiClient";
 import type { LandingContent } from "../../lib/types";
+import { api, extractErrorMessage, uploadImage } from "../../shared/api/client";
+import { Button, Card, ErrorText, Input, Textarea } from "../../shared/ui/ui";
 
 type Section = keyof LandingContent;
 

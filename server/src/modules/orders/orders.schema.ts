@@ -64,7 +64,9 @@ const businessDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, { error: "Dates mus
 
 export const orderFilterQuery = z.object({
   type: blankToUndefined(z.enum(["dine-in", "takeaway", "delivery"], { error: "Invalid order type" })),
-  status: blankToUndefined(z.enum(["open", "closed", "cancelled"], { error: "Invalid order status" })),
+  status: blankToUndefined(
+    z.enum(["open", "billed", "unpaid", "closed", "cancelled"], { error: "Invalid order status" })
+  ),
   today: blankToUndefined(z.string()),
   from: blankToUndefined(businessDate),
   to: blankToUndefined(businessDate),
@@ -80,6 +82,43 @@ export const applyCouponSchema = z.object({
   code: z.string({ error: "code is required" }).trim().min(1, { error: "code is required" }),
 });
 
+export const ITEM_CANCEL_REASONS = ["wrong_item", "guest_changed_mind", "quality", "out_of_stock", "other"] as const;
+
+export const cancelItemSchema = z.object({
+  reason: blankToUndefined(z.enum(ITEM_CANCEL_REASONS, { error: "Choose a valid reason" })),
+  note: z
+    .string()
+    .trim()
+    .max(200, { error: "Keep the note under 200 characters" })
+    .nullish()
+    .transform((value) => value || undefined),
+});
+
+const reason = z
+  .string({ error: "A reason is required" })
+  .trim()
+  .min(3, { error: "A reason is required" })
+  .max(200, { error: "Keep the reason under 200 characters" });
+
+export const reasonSchema = z.object({ reason });
+
+export const cancelOrderSchema = z.object({ reason: blankToUndefined(reason) });
+
+export const generateBillSchema = z.object({
+  customerGstin: blankToUndefined(
+    z
+      .string()
+      .trim()
+      .toUpperCase()
+      .regex(/^[0-9]{2}[A-Z0-9]{13}$/, { error: "Enter a valid 15-character GSTIN" })
+  ),
+});
+
+export const invoiceRegisterQuery = z.object({
+  from: blankToUndefined(businessDate),
+  to: blankToUndefined(businessDate),
+});
+
 export type StartDineInInput = z.output<typeof startDineInSchema>;
 export type StartTakeawayInput = z.output<typeof startTakeawaySchema>;
 export type StartDeliveryInput = z.output<typeof startDeliverySchema>;
@@ -87,3 +126,6 @@ export type StartCounterInput = z.output<typeof startCounterSchema>;
 export type AddItemsInput = z.output<typeof addItemsSchema>;
 export type OrderFilterInput = z.output<typeof orderFilterQuery>;
 export type PayOrderInput = z.output<typeof payOrderSchema>;
+export type CancelItemInput = z.output<typeof cancelItemSchema>;
+export type GenerateBillInput = z.output<typeof generateBillSchema>;
+export type InvoiceRegisterInput = z.output<typeof invoiceRegisterQuery>;

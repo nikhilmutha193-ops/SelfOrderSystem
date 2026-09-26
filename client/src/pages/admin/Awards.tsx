@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 
-import { Badge, Button, Card, ErrorText, Input, Textarea } from "../../components/ui";
-import { api, extractErrorMessage, uploadImage } from "../../lib/apiClient";
 import type { Award } from "../../lib/types";
+import { api, extractErrorMessage, uploadImage } from "../../shared/api/client";
+import { Badge, Button, Card, ErrorText, Input, Textarea } from "../../shared/ui/ui";
 
 export default function Awards() {
   const [awards, setAwards] = useState<Award[]>([]);

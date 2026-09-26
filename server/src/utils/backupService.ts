@@ -8,6 +8,7 @@ import ChatMessage from "../models/ChatMessage";
 import Chef from "../models/Chef";
 import Coupon from "../models/Coupon";
 import FoodItem from "../models/FoodItem";
+import InvoiceCounter from "../models/InvoiceCounter";
 import Order from "../models/Order";
 import OrderItem from "../models/OrderItem";
 import Restaurant from "../models/Restaurant";
@@ -33,6 +34,7 @@ const TENANT_MODELS: { key: string; model: Model<any> }[] = [
   { key: "orders", model: Order },
   { key: "orderItems", model: OrderItem },
   { key: "chatMessages", model: ChatMessage },
+  { key: "invoiceCounters", model: InvoiceCounter },
 ];
 
 async function buildBackupPayload(restaurantId: Types.ObjectId | string) {

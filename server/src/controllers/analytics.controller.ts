@@ -4,7 +4,7 @@ import { asyncHandler } from "../middleware/errorHandler";
 import AuditLog from "../models/AuditLog";
 import FoodItem from "../models/FoodItem";
 import Order from "../models/Order";
-import OrderItem from "../models/OrderItem";
+import OrderItem, { IOrderItem } from "../models/OrderItem";
 import Restaurant from "../models/Restaurant";
 import { HttpError } from "../utils/httpError";
 import { computeInvoiceTotals } from "../utils/invoice";
@@ -36,14 +36,14 @@ export const getSalesAnalytics = asyncHandler(async (req: Request, res: Response
     status: "closed",
     checkoutTime: { $gte: since },
   })
-    .select("orderType checkoutTime discountAmount")
+    .select("orderType checkoutTime discountAmount bill")
     .lean();
 
   const orderIds = orders.map((o) => o._id);
   const items = await OrderItem.find({ orderId: { $in: orderIds } })
     .select("orderId status total foodName quantity")
     .lean();
-  const itemsByOrder = new Map<string, { status: string; total: number }[]>();
+  const itemsByOrder = new Map<string, Pick<IOrderItem, "status" | "total">[]>();
   for (const it of items) {
     const key = it.orderId.toString();
     if (!itemsByOrder.has(key)) itemsByOrder.set(key, []);
@@ -56,11 +56,9 @@ export const getSalesAnalytics = asyncHandler(async (req: Request, res: Response
   let totalRevenue = 0;
 
   for (const o of orders) {
-    const grand = computeInvoiceTotals(
-      itemsByOrder.get(o._id.toString()) as any,
-      taxRates,
-      o.discountAmount
-    ).grandTotal;
+    const grand =
+      o.bill?.grandTotal ??
+      computeInvoiceTotals(itemsByOrder.get(o._id.toString()) ?? [], taxRates, o.discountAmount).grandTotal;
     totalRevenue += grand;
     const when = o.checkoutTime ? new Date(o.checkoutTime) : new Date();
     const { date, hour } = localParts(when, tz);

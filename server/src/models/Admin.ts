@@ -11,6 +11,7 @@ export interface IAdmin {
   securityAnswerHash: string;
   isOwner: boolean;
   permissions: Map<string, PermissionLevel>;
+  tokenVersion: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -23,6 +24,7 @@ const adminSchema = new Schema<IAdmin>(
     securityQuestion: { type: String, required: true },
     securityAnswerHash: { type: String, required: true },
     isOwner: { type: Boolean, default: false },
+    tokenVersion: { type: Number, default: 0 },
     permissions: {
       type: Map,
       of: { type: String, enum: ["view", "edit"] },

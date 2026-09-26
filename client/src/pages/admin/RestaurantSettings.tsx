@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 
-import { Button, Card, ErrorText, Input, Select, Textarea } from "../../components/ui";
-import { api, extractErrorMessage, uploadImage } from "../../lib/apiClient";
+import { currentFinancialYearLabel } from "../../features/orders/status";
 import {
   PRINT_FONT_SIZE_LABELS,
   PRINT_PAPER_SIZE_LABELS,
@@ -12,6 +11,8 @@ import {
   type Restaurant,
   type TaxRate,
 } from "../../lib/types";
+import { api, extractErrorMessage, uploadImage } from "../../shared/api/client";
+import { Button, Card, ErrorText, Input, Select, Textarea } from "../../shared/ui/ui";
 
 const TIMEZONE_CHOICES: string[] =
   typeof Intl.supportedValuesOf === "function"
@@ -31,6 +32,8 @@ const DEFAULT_KOT_SETTINGS: KotSettings = {
 };
 
 const DEFAULT_INVOICE_SETTINGS: InvoiceSettings = {
+  invoicePrefix: "INV",
+  placeOfSupply: "",
   showCustomerPhone: true,
   footerNote: "Thank you for dining with us!",
   termsText: "",
@@ -734,6 +737,38 @@ export default function RestaurantSettings() {
         <h2 className="mb-3 text-lg font-semibold text-slate-800">Invoice</h2>
         <p className="mb-4 text-sm text-slate-500">Customize what's printed on customer invoices.</p>
         <form onSubmit={submit} className="flex flex-col gap-4">
+          <div className="flex flex-wrap gap-3">
+            <label className="text-sm font-medium text-slate-700">
+              Invoice prefix
+              <Input
+                id="invoice-prefix"
+                className="mt-1 !w-28 uppercase"
+                maxLength={3}
+                value={invoiceSettings.invoicePrefix}
+                onChange={(e) =>
+                  setInvoiceSettings((prev) => ({
+                    ...prev,
+                    invoicePrefix: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""),
+                  }))
+                }
+              />
+              <span className="mt-1 block text-xs font-normal text-slate-500">
+                Bills are numbered {invoiceSettings.invoicePrefix || "INV"}/{currentFinancialYearLabel()}/000001 and
+                restart each April.
+              </span>
+            </label>
+            <label className="text-sm font-medium text-slate-700">
+              Place of supply (state)
+              <Input
+                id="place-of-supply"
+                className="mt-1"
+                maxLength={60}
+                value={invoiceSettings.placeOfSupply}
+                onChange={(e) => setInvoiceSettings((prev) => ({ ...prev, placeOfSupply: e.target.value }))}
+                placeholder="Karnataka"
+              />
+            </label>
+          </div>
           <div className="flex flex-wrap gap-3">
             <label className="text-sm font-medium text-slate-700">
               Paper size

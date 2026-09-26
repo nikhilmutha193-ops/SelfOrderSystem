@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { api, clearStoredToken, extractErrorMessage, setActiveAuth, storeToken } from "../../lib/apiClient";
+import { ordersApi } from "../../features/orders/api";
 import { useTableSession } from "../../lib/useTableSession";
+import { api, clearStoredToken, extractErrorMessage, setActiveAuth, storeToken } from "../../shared/api/client";
 
 import "../../styles/order.css";
 
@@ -51,13 +52,13 @@ export default function CustomerDetails() {
     setLoading(true);
     try {
       const phone = customerPhone.trim();
-      const res = await api.post("/orders/dine-in", {
+      const started = await ordersApi.startDineIn({
         customerName,
         customerPhone: phone ? `+91 ${phone}` : "",
         members,
       });
-      storeToken("table", res.data.token);
-      setActiveAuth({ role: "table", token: res.data.token });
+      storeToken("table", started.token);
+      setActiveAuth({ role: "table", token: started.token });
       navigate("/order/menu");
     } catch (err) {
       setError(extractErrorMessage(err));

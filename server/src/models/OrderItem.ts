@@ -19,6 +19,9 @@ export interface IOrderItem {
   tokenNumber: number | null;
   kotPrintedAt: Date | null;
   readyAt: Date | null;
+  cancelReason?: string;
+  cancelNote?: string;
+  cancelledAt?: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -48,6 +51,9 @@ const orderItemSchema = new Schema<IOrderItem>(
     tokenNumber: { type: Number, default: null },
     kotPrintedAt: { type: Date, default: null },
     readyAt: { type: Date, default: null },
+    cancelReason: { type: String },
+    cancelNote: { type: String, trim: true },
+    cancelledAt: { type: Date, default: null },
   },
   { timestamps: true }
 );

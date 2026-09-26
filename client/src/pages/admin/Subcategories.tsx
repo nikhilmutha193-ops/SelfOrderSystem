@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 
-import { Badge, Button, Card, ErrorText, Input, Select, TableWrap } from "../../components/ui";
-import { api, extractErrorMessage } from "../../lib/apiClient";
 import type { Category, Subcategory } from "../../lib/types";
+import { api, extractErrorMessage } from "../../shared/api/client";
+import { Badge, Button, Card, ErrorText, Input, Select, TableWrap } from "../../shared/ui/ui";
 
 export default function Subcategories() {
   const [subcategories, setSubcategories] = useState<Subcategory[]>([]);

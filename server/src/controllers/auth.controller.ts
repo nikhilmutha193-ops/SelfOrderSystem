@@ -7,7 +7,7 @@ import Chef from "../models/Chef";
 import Order from "../models/Order";
 import TableModel from "../models/Table";
 import { HttpError } from "../utils/httpError";
-import { signToken } from "../utils/jwt";
+import { AuthTokenPayload, nowSeconds, signToken, staffSessionMaxSeconds } from "../utils/jwt";
 import { comparePassword, hashPassword } from "../utils/password";
 import { cancelUnsentOrdersForTables } from "../utils/tableRelease";
 import { decryptTableToken } from "../utils/tableToken";
@@ -36,7 +36,13 @@ export const adminLogin = asyncHandler(async (req: Request, res: Response) => {
     }
   }
 
-  const token = signToken({ role: "admin", restaurantId: req.restaurantId!, id: admin._id.toString() });
+  const token = signToken({
+    role: "admin",
+    restaurantId: req.restaurantId!,
+    id: admin._id.toString(),
+    tv: admin.tokenVersion ?? 0,
+    sst: nowSeconds(),
+  });
   res.json({ token, admin: adminProfile(admin) });
 });
 
@@ -73,6 +79,7 @@ export const adminForgotPassword = asyncHandler(async (req: Request, res: Respon
     throw new HttpError(401, "Security answer did not match");
   }
   admin.passwordHash = await hashPassword(newPassword);
+  admin.tokenVersion = (admin.tokenVersion ?? 0) + 1;
   await admin.save();
   res.json({ message: "Password updated successfully" });
 });
@@ -87,8 +94,17 @@ export const adminChangePassword = asyncHandler(async (req: Request, res: Respon
     throw new HttpError(401, "Current password is incorrect");
   }
   admin.passwordHash = await hashPassword(newPassword);
+  admin.tokenVersion = (admin.tokenVersion ?? 0) + 1;
   await admin.save();
-  res.json({ message: "Password updated successfully" });
+  const token = signToken({
+    role: "admin",
+    restaurantId: req.restaurantId!,
+    id: admin._id.toString(),
+    tv: admin.tokenVersion,
+    dev: req.auth!.dev,
+    sst: nowSeconds(),
+  });
+  res.json({ message: "Password updated successfully", token });
 });
 
 export const chefLogin = asyncHandler(async (req: Request, res: Response) => {
@@ -100,7 +116,14 @@ export const chefLogin = asyncHandler(async (req: Request, res: Response) => {
     throw new HttpError(401, "Invalid username or password");
   }
 
-  const token = signToken({ role: "chef", restaurantId: req.restaurantId!, id: chef._id.toString() });
+  const token = signToken({
+    role: "chef",
+    restaurantId: req.restaurantId!,
+    id: chef._id.toString(),
+    tv: chef.tokenVersion ?? 0,
+    dev: req.body?.keepSignedIn === true,
+    sst: nowSeconds(),
+  });
   res.json({ token, chef: { id: chef._id, username: chef.username } });
 });
 
@@ -148,7 +171,9 @@ export const tableLogin = asyncHandler(async (req: Request, res: Response) => {
       await cancelUnsentOrdersForTables([table._id]);
       // status/sessionId are overwritten just below regardless, so nothing else to reset here.
     } else if (continueOrder === true) {
-      const openOrder = await Order.findOne({ tableId: table._id, status: "open" }).sort({ createdAt: -1 });
+      const openOrder = await Order.findOne({ tableId: table._id, status: { $in: ["open", "billed"] } }).sort({
+        createdAt: -1,
+      });
       const token = signToken({
         role: "table",
         restaurantId: req.restaurantId!,
@@ -181,4 +206,22 @@ export const tableLogin = asyncHandler(async (req: Request, res: Response) => {
     sessionId,
   });
   res.json({ token, table: { id: table._id, code: table.code } });
+});
+
+export const refreshSession = asyncHandler(async (req: Request, res: Response) => {
+  const auth = req.auth!;
+  const startedAt = auth.sst ?? nowSeconds();
+  if (nowSeconds() - startedAt > staffSessionMaxSeconds(auth)) {
+    throw new HttpError(401, "Your session has ended. Please sign in again.");
+  }
+
+  const payload: AuthTokenPayload = {
+    role: auth.role,
+    restaurantId: auth.restaurantId,
+    id: auth.id,
+    tv: auth.tv ?? 0,
+    dev: auth.dev,
+    sst: startedAt,
+  };
+  res.json({ token: signToken(payload) });
 });

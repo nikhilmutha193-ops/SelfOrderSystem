@@ -1,13 +1,16 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import ChatFab from "../../components/ChatFab";
 import { ReviewDialog } from "../../components/ReviewFab";
-import { Badge, Button, Card, ErrorText, Input } from "../../components/ui";
-import { api, clearStoredToken, extractErrorMessage, setActiveAuth } from "../../lib/apiClient";
+import ChatFab from "../../features/chat/components/ChatFab";
+import { useSendChatMessage } from "../../features/chat/queries";
+import { ordersApi } from "../../features/orders/api";
+import { useApplyCoupon, useOrderInvoice, useRemoveCoupon } from "../../features/orders/queries";
 import { renderPrepMessage } from "../../lib/prepTime";
-import type { OrderDetailResponse } from "../../lib/types";
 import { useTableSession } from "../../lib/useTableSession";
+import { api, clearStoredToken, extractErrorMessage, setActiveAuth } from "../../shared/api/client";
+import { POLL } from "../../shared/api/queryClient";
+import { Badge, Button, Card, ErrorText, Input } from "../../shared/ui/ui";
 
 const STATUS_TONE = {
   pending: "amber",
@@ -24,11 +27,16 @@ export default function CustomerInvoice() {
   const [checkoutRequested, setCheckoutRequested] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const navigate = useNavigate();
-  const [data, setData] = useState<OrderDetailResponse | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const invoiceQuery = useOrderInvoice(orderId, POLL.guestInvoice);
+  const data = invoiceQuery.data ?? null;
+  const [actionError, setActionError] = useState<string | null>(null);
+  const error = actionError ?? (invoiceQuery.error ? extractErrorMessage(invoiceQuery.error) : null);
   const [couponCode, setCouponCode] = useState("");
   const [couponError, setCouponError] = useState<string | null>(null);
-  const [applyingCoupon, setApplyingCoupon] = useState(false);
+  const applyOrderCoupon = useApplyCoupon();
+  const removeOrderCoupon = useRemoveCoupon();
+  const sendChat = useSendChatMessage();
+  const applyingCoupon = applyOrderCoupon.isPending;
   const [ratedDishes, setRatedDishes] = useState<Record<string, number>>({});
 
   async function rateDish(foodItemId: string, rating: number) {
@@ -40,23 +48,9 @@ export default function CustomerInvoice() {
     }
   }
 
-  const load = useCallback(() => {
-    if (!orderId) return;
-    api
-      .get<OrderDetailResponse>(`/orders/${orderId}/invoice`)
-      .then((res) => setData(res.data))
-      .catch((err) => setError(extractErrorMessage(err)));
-  }, [orderId]);
-
   useEffect(() => {
-    if (!orderId) {
-      navigate("/order/details", { replace: true });
-      return;
-    }
-    load();
-    const interval = setInterval(load, 8000);
-    return () => clearInterval(interval);
-  }, [orderId, load, navigate]);
+    if (!orderId) navigate("/order/details", { replace: true });
+  }, [orderId, navigate]);
 
   function logout() {
     clearStoredToken("table");
@@ -66,16 +60,17 @@ export default function CustomerInvoice() {
 
   async function requestCheckout() {
     if (!orderId) return;
-    setError(null);
+    setActionError(null);
     setCheckingOut(true);
     try {
-      await api.post(`/orders/${orderId}/chat`, {
+      await sendChat.mutateAsync({
+        orderId,
         message: "We'd like to checkout please - we'll pay at the counter.",
       });
       setCheckoutRequested(true);
       setTimeout(logout, 4000);
     } catch (err) {
-      setError(extractErrorMessage(err));
+      setActionError(extractErrorMessage(err));
     } finally {
       setCheckingOut(false);
     }
@@ -83,11 +78,10 @@ export default function CustomerInvoice() {
 
   async function downloadInvoice() {
     if (!orderId) return;
-    setError(null);
+    setActionError(null);
     setDownloading(true);
     try {
-      const res = await api.get(`/orders/${orderId}/invoice/pdf`, { responseType: "blob" });
-      const url = URL.createObjectURL(res.data);
+      const url = URL.createObjectURL(await ordersApi.invoicePdf(orderId));
       const link = document.createElement("a");
       link.href = url;
       link.download = `invoice-${orderId}.pdf`;
@@ -97,7 +91,7 @@ export default function CustomerInvoice() {
       // Revoking immediately can cancel the download on some mobile browsers.
       setTimeout(() => URL.revokeObjectURL(url), 10000);
     } catch (err) {
-      setError(extractErrorMessage(err));
+      setActionError(extractErrorMessage(err));
     } finally {
       setDownloading(false);
     }
@@ -107,15 +101,11 @@ export default function CustomerInvoice() {
     e.preventDefault();
     if (!orderId || !couponCode.trim()) return;
     setCouponError(null);
-    setApplyingCoupon(true);
     try {
-      await api.post(`/orders/${orderId}/coupon`, { code: couponCode.trim() });
+      await applyOrderCoupon.mutateAsync({ orderId, code: couponCode.trim() });
       setCouponCode("");
-      load();
     } catch (err) {
       setCouponError(extractErrorMessage(err));
-    } finally {
-      setApplyingCoupon(false);
     }
   }
 
@@ -123,8 +113,7 @@ export default function CustomerInvoice() {
     if (!orderId) return;
     setCouponError(null);
     try {
-      await api.delete(`/orders/${orderId}/coupon`);
-      load();
+      await removeOrderCoupon.mutateAsync(orderId);
     } catch (err) {
       setCouponError(extractErrorMessage(err));
     }
@@ -142,16 +131,29 @@ export default function CustomerInvoice() {
   // Cancelled items are settled, so they don't hold the table up.
   const activeItems = items.filter((i) => i.status !== "cancelled");
   const pendingCount = activeItems.filter((i) => i.status !== "served").length;
-  const orderComplete = order.status === "closed" || (activeItems.length > 0 && pendingCount === 0);
+  const orderComplete =
+    order.status === "closed" || order.status === "billed" || (activeItems.length > 0 && pendingCount === 0);
+  const statusBadge =
+    order.status === "closed"
+      ? { tone: "green" as const, label: "Paid" }
+      : order.status === "billed"
+        ? { tone: "blue" as const, label: "Bill ready" }
+        : order.status === "cancelled"
+          ? { tone: "red" as const, label: "Cancelled" }
+          : { tone: "amber" as const, label: "Open" };
 
   return (
     <div className="mx-auto max-w-2xl px-4 pt-6 pb-32">
       <div className="mb-4 flex items-center justify-between">
         <h1 className="text-xl font-bold text-slate-800">Your order</h1>
-        <Badge tone={order.status === "closed" ? "green" : "amber"}>
-          {order.status === "closed" ? "Paid" : "Open"}
-        </Badge>
+        <Badge tone={statusBadge.tone}>{statusBadge.label}</Badge>
       </div>
+
+      {order.status === "billed" && (
+        <p className="mb-4 rounded-md bg-blue-50 px-3 py-2 text-sm text-blue-900">
+          Your bill{order.invoiceNumber ? ` ${order.invoiceNumber}` : ""} is ready. Please pay at the counter.
+        </p>
+      )}
 
       <Card className="mb-4">
         <p className="text-sm text-slate-600">Customer: {order.customerName}</p>
@@ -243,6 +245,14 @@ export default function CustomerInvoice() {
             <span>₹{t.amount.toFixed(2)}</span>
           </div>
         ))}
+        {totals.roundOff !== 0 && (
+          <div className="flex justify-between text-sm text-slate-600">
+            <span>Round off</span>
+            <span>
+              {totals.roundOff > 0 ? "+" : "-"}₹{Math.abs(totals.roundOff).toFixed(2)}
+            </span>
+          </div>
+        )}
         <div className="mt-2 flex justify-between border-t border-slate-200 pt-2 text-base font-semibold text-slate-800">
           <span>Grand total</span>
           <span>₹{totals.grandTotal.toFixed(2)}</span>

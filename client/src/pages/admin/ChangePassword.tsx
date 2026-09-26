@@ -1,7 +1,7 @@
 import { useState } from "react";
 
-import { Button, Card, ErrorText, Input } from "../../components/ui";
-import { api, extractErrorMessage } from "../../lib/apiClient";
+import { api, extractErrorMessage, setActiveAuth, storeToken } from "../../shared/api/client";
+import { Button, Card, ErrorText, Input } from "../../shared/ui/ui";
 
 export default function ChangePassword() {
   const [oldPassword, setOldPassword] = useState("");
@@ -14,8 +14,12 @@ export default function ChangePassword() {
     setError(null);
     setMessage(null);
     try {
-      await api.post("/auth/admin/change-password", { oldPassword, newPassword });
-      setMessage("Password updated");
+      const res = await api.post<{ token?: string }>("/auth/admin/change-password", { oldPassword, newPassword });
+      if (res.data.token) {
+        storeToken("admin", res.data.token);
+        setActiveAuth({ role: "admin", token: res.data.token });
+      }
+      setMessage("Password updated. Other devices using this account have been signed out.");
       setOldPassword("");
       setNewPassword("");
     } catch (err) {

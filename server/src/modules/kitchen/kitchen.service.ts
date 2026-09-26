@@ -1,4 +1,5 @@
 import { RequestContext } from "../../core/context";
+import { emit } from "../../core/events";
 import { HttpError } from "../../utils/httpError";
 import { nextTokenNumber } from "../../utils/kotQueue";
 import { getOwnedOrder } from "../orders/orders.service";
@@ -28,25 +29,27 @@ export async function getKotQueue(ctx: RequestContext, tableId?: string) {
 
 export async function printKot(ctx: RequestContext, orderId: string) {
   const order = await getOwnedOrder(ctx, orderId);
-  const repo = new KitchenRepository(ctx.restaurantId);
-  const pending = await repo.findUnsentItems(order._id);
-  if (pending.length === 0) {
-    return { round: null, items: [], message: "No new items to send to the kitchen" };
+  if (order.status !== "open" && order.status !== "billed") {
+    throw new HttpError(409, "This order is closed, so nothing can be sent to the kitchen");
   }
-
-  const lastSent = await repo.findLatestSentItem(order._id);
-  const round = (lastSent?.kotRound || 0) + 1;
+  const repo = new KitchenRepository(ctx.restaurantId);
+  const nothingToSend = { round: null, items: [], message: "No new items to send to the kitchen" };
+  if (!(await repo.hasUnsentItems(order._id))) return nothingToSend;
+  const round = await repo.nextKotRound(order._id);
+  if ((await repo.claimUnsentItems(order._id, round)) === 0) return nothingToSend;
 
   const restaurant = await repo.findRestaurant("dayEndTime timezone");
   const { tokenNumber } = await nextTokenNumber(ctx.restaurantId, restaurant?.dayEndTime, restaurant?.timezone);
-
-  await repo.markItemsSent(
-    pending.map((p) => p._id),
-    round,
-    tokenNumber
-  );
+  await repo.setRoundToken(order._id, round, tokenNumber);
 
   const items = await repo.findRoundItems(order._id, round);
+  await emit("order.kotSent", {
+    restaurantId: ctx.restaurantId,
+    orderId: order._id.toString(),
+    round,
+    tokenNumber,
+    itemIds: items.map((item) => item._id.toString()),
+  });
   return { round, tokenNumber, items };
 }
 

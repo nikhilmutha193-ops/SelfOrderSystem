@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 
-import { Card, ErrorText, TableWrap } from "../../components/ui";
-import { api, extractErrorMessage } from "../../lib/apiClient";
+import { api, extractErrorMessage } from "../../shared/api/client";
+import { Card, ErrorText, TableWrap } from "../../shared/ui/ui";
 
 interface SalesData {
   days: number;

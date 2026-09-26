@@ -36,7 +36,7 @@ export const updateChef = asyncHandler(async (req: Request, res: Response) => {
 
   const chef = await Chef.findOneAndUpdate(
     { _id: req.params.id, restaurantId: req.restaurantId },
-    { $set: { passwordHash: await hashPassword(password), password } },
+    { $set: { passwordHash: await hashPassword(password), password }, $inc: { tokenVersion: 1 } },
     { new: true }
   ).select("-passwordHash");
   if (!chef) throw new HttpError(404, "Chef not found");

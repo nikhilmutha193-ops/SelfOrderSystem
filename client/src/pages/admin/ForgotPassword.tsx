@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { Button, Card, ErrorText, Input } from "../../components/ui";
-import { api, extractErrorMessage } from "../../lib/apiClient";
+import { api, extractErrorMessage } from "../../shared/api/client";
+import { Button, Card, ErrorText, Input } from "../../shared/ui/ui";
 
 export default function ForgotPassword() {
   const [username, setUsername] = useState("");

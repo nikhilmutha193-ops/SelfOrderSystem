@@ -4,22 +4,26 @@ import { requireAuth, requireModule } from "../../middleware/auth";
 import {
   addOrderItems,
   applyCoupon,
+  archiveOrders,
   cancelOrder,
   cancelOrderItem,
-  clearOrders,
   exportOrdersCsv,
   exportOrdersPdf,
+  generateBill,
   getInvoice,
   getInvoicePdf,
   getOrder,
+  listInvoiceRegister,
   listOrderCoupons,
   listOrders,
   payOrder,
   removeCoupon,
+  reopenBill,
   startCounterOrder,
   startDeliveryOrder,
   startDineInOrder,
   startTakeawayOrder,
+  voidBill,
 } from "./orders.controller";
 
 const router = Router();
@@ -30,13 +34,17 @@ router.post("/counter", requireAuth("admin"), requireModule("orders"), startCoun
 router.post("/takeaway", requireAuth("admin"), requireModule("orders"), startTakeawayOrder);
 
 router.get("/", requireAuth("admin"), requireModule("orders"), listOrders);
-router.delete("/", requireAuth("admin"), requireModule("orders"), clearOrders);
+router.delete("/", requireAuth("admin"), requireModule("orders"), archiveOrders);
+router.get("/invoices", requireAuth("admin"), requireModule("orders"), listInvoiceRegister);
 router.get("/report.csv", requireAuth("admin"), requireModule("orders"), exportOrdersCsv);
 router.get("/report.pdf", requireAuth("admin"), requireModule("orders"), exportOrdersPdf);
 
 router.get("/:orderId", requireAuth("table", "admin", "chef"), requireModule("orders"), getOrder);
 router.get("/:orderId/invoice", requireAuth("table", "admin"), requireModule("orders"), getInvoice);
 router.get("/:orderId/invoice/pdf", requireAuth("table", "admin"), requireModule("orders"), getInvoicePdf);
+router.post("/:orderId/bill", requireAuth("admin"), requireModule("orders"), generateBill);
+router.post("/:orderId/reopen", requireAuth("admin"), requireModule("orders"), reopenBill);
+router.post("/:orderId/void", requireAuth("admin"), requireModule("orders"), voidBill);
 router.patch("/:orderId/pay", requireAuth("admin"), requireModule("orders"), payOrder);
 router.patch("/:orderId/cancel", requireAuth("admin"), requireModule("orders"), cancelOrder);
 

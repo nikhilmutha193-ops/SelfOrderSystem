@@ -31,6 +31,8 @@ export interface KotSettings {
 }
 
 export interface InvoiceSettings {
+  invoicePrefix: string;
+  placeOfSupply: string;
   showCustomerPhone: boolean;
   footerNote: string;
   termsText: string;
@@ -181,7 +183,7 @@ export interface ChefRow {
 
 export type OrderType = "dine-in" | "takeaway" | "delivery";
 
-export type OrderStatus = "open" | "closed" | "cancelled";
+export type OrderStatus = "open" | "billed" | "closed" | "cancelled";
 
 export type PaymentMethod = "pending" | "cash" | "online" | "card";
 
@@ -206,6 +208,46 @@ export interface Order {
   externalOrderId?: string;
   estimatedReadyAt?: string | null;
   kitchen?: OrderKitchenSummary;
+  invoiceNumber?: string;
+  billedAt?: string | null;
+  bill?: BillSnapshot | null;
+  customerGstin?: string;
+  archivedAt?: string | null;
+  cancelReason?: string;
+  voidedAt?: string | null;
+  voidReason?: string;
+}
+
+export interface BillSnapshot extends InvoiceTotals {
+  couponCode?: string;
+  sac: string;
+  placeOfSupply: string;
+  legacy: boolean;
+}
+
+export type ItemCancelReason = "wrong_item" | "guest_changed_mind" | "quality" | "out_of_stock" | "other";
+
+export const ITEM_CANCEL_REASON_LABELS: Record<ItemCancelReason, string> = {
+  wrong_item: "Wrong item entered",
+  guest_changed_mind: "Guest changed their mind",
+  quality: "Quality problem",
+  out_of_stock: "Out of stock",
+  other: "Other",
+};
+
+export type InvoiceRegisterStatus = "reopened" | "unpaid" | "paid" | "cancelled" | "voided";
+
+export interface InvoiceRegisterRow {
+  orderId: string;
+  invoiceNumber: string;
+  billedAt: string | null;
+  customerName: string;
+  customerGstin: string;
+  orderType: OrderType;
+  status: InvoiceRegisterStatus;
+  paymentMethod: PaymentMethod;
+  grandTotal: number | null;
+  reason: string;
 }
 
 export interface OrderKitchenSummary {
@@ -234,18 +276,23 @@ export interface OrderItem {
   kotPrintedAt: string | null;
   modifiers?: SelectedModifier[];
   note?: string;
+  cancelReason?: ItemCancelReason;
+  cancelNote?: string;
 }
 
 export interface InvoiceTaxLine {
   name: string;
   percent: number;
+  base: number;
   amount: number;
 }
 
 export interface InvoiceTotals {
   subtotal: number;
   discount: number;
+  taxableAmount: number;
   taxLines: InvoiceTaxLine[];
+  roundOff: number;
   grandTotal: number;
 }
 

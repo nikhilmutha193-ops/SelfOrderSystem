@@ -1,4 +1,4 @@
-import { decodeToken, getStoredToken } from "./apiClient";
+import { decodeToken, getStoredToken } from "../shared/api/client";
 
 interface TablePayload {
   role: "table";

@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 
-import { Button, Card, ErrorText, Input, TableWrap } from "../../components/ui";
-import { api, extractErrorMessage } from "../../lib/apiClient";
 import type { ChefRow } from "../../lib/types";
+import { api, extractErrorMessage } from "../../shared/api/client";
+import { Button, Card, ErrorText, Input, TableWrap } from "../../shared/ui/ui";
 
 export default function Chefs() {
   const [chefs, setChefs] = useState<ChefRow[]>([]);

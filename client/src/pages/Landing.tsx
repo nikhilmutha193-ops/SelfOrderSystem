@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
-import { api, extractErrorMessage } from "../lib/apiClient";
 import type { LandingContent, LandingData } from "../lib/types";
+import { api, extractErrorMessage } from "../shared/api/client";
 
 import "../styles/landing/index.css";
 

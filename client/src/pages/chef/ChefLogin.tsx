@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { Button, ErrorText, Input } from "../../components/ui";
-import { api, extractErrorMessage, setActiveAuth, storeToken } from "../../lib/apiClient";
+import { api, extractErrorMessage, setActiveAuth, storeToken } from "../../shared/api/client";
+import { Button, ErrorText, Input } from "../../shared/ui/ui";
 
 export default function ChefLogin() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [keepSignedIn, setKeepSignedIn] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [brand, setBrand] = useState<{ name: string; logoUrl: string }>({ name: "", logoUrl: "" });
@@ -24,7 +25,7 @@ export default function ChefLogin() {
     setError(null);
     setLoading(true);
     try {
-      const res = await api.post("/auth/chef/login", { username, password });
+      const res = await api.post("/auth/chef/login", { username, password, keepSignedIn });
       storeToken("chef", res.data.token);
       setActiveAuth({ role: "chef", token: res.data.token });
       navigate("/chef/dashboard");
@@ -70,6 +71,21 @@ export default function ChefLogin() {
               onChange={(e) => setPassword(e.target.value)}
               required
             />
+          </label>
+          <label htmlFor="keep-signed-in" className="flex items-start gap-2 text-sm text-slate-700">
+            <input
+              id="keep-signed-in"
+              type="checkbox"
+              className="mt-0.5 h-4 w-4 accent-orange-600"
+              checked={keepSignedIn}
+              onChange={(e) => setKeepSignedIn(e.target.checked)}
+            />
+            <span>
+              Keep this screen signed in
+              <span className="block text-xs text-slate-500">
+                For a kitchen display. Stays signed in for up to 30 days until you log out.
+              </span>
+            </span>
           </label>
           <ErrorText>{error}</ErrorText>
           <Button type="submit" disabled={loading} className="mt-1">

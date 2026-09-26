@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 
-import { Badge, Button, Card, ErrorText, Input, Select, Textarea } from "../../components/ui";
-import { api, extractErrorMessage, uploadImage } from "../../lib/apiClient";
 import type { TeamMember, TeamMemberRole } from "../../lib/types";
+import { api, extractErrorMessage, uploadImage } from "../../shared/api/client";
+import { Badge, Button, Card, ErrorText, Input, Select, Textarea } from "../../shared/ui/ui";
 
 export default function Team() {
   const [team, setTeam] = useState<TeamMember[]>([]);

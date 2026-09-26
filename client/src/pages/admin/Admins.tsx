@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 
-import { Badge, Button, Card, ErrorText, Input, Select } from "../../components/ui";
 import {
   MODULE_KEYS,
   MODULES,
@@ -9,7 +8,8 @@ import {
   type ModuleKey,
   type PermissionLevel,
 } from "../../lib/adminAuth";
-import { api, extractErrorMessage } from "../../lib/apiClient";
+import { api, extractErrorMessage } from "../../shared/api/client";
+import { Badge, Button, Card, ErrorText, Input, Select } from "../../shared/ui/ui";
 
 type Permissions = Partial<Record<ModuleKey, PermissionLevel>>;
 

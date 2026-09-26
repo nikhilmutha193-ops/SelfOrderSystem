@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 
-import { Badge, Card, ErrorText, TableWrap } from "../../components/ui";
-import { api, extractErrorMessage } from "../../lib/apiClient";
+import { api, extractErrorMessage } from "../../shared/api/client";
+import { Badge, Card, ErrorText, TableWrap } from "../../shared/ui/ui";
 
 interface AuditEntry {
   _id: string;

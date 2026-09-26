@@ -1,6 +1,7 @@
 import { FilterQuery, Types } from "mongoose";
 
 import { RequestContext } from "../../core/context";
+import { emit } from "../../core/events";
 import { IOrder } from "../../models/Order";
 import { writeAudit } from "../../utils/audit";
 import { getBusinessDayRangeForDate, getBusinessDayStart } from "../../utils/businessDay";
@@ -8,11 +9,13 @@ import { computeDiscountAmount, findValidCoupon } from "../../utils/coupon";
 import { HttpError } from "../../utils/httpError";
 import { computeInvoiceTotals } from "../../utils/invoice";
 import { signToken } from "../../utils/jwt";
+import { getOwnedOrder, requireOwner } from "./orders.access";
+import { refreshCouponDiscount, totalsForOrder } from "./orders.billing";
 import { OrdersRepository } from "./orders.repository";
 import {
   AddItemsInput,
+  CancelItemInput,
   OrderFilterInput,
-  PayOrderInput,
   StartCounterInput,
   StartDeliveryInput,
   StartDineInInput,
@@ -32,23 +35,27 @@ function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
+async function announceCreated<T extends { _id: Types.ObjectId }>(ctx: RequestContext, order: T): Promise<T> {
+  await emit("order.created", { restaurantId: ctx.restaurantId, orderId: order._id.toString() });
+  return order;
+}
+
 function emptyKitchenSummary(): KitchenSummary {
   return { active: 0, served: 0, ready: 0, preparing: 0, pendingSent: 0, pendingUnsent: 0 };
 }
 
-export async function getOwnedOrder(ctx: RequestContext, orderId: string) {
-  const order = await new OrdersRepository(ctx.restaurantId).findOrder(orderId);
-  if (!order) throw new HttpError(404, "Order not found");
-  if (ctx.auth.role === "table" && ctx.auth.orderId !== orderId) {
-    throw new HttpError(403, "This order does not belong to your table session");
-  }
-  return order;
-}
+export { getOwnedOrder };
 
-export async function buildOrderFilter(repo: OrdersRepository, query: OrderFilterInput): Promise<FilterQuery<IOrder>> {
+export async function buildOrderFilter(
+  repo: OrdersRepository,
+  query: OrderFilterInput,
+  options: { includeArchived?: boolean } = {}
+): Promise<FilterQuery<IOrder>> {
   const filter: FilterQuery<IOrder> = {};
   if (query.type) filter.orderType = query.type;
-  if (query.status) filter.status = query.status;
+  if (query.status === "unpaid") filter.status = { $in: ["open", "billed"] };
+  else if (query.status) filter.status = query.status;
+  if (!options.includeArchived) filter.archivedAt = null;
 
   if (query.today === "true") {
     const restaurant = await repo.findRestaurant("dayEndTime timezone");
@@ -74,29 +81,37 @@ export async function startDineInOrder(ctx: RequestContext, input: StartDineInIn
   const table = await repo.findTable(ctx.auth.tableId);
   if (!table) throw new HttpError(404, "Table not found");
 
+  const sessionToken = (orderId: string) =>
+    signToken({
+      role: "table",
+      restaurantId: ctx.restaurantId,
+      id: ctx.auth.id,
+      tableId: table._id.toString(),
+      orderId,
+      sessionId: ctx.auth.sessionId,
+    });
+
+  if (ctx.auth.sessionId && !table.isGuest) {
+    const existing = await repo.findSessionOrder(table._id, ctx.auth.sessionId);
+    if (existing) return { token: sessionToken(existing._id.toString()), order: existing };
+  }
+
   const order = await repo.createOrder({
     orderType: "dine-in",
     tableId: table._id,
+    sessionId: ctx.auth.sessionId,
     customerName: input.customerName,
     customerPhone: input.customerPhone,
     members: input.members,
     status: "open",
   });
 
-  const token = signToken({
-    role: "table",
-    restaurantId: ctx.restaurantId,
-    id: ctx.auth.id,
-    tableId: table._id.toString(),
-    orderId: order._id.toString(),
-    sessionId: ctx.auth.sessionId,
-  });
-
-  return { token, order };
+  await announceCreated(ctx, order);
+  return { token: sessionToken(order._id.toString()), order };
 }
 
 export async function startDeliveryOrder(ctx: RequestContext, input: StartDeliveryInput) {
-  return new OrdersRepository(ctx.restaurantId).createOrder({
+  const order = await new OrdersRepository(ctx.restaurantId).createOrder({
     orderType: "delivery",
     deliveryProvider: input.provider,
     source: "counter",
@@ -105,10 +120,11 @@ export async function startDeliveryOrder(ctx: RequestContext, input: StartDelive
     members: input.members,
     status: "open",
   });
+  return announceCreated(ctx, order);
 }
 
 export async function startTakeawayOrder(ctx: RequestContext, input: StartTakeawayInput) {
-  return new OrdersRepository(ctx.restaurantId).createOrder({
+  const order = await new OrdersRepository(ctx.restaurantId).createOrder({
     orderType: "takeaway",
     source: "counter",
     customerName: input.customerName,
@@ -116,6 +132,7 @@ export async function startTakeawayOrder(ctx: RequestContext, input: StartTakeaw
     members: input.members,
     status: "open",
   });
+  return announceCreated(ctx, order);
 }
 
 export async function startCounterOrder(ctx: RequestContext, input: StartCounterInput) {
@@ -139,7 +156,7 @@ export async function startCounterOrder(ctx: RequestContext, input: StartCounter
 
   if (table && !table.isGuest) await repo.occupyTable(table._id);
 
-  return order;
+  return announceCreated(ctx, order);
 }
 
 export async function addOrderItems(ctx: RequestContext, orderId: string, input: AddItemsInput) {
@@ -190,15 +207,42 @@ export async function addOrderItems(ctx: RequestContext, orderId: string, input:
     order.estimatedReadyAt = roundReadyAt;
     await repo.saveOrder(order);
   }
+  await refreshCouponDiscount(repo, order);
 
+  await emit("order.itemsAdded", {
+    restaurantId: ctx.restaurantId,
+    orderId: order._id.toString(),
+    itemIds: created.map((item) => item._id.toString()),
+  });
   return created;
 }
 
-export async function cancelOrderItem(ctx: RequestContext, itemId: string) {
-  const item = await new OrdersRepository(ctx.restaurantId).cancelItem(itemId);
-  if (!item) throw new HttpError(404, "Order item not found");
-  await writeAudit(ctx, "orderItem.cancel", `Cancelled item "${item.foodName}" x${item.quantity}`);
-  return item;
+export async function cancelOrderItem(ctx: RequestContext, itemId: string, input: CancelItemInput) {
+  const repo = new OrdersRepository(ctx.restaurantId);
+  const item = await repo.findItem(itemId);
+  if (!item || item.status === "cancelled") throw new HttpError(404, "Order item not found");
+
+  const order = await repo.findOrder(item.orderId.toString());
+  if (!order) throw new HttpError(404, "Order not found");
+  if (order.status === "billed") throw new HttpError(409, "This order has been billed. Reopen the bill to change it.");
+  if (order.status === "closed") throw new HttpError(409, "This bill is already paid. Void it instead.");
+  if (order.status !== "open") throw new HttpError(409, "This order is no longer open");
+  if (item.kotRound != null && !input.reason) {
+    throw new HttpError(400, "Choose a reason to cancel an item that was already sent to the kitchen");
+  }
+
+  const cancelled = await repo.cancelItem(itemId, input.reason, input.note);
+  if (!cancelled) throw new HttpError(404, "Order item not found");
+  await refreshCouponDiscount(repo, order);
+
+  const why = input.reason ? ` (${input.reason.replace(/_/g, " ")}${input.note ? `: ${input.note}` : ""})` : "";
+  await writeAudit(ctx, "orderItem.cancel", `Cancelled item "${cancelled.foodName}" x${cancelled.quantity}${why}`);
+  await emit("order.itemCancelled", {
+    restaurantId: ctx.restaurantId,
+    orderId: cancelled.orderId.toString(),
+    itemId: cancelled._id.toString(),
+  });
+  return cancelled;
 }
 
 export async function listOrders(ctx: RequestContext, query: OrderFilterInput) {
@@ -224,22 +268,33 @@ export async function listOrders(ctx: RequestContext, query: OrderFilterInput) {
   return orders.map((o) => ({ ...o, kitchen: byOrder.get(o._id.toString()) ?? emptyKitchenSummary() }));
 }
 
-export async function clearOrders(ctx: RequestContext, query: OrderFilterInput) {
+export async function archiveOrders(ctx: RequestContext, query: OrderFilterInput) {
+  await requireOwner(ctx, "archive orders");
   const repo = new OrdersRepository(ctx.restaurantId);
-  const admin = ctx.admin ?? (await repo.findAdmin(ctx.auth.id));
-  if (!admin?.isOwner) throw new HttpError(403, "Only the owner account can clear orders");
 
   const orders = await repo.findOrdersForClearing(await buildOrderFilter(repo, query));
-  if (orders.length === 0) return { deleted: 0 };
+  if (orders.length === 0) return { archived: 0, deleted: 0 };
 
-  const orderIds = orders.map((o) => o._id);
-  const tableIds = orders.filter((o) => o.orderType === "dine-in" && o.tableId).map((o) => o.tableId as Types.ObjectId);
+  const finished = orders.filter((o) => o.status === "closed" || o.status === "cancelled").map((o) => o._id);
+  const openUnbilled = orders.filter((o) => o.status === "open" && !o.invoiceNumber).map((o) => o._id);
+  const sent = new Set((await repo.findOrderIdsWithSentItems(openUnbilled)).map((id) => id.toString()));
+  const testOrders = orders.filter((o) => openUnbilled.includes(o._id) && !sent.has(o._id.toString()));
 
-  await repo.deleteOrdersCascade(orderIds);
-  if (tableIds.length > 0) await repo.releaseSeatedTables(tableIds);
+  if (finished.length > 0) await repo.archiveOrders(finished);
+  if (testOrders.length > 0) {
+    await repo.deleteOrdersCascade(testOrders.map((o) => o._id));
+    const tableIds = testOrders
+      .filter((o) => o.orderType === "dine-in" && o.tableId)
+      .map((o) => o.tableId as Types.ObjectId);
+    if (tableIds.length > 0) await repo.releaseSeatedTables(tableIds);
+  }
 
-  await writeAudit(ctx, "order.clear", `Cleared ${orderIds.length} ${query.type || "all"} order(s)`);
-  return { deleted: orderIds.length };
+  await writeAudit(
+    ctx,
+    "order.archive",
+    `Archived ${finished.length} and deleted ${testOrders.length} unsent ${query.type || "all"} order(s)`
+  );
+  return { archived: finished.length, deleted: testOrders.length };
 }
 
 async function getOrderWithTotals(ctx: RequestContext, orderId: string, sortItems: boolean) {
@@ -247,7 +302,7 @@ async function getOrderWithTotals(ctx: RequestContext, orderId: string, sortItem
   const repo = new OrdersRepository(ctx.restaurantId);
   const items = await repo.findItems(order._id, { sorted: sortItems });
   const restaurant = await repo.findRestaurant();
-  const totals = computeInvoiceTotals(items, restaurant?.taxRates || [], order.discountAmount);
+  const totals = totalsForOrder(order, items, restaurant?.taxRates || []);
   return {
     order,
     items,
@@ -271,7 +326,7 @@ export async function getInvoicePdfData(ctx: RequestContext, orderId: string) {
   const items = await repo.findItems(order._id);
   const restaurant = await repo.findRestaurant();
   if (!restaurant) throw new HttpError(404, "Restaurant not found");
-  const totals = computeInvoiceTotals(items, restaurant.taxRates, order.discountAmount);
+  const totals = totalsForOrder(order, items, restaurant.taxRates);
   return { restaurant, order, items, totals };
 }
 
@@ -318,10 +373,6 @@ export async function applyCoupon(ctx: RequestContext, orderId: string, code: st
   const coupon = await findValidCoupon(ctx.restaurantId, code.toUpperCase(), subtotal);
   const discountAmount = computeDiscountAmount(coupon, subtotal);
 
-  const previousCode = order.couponCode;
-  if (previousCode && previousCode !== coupon.code) await repo.decrementCouponUsage(previousCode);
-  if (previousCode !== coupon.code) await repo.incrementCouponUsage(coupon._id);
-
   order.couponCode = coupon.code;
   order.discountAmount = discountAmount;
   await repo.saveOrder(order);
@@ -336,7 +387,6 @@ export async function removeCoupon(ctx: RequestContext, orderId: string) {
   if (order.status !== "open") throw new HttpError(409, "A coupon can only be changed on an open order");
 
   const repo = new OrdersRepository(ctx.restaurantId);
-  if (order.couponCode) await repo.decrementCouponUsage(order.couponCode);
   order.couponCode = undefined;
   order.discountAmount = 0;
   await repo.saveOrder(order);
@@ -345,39 +395,4 @@ export async function removeCoupon(ctx: RequestContext, orderId: string) {
   const restaurant = await repo.findRestaurant();
   const totals = computeInvoiceTotals(items, restaurant?.taxRates || [], 0);
   return { order, totals };
-}
-
-export async function payOrder(ctx: RequestContext, orderId: string, input: PayOrderInput) {
-  const order = await getOwnedOrder(ctx, orderId);
-  if (order.status !== "open") throw new HttpError(409, "This order is not open");
-
-  const repo = new OrdersRepository(ctx.restaurantId);
-  order.status = "closed";
-  order.paymentMethod = input.paymentMethod;
-  order.checkoutTime = new Date();
-  await repo.saveOrder(order);
-
-  if (order.orderType === "dine-in" && order.tableId) await repo.releaseTable(order.tableId);
-
-  await writeAudit(
-    ctx,
-    "order.pay",
-    `Closed & paid order for ${order.customerName || "guest"} (${input.paymentMethod})`
-  );
-  return order;
-}
-
-export async function cancelOrder(ctx: RequestContext, orderId: string) {
-  const order = await getOwnedOrder(ctx, orderId);
-  if (order.status === "closed") throw new HttpError(409, "A closed order cannot be cancelled");
-
-  const repo = new OrdersRepository(ctx.restaurantId);
-  order.status = "cancelled";
-  await repo.saveOrder(order);
-  await repo.cancelPendingItems(order._id);
-
-  if (order.orderType === "dine-in" && order.tableId) await repo.releaseTable(order.tableId);
-
-  await writeAudit(ctx, "order.cancel", `Cancelled order for ${order.customerName || "guest"}`);
-  return order;
 }

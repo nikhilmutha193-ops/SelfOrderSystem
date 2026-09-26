@@ -9,6 +9,7 @@ import { IOrder } from "../models/Order";
 import { IOrderItem } from "../models/OrderItem";
 import { IRestaurant, PrintFontSize, PrintPaperSize } from "../models/Restaurant";
 import { InvoiceTotals } from "./invoice";
+import { DEFAULT_SAC } from "./invoiceNumber";
 import { describeError, logger } from "./logger";
 import { putObject, UPLOADS_DIR } from "./objectStore";
 
@@ -215,6 +216,19 @@ function drawRow(doc: PDFKit.PDFDocument, x0: number, y: number, cols: Column[],
   return y + rowHeight;
 }
 
+function invoiceTitle(order: IOrder): string {
+  if (!order.invoiceNumber || order.status === "open") return "Bill preview (not a tax invoice)";
+  if (order.voidedAt) return "Tax Invoice - VOIDED";
+  if (order.status === "cancelled") return "Tax Invoice - CANCELLED";
+  return "Tax Invoice";
+}
+
+function orderTypeText(order: IOrder): string {
+  if (order.orderType === "takeaway") return "Take away";
+  if (order.orderType === "delivery") return `Delivery (${order.deliveryProvider || "Other"})`;
+  return "Dine-in";
+}
+
 export async function streamInvoicePdf(
   res: Response,
   data: { restaurant: IRestaurant; order: IOrder; items: IOrderItem[]; totals: InvoiceTotals }
@@ -233,7 +247,7 @@ export async function streamInvoicePdf(
 
   await renderToPaper(
     res,
-    `invoice-${order._id}.pdf`,
+    `invoice-${order.invoiceNumber ? order.invoiceNumber.replace(/[^A-Za-z0-9-]/g, "-") : order._id}.pdf`,
     paperSize,
     (doc, x0, usableWidth) => {
       if (logo) drawLogo(doc, logo, x0, usableWidth);
@@ -244,17 +258,25 @@ export async function streamInvoicePdf(
       if (restaurant.fssaiLicense)
         doc.fontSize(fz(9)).text(`FSSAI Reg. No: ${restaurant.fssaiLicense}`, { align: "center" });
       doc.moveDown(0.5);
-      doc.fontSize(fz(12)).text("Invoice", { align: "center" });
+      doc.fontSize(fz(12)).text(invoiceTitle(order), { align: "center" });
       doc.moveDown(0.5);
       drawSeparator(doc, x0, usableWidth, true);
 
       doc.fontSize(fz(10));
-      doc.text(`Order: ${order.orderType === "dine-in" ? "Dine-in" : `Delivery (${order.deliveryProvider})`}`);
+      if (order.invoiceNumber) doc.text(`Invoice No: ${order.invoiceNumber}`);
+      const billDate = order.billedAt ?? order.checkinTime;
+      doc.text(
+        `Date: ${new Date(billDate).toLocaleString("en-IN", { timeZone: restaurant.timezone || "Asia/Kolkata" })}`
+      );
+      doc.text(`Order: ${orderTypeText(order)}`);
       doc.text(
         `Customer: ${order.customerName}` +
           (settings?.showCustomerPhone !== false && order.customerPhone ? `  (${order.customerPhone})` : "")
       );
-      doc.text(`Date: ${new Date(order.checkinTime).toLocaleString()}`);
+      if (order.customerGstin) doc.text(`Customer GSTIN: ${order.customerGstin}`);
+      const placeOfSupply = order.bill?.placeOfSupply || settings?.placeOfSupply;
+      if (placeOfSupply) doc.text(`Place of supply: ${placeOfSupply}`);
+      doc.text(`SAC: ${order.bill?.sac || DEFAULT_SAC} (restaurant service)`);
       doc.moveDown(0.3);
       drawSeparator(doc, x0, usableWidth);
 
@@ -329,10 +351,28 @@ export async function streamInvoicePdf(
         doc.y = ty + 2;
       }
 
+      ty = drawRow(doc, x0, doc.y, [
+        { text: "Taxable value", width: totalsLabelWidth },
+        { text: totals.taxableAmount.toFixed(2), width: totalsAmountWidth, align: "right" },
+      ]);
+      doc.y = ty + 2;
+
       for (const tax of totals.taxLines) {
         ty = drawRow(doc, x0, doc.y, [
           { text: `${tax.name} (${tax.percent}%)`, width: totalsLabelWidth },
           { text: tax.amount.toFixed(2), width: totalsAmountWidth, align: "right" },
+        ]);
+        doc.y = ty + 2;
+      }
+
+      if (totals.roundOff !== 0) {
+        ty = drawRow(doc, x0, doc.y, [
+          { text: "Round off", width: totalsLabelWidth },
+          {
+            text: `${totals.roundOff > 0 ? "+" : ""}${totals.roundOff.toFixed(2)}`,
+            width: totalsAmountWidth,
+            align: "right",
+          },
         ]);
         doc.y = ty + 2;
       }

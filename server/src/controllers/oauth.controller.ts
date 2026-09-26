@@ -5,7 +5,7 @@ import { asyncHandler } from "../middleware/errorHandler";
 import Admin from "../models/Admin";
 import OAuthAuthCode from "../models/OAuthAuthCode";
 import { HttpError } from "../utils/httpError";
-import { signToken } from "../utils/jwt";
+import { nowSeconds, signToken } from "../utils/jwt";
 import { comparePassword } from "../utils/password";
 
 interface AuthorizeParams {
@@ -208,6 +208,8 @@ export const oauthToken = asyncHandler(async (req: Request, res: Response) => {
     role: "admin",
     restaurantId: record.restaurantId.toString(),
     id: admin._id.toString(),
+    tv: admin.tokenVersion ?? 0,
+    sst: nowSeconds(),
   });
 
   res.json({

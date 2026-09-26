@@ -7,6 +7,7 @@ import Restaurant, { IInvoiceSettings, IKotSettings, IQrSettings, IRestaurant, I
 import { isValidDayEndTime, isValidTimezone } from "../utils/businessDay";
 import { HttpError } from "../utils/httpError";
 import { computeInvoiceTotals } from "../utils/invoice";
+import { INVOICE_PREFIX_PATTERN } from "../utils/invoiceNumber";
 import { seedLandingContent } from "../utils/landingSeed";
 import { resolveLogoBuffer, streamInvoicePdf, streamKotPdf } from "../utils/pdf";
 
@@ -186,7 +187,19 @@ export const updateRestaurantSettings = asyncHandler(async (req: Request, res: R
   if (taxRates !== undefined) restaurant.taxRates = taxRates;
   if (qrSettings !== undefined) Object.assign(restaurant.qrSettings, qrSettings);
   if (kotSettings !== undefined) Object.assign(restaurant.kotSettings, kotSettings);
-  if (invoiceSettings !== undefined) Object.assign(restaurant.invoiceSettings, invoiceSettings);
+  if (invoiceSettings !== undefined) {
+    if (invoiceSettings.invoicePrefix !== undefined) {
+      const prefix = String(invoiceSettings.invoicePrefix).trim().toUpperCase();
+      if (!INVOICE_PREFIX_PATTERN.test(prefix)) {
+        throw new HttpError(400, "Invoice prefix must be 1 to 3 letters or digits");
+      }
+      invoiceSettings.invoicePrefix = prefix;
+    }
+    if (invoiceSettings.placeOfSupply !== undefined && String(invoiceSettings.placeOfSupply).length > 60) {
+      throw new HttpError(400, "Place of supply must be 60 characters or fewer");
+    }
+    Object.assign(restaurant.invoiceSettings, invoiceSettings);
+  }
   if (chatModeration !== undefined) {
     if (chatModeration.enabled !== undefined) restaurant.chatModeration.enabled = !!chatModeration.enabled;
     if (chatModeration.mode !== undefined) {
