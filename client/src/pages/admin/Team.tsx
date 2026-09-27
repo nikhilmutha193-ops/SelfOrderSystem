@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 
 import type { TeamMember, TeamMemberRole } from "../../lib/types";
 import { api, extractErrorMessage, uploadImage } from "../../shared/api/client";
-import { Badge, Button, Card, ErrorText, Input, Select, Textarea } from "../../shared/ui/ui";
+import { Badge, Button, Card, ErrorText, Input, PageHeader, Select, Textarea } from "../../shared/ui/ui";
 
 export default function Team() {
   const [team, setTeam] = useState<TeamMember[]>([]);
@@ -98,39 +98,39 @@ export default function Team() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-bold text-slate-800">Owner &amp; Chef Profiles</h1>
-      <p className="text-sm text-slate-500">
-        These profiles appear in the "Meet the team" section of your public landing page.
-      </p>
+    <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 sm:gap-6">
+      <PageHeader
+        title="Owner & Chef Profiles"
+        description={<>These profiles appear in the "Meet the team" section of your public landing page.</>}
+      />
 
       <Card>
         <form onSubmit={submit} className="flex flex-col gap-4">
-          <div className="flex flex-wrap items-end gap-3">
-            <label className="text-sm font-medium text-slate-700">
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <label className="flex flex-col text-sm font-medium text-slate-700">
               Role
-              <Select className="mt-1" value={role} onChange={(e) => setRole(e.target.value as TeamMemberRole)}>
+              <Select className="mt-1.5" value={role} onChange={(e) => setRole(e.target.value as TeamMemberRole)}>
                 <option value="owner">Owner</option>
                 <option value="chef">Chef</option>
               </Select>
             </label>
-            <label className="text-sm font-medium text-slate-700">
+            <label className="flex flex-col text-sm font-medium text-slate-700">
               Name
-              <Input className="mt-1" value={name} onChange={(e) => setName(e.target.value)} required />
+              <Input className="mt-1.5" value={name} onChange={(e) => setName(e.target.value)} required />
             </label>
-            <label className="text-sm font-medium text-slate-700">
+            <label className="flex flex-col text-sm font-medium text-slate-700">
               Title
               <Input
-                className="mt-1"
+                className="mt-1.5"
                 placeholder="e.g. Head Chef"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
               />
             </label>
-            <label className="text-sm font-medium text-slate-700">
+            <label className="flex flex-col text-sm font-medium text-slate-700">
               Sort order
               <Input
-                className="mt-1 w-24"
+                className="mt-1.5"
                 type="number"
                 value={sortOrder}
                 onChange={(e) => setSortOrder(Number(e.target.value))}
@@ -146,7 +146,7 @@ export default function Team() {
               ) : (
                 <div className="h-14 w-14 rounded-full bg-slate-100" />
               )}
-              <div className="flex flex-col gap-1">
+              <div className="flex min-w-0 flex-1 flex-col gap-2">
                 <input
                   type="file"
                   accept="image/png,image/jpeg,image/webp,image/gif"
@@ -155,7 +155,7 @@ export default function Team() {
                   className="text-sm text-slate-600"
                 />
                 <Input
-                  className="w-64"
+                  className="sm:!w-72"
                   placeholder="or paste an image URL"
                   value={photoUrl}
                   onChange={(e) => setPhotoUrl(e.target.value)}
@@ -165,9 +165,9 @@ export default function Team() {
             </div>
           </div>
 
-          <label className="text-sm font-medium text-slate-700">
+          <label className="flex flex-col text-sm font-medium text-slate-700">
             Bio
-            <Textarea className="mt-1" rows={3} value={bio} onChange={(e) => setBio(e.target.value)} />
+            <Textarea className="mt-1.5" rows={3} value={bio} onChange={(e) => setBio(e.target.value)} />
           </label>
           <div className="flex gap-2">
             <Button type="submit">{editing ? "Update" : "Add team member"}</Button>
@@ -200,13 +200,22 @@ export default function Team() {
             <div className="flex items-center justify-between">
               <Badge tone={member.isActive ? "green" : "gray"}>{member.isActive ? "Visible" : "Hidden"}</Badge>
               <div className="flex gap-2 text-sm">
-                <button className="text-orange-600 hover:underline" onClick={() => edit(member)}>
+                <button
+                  className="rounded-md px-2 py-1 text-sm font-medium transition-colors text-orange-700 hover:bg-orange-50"
+                  onClick={() => edit(member)}
+                >
                   Edit
                 </button>
-                <button className="text-slate-600 hover:underline" onClick={() => toggleActive(member)}>
+                <button
+                  className="rounded-md px-2 py-1 text-sm font-medium transition-colors text-slate-600 hover:bg-slate-100"
+                  onClick={() => toggleActive(member)}
+                >
                   {member.isActive ? "Hide" : "Show"}
                 </button>
-                <button className="text-red-600 hover:underline" onClick={() => remove(member)}>
+                <button
+                  className="rounded-md px-2 py-1 text-sm font-medium transition-colors text-red-600 hover:bg-red-50"
+                  onClick={() => remove(member)}
+                >
                   Remove
                 </button>
               </div>

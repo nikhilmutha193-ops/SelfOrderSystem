@@ -4,6 +4,7 @@ import net from "net";
 import path from "path";
 import { Response } from "express";
 import PDFDocument from "pdfkit";
+import QRCode from "qrcode";
 
 import { IOrder } from "../models/Order";
 import { IOrderItem } from "../models/OrderItem";
@@ -229,6 +230,19 @@ function orderTypeText(order: IOrder): string {
   return "Dine-in";
 }
 
+const PAYMENT_LABELS: Record<string, string> = {
+  cash: "cash",
+  upi: "UPI",
+  card: "card",
+  online: "online",
+  wallet: "wallet",
+};
+
+export function upiPaymentLink(vpa: string, payeeName: string, amount: number, note: string): string {
+  const params = new URLSearchParams({ pa: vpa, pn: payeeName, am: amount.toFixed(2), cu: "INR", tn: note });
+  return `upi://pay?${params.toString()}`;
+}
+
 export async function streamInvoicePdf(
   res: Response,
   data: { restaurant: IRestaurant; order: IOrder; items: IOrderItem[]; totals: InvoiceTotals }
@@ -241,6 +255,19 @@ export async function streamInvoicePdf(
   const paperSize = settings?.paperSize || "a5";
 
   const logo = settings?.showLogo ? await resolveLogoBuffer(restaurant.logoUrl) : null;
+  const upiVpa = restaurant.billingSettings?.upiVpa;
+  const upiQr =
+    order.status === "billed" && upiVpa && order.invoiceNumber
+      ? await QRCode.toBuffer(
+          upiPaymentLink(
+            upiVpa,
+            restaurant.billingSettings?.upiPayeeName || restaurant.name,
+            totals.grandTotal,
+            order.invoiceNumber
+          ),
+          { margin: 1, width: 240 }
+        )
+      : null;
 
   const archive = (pdf: Buffer) =>
     putObject("invoices", `${restaurant._id}/${order._id}.pdf`, pdf, "application/pdf").then(() => undefined);
@@ -312,7 +339,10 @@ export async function streamInvoicePdf(
       drawSeparator(doc, x0, usableWidth);
 
       for (const item of items.filter((i) => i.status !== "cancelled")) {
-        const name = item.foodName + (showJainTag && item.isJain ? " (Jain)" : "");
+        const name =
+          item.foodName +
+          (showJainTag && item.isJain ? " (Jain)" : "") +
+          (item.complimentary ? " (complimentary)" : "");
         const rowCols: Column[] = showUnitPrice
           ? [
               { text: name, width: cols[0].width },
@@ -343,10 +373,33 @@ export async function streamInvoicePdf(
       ]);
       doc.y = ty + 2;
 
-      if (totals.discount > 0) {
+      const couponDiscount = totals.couponDiscount ?? totals.discount;
+      const manualDiscount = totals.manualDiscount ?? 0;
+      if (couponDiscount > 0) {
         ty = drawRow(doc, x0, doc.y, [
-          { text: order.couponCode ? `Discount (${order.couponCode})` : "Discount", width: totalsLabelWidth },
-          { text: `-${totals.discount.toFixed(2)}`, width: totalsAmountWidth, align: "right" },
+          { text: order.couponCode ? `Coupon (${order.couponCode})` : "Discount", width: totalsLabelWidth },
+          { text: `-${couponDiscount.toFixed(2)}`, width: totalsAmountWidth, align: "right" },
+        ]);
+        doc.y = ty + 2;
+      }
+      if (manualDiscount > 0) {
+        ty = drawRow(doc, x0, doc.y, [
+          { text: "Discount", width: totalsLabelWidth },
+          { text: `-${manualDiscount.toFixed(2)}`, width: totalsAmountWidth, align: "right" },
+        ]);
+        doc.y = ty + 2;
+      }
+      if ((totals.loyaltyDiscount ?? 0) > 0) {
+        ty = drawRow(doc, x0, doc.y, [
+          { text: "Loyalty points", width: totalsLabelWidth },
+          { text: `-${totals.loyaltyDiscount.toFixed(2)}`, width: totalsAmountWidth, align: "right" },
+        ]);
+        doc.y = ty + 2;
+      }
+      if ((totals.serviceCharge ?? 0) > 0) {
+        ty = drawRow(doc, x0, doc.y, [
+          { text: `Service charge (${totals.serviceChargePercent}%)`, width: totalsLabelWidth },
+          { text: totals.serviceCharge.toFixed(2), width: totalsAmountWidth, align: "right" },
         ]);
         doc.y = ty + 2;
       }
@@ -390,6 +443,39 @@ export async function streamInvoicePdf(
         true
       );
       doc.y = ty;
+
+      if (order.payments?.length) {
+        doc.moveDown(0.3);
+        doc.fontSize(fz(9));
+        for (const payment of order.payments) {
+          const label =
+            `Paid by ${PAYMENT_LABELS[payment.method] ?? payment.method}` +
+            (payment.reference ? ` (${payment.reference})` : "");
+          ty = drawRow(doc, x0, doc.y, [
+            { text: label, width: totalsLabelWidth },
+            { text: payment.amount.toFixed(2), width: totalsAmountWidth, align: "right" },
+          ]);
+          doc.y = ty + 1;
+          if (payment.change) {
+            ty = drawRow(doc, x0, doc.y, [
+              { text: `Cash received ${payment.tendered?.toFixed(2)}, change`, width: totalsLabelWidth },
+              { text: payment.change.toFixed(2), width: totalsAmountWidth, align: "right" },
+            ]);
+            doc.y = ty + 1;
+          }
+        }
+      }
+
+      if (upiQr) {
+        doc.moveDown(0.5);
+        const size = Math.min(120, usableWidth * 0.6);
+        doc.image(upiQr, x0 + (usableWidth - size) / 2, doc.y, { width: size, height: size });
+        doc.y += size + 4;
+        doc.fontSize(fz(8)).text(`Scan to pay Rs. ${totals.grandTotal.toFixed(2)} with any UPI app`, x0, doc.y, {
+          width: usableWidth,
+          align: "center",
+        });
+      }
 
       doc.moveDown(0.3);
       drawSeparator(doc, x0, usableWidth, true);

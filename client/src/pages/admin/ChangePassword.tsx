@@ -1,7 +1,8 @@
+import { KeyRound } from "lucide-react";
 import { useState } from "react";
 
 import { api, extractErrorMessage, setActiveAuth, storeToken } from "../../shared/api/client";
-import { Button, Card, ErrorText, Input } from "../../shared/ui/ui";
+import { Alert, Button, Card, CardHeader, ErrorText, Field, Input, Page, PageHeader } from "../../shared/ui/ui";
 
 export default function ChangePassword() {
   const [oldPassword, setOldPassword] = useState("");
@@ -28,36 +29,39 @@ export default function ChangePassword() {
   }
 
   return (
-    <div className="flex max-w-md flex-col gap-6">
-      <h1 className="text-2xl font-bold text-slate-800">Change Password</h1>
+    <Page className="max-w-xl">
+      <PageHeader title="Change password" description="Other devices signed in to this account will be signed out." />
       <Card>
-        <form onSubmit={submit} className="flex flex-col gap-3">
-          <label className="text-sm font-medium text-slate-700">
-            Current password
+        <CardHeader icon={KeyRound} title="Update your password" />
+        <form onSubmit={submit} className="flex flex-col gap-4">
+          <Field label="Current password" htmlFor="current-password">
             <Input
-              className="mt-1"
+              id="current-password"
               type="password"
+              autoComplete="current-password"
               value={oldPassword}
               onChange={(e) => setOldPassword(e.target.value)}
               required
             />
-          </label>
-          <label className="text-sm font-medium text-slate-700">
-            New password
+          </Field>
+          <Field label="New password" htmlFor="new-password" hint="At least 6 characters.">
             <Input
-              className="mt-1"
+              id="new-password"
               type="password"
+              autoComplete="new-password"
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
               required
               minLength={6}
             />
-          </label>
+          </Field>
           <ErrorText>{error}</ErrorText>
-          {message && <p className="text-sm text-green-700">{message}</p>}
-          <Button type="submit">Update password</Button>
+          {message && <Alert tone="success">{message}</Alert>}
+          <Button type="submit" className="self-start">
+            Update password
+          </Button>
         </form>
       </Card>
-    </div>
+    </Page>
   );
 }

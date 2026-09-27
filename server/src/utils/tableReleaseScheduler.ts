@@ -2,6 +2,7 @@ import Restaurant from "../models/Restaurant";
 import TableModel from "../models/Table";
 import { describeError, logger } from "./logger";
 import { cancelUnsentOrdersForTables } from "./tableRelease";
+import { syncTableState } from "./tableState";
 
 const CHECK_INTERVAL_MS = 60 * 1000;
 
@@ -26,11 +27,8 @@ async function releaseExpiredTables(): Promise<void> {
         })
         .map((t) => t._id);
       if (expiredIds.length === 0) continue;
-      await TableModel.updateMany(
-        { _id: { $in: expiredIds } },
-        { $set: { status: "available" }, $unset: { sessionId: "", occupiedAt: "" } }
-      );
       const cancelledOrders = await cancelUnsentOrdersForTables(expiredIds);
+      for (const tableId of expiredIds) await syncTableState(tableId, { endSession: true });
 
       logger.info("table-release-scheduler: auto-released tables", {
         restaurantId: restaurant._id.toString(),

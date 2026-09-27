@@ -7,6 +7,7 @@ export interface ICategory {
   description?: string;
   translations?: Record<string, { name?: string; description?: string }>;
   isActive: boolean;
+  defaultStationId?: Types.ObjectId | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -18,6 +19,7 @@ const categorySchema = new Schema<ICategory>(
     description: { type: String, default: "" },
     translations: { type: Schema.Types.Mixed, default: {} },
     isActive: { type: Boolean, default: true },
+    defaultStationId: { type: Schema.Types.ObjectId, ref: "Station", default: null },
   },
   { timestamps: true }
 );

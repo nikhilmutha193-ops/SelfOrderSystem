@@ -21,9 +21,14 @@ beforeAll(async () => {
   chef = await loginChef();
 });
 
-async function takeaway(lines: { foodItemId: string; quantity: number }[], name = "Walk-in") {
+async function takeaway(
+  lines: { foodItemId: string; quantity: number }[],
+  name = "Walk-in",
+  { sendToKitchen = true } = {}
+) {
   const order = await api().post("/api/orders/takeaway").set(bearer(owner)).send({ customerName: name });
   await api().post(`/api/orders/${order.body._id}/items`).set(bearer(owner)).send({ items: lines });
+  if (sendToKitchen) await api().post(`/api/orders/${order.body._id}/kot/print`).set(bearer(owner));
   return order.body._id as string;
 }
 
@@ -148,6 +153,9 @@ describe("billed orders are locked", () => {
       .post(`/api/orders/${orderId}/items`)
       .set(bearer(owner))
       .send({ items: [{ foodItemId: world.food.vada, quantity: 1 }] });
+    const unsent = await bill(orderId);
+    expect(unsent.body.message).toBe("Send 1 item to the kitchen or cancel it before billing");
+    await api().post(`/api/orders/${orderId}/kot/print`).set(bearer(owner));
     const rebilled = await bill(orderId);
     expect(rebilled.body.invoiceNumber).toBe(billed.body.invoiceNumber);
     expect(rebilled.body.bill.subtotal).toBe(180);
@@ -189,7 +197,7 @@ describe("billed orders are locked", () => {
 describe("paying, cancelling and voiding", () => {
   it("bills an open order automatically when it is paid", async () => {
     const orderId = await takeaway([{ foodItemId: world.food.vada, quantity: 1 }]);
-    const res = await api().patch(`/api/orders/${orderId}/pay`).set(bearer(owner)).send({ paymentMethod: "upi" });
+    const res = await api().patch(`/api/orders/${orderId}/pay`).set(bearer(owner)).send({ paymentMethod: "gold" });
     expect(res.status).toBe(400);
     const paid = await api().patch(`/api/orders/${orderId}/pay`).set(bearer(owner)).send({ paymentMethod: "online" });
     expect(paid.body).toMatchObject({ status: "closed", paymentMethod: "online" });
@@ -255,7 +263,10 @@ describe("coupons", () => {
 
     await api().post(`/api/orders/${orderId}/coupon`).set(bearer(owner)).send({ code: "MIN200" });
     const items = (await invoice(orderId)).body.items;
-    await api().patch(`/api/orders/items/${items[0]._id}/cancel`).set(bearer(owner)).send({});
+    await api()
+      .patch(`/api/orders/items/${items[0]._id}/cancel`)
+      .set(bearer(owner))
+      .send({ reason: "guest_changed_mind" });
     const after = (await invoice(orderId)).body;
     expect(after.order.couponCode).toBeUndefined();
     expect(after.totals.discount).toBe(0);
@@ -308,10 +319,14 @@ describe("kitchen items and duplicates", () => {
   });
 
   it("prints one ticket when several people press Print KOT together", async () => {
-    const orderId = await takeaway([
-      { foodItemId: world.food.dosa, quantity: 1 },
-      { foodItemId: world.food.vada, quantity: 2 },
-    ]);
+    const orderId = await takeaway(
+      [
+        { foodItemId: world.food.dosa, quantity: 1 },
+        { foodItemId: world.food.vada, quantity: 2 },
+      ],
+      "Race",
+      { sendToKitchen: false }
+    );
     const results = await Promise.all(
       Array.from({ length: 5 }, () => api().post(`/api/orders/${orderId}/kot/print`).set(bearer(chef)))
     );
@@ -362,8 +377,12 @@ describe("archiving and old data", () => {
   it("archives finished orders, deletes only unsent test orders, and keeps both in reports", async () => {
     const paid = await takeaway([{ foodItemId: world.food.vada, quantity: 1 }], "Archive paid");
     await api().patch(`/api/orders/${paid}/pay`).set(bearer(owner)).send({ paymentMethod: "cash" });
-    const test = await takeaway([{ foodItemId: world.food.vada, quantity: 1 }], "Archive test");
-    const cooking = await takeaway([{ foodItemId: world.food.vada, quantity: 1 }], "Archive cooking");
+    const test = await takeaway([{ foodItemId: world.food.vada, quantity: 1 }], "Archive test", {
+      sendToKitchen: false,
+    });
+    const cooking = await takeaway([{ foodItemId: world.food.vada, quantity: 1 }], "Archive cooking", {
+      sendToKitchen: false,
+    });
     await api().post(`/api/orders/${cooking}/kot/print`).set(bearer(chef));
 
     const res = await api().delete("/api/orders").set(bearer(owner)).query({ type: "takeaway" });
@@ -404,5 +423,26 @@ describe("archiving and old data", () => {
     expect(after!.bill).toMatchObject({ grandTotal: 105, legacy: true });
     expect(after!.invoiceNumber).toBeUndefined();
     expect(await backfillLegacyBills()).toBe(0);
+
+    const register = await api().get("/api/orders/invoices").set(bearer(owner));
+    const row = register.body.find((r: { orderId: string }) => r.orderId === legacy._id.toString());
+    expect(row).toMatchObject({ invoiceNumber: null, legacy: true, status: "paid", grandTotal: 105 });
+  });
+
+  it("searches the invoice register by number and by exact amount", async () => {
+    const orderId = await takeaway([{ foodItemId: world.food.dosa, quantity: 3 }], "Search me");
+    const billed = await bill(orderId);
+    const seq = billed.body.invoiceNumber.split("/")[2];
+
+    const byNumber = await api().get("/api/orders/invoices").set(bearer(owner)).query({ number: seq });
+    expect(byNumber.body.map((r: { invoiceNumber: string }) => r.invoiceNumber)).toEqual([billed.body.invoiceNumber]);
+
+    const byAmount = await api().get("/api/orders/invoices").set(bearer(owner)).query({ amount: 378 });
+    expect(byAmount.body.map((r: { orderId: string }) => r.orderId)).toContain(orderId);
+    expect(byAmount.body.every((r: { grandTotal: number }) => r.grandTotal === 378)).toBe(true);
+
+    const weird = await api().get("/api/orders/invoices").set(bearer(owner)).query({ number: "(.*" });
+    expect(weird.status).toBe(200);
+    expect(weird.body).toEqual([]);
   });
 });

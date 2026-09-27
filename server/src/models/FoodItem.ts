@@ -29,6 +29,9 @@ export interface IFoodItem {
   foodType: FoodType;
   rating: number;
   prepTimeMinutes: number;
+  stationId?: Types.ObjectId | null;
+  shortCode?: string;
+  soldOutByStock: boolean;
   translations?: Record<string, { name?: string; description?: string }>;
   modifierGroups: IModifierGroup[];
   reviewSum: number;
@@ -67,12 +70,20 @@ const foodItemSchema = new Schema<IFoodItem>(
     foodType: { type: String, enum: ["veg", "non-veg", "egg"], default: "veg" },
     rating: { type: Number, default: 0, min: 0, max: 5 },
     prepTimeMinutes: { type: Number, default: 10, min: 0 },
+    stationId: { type: Schema.Types.ObjectId, ref: "Station", default: null },
+    shortCode: { type: String, trim: true, uppercase: true },
+    soldOutByStock: { type: Boolean, default: false },
     translations: { type: Schema.Types.Mixed, default: {} },
     modifierGroups: { type: [modifierGroupSchema], default: [] },
     reviewSum: { type: Number, default: 0 },
     reviewCount: { type: Number, default: 0 },
   },
   { timestamps: true }
+);
+
+foodItemSchema.index(
+  { restaurantId: 1, shortCode: 1 },
+  { unique: true, partialFilterExpression: { shortCode: { $type: "string" } } }
 );
 
 export default model<IFoodItem>("FoodItem", foodItemSchema);

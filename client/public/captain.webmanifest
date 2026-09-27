@@ -1,0 +1,17 @@
+{
+  "name": "SelfOrder Captain",
+  "short_name": "Captain",
+  "description": "Take table orders, serve ready dishes and answer guest requests.",
+  "start_url": "/captain",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f1f5f9",
+  "theme_color": "#0f172a",
+  "icons": [
+    { "src": "/captain-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/captain-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/captain-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "/captain-icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}

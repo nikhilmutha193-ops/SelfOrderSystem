@@ -21,6 +21,9 @@ export interface IOrderItem {
   readyAt: Date | null;
   cancelReason?: string;
   cancelNote?: string;
+  complimentary?: boolean;
+  stationId?: Types.ObjectId | null;
+  complimentaryReason?: string;
   cancelledAt?: Date | null;
   createdAt: Date;
   updatedAt: Date;
@@ -52,6 +55,9 @@ const orderItemSchema = new Schema<IOrderItem>(
     kotPrintedAt: { type: Date, default: null },
     readyAt: { type: Date, default: null },
     cancelReason: { type: String },
+    complimentary: { type: Boolean, default: false },
+    stationId: { type: Schema.Types.ObjectId, ref: "Station", default: null },
+    complimentaryReason: { type: String, trim: true },
     cancelNote: { type: String, trim: true },
     cancelledAt: { type: Date, default: null },
   },

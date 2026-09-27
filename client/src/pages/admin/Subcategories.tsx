@@ -1,8 +1,22 @@
+import { Check, Eye, EyeOff, ListTree, Pencil, Plus } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import type { Category, Subcategory } from "../../lib/types";
 import { api, extractErrorMessage } from "../../shared/api/client";
-import { Badge, Button, Card, ErrorText, Input, Select, TableWrap } from "../../shared/ui/ui";
+import {
+  Badge,
+  Button,
+  Card,
+  CardHeader,
+  EmptyState,
+  ErrorText,
+  Field,
+  Input,
+  Page,
+  PageHeader,
+  Select,
+  TableWrap,
+} from "../../shared/ui/ui";
 
 export default function Subcategories() {
   const [subcategories, setSubcategories] = useState<Subcategory[]>([]);
@@ -64,80 +78,101 @@ export default function Subcategories() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-bold text-slate-800">Subcategories</h1>
+    <Page>
+      <PageHeader
+        title="Subcategories"
+        description="Sections inside a category, like Soups under Starters. Guests see them as headings on the menu."
+      />
       <Card>
-        <form onSubmit={submit} className="flex flex-wrap items-end gap-3">
-          <label className="text-sm font-medium text-slate-700">
-            Category
-            <Select className="mt-1" value={categoryId} onChange={(e) => setCategoryId(e.target.value)} required>
+        <CardHeader icon={editing ? Pencil : Plus} title={editing ? `Edit “${editing.name}”` : "Add a subcategory"} />
+        <form onSubmit={submit} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1.4fr_auto] lg:items-end">
+          <Field label="Category" htmlFor="sub-category">
+            <Select id="sub-category" value={categoryId} onChange={(e) => setCategoryId(e.target.value)} required>
               {categories.map((c) => (
                 <option key={c._id} value={c._id}>
                   {c.name}
                 </option>
               ))}
             </Select>
-          </label>
-          <label className="text-sm font-medium text-slate-700">
-            Name
-            <Input className="mt-1" value={name} onChange={(e) => setName(e.target.value)} required />
-          </label>
-          <label className="text-sm font-medium text-slate-700">
-            Description
-            <Input className="mt-1" value={description} onChange={(e) => setDescription(e.target.value)} />
-          </label>
-          <Button type="submit">{editing ? "Update" : "Add subcategory"}</Button>
-          {editing && (
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => {
-                setEditing(null);
-                setName("");
-                setDescription("");
-              }}
-            >
-              Cancel
+          </Field>
+          <Field label="Name" htmlFor="sub-name">
+            <Input id="sub-name" value={name} onChange={(e) => setName(e.target.value)} required />
+          </Field>
+          <Field label="Description" htmlFor="sub-description" className="sm:col-span-2 lg:col-span-1">
+            <Input id="sub-description" value={description} onChange={(e) => setDescription(e.target.value)} />
+          </Field>
+          <div className="flex gap-2 sm:col-span-2 lg:col-span-1">
+            <Button type="submit" icon={editing ? Check : Plus} className="flex-1 lg:flex-none">
+              {editing ? "Save" : "Add"}
             </Button>
-          )}
+            {editing && (
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  setEditing(null);
+                  setName("");
+                  setDescription("");
+                }}
+              >
+                Cancel
+              </Button>
+            )}
+          </div>
         </form>
       </Card>
 
       <ErrorText>{error}</ErrorText>
 
       <Card>
-        <TableWrap>
-          <table className="w-full min-w-[34rem] text-sm">
-            <thead>
-              <tr className="text-left text-slate-500">
-                <th className="pb-2">Category</th>
-                <th className="pb-2">Name</th>
-                <th className="pb-2">Status</th>
-                <th className="pb-2"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {subcategories.map((sub) => (
-                <tr key={sub._id} className="border-t border-slate-100">
-                  <td className="py-1.5">{categoryName(sub.categoryId)}</td>
-                  <td className="py-1.5">{sub.name}</td>
-                  <td className="py-1.5">
-                    <Badge tone={sub.isActive ? "green" : "gray"}>{sub.isActive ? "Active" : "Inactive"}</Badge>
-                  </td>
-                  <td className="flex gap-2 py-1.5">
-                    <button className="text-orange-600 hover:underline" onClick={() => edit(sub)}>
-                      Edit
-                    </button>
-                    <button className="text-slate-600 hover:underline" onClick={() => toggleActive(sub)}>
-                      {sub.isActive ? "Deactivate" : "Activate"}
-                    </button>
-                  </td>
+        <CardHeader title="All subcategories" description={`${subcategories.length} in your menu`} className="mb-3" />
+        {subcategories.length === 0 ? (
+          <EmptyState
+            icon={ListTree}
+            title="No subcategories yet"
+            description="Add one above to organise a category."
+          />
+        ) : (
+          <TableWrap>
+            <table className="min-w-[34rem]">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Category</th>
+                  <th>Status</th>
+                  <th className="text-right">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </TableWrap>
+              </thead>
+              <tbody>
+                {subcategories.map((sub) => (
+                  <tr key={sub._id}>
+                    <td className="font-medium text-slate-900">{sub.name}</td>
+                    <td className="text-slate-600">{categoryName(sub.categoryId)}</td>
+                    <td>
+                      <Badge tone={sub.isActive ? "green" : "gray"} dot>
+                        {sub.isActive ? "Active" : "Hidden"}
+                      </Badge>
+                    </td>
+                    <td className="text-right whitespace-nowrap">
+                      <Button size="sm" variant="ghost" icon={Pencil} onClick={() => edit(sub)}>
+                        Edit
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        icon={sub.isActive ? EyeOff : Eye}
+                        onClick={() => toggleActive(sub)}
+                      >
+                        {sub.isActive ? "Hide" : "Show"}
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </TableWrap>
+        )}
       </Card>
-    </div>
+    </Page>
   );
 }

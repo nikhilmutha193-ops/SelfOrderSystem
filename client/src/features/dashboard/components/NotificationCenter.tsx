@@ -1,3 +1,4 @@
+import { Bell } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
@@ -186,6 +187,10 @@ export default function NotificationCenter() {
     if (next.openOrdersToday > last.openOrdersToday) pushToast("New order placed");
     if (next.pendingKotItems > last.pendingKotItems) pushToast("New items ready to send to kitchen");
     if (next.unreadChatCount > last.unreadChatCount) pushToast("New message from a table");
+    if ((next.tablesAwaitingPayment ?? 0) > (last.tablesAwaitingPayment ?? 0)) {
+      pushToast("A table is waiting to pay its bill");
+    }
+    if ((next.lowStockItems ?? 0) > (last.lowStockItems ?? 0)) pushToast("A stock item is running low");
   }, [summaryQuery.data]);
 
   const clearing = markAllRead.isPending;
@@ -195,7 +200,11 @@ export default function NotificationCenter() {
     markAllRead.mutate();
   }
 
-  const badgeCount = (summary?.pendingKotItems || 0) + (summary?.unreadChatCount || 0);
+  const badgeCount =
+    (summary?.pendingKotItems || 0) +
+    (summary?.unreadChatCount || 0) +
+    (summary?.tablesAwaitingPayment || 0) +
+    (summary?.lowStockItems || 0);
 
   return (
     <div className="relative">
@@ -203,24 +212,12 @@ export default function NotificationCenter() {
         type="button"
         aria-label="Notifications"
         onClick={() => setOpen((o) => !o)}
-        className="relative flex h-10 w-10 items-center justify-center rounded-full text-slate-600 hover:bg-slate-100"
+        aria-expanded={open}
+        className="relative flex h-11 w-11 items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100 sm:h-10 sm:w-10"
       >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          className="h-6 w-6"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            d="M15 17h5l-1.4-1.4A2 2 0 0 1 18 14.2V11a6 6 0 1 0-12 0v3.2a2 2 0 0 1-.6 1.4L4 17h5m6 0v1a3 3 0 1 1-6 0v-1m6 0H9"
-          />
-        </svg>
+        <Bell size={20} aria-hidden="true" />
         {badgeCount > 0 && (
-          <span className="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-600 px-1 text-[11px] font-semibold text-white">
+          <span className="absolute -top-0.5 -right-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-600 px-1 text-[11px] font-semibold text-white ring-2 ring-white">
             {badgeCount > 99 ? "99+" : badgeCount}
           </span>
         )}
@@ -228,8 +225,8 @@ export default function NotificationCenter() {
 
       {open && (
         <>
-          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 z-20 mt-2 w-72 rounded-lg border border-slate-200 bg-white p-3 shadow-lg">
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div className="fixed inset-x-3 top-[4.25rem] z-50 rounded-xl border border-slate-200 bg-white p-4 shadow-pop animate-pop-in sm:absolute sm:inset-x-auto sm:top-auto sm:right-0 sm:mt-2 sm:w-80">
             <div className="mb-2 flex items-center justify-between">
               <p className="text-sm font-semibold text-slate-800">Notifications</p>
               <button
@@ -273,7 +270,7 @@ export default function NotificationCenter() {
                 id="notif-tone"
                 value={tone}
                 onChange={(e) => changeTone(e.target.value)}
-                className="w-full rounded-md border border-slate-300 px-2 py-1 text-sm text-slate-700"
+                className="ui-select min-h-[40px] w-full rounded-lg border border-slate-300 bg-white pr-8 pl-2 text-sm text-slate-700"
               >
                 {NOTIFICATION_TONES.map((t) => (
                   <option key={t.id} value={t.id}>
@@ -303,7 +300,7 @@ export default function NotificationCenter() {
               <Link
                 to="/admin/kot"
                 onClick={() => setOpen(false)}
-                className="flex items-center justify-between rounded-md px-2 py-1.5 hover:bg-slate-50"
+                className="flex min-h-[44px] items-center justify-between rounded-lg px-2 py-2 hover:bg-slate-50"
               >
                 <span className="text-slate-600">Items waiting for KOT</span>
                 <span className={`font-semibold ${summary?.pendingKotItems ? "text-orange-600" : "text-slate-400"}`}>
@@ -311,9 +308,29 @@ export default function NotificationCenter() {
                 </span>
               </Link>
               <Link
+                to="/admin/tables"
+                onClick={() => setOpen(false)}
+                className="flex min-h-[44px] items-center justify-between rounded-lg px-2 py-2 hover:bg-slate-50"
+              >
+                <span className="text-slate-600">Tables awaiting payment</span>
+                <span className={`font-semibold ${summary?.tablesAwaitingPayment ? "text-red-600" : "text-slate-400"}`}>
+                  {summary?.tablesAwaitingPayment ?? 0}
+                </span>
+              </Link>
+              <Link
+                to="/admin/inventory"
+                onClick={() => setOpen(false)}
+                className="flex min-h-[44px] items-center justify-between rounded-lg px-2 py-2 hover:bg-slate-50"
+              >
+                <span className="text-slate-600">Stock items running low</span>
+                <span className={`font-semibold ${summary?.lowStockItems ? "text-red-600" : "text-slate-400"}`}>
+                  {summary?.lowStockItems ?? 0}
+                </span>
+              </Link>
+              <Link
                 to="/admin/messages"
                 onClick={() => setOpen(false)}
-                className="flex items-center justify-between rounded-md px-2 py-1.5 hover:bg-slate-50"
+                className="flex min-h-[44px] items-center justify-between rounded-lg px-2 py-2 hover:bg-slate-50"
               >
                 <span className="text-slate-600">Unread table messages</span>
                 <span className={`font-semibold ${summary?.unreadChatCount ? "text-orange-600" : "text-slate-400"}`}>
@@ -323,7 +340,7 @@ export default function NotificationCenter() {
               <Link
                 to="/admin/orders?type=dine-in"
                 onClick={() => setOpen(false)}
-                className="flex items-center justify-between rounded-md px-2 py-1.5 hover:bg-slate-50"
+                className="flex min-h-[44px] items-center justify-between rounded-lg px-2 py-2 hover:bg-slate-50"
               >
                 <span className="text-slate-600">Open orders today</span>
                 <span className="font-semibold text-slate-700">{summary?.openOrdersToday ?? 0}</span>
@@ -337,7 +354,7 @@ export default function NotificationCenter() {
         {toasts.map((t) => (
           <div
             key={t.id}
-            className="flex items-center gap-2 rounded-md border border-orange-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-800 shadow-lg"
+            className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-800 shadow-pop animate-pop-in"
           >
             <span className="h-2 w-2 shrink-0 rounded-full bg-orange-600" />
             {t.text}

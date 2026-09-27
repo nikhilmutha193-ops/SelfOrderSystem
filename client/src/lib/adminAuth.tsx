@@ -34,6 +34,10 @@ export const MODULES = {
   admins: "Admin Users",
   analytics: "Analytics",
   audit: "Audit Log",
+  dayClose: "Shifts & Day Close",
+  printing: "Printers & Stations",
+  inventory: "Inventory",
+  customers: "Customers & Loyalty",
 } as const;
 
 export const MODULE_KEYS = Object.keys(MODULES) as ModuleKey[];

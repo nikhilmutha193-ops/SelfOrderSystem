@@ -84,7 +84,7 @@ export default function ForgotPassword() {
               />
             </label>
             <ErrorText>{error}</ErrorText>
-            {message && <p className="text-sm text-green-700">{message}</p>}
+            {message && <p className="text-sm font-medium text-emerald-700">{message}</p>}
             <Button type="submit" disabled={loading}>
               {loading ? "Updating..." : "Reset password"}
             </Button>

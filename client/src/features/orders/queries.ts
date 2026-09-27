@@ -1,7 +1,15 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 
 import type { DeliveryProvider, ItemCancelReason, PaymentMethod } from "../../lib/types";
-import { ordersApi, type CustomerInput, type NewOrderLine, type OrderFilters } from "./api";
+import {
+  ordersApi,
+  type CustomerInput,
+  type DiscountInput,
+  type InvoiceRegisterFilters,
+  type NewOrderLine,
+  type OrderFilters,
+  type PaymentLine,
+} from "./api";
 
 export const orderKeys = {
   all: ["orders"] as const,
@@ -9,7 +17,7 @@ export const orderKeys = {
   detail: (orderId: string) => ["orders", "detail", orderId] as const,
   invoice: (orderId: string) => ["orders", "invoice", orderId] as const,
   coupons: (orderId: string, subtotal: number | undefined) => ["orders", "coupons", orderId, subtotal] as const,
-  invoices: (range: { from?: string; to?: string }) => ["orders", "invoices", range] as const,
+  invoices: (filters: InvoiceRegisterFilters) => ["orders", "invoices", filters] as const,
 };
 
 export function refreshOrderData(queryClient: QueryClient) {
@@ -28,11 +36,12 @@ export function useOrders(filters: OrderFilters, options: { enabled?: boolean; r
   });
 }
 
-export function useOrder(orderId: string | undefined) {
+export function useOrder(orderId: string | undefined, refetchInterval?: number) {
   return useQuery({
     queryKey: orderKeys.detail(orderId ?? ""),
     queryFn: () => ordersApi.get(orderId!),
     enabled: !!orderId,
+    refetchInterval,
   });
 }
 
@@ -94,8 +103,8 @@ export function useVoidBill() {
   );
 }
 
-export function useInvoiceRegister(range: { from?: string; to?: string }) {
-  return useQuery({ queryKey: orderKeys.invoices(range), queryFn: () => ordersApi.invoices(range) });
+export function useInvoiceRegister(filters: InvoiceRegisterFilters) {
+  return useQuery({ queryKey: orderKeys.invoices(filters), queryFn: () => ordersApi.invoices(filters) });
 }
 
 export function useAddOrderItems() {
@@ -112,6 +121,52 @@ export function useApplyCoupon() {
 
 export function useRemoveCoupon() {
   return useOrderMutation((orderId: string) => ordersApi.removeCoupon(orderId));
+}
+
+export function useSettleOrder() {
+  return useOrderMutation(({ orderId, payments }: { orderId: string; payments: PaymentLine[] }) =>
+    ordersApi.settle(orderId, payments)
+  );
+}
+
+export function useSplitOrder() {
+  return useOrderMutation(({ orderId, itemIds }: { orderId: string; itemIds: string[] }) =>
+    ordersApi.split(orderId, itemIds)
+  );
+}
+
+export function useMergeOrder() {
+  return useOrderMutation(({ orderId, intoOrderId }: { orderId: string; intoOrderId: string }) =>
+    ordersApi.merge(orderId, intoOrderId)
+  );
+}
+
+export function useTransferOrder() {
+  return useOrderMutation(({ orderId, tableId }: { orderId: string; tableId: string }) =>
+    ordersApi.transfer(orderId, tableId)
+  );
+}
+
+export function useSetDiscount() {
+  return useOrderMutation(({ orderId, input }: { orderId: string; input: DiscountInput | null }) =>
+    input ? ordersApi.setDiscount(orderId, input) : ordersApi.removeDiscount(orderId)
+  );
+}
+
+export function useSetServiceCharge() {
+  return useOrderMutation(({ orderId, waived }: { orderId: string; waived: boolean }) =>
+    ordersApi.setServiceCharge(orderId, waived)
+  );
+}
+
+export function useComplimentary() {
+  return useOrderMutation(({ itemId, reason }: { itemId: string; reason: string }) =>
+    ordersApi.complimentary(itemId, reason)
+  );
+}
+
+export function useFreeTables(enabled: boolean) {
+  return useQuery({ queryKey: ["tables", "free"], queryFn: ordersApi.freeTables, enabled });
 }
 
 export function useArchiveOrders() {

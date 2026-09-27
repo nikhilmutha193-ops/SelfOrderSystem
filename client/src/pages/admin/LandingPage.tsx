@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useCanEdit } from "../../lib/adminAuth";
 import type { LandingContent } from "../../lib/types";
 import { api, extractErrorMessage, uploadImage } from "../../shared/api/client";
-import { Button, Card, ErrorText, Input, Textarea } from "../../shared/ui/ui";
+import { Button, Card, ErrorText, Input, PageHeader, Textarea } from "../../shared/ui/ui";
 
 type Section = keyof LandingContent;
 
@@ -240,21 +240,23 @@ export default function LandingPageEditor() {
   const { hero, serve, menu, story, outlets, reels, partnership, footer } = content;
 
   return (
-    <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-800">Landing Page</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          Everything on your public page. Dishes, team, awards and reviews come from their own sections - this is the
-          wording around them.
-        </p>
-      </div>
+    <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 sm:gap-6">
+      <PageHeader
+        title="Landing Page"
+        description={
+          <>
+            Everything on your public page. Dishes, team, awards and reviews come from their own sections - this is the
+            wording around them.
+          </>
+        }
+      />
 
       <ErrorText>{error}</ErrorText>
-      {message && <p className="text-sm text-green-700">{message}</p>}
+      {message && <p className="text-sm font-medium text-emerald-700">{message}</p>}
 
       <div className="gap-6 xl:columns-2 [&>*]:mb-6 [&>*]:break-inside-avoid">
         <Card>
-          <h2 className="mb-3 text-lg font-semibold text-slate-800">Hero banner</h2>
+          <h2 className="mb-4 text-base font-semibold text-slate-900">Hero banner</h2>
           <p className="mb-3 text-xs text-slate-500">
             Add a portrait version of each banner for phones - a wide image has to be cropped to fill a tall screen.
             Leave it blank and the banner is shown whole instead, with the wording beneath it.
@@ -410,7 +412,7 @@ export default function LandingPageEditor() {
 
         <Card>
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-slate-800">What We Serve</h2>
+            <h2 className="text-base font-semibold text-slate-900">What We Serve</h2>
             <Toggle label="Show" value={serve.enabled} onChange={(v) => patch("serve", { enabled: v })} />
           </div>
           <div className="flex flex-col gap-3">
@@ -420,7 +422,7 @@ export default function LandingPageEditor() {
 
             <div className="flex flex-col gap-3">
               {serve.items.map((item, i) => (
-                <div key={i} className="flex flex-col gap-2 rounded-md border border-slate-200 p-3">
+                <div key={i} className="flex flex-col gap-2 rounded-lg border border-slate-200 p-3">
                   <Field
                     label={`Card ${i + 1} title`}
                     value={item.title}
@@ -460,7 +462,7 @@ export default function LandingPageEditor() {
 
         <Card>
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-slate-800">Menu highlights</h2>
+            <h2 className="text-base font-semibold text-slate-900">Menu highlights</h2>
             <Toggle label="Show" value={menu.enabled} onChange={(v) => patch("menu", { enabled: v })} />
           </div>
           <p className="mb-3 text-xs text-slate-500">
@@ -476,7 +478,7 @@ export default function LandingPageEditor() {
 
         <Card>
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-slate-800">Our Story</h2>
+            <h2 className="text-base font-semibold text-slate-900">Our Story</h2>
             <Toggle label="Show" value={story.enabled} onChange={(v) => patch("story", { enabled: v })} />
           </div>
           <div className="flex flex-col gap-3">
@@ -501,7 +503,7 @@ export default function LandingPageEditor() {
 
         <Card>
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-slate-800">Outlets</h2>
+            <h2 className="text-base font-semibold text-slate-900">Outlets</h2>
             <Toggle label="Show" value={outlets.enabled} onChange={(v) => patch("outlets", { enabled: v })} />
           </div>
           <div className="flex flex-col gap-3">
@@ -512,7 +514,7 @@ export default function LandingPageEditor() {
               const upd = (changes: Partial<typeof o>) =>
                 patch("outlets", { items: outlets.items.map((x, j) => (i === j ? { ...x, ...changes } : x)) });
               return (
-                <div key={i} className="flex flex-col gap-2 rounded-md border border-slate-200 p-3">
+                <div key={i} className="flex flex-col gap-2 rounded-lg border border-slate-200 p-3">
                   <div className="grid gap-2 sm:grid-cols-2">
                     <Field label="City" value={o.city} onChange={(v) => upd({ city: v })} />
                     <Field label="Area" value={o.area} onChange={(v) => upd({ area: v })} />
@@ -556,7 +558,7 @@ export default function LandingPageEditor() {
 
         <Card>
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-slate-800">Reels</h2>
+            <h2 className="text-base font-semibold text-slate-900">Reels</h2>
             <Toggle label="Show" value={reels.enabled} onChange={(v) => patch("reels", { enabled: v })} />
           </div>
           <p className="mb-3 text-xs text-slate-500">Off by default - turn it on once you have clips to link to.</p>
@@ -576,7 +578,7 @@ export default function LandingPageEditor() {
               const upd = (changes: Partial<typeof r>) =>
                 patch("reels", { items: reels.items.map((x, j) => (i === j ? { ...x, ...changes } : x)) });
               return (
-                <div key={i} className="flex flex-col gap-2 rounded-md border border-slate-200 p-3">
+                <div key={i} className="flex flex-col gap-2 rounded-lg border border-slate-200 p-3">
                   <Field label={`Reel ${i + 1} caption`} value={r.caption} onChange={(v) => upd({ caption: v })} />
                   <Field
                     label="Link"
@@ -606,7 +608,7 @@ export default function LandingPageEditor() {
 
         <Card>
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-slate-800">Call-to-action band</h2>
+            <h2 className="text-base font-semibold text-slate-900">Call-to-action band</h2>
             <Toggle label="Show" value={partnership.enabled} onChange={(v) => patch("partnership", { enabled: v })} />
           </div>
           <div className="flex flex-col gap-3">
@@ -634,7 +636,7 @@ export default function LandingPageEditor() {
         </Card>
 
         <Card>
-          <h2 className="mb-3 text-lg font-semibold text-slate-800">Footer</h2>
+          <h2 className="mb-4 text-base font-semibold text-slate-900">Footer</h2>
           <div className="flex flex-col gap-3">
             <Field label="Tagline" multiline value={footer.tagline} onChange={(v) => patch("footer", { tagline: v })} />
 

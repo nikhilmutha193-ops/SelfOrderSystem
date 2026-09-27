@@ -1,8 +1,22 @@
+import { ChefHat, KeyRound, Plus, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import { useSetChefStation, useStationList } from "../../features/printing/queries";
 import type { ChefRow } from "../../lib/types";
 import { api, extractErrorMessage } from "../../shared/api/client";
-import { Button, Card, ErrorText, Input, TableWrap } from "../../shared/ui/ui";
+import {
+  Button,
+  Card,
+  CardHeader,
+  EmptyState,
+  ErrorText,
+  Field,
+  Input,
+  Page,
+  PageHeader,
+  Select,
+  TableWrap,
+} from "../../shared/ui/ui";
 
 export default function Chefs() {
   const [chefs, setChefs] = useState<ChefRow[]>([]);
@@ -12,6 +26,18 @@ export default function Chefs() {
   const [resettingId, setResettingId] = useState<string | null>(null);
   const [newPassword, setNewPassword] = useState("");
   const [resetError, setResetError] = useState<string | null>(null);
+  const stations = useStationList();
+  const setChefStation = useSetChefStation();
+
+  async function changeStation(chef: ChefRow, stationId: string) {
+    setError(null);
+    try {
+      await setChefStation.mutateAsync({ chefId: chef._id, stationId: stationId || null });
+      load();
+    } catch (err) {
+      setError(extractErrorMessage(err));
+    }
+  }
 
   function load() {
     api
@@ -74,80 +100,130 @@ export default function Chefs() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-bold text-slate-800">Chef Accounts</h1>
+    <Page>
+      <PageHeader
+        title="Chef Accounts"
+        description="Logins for the kitchen display. A chef with a station sees that station's tickets first."
+      />
       <Card>
-        <form onSubmit={submit} className="flex flex-wrap items-end gap-3">
-          <label className="text-sm font-medium text-slate-700">
-            Username
-            <Input className="mt-1" value={username} onChange={(e) => setUsername(e.target.value)} required />
-          </label>
-          <label className="text-sm font-medium text-slate-700">
-            Password
+        <CardHeader icon={Plus} title="Add a chef" />
+        <form onSubmit={submit} className="grid gap-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+          <Field label="Username" htmlFor="chef-username">
             <Input
-              className="mt-1"
+              id="chef-username"
+              autoComplete="off"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              required
+            />
+          </Field>
+          <Field label="Password" htmlFor="chef-password">
+            <Input
+              id="chef-password"
+              autoComplete="new-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
               minLength={4}
             />
-          </label>
-          <Button type="submit">Add chef</Button>
+          </Field>
+          <Button type="submit" icon={Plus}>
+            Add chef
+          </Button>
         </form>
       </Card>
 
       <ErrorText>{error}</ErrorText>
 
       <Card>
-        <TableWrap>
-          <table className="w-full min-w-[34rem] text-sm">
-            <thead>
-              <tr className="text-left text-slate-500">
-                <th className="pb-2">Username</th>
-                <th className="pb-2">Password</th>
-                <th className="pb-2"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {chefs.map((chef) => (
-                <tr key={chef._id} className="border-t border-slate-100">
-                  <td className="py-1.5">{chef.username}</td>
-                  <td className="py-1.5 font-mono">{chef.password || "-"}</td>
-                  <td className="py-1.5">
-                    {resettingId === chef._id ? (
-                      <div className="flex items-center gap-2">
-                        <Input
-                          className="w-36"
-                          placeholder="New password"
-                          value={newPassword}
-                          onChange={(e) => setNewPassword(e.target.value)}
-                          autoFocus
-                        />
-                        <Button type="button" onClick={() => submitReset(chef._id)} disabled={!newPassword}>
-                          Save
-                        </Button>
-                        <button className="text-slate-600 hover:underline" onClick={cancelReset}>
-                          Cancel
-                        </button>
-                        {resetError && <span className="text-xs text-red-600">{resetError}</span>}
-                      </div>
-                    ) : (
-                      <div className="flex gap-3">
-                        <button className="text-orange-600 hover:underline" onClick={() => startReset(chef)}>
-                          Reset password
-                        </button>
-                        <button className="text-red-600 hover:underline" onClick={() => remove(chef)}>
-                          Remove
-                        </button>
-                      </div>
-                    )}
-                  </td>
+        <CardHeader
+          title="Kitchen staff"
+          description={`${chefs.length} account${chefs.length === 1 ? "" : "s"}`}
+          className="mb-3"
+        />
+        {chefs.length === 0 ? (
+          <EmptyState
+            icon={ChefHat}
+            title="No chef accounts yet"
+            description="Add one above so the kitchen can sign in."
+          />
+        ) : (
+          <TableWrap>
+            <table className="min-w-[34rem]">
+              <thead>
+                <tr>
+                  <th>Username</th>
+                  <th>Password</th>
+                  {stations.length > 0 && <th>Station</th>}
+                  <th className="text-right">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </TableWrap>
+              </thead>
+              <tbody>
+                {chefs.map((chef) => (
+                  <tr key={chef._id}>
+                    <td className="font-medium text-slate-900">{chef.username}</td>
+                    <td className="font-mono text-slate-600">{chef.password || "—"}</td>
+                    {stations.length > 0 && (
+                      <td>
+                        <Select
+                          aria-label={`Station for ${chef.username}`}
+                          className="!w-44"
+                          value={chef.stationId ?? ""}
+                          disabled={setChefStation.isPending}
+                          onChange={(e) => changeStation(chef, e.target.value)}
+                        >
+                          <option value="">All stations</option>
+                          {stations.map((station) => (
+                            <option key={station._id} value={station._id}>
+                              {station.name}
+                            </option>
+                          ))}
+                        </Select>
+                      </td>
+                    )}
+                    <td className="text-right">
+                      {resettingId === chef._id ? (
+                        <div className="flex flex-wrap items-center justify-end gap-2">
+                          <Input
+                            className="!w-40"
+                            placeholder="New password"
+                            aria-label={`New password for ${chef.username}`}
+                            value={newPassword}
+                            onChange={(e) => setNewPassword(e.target.value)}
+                            autoFocus
+                          />
+                          <Button type="button" size="sm" onClick={() => submitReset(chef._id)} disabled={!newPassword}>
+                            Save
+                          </Button>
+                          <Button type="button" size="sm" variant="ghost" onClick={cancelReset}>
+                            Cancel
+                          </Button>
+                          {resetError && <span className="w-full text-xs text-red-600">{resetError}</span>}
+                        </div>
+                      ) : (
+                        <div className="flex justify-end gap-1 whitespace-nowrap">
+                          <Button size="sm" variant="ghost" icon={KeyRound} onClick={() => startReset(chef)}>
+                            Reset password
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            icon={Trash2}
+                            className="!text-red-600 hover:!bg-red-50"
+                            onClick={() => remove(chef)}
+                          >
+                            Remove
+                          </Button>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </TableWrap>
+        )}
       </Card>
-    </div>
+    </Page>
   );
 }

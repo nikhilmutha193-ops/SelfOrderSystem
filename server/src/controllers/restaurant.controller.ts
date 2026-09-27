@@ -3,11 +3,18 @@ import { Request, Response } from "express";
 import { asyncHandler } from "../middleware/errorHandler";
 import { IOrder } from "../models/Order";
 import { IOrderItem } from "../models/OrderItem";
-import Restaurant, { IInvoiceSettings, IKotSettings, IQrSettings, IRestaurant, ITaxRate } from "../models/Restaurant";
+import Restaurant, {
+  IBillingSettings,
+  IInvoiceSettings,
+  IKotSettings,
+  IQrSettings,
+  IRestaurant,
+  ITaxRate,
+} from "../models/Restaurant";
 import { isValidDayEndTime, isValidTimezone } from "../utils/businessDay";
 import { HttpError } from "../utils/httpError";
 import { computeInvoiceTotals } from "../utils/invoice";
-import { INVOICE_PREFIX_PATTERN } from "../utils/invoiceNumber";
+import { financialYearLabel, INVOICE_PREFIX_PATTERN } from "../utils/invoiceNumber";
 import { seedLandingContent } from "../utils/landingSeed";
 import { resolveLogoBuffer, streamInvoicePdf, streamKotPdf } from "../utils/pdf";
 
@@ -17,9 +24,12 @@ const SAMPLE_ITEMS: Pick<IOrderItem, "foodName" | "isJain" | "quantity" | "unitP
   { foodName: "Butter Naan", isJain: false, quantity: 4, unitPrice: 35, total: 140, status: "pending" },
 ];
 
-function buildSampleOrder(): IOrder {
+function buildSampleOrder(invoicePrefix?: string): IOrder {
   return {
     _id: "preview",
+    invoiceNumber: `${invoicePrefix || "INV"}/${financialYearLabel(new Date(), undefined)}/000123`,
+    billedAt: new Date(),
+    customerGstin: "",
     orderType: "dine-in",
     customerName: "Sample Customer",
     customerPhone: "9876543210",
@@ -104,6 +114,7 @@ export const updateRestaurantSettings = asyncHandler(async (req: Request, res: R
     qrSettings,
     kotSettings,
     invoiceSettings,
+    billingSettings,
     tableAutoReleaseMinutes,
     prepBufferMinutes,
     prepMessageTemplate,
@@ -126,6 +137,7 @@ export const updateRestaurantSettings = asyncHandler(async (req: Request, res: R
     qrSettings?: Partial<IQrSettings>;
     kotSettings?: Partial<IKotSettings>;
     invoiceSettings?: Partial<IInvoiceSettings>;
+    billingSettings?: Partial<IBillingSettings>;
     tableAutoReleaseMinutes?: number;
     prepBufferMinutes?: number;
     prepMessageTemplate?: string;
@@ -186,7 +198,12 @@ export const updateRestaurantSettings = asyncHandler(async (req: Request, res: R
   if (prepMessageTemplate !== undefined) restaurant.prepMessageTemplate = prepMessageTemplate;
   if (taxRates !== undefined) restaurant.taxRates = taxRates;
   if (qrSettings !== undefined) Object.assign(restaurant.qrSettings, qrSettings);
-  if (kotSettings !== undefined) Object.assign(restaurant.kotSettings, kotSettings);
+  if (kotSettings !== undefined) {
+    if (kotSettings.guestOrderMode !== undefined && !["auto", "accept"].includes(kotSettings.guestOrderMode)) {
+      throw new HttpError(400, "Guest orders must be sent automatically or wait for staff to accept");
+    }
+    Object.assign(restaurant.kotSettings, kotSettings);
+  }
   if (invoiceSettings !== undefined) {
     if (invoiceSettings.invoicePrefix !== undefined) {
       const prefix = String(invoiceSettings.invoicePrefix).trim().toUpperCase();
@@ -198,7 +215,39 @@ export const updateRestaurantSettings = asyncHandler(async (req: Request, res: R
     if (invoiceSettings.placeOfSupply !== undefined && String(invoiceSettings.placeOfSupply).length > 60) {
       throw new HttpError(400, "Place of supply must be 60 characters or fewer");
     }
+    if (invoiceSettings.autoPrintBill !== undefined && typeof invoiceSettings.autoPrintBill !== "boolean") {
+      throw new HttpError(400, "Automatic bill printing must be on or off");
+    }
     Object.assign(restaurant.invoiceSettings, invoiceSettings);
+  }
+  if (billingSettings !== undefined) {
+    const { serviceChargePercent, maxStaffDiscountPercent, upiVpa, upiPayeeName } = billingSettings;
+    if (
+      serviceChargePercent !== undefined &&
+      (typeof serviceChargePercent !== "number" || serviceChargePercent < 0 || serviceChargePercent > 20)
+    ) {
+      throw new HttpError(400, "Service charge must be between 0% and 20%");
+    }
+    if (
+      maxStaffDiscountPercent !== undefined &&
+      (typeof maxStaffDiscountPercent !== "number" || maxStaffDiscountPercent < 0 || maxStaffDiscountPercent > 100)
+    ) {
+      throw new HttpError(400, "Staff discount limit must be between 0% and 100%");
+    }
+    if (
+      upiVpa !== undefined &&
+      upiVpa !== "" &&
+      !/^[A-Za-z0-9._-]{2,256}@[A-Za-z]{2,64}$/.test(String(upiVpa).trim())
+    ) {
+      throw new HttpError(400, "Enter a valid UPI ID, like restaurant@okicici");
+    }
+    if (upiPayeeName !== undefined && String(upiPayeeName).length > 60) {
+      throw new HttpError(400, "UPI payee name must be 60 characters or fewer");
+    }
+    Object.assign(restaurant.billingSettings, {
+      ...billingSettings,
+      ...(upiVpa !== undefined && { upiVpa: String(upiVpa).trim() }),
+    });
   }
   if (chatModeration !== undefined) {
     if (chatModeration.enabled !== undefined) restaurant.chatModeration.enabled = !!chatModeration.enabled;
@@ -254,7 +303,7 @@ export const previewInvoicePdf = asyncHandler(async (req: Request, res: Response
     taxRates,
     invoiceSettings,
   });
-  const order = buildSampleOrder();
+  const order = { ...buildSampleOrder(restaurant.invoiceSettings?.invoicePrefix), status: "closed" } as IOrder;
   const items = SAMPLE_ITEMS as unknown as IOrderItem[];
   const totals = computeInvoiceTotals(items, restaurant.taxRates || []);
   await streamInvoicePdf(res, { restaurant, order, items, totals });

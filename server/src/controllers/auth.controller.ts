@@ -162,7 +162,7 @@ export const tableLogin = asyncHandler(async (req: Request, res: Response) => {
     }
   }
 
-  if (!table.isGuest && table.status === "occupied") {
+  if (!table.isGuest && table.status !== "available") {
     const provedIdentity = !qrToken || (typeof currentTableId === "string" && currentTableId === table._id.toString());
     if (!provedIdentity) {
       throw new HttpError(409, "This table is already occupied");

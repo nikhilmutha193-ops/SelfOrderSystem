@@ -1,3 +1,5 @@
+import { FilterQuery } from "mongoose";
+
 import { RequestContext } from "../../core/context";
 import { IOrder } from "../../models/Order";
 import { IOrderItem } from "../../models/OrderItem";
@@ -36,8 +38,7 @@ export function reportFilename(query: OrderFilterInput, ext: string): string {
 async function buildOrderReport(ctx: RequestContext, query: OrderFilterInput) {
   const repo = new OrdersRepository(ctx.restaurantId);
   const orders = await repo.findOrdersWithTable(await buildOrderFilter(repo, query, { includeArchived: true }));
-  const restaurant = await repo.findRestaurant("taxRates");
-  const taxRates = restaurant?.taxRates || [];
+  const restaurant = await repo.findRestaurant("taxRates billingSettings");
 
   const items = await repo.findItemTotals(orders.map((o) => o._id));
   const itemsByOrder = new Map<string, Pick<IOrderItem, "status" | "total">[]>();
@@ -50,7 +51,7 @@ async function buildOrderReport(ctx: RequestContext, query: OrderFilterInput) {
   let total = 0;
   const rows: OrderReportRow[] = orders.map((order) => {
     const orderItems = itemsByOrder.get(order._id.toString()) || [];
-    const grandTotal = order.status === "cancelled" ? 0 : totalsForOrder(order, orderItems, taxRates).grandTotal;
+    const grandTotal = order.status === "cancelled" ? 0 : totalsForOrder(order, orderItems, restaurant).grandTotal;
     total += grandTotal;
     return { order: order as unknown as ReportOrder, grandTotal };
   });
@@ -141,11 +142,24 @@ export async function listInvoices(ctx: RequestContext, query: InvoiceRegisterIn
     range.$gte = getBusinessDayRangeForDate(query.from, restaurant?.dayEndTime, restaurant?.timezone).start;
   if (query.to) range.$lt = getBusinessDayRangeForDate(query.to, restaurant?.dayEndTime, restaurant?.timezone).end;
 
-  const orders = await repo.findInvoices(Object.keys(range).length ? { billedAt: range } : {});
+  const conditions: FilterQuery<IOrder>[] = [
+    { $or: [{ invoiceNumber: { $type: "string" } }, { "bill.legacy": true }] },
+  ];
+  if (Object.keys(range).length) {
+    conditions.push({ $or: [{ billedAt: range }, { billedAt: null, checkoutTime: range }] });
+  }
+  if (query.number) {
+    const escaped = query.number.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    conditions.push({ invoiceNumber: { $regex: escaped, $options: "i" } });
+  }
+  if (query.amount !== undefined) conditions.push({ "bill.grandTotal": query.amount });
+
+  const orders = await repo.findInvoices({ $and: conditions });
   return orders.map((order) => ({
     orderId: order._id,
-    invoiceNumber: order.invoiceNumber!,
-    billedAt: order.billedAt ?? null,
+    invoiceNumber: order.invoiceNumber ?? null,
+    legacy: !order.invoiceNumber && !!order.bill?.legacy,
+    billedAt: order.billedAt ?? order.checkoutTime ?? null,
     customerName: order.customerName,
     customerGstin: order.customerGstin ?? "",
     orderType: order.orderType,

@@ -1,7 +1,8 @@
 import { useState } from "react";
 
 import { extractErrorMessage } from "../api/client";
-import { Button, ErrorText, Select, Textarea } from "./ui";
+import { Dialog } from "./Dialog";
+import { Button, ErrorText, Field, Select, Textarea } from "./ui";
 
 export interface ReasonOption<T extends string> {
   value: T;
@@ -56,31 +57,28 @@ function ReasonDialogForm<T extends string>({
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center"
-      onClick={onCancel}
+    <Dialog
+      open
+      onClose={onCancel}
+      title={title}
+      description={description}
+      onSubmit={submit}
+      dismissible={!busy}
+      footer={
+        <>
+          <Button type="button" variant="secondary" onClick={onCancel} disabled={busy}>
+            Keep as is
+          </Button>
+          <Button type="submit" variant={danger ? "danger" : "primary"} loading={busy}>
+            {busy ? "Saving..." : confirmLabel}
+          </Button>
+        </>
+      }
     >
-      <form
-        onSubmit={submit}
-        onClick={(e) => e.stopPropagation()}
-        className="flex w-full max-w-md flex-col gap-3 rounded-xl bg-white p-5 shadow-xl"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="reason-dialog-title"
-      >
-        <h2 id="reason-dialog-title" className="text-lg font-semibold text-slate-800">
-          {title}
-        </h2>
-        {description && <p className="text-sm text-slate-600">{description}</p>}
+      <div className="flex flex-col gap-4">
         {options && (
-          <label className="text-sm font-medium text-slate-700">
-            Reason
-            <Select
-              id="reason-dialog-option"
-              className="mt-1"
-              value={option}
-              onChange={(e) => setOption(e.target.value as T)}
-            >
+          <Field label="Reason" htmlFor="reason-dialog-option">
+            <Select id="reason-dialog-option" value={option} onChange={(e) => setOption(e.target.value as T)}>
               <option value="">Choose a reason</option>
               {options.map((o) => (
                 <option key={o.value} value={o.value}>
@@ -88,30 +86,20 @@ function ReasonDialogForm<T extends string>({
                 </option>
               ))}
             </Select>
-          </label>
+          </Field>
         )}
-        <label className="text-sm font-medium text-slate-700">
-          {options ? "Note (optional)" : "Reason"}
+        <Field label={options ? "Note (optional)" : "Reason"} htmlFor="reason-dialog-note">
           <Textarea
             id="reason-dialog-note"
-            className="mt-1"
             rows={3}
             maxLength={200}
             value={note}
             onChange={(e) => setNote(e.target.value)}
             placeholder={options ? "Anything the owner should know" : "Why is this needed?"}
           />
-        </label>
+        </Field>
         <ErrorText>{error}</ErrorText>
-        <div className="flex justify-end gap-2">
-          <Button type="button" variant="secondary" onClick={onCancel} disabled={busy}>
-            Keep as is
-          </Button>
-          <Button type="submit" variant={danger ? "danger" : "primary"} disabled={busy}>
-            {busy ? "Saving..." : confirmLabel}
-          </Button>
-        </div>
-      </form>
-    </div>
+      </div>
+    </Dialog>
   );
 }

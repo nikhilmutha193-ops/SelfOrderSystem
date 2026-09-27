@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 
 import type { Coupon, CouponType } from "../../lib/types";
 import { api, extractErrorMessage } from "../../shared/api/client";
-import { Badge, Button, Card, ErrorText, Input, Select, TableWrap } from "../../shared/ui/ui";
+import { Badge, Button, Card, ErrorText, Input, PageHeader, Select, TableWrap } from "../../shared/ui/ui";
 
 export default function Coupons() {
   const [coupons, setCoupons] = useState<Coupon[]>([]);
@@ -105,37 +105,41 @@ export default function Coupons() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-bold text-slate-800">Discount Coupons</h1>
-      <p className="text-sm text-slate-500">
-        Customers can apply a coupon code on their order/invoice screen; staff can also apply one from an order's detail
-        page at billing time.
-      </p>
+    <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 sm:gap-6">
+      <PageHeader
+        title="Discount Coupons"
+        description={
+          <>
+            Customers can apply a coupon code on their order/invoice screen; staff can also apply one from an order's
+            detail page at billing time.
+          </>
+        }
+      />
 
       <Card>
         <form onSubmit={submit} className="flex flex-col gap-4">
-          <div className="flex flex-wrap items-end gap-3">
-            <label className="text-sm font-medium text-slate-700">
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <label className="flex flex-col text-sm font-medium text-slate-700">
               Code
               <Input
-                className="mt-1 w-36 uppercase"
+                className="mt-1.5 uppercase"
                 value={code}
                 onChange={(e) => setCode(e.target.value.toUpperCase())}
                 placeholder="e.g. WELCOME10"
                 required
               />
             </label>
-            <label className="text-sm font-medium text-slate-700">
+            <label className="flex flex-col text-sm font-medium text-slate-700">
               Type
-              <Select className="mt-1" value={type} onChange={(e) => setType(e.target.value as CouponType)}>
+              <Select className="mt-1.5" value={type} onChange={(e) => setType(e.target.value as CouponType)}>
                 <option value="percent">Percent off</option>
                 <option value="flat">Flat amount off</option>
               </Select>
             </label>
-            <label className="text-sm font-medium text-slate-700">
+            <label className="flex flex-col text-sm font-medium text-slate-700">
               Value {type === "percent" ? "(%)" : "(₹)"}
               <Input
-                className="mt-1 w-28"
+                className="mt-1.5"
                 type="number"
                 min={0}
                 max={type === "percent" ? 100 : undefined}
@@ -145,10 +149,10 @@ export default function Coupons() {
                 required
               />
             </label>
-            <label className="text-sm font-medium text-slate-700">
+            <label className="flex flex-col text-sm font-medium text-slate-700">
               Min order value (₹)
               <Input
-                className="mt-1 w-32"
+                className="mt-1.5"
                 type="number"
                 min={0}
                 step="0.01"
@@ -158,12 +162,12 @@ export default function Coupons() {
             </label>
           </div>
 
-          <div className="flex flex-wrap items-end gap-3">
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {type === "percent" && (
-              <label className="text-sm font-medium text-slate-700">
+              <label className="flex flex-col text-sm font-medium text-slate-700">
                 Max discount (₹, optional)
                 <Input
-                  className="mt-1 w-36"
+                  className="mt-1.5"
                   type="number"
                   min={0}
                   step="0.01"
@@ -173,10 +177,10 @@ export default function Coupons() {
                 />
               </label>
             )}
-            <label className="text-sm font-medium text-slate-700">
+            <label className="flex flex-col text-sm font-medium text-slate-700">
               Usage limit (optional)
               <Input
-                className="mt-1 w-32"
+                className="mt-1.5"
                 type="number"
                 min={1}
                 placeholder="Unlimited"
@@ -184,9 +188,9 @@ export default function Coupons() {
                 onChange={(e) => setUsageLimit(e.target.value)}
               />
             </label>
-            <label className="text-sm font-medium text-slate-700">
+            <label className="flex flex-col text-sm font-medium text-slate-700">
               Expires on (optional)
-              <Input className="mt-1" type="date" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} />
+              <Input className="mt-1.5" type="date" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} />
             </label>
           </div>
 
@@ -207,39 +211,48 @@ export default function Coupons() {
         <TableWrap>
           <table className="w-full min-w-[34rem] text-sm">
             <thead>
-              <tr className="text-left text-slate-500">
-                <th className="pb-2">Code</th>
-                <th className="pb-2">Discount</th>
-                <th className="pb-2">Usage</th>
-                <th className="pb-2">Expires</th>
-                <th className="pb-2">Status</th>
-                <th className="pb-2"></th>
+              <tr>
+                <th>Code</th>
+                <th>Discount</th>
+                <th>Usage</th>
+                <th>Expires</th>
+                <th>Status</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
               {coupons.map((coupon) => (
                 <tr key={coupon._id} className="border-t border-slate-100">
-                  <td className="py-1.5 font-semibold text-slate-800">{coupon.code}</td>
-                  <td className="py-1.5">{describe(coupon)}</td>
-                  <td className="py-1.5">
+                  <td className="font-semibold text-slate-800">{coupon.code}</td>
+                  <td>{describe(coupon)}</td>
+                  <td>
                     {coupon.usedCount}
                     {coupon.usageLimit ? ` / ${coupon.usageLimit}` : ""}
                   </td>
-                  <td className="py-1.5">{coupon.expiresAt ? new Date(coupon.expiresAt).toLocaleDateString() : "-"}</td>
-                  <td className="py-1.5">
+                  <td>{coupon.expiresAt ? new Date(coupon.expiresAt).toLocaleDateString() : "-"}</td>
+                  <td>
                     <div className="flex flex-wrap gap-1.5">
                       <Badge tone={coupon.isActive ? "green" : "gray"}>{coupon.isActive ? "Active" : "Inactive"}</Badge>
                       {isExpired(coupon) && <Badge tone="red">Expired</Badge>}
                     </div>
                   </td>
-                  <td className="flex gap-2 py-1.5">
-                    <button className="text-orange-600 hover:underline" onClick={() => edit(coupon)}>
+                  <td className="whitespace-nowrap">
+                    <button
+                      className="rounded-md px-2 py-1 text-sm font-medium transition-colors text-orange-700 hover:bg-orange-50"
+                      onClick={() => edit(coupon)}
+                    >
                       Edit
                     </button>
-                    <button className="text-slate-600 hover:underline" onClick={() => toggleActive(coupon)}>
+                    <button
+                      className="rounded-md px-2 py-1 text-sm font-medium transition-colors text-slate-600 hover:bg-slate-100"
+                      onClick={() => toggleActive(coupon)}
+                    >
                       {coupon.isActive ? "Deactivate" : "Activate"}
                     </button>
-                    <button className="text-red-600 hover:underline" onClick={() => remove(coupon)}>
+                    <button
+                      className="rounded-md px-2 py-1 text-sm font-medium transition-colors text-red-600 hover:bg-red-50"
+                      onClick={() => remove(coupon)}
+                    >
                       Delete
                     </button>
                   </td>
@@ -247,7 +260,7 @@ export default function Coupons() {
               ))}
               {coupons.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="py-4 text-center text-slate-400">
+                  <td colSpan={6} className="py-10 text-center text-sm text-slate-500">
                     No coupons yet.
                   </td>
                 </tr>

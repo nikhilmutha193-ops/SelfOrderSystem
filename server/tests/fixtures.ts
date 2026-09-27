@@ -23,7 +23,9 @@ export interface World {
   food: { coffee: string; dosa: string; vada: string; hidden: string };
 }
 
-export async function createWorld(): Promise<World> {
+export async function createWorld({
+  guestOrderMode = "accept",
+}: { guestOrderMode?: "auto" | "accept" } = {}): Promise<World> {
   await connectDb();
 
   const restaurant = await Restaurant.create({
@@ -33,6 +35,7 @@ export async function createWorld(): Promise<World> {
       { name: "CGST", percent: 2.5 },
       { name: "SGST", percent: 2.5 },
     ],
+    kotSettings: { guestOrderMode },
   });
   const restaurantId = restaurant._id;
 
@@ -147,4 +150,19 @@ export function bearer(token: string) {
 
 export function decodeToken(token: string): Record<string, number | string | boolean> {
   return JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString("utf8"));
+}
+
+export async function counterOrder(
+  token: string,
+  lines: { foodItemId: string; quantity: number }[],
+  name = "Walk-in",
+  { sendToKitchen = true, tableId }: { sendToKitchen?: boolean; tableId?: string } = {}
+): Promise<string> {
+  const order = tableId
+    ? await api().post("/api/orders/counter").set(bearer(token)).send({ customerName: name, tableId })
+    : await api().post("/api/orders/takeaway").set(bearer(token)).send({ customerName: name });
+  if (order.status !== 201) throw new Error(`order failed: ${order.status} ${JSON.stringify(order.body)}`);
+  await api().post(`/api/orders/${order.body._id}/items`).set(bearer(token)).send({ items: lines });
+  if (sendToKitchen) await api().post(`/api/orders/${order.body._id}/kot/print`).set(bearer(token));
+  return order.body._id as string;
 }

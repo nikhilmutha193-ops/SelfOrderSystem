@@ -7,12 +7,13 @@ import { ReviewDialog, StarPicker } from "../../components/ReviewFab";
 import ChatFab from "../../features/chat/components/ChatFab";
 import QuickRequests from "../../features/chat/components/QuickRequests";
 import { ordersApi } from "../../features/orders/api";
-import { useAddOrderItems } from "../../features/orders/queries";
+import { useAddOrderItems, useOrder } from "../../features/orders/queries";
 import { LANGS, loadLang, saveLang, tr, type Lang } from "../../lib/i18n";
 import { newId } from "../../lib/id";
 import type { CartLine, MenuCategory, MenuFoodItem } from "../../lib/types";
 import { useTableSession } from "../../lib/useTableSession";
 import { api, clearStoredToken, extractErrorMessage, setActiveAuth } from "../../shared/api/client";
+import { POLL } from "../../shared/api/queryClient";
 import { Button, ErrorText, Input, Select, Textarea } from "../../shared/ui/ui";
 
 type SortOption = "recommended" | "priceLowHigh" | "priceHighLow" | "nameAsc" | "bestsellerFirst";
@@ -82,6 +83,8 @@ const SORT_LABELS: Record<SortOption, string> = {
 export default function Menu() {
   const { orderId } = useTableSession();
   const addOrderItems = useAddOrderItems();
+  const orderQuery = useOrder(orderId, POLL.guestInvoice);
+  const billReady = !!orderQuery.data && orderQuery.data.order.status !== "open";
   const navigate = useNavigate();
   const [menu, setMenu] = useState<MenuCategory[]>([]);
   const [cart, setCart] = useState<CartLine[]>([]);
@@ -201,6 +204,7 @@ export default function Menu() {
       navigate("/order/invoice");
     } catch (err) {
       setError(extractErrorMessage(err));
+      orderQuery.refetch();
     } finally {
       setConfirming(false);
     }
@@ -322,6 +326,17 @@ export default function Menu() {
 
   return (
     <div className="mx-auto max-w-3xl pb-32">
+      {billReady && (
+        <div className="flex flex-wrap items-center justify-between gap-3 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+          <span>
+            Your bill{orderQuery.data?.order.invoiceNumber ? ` ${orderQuery.data.order.invoiceNumber}` : ""} is ready,
+            so ordering is closed. Ask staff if you'd like to add something.
+          </span>
+          <Button className="rounded-xl" onClick={() => navigate("/order/invoice")}>
+            View bill
+          </Button>
+        </div>
+      )}
       <div className="sticky top-0 z-20 border-b border-slate-200/80 bg-white/95 backdrop-blur">
         <div className="flex items-center justify-between gap-3 px-4 pt-4">
           <div>
@@ -623,7 +638,7 @@ export default function Menu() {
 
       {cartCount === 0 && <ChatFab />}
 
-      {cartCount > 0 && (
+      {cartCount > 0 && !billReady && (
         <div className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 backdrop-blur shadow-[0_-4px_20px_rgba(0,0,0,0.08)]">
           <div className="mx-auto max-w-3xl px-4 py-3">
             {showCart && (

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 
 import { extractErrorMessage } from "../../../shared/api/client";
-import { Badge, Card, ErrorText, Input, TableWrap } from "../../../shared/ui/ui";
+import { Badge, Card, ErrorText, Input, PageHeader, TableWrap } from "../../../shared/ui/ui";
 import { useInvoiceRegister } from "../queries";
 import { INVOICE_STATUS_BADGE, orderTypeLabel } from "../status";
 
@@ -13,19 +13,24 @@ function today(): string {
 export default function Invoices() {
   const [from, setFrom] = useState(today);
   const [to, setTo] = useState(today);
-  const register = useInvoiceRegister({ from: from || undefined, to: to || undefined });
+  const [number, setNumber] = useState("");
+  const [amount, setAmount] = useState("");
+  const register = useInvoiceRegister({
+    from: from || undefined,
+    to: to || undefined,
+    number: number.trim() || undefined,
+    amount: amount.trim() || undefined,
+  });
   const rows = register.data ?? [];
   const paidTotal = rows.filter((r) => r.status === "paid").reduce((sum, r) => sum + (r.grandTotal ?? 0), 0);
-  const numbers = rows.map((r) => r.invoiceNumber);
+  const numbers = rows.map((r) => r.invoiceNumber).filter((n): n is string => !!n);
 
   return (
-    <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-800">Invoice register</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          Every bill number issued, including cancelled and voided bills. Numbers are never reused.
-        </p>
-      </div>
+    <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 sm:gap-6">
+      <PageHeader
+        title="Invoice register"
+        description={<>Every bill number issued, including cancelled and voided bills. Numbers are never reused.</>}
+      />
 
       <Card>
         <div className="flex flex-wrap items-end gap-3">
@@ -43,6 +48,28 @@ export default function Invoices() {
             To
             <Input id="invoices-to" className="mt-1" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
           </label>
+          <label className="text-sm font-medium text-slate-700">
+            Invoice number
+            <Input
+              id="invoices-number"
+              className="mt-1"
+              placeholder="e.g. 000123"
+              value={number}
+              onChange={(e) => setNumber(e.target.value)}
+            />
+          </label>
+          <label className="text-sm font-medium text-slate-700">
+            Exact amount (₹)
+            <Input
+              id="invoices-amount"
+              className="mt-1 !w-32"
+              type="number"
+              min={0}
+              step="0.01"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+            />
+          </label>
           <div className="ml-auto text-right text-sm text-slate-600">
             <p>
               {rows.length} bill{rows.length === 1 ? "" : "s"}
@@ -59,50 +86,54 @@ export default function Invoices() {
         <TableWrap>
           <table className="w-full min-w-[46rem] text-sm">
             <thead>
-              <tr className="text-left text-slate-500">
-                <th className="pb-2">Invoice</th>
-                <th className="pb-2">Billed</th>
-                <th className="pb-2">Customer</th>
-                <th className="pb-2">Type</th>
-                <th className="pb-2">Status</th>
-                <th className="pb-2">Payment</th>
-                <th className="pb-2 text-right">Total</th>
+              <tr>
+                <th>Invoice</th>
+                <th>Billed</th>
+                <th>Customer</th>
+                <th>Type</th>
+                <th>Status</th>
+                <th>Payment</th>
+                <th className="text-right">Total</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((row) => (
-                <tr key={row.invoiceNumber} className="border-t border-slate-100 align-top">
-                  <td className="py-1.5 font-medium tabular-nums">
-                    <Link className="text-orange-600 hover:underline" to={`/admin/orders/${row.orderId}`}>
-                      {row.invoiceNumber}
+                <tr key={row.orderId} className="border-t border-slate-100 align-top">
+                  <td className="font-medium tabular-nums">
+                    <Link
+                      className="rounded-md px-2 py-1 text-sm font-medium transition-colors text-orange-700 hover:bg-orange-50"
+                      to={`/admin/orders/${row.orderId}`}
+                    >
+                      {row.invoiceNumber ?? "Legacy bill"}
                     </Link>
+                    {row.legacy && (
+                      <span className="block text-xs font-normal text-slate-500">Paid before numbering</span>
+                    )}
                   </td>
-                  <td className="py-1.5 text-slate-600">
-                    {row.billedAt ? new Date(row.billedAt).toLocaleString() : "-"}
-                  </td>
-                  <td className="py-1.5">
+                  <td className="text-slate-600">{row.billedAt ? new Date(row.billedAt).toLocaleString() : "-"}</td>
+                  <td>
                     {row.customerName}
                     {row.customerGstin && (
                       <span className="block text-xs text-slate-500">GSTIN {row.customerGstin}</span>
                     )}
                   </td>
-                  <td className="py-1.5">{orderTypeLabel(row)}</td>
-                  <td className="py-1.5">
+                  <td>{orderTypeLabel(row)}</td>
+                  <td>
                     <Badge tone={INVOICE_STATUS_BADGE[row.status].tone}>{INVOICE_STATUS_BADGE[row.status].label}</Badge>
                     {row.reason && (
                       <span className="mt-0.5 block max-w-[14rem] text-xs text-slate-500">{row.reason}</span>
                     )}
                   </td>
-                  <td className="py-1.5 capitalize">{row.status === "paid" ? row.paymentMethod : "-"}</td>
-                  <td className="py-1.5 text-right tabular-nums">
+                  <td className="capitalize">{row.status === "paid" ? row.paymentMethod : "-"}</td>
+                  <td className="text-right tabular-nums">
                     {row.grandTotal != null ? `₹${row.grandTotal.toFixed(2)}` : "-"}
                   </td>
                 </tr>
               ))}
               {rows.length === 0 && !register.isLoading && (
                 <tr>
-                  <td colSpan={7} className="py-4 text-center text-slate-400">
-                    No bills in this date range
+                  <td colSpan={7} className="py-10 text-center text-sm text-slate-500">
+                    No bills match these filters
                   </td>
                 </tr>
               )}

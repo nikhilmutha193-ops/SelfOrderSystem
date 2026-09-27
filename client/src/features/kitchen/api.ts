@@ -9,10 +9,10 @@ export interface KotPrintResult {
 }
 
 export const kitchenApi = {
-  queue: (tableId?: string) =>
-    api
-      .get<KotQueueGroup[]>("/orders/kot/queue", { params: tableId ? { tableId } : undefined })
-      .then((res) => res.data),
+  queue: (tableId?: string, stationId?: string) =>
+    api.get<KotQueueGroup[]>("/orders/kot/queue", { params: { tableId, stationId } }).then((res) => res.data),
+  reprintKot: (orderId: string, round: number) =>
+    api.post<{ queued: number }>(`/orders/${orderId}/kot/${round}/reprint`).then((res) => res.data),
   printKot: (orderId: string) => api.post<KotPrintResult>(`/orders/${orderId}/kot/print`).then((res) => res.data),
   kotPdf: (orderId: string, round: number) =>
     api.get<Blob>(`/orders/${orderId}/kot/${round}/pdf`, { responseType: "blob" }).then((res) => res.data),

@@ -9,8 +9,8 @@ export const chatKeys = {
   thread: (orderId: string) => ["chat", "thread", orderId] as const,
 };
 
-export function useConversations(refetchInterval: number) {
-  return useQuery({ queryKey: chatKeys.conversations, queryFn: chatApi.conversations, refetchInterval });
+export function useConversations(refetchInterval: number, enabled = true) {
+  return useQuery({ queryKey: chatKeys.conversations, queryFn: chatApi.conversations, refetchInterval, enabled });
 }
 
 export function useChatThread(orderId: string | null | undefined, refetchInterval: number) {

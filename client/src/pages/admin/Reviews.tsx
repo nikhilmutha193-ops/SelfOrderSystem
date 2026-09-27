@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 
 import type { Review } from "../../lib/types";
 import { api, extractErrorMessage } from "../../shared/api/client";
-import { Badge, Card, ErrorText } from "../../shared/ui/ui";
+import { Badge, Card, ErrorText, PageHeader } from "../../shared/ui/ui";
 
 function Stars({ rating }: { rating: number }) {
   return (
@@ -70,7 +70,10 @@ export default function Reviews() {
         <p className="text-xs text-slate-400">{new Date(review.createdAt).toLocaleString()}</p>
         <div className="flex gap-3 text-sm">
           {review.isApproved ? (
-            <button className="text-slate-600 hover:underline" onClick={() => setApproved(review, false)}>
+            <button
+              className="rounded-md px-2 py-1 text-sm font-medium transition-colors text-slate-600 hover:bg-slate-100"
+              onClick={() => setApproved(review, false)}
+            >
               Unapprove
             </button>
           ) : (
@@ -78,7 +81,10 @@ export default function Reviews() {
               Approve
             </button>
           )}
-          <button className="text-red-600 hover:underline" onClick={() => remove(review)}>
+          <button
+            className="rounded-md px-2 py-1 text-sm font-medium transition-colors text-red-600 hover:bg-red-50"
+            onClick={() => remove(review)}
+          >
             Delete
           </button>
         </div>
@@ -87,11 +93,15 @@ export default function Reviews() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-bold text-slate-800">Customer Reviews</h1>
-      <p className="text-sm text-slate-500">
-        Reviews submitted from the landing page show up here as "Pending" until you approve them for public display.
-      </p>
+    <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 sm:gap-6">
+      <PageHeader
+        title="Customer Reviews"
+        description={
+          <>
+            Reviews submitted from the landing page show up here as "Pending" until you approve them for public display.
+          </>
+        }
+      />
 
       <ErrorText>{error}</ErrorText>
 

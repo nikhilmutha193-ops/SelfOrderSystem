@@ -1,3 +1,4 @@
+import { ClipboardList } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
@@ -98,29 +99,14 @@ export default function ActiveOrders() {
         }}
         aria-label="Active orders"
         aria-expanded={open}
-        className="relative inline-flex h-11 items-center gap-2 rounded-md px-2 text-sm font-medium text-slate-600 hover:bg-slate-100 sm:px-3"
+        className="relative inline-flex h-11 items-center gap-2 rounded-lg px-2.5 text-sm font-medium text-slate-600 hover:bg-slate-100 sm:h-10 sm:px-3"
       >
-        <svg
-          width="20"
-          height="20"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          aria-hidden="true"
-        >
-          <path
-            d="M9 5h6M9 5a2 2 0 1 0 4 0M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-          <path d="M9 12h6M9 16h4" strokeLinecap="round" />
-        </svg>
-        <span className="hidden sm:inline">Active orders</span>
+        <ClipboardList size={20} aria-hidden="true" />
+        <span className="hidden 2xl:inline">Active orders</span>
         {orders.length > 0 && (
           <span
             className={`flex h-5 min-w-5 items-center justify-center rounded-md px-1 text-[11px] font-bold text-white ${
-              stale.length > 0 ? "bg-red-600" : "bg-orange-600"
+              stale.length > 0 ? "bg-red-600" : "bg-slate-800"
             }`}
           >
             {orders.length}
@@ -135,12 +121,12 @@ export default function ActiveOrders() {
       </button>
 
       {open && (
-        <div className="absolute right-0 z-50 mt-1 w-80 max-w-[90vw] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg">
+        <div className="fixed inset-x-3 top-[4.25rem] z-50 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-pop animate-pop-in sm:absolute sm:inset-x-auto sm:top-auto sm:right-0 sm:mt-2 sm:w-96">
           {error && <p className="bg-red-50 px-3 py-2 text-xs text-red-700">{error}</p>}
 
           {stale.length > 0 && (
             <div className="border-b border-slate-100">
-              <div className="bg-red-50 px-3 py-2 text-xs font-semibold uppercase tracking-wider text-red-700">
+              <div className="bg-red-50 px-4 py-2.5 text-xs font-semibold text-red-700">
                 Needs attention · open 6h+ ({stale.length})
               </div>
               <div className="max-h-[45vh] overflow-y-auto">
@@ -177,11 +163,13 @@ export default function ActiveOrders() {
                           <select
                             value={method}
                             onChange={(e) => setMethod(e.target.value as PaymentMethod)}
-                            className="min-h-[36px] flex-1 rounded-md border border-slate-300 px-2 text-sm"
+                            className="ui-select min-h-[40px] flex-1 rounded-lg border border-slate-300 bg-white pr-8 pl-2 text-sm"
                           >
                             <option value="cash">Cash</option>
                             <option value="online">Online</option>
                             <option value="card">Card</option>
+                            <option value="upi">UPI</option>
+                            <option value="wallet">Wallet</option>
                           </select>
                           <button
                             type="button"
@@ -217,7 +205,7 @@ export default function ActiveOrders() {
             </div>
           )}
 
-          <div className="px-3 py-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
+          <div className="border-b border-slate-100 px-4 py-2.5 text-xs font-semibold text-slate-500">
             Open orders ({fresh.length})
           </div>
           {fresh.length === 0 ? (
@@ -231,7 +219,7 @@ export default function ActiveOrders() {
                   key={o._id}
                   to={`/admin/orders/${o._id}`}
                   onClick={() => setOpen(false)}
-                  className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm hover:bg-slate-50"
+                  className="flex min-h-[52px] items-center justify-between gap-3 px-4 py-2.5 text-sm hover:bg-slate-50"
                 >
                   <span className="min-w-0">
                     <span className="block truncate font-medium text-slate-800">{o.customerName || "Guest"}</span>

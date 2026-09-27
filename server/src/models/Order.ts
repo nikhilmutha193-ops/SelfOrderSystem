@@ -5,7 +5,28 @@ export type OrderStatus = "open" | "billed" | "closed" | "cancelled";
 
 export const ORDER_STATUSES: OrderStatus[] = ["open", "billed", "closed", "cancelled"];
 export type OrderSource = "guest" | "counter" | "swiggy" | "zomato";
-export type PaymentMethod = "pending" | "cash" | "online" | "card";
+export type PaymentMethod = "pending" | "cash" | "upi" | "card" | "online" | "wallet" | "split";
+export type TenderMethod = "cash" | "upi" | "card" | "online" | "wallet";
+
+export const TENDER_METHODS: TenderMethod[] = ["cash", "upi", "card", "online", "wallet"];
+
+export interface IPayment {
+  method: TenderMethod;
+  amount: number;
+  reference?: string;
+  tendered?: number;
+  change?: number;
+  receivedBy?: string;
+  receivedByName?: string;
+  at: Date;
+}
+
+export interface IManualDiscount {
+  type: "percent" | "flat";
+  value: number;
+  reason: string;
+  by?: string;
+}
 export type DeliveryProvider = "Swiggy" | "Zomato" | "Uber-Eats" | "Other";
 
 export interface IBillTaxLine {
@@ -17,7 +38,12 @@ export interface IBillTaxLine {
 
 export interface IBillSnapshot {
   subtotal: number;
+  couponDiscount?: number;
+  manualDiscount?: number;
+  loyaltyDiscount?: number;
   discount: number;
+  serviceChargePercent?: number;
+  serviceCharge?: number;
   couponCode?: string;
   taxableAmount: number;
   taxLines: IBillTaxLine[];
@@ -55,16 +81,53 @@ export interface IOrder {
   kotSeq?: number;
   archivedAt?: Date | null;
   cancelReason?: string;
+  cancelledAt?: Date | null;
   voidedAt?: Date | null;
   voidReason?: string;
+  payments: IPayment[];
+  manualDiscount?: IManualDiscount | null;
+  customerId?: Types.ObjectId | null;
+  loyaltyRedeem?: { points: number; amount: number } | null;
+  serviceChargeWaived?: boolean;
+  mergedInto?: Types.ObjectId | null;
+  splitFrom?: Types.ObjectId | null;
   createdAt: Date;
   updatedAt: Date;
 }
 
+const paymentSchema = new Schema<IPayment>(
+  {
+    method: { type: String, enum: TENDER_METHODS, required: true },
+    amount: { type: Number, required: true, min: 0 },
+    reference: { type: String, trim: true },
+    tendered: { type: Number, min: 0 },
+    change: { type: Number, min: 0 },
+    receivedBy: { type: String },
+    receivedByName: { type: String },
+    at: { type: Date, default: Date.now },
+  },
+  { _id: false }
+);
+
+const manualDiscountSchema = new Schema<IManualDiscount>(
+  {
+    type: { type: String, enum: ["percent", "flat"], required: true },
+    value: { type: Number, required: true, min: 0 },
+    reason: { type: String, required: true, trim: true },
+    by: { type: String },
+  },
+  { _id: false }
+);
+
 const billSnapshotSchema = new Schema<IBillSnapshot>(
   {
     subtotal: { type: Number, required: true },
+    couponDiscount: { type: Number, default: 0 },
+    manualDiscount: { type: Number, default: 0 },
+    loyaltyDiscount: { type: Number, default: 0 },
     discount: { type: Number, required: true },
+    serviceChargePercent: { type: Number, default: 0 },
+    serviceCharge: { type: Number, default: 0 },
     couponCode: { type: String },
     taxableAmount: { type: Number, required: true },
     taxLines: {
@@ -94,7 +157,11 @@ const orderSchema = new Schema<IOrder>(
     status: { type: String, enum: ORDER_STATUSES, default: "open", index: true },
     source: { type: String, enum: ["guest", "counter", "swiggy", "zomato"], default: "guest" },
     externalOrderId: { type: String, trim: true, index: true },
-    paymentMethod: { type: String, enum: ["pending", "cash", "online", "card"], default: "pending" },
+    paymentMethod: {
+      type: String,
+      enum: ["pending", "cash", "upi", "card", "online", "wallet", "split"],
+      default: "pending",
+    },
     couponCode: { type: String, trim: true, uppercase: true },
     discountAmount: { type: Number, default: 0, min: 0 },
     estimatedReadyAt: { type: Date, default: null },
@@ -107,8 +174,22 @@ const orderSchema = new Schema<IOrder>(
     kotSeq: { type: Number },
     archivedAt: { type: Date, default: null },
     cancelReason: { type: String, trim: true },
+    cancelledAt: { type: Date, default: null },
     voidedAt: { type: Date, default: null },
     voidReason: { type: String, trim: true },
+    payments: { type: [paymentSchema], default: [] },
+    manualDiscount: { type: manualDiscountSchema, default: null },
+    customerId: { type: Schema.Types.ObjectId, ref: "Customer", default: null },
+    loyaltyRedeem: {
+      type: new Schema(
+        { points: { type: Number, required: true }, amount: { type: Number, required: true } },
+        { _id: false }
+      ),
+      default: null,
+    },
+    serviceChargeWaived: { type: Boolean, default: false },
+    mergedInto: { type: Schema.Types.ObjectId, ref: "Order", default: null },
+    splitFrom: { type: Schema.Types.ObjectId, ref: "Order", default: null },
   },
   { timestamps: true }
 );

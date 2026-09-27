@@ -7,15 +7,27 @@ import Category from "../models/Category";
 import ChatMessage from "../models/ChatMessage";
 import Chef from "../models/Chef";
 import Coupon from "../models/Coupon";
+import Customer from "../models/Customer";
+import DayClose from "../models/DayClose";
 import FoodItem from "../models/FoodItem";
 import InvoiceCounter from "../models/InvoiceCounter";
+import LoyaltyEntry from "../models/LoyaltyEntry";
 import Order from "../models/Order";
 import OrderItem from "../models/OrderItem";
+import Printer from "../models/Printer";
+import Purchase from "../models/Purchase";
+import Recipe from "../models/Recipe";
 import Restaurant from "../models/Restaurant";
 import Review from "../models/Review";
+import Shift from "../models/Shift";
+import Station from "../models/Station";
+import StockCount from "../models/StockCount";
+import StockItem from "../models/StockItem";
+import StockMovement from "../models/StockMovement";
 import Subcategory from "../models/Subcategory";
 import TableModel from "../models/Table";
 import TeamMember from "../models/TeamMember";
+import Vendor from "../models/Vendor";
 import { HttpError } from "./httpError";
 import { deleteObject, getObject, putObject } from "./objectStore";
 
@@ -35,6 +47,18 @@ const TENANT_MODELS: { key: string; model: Model<any> }[] = [
   { key: "orderItems", model: OrderItem },
   { key: "chatMessages", model: ChatMessage },
   { key: "invoiceCounters", model: InvoiceCounter },
+  { key: "shifts", model: Shift },
+  { key: "dayCloses", model: DayClose },
+  { key: "stations", model: Station },
+  { key: "printers", model: Printer },
+  { key: "stockItems", model: StockItem },
+  { key: "recipes", model: Recipe },
+  { key: "stockMovements", model: StockMovement },
+  { key: "vendors", model: Vendor },
+  { key: "purchases", model: Purchase },
+  { key: "stockCounts", model: StockCount },
+  { key: "customers", model: Customer },
+  { key: "loyaltyEntries", model: LoyaltyEntry },
 ];
 
 async function buildBackupPayload(restaurantId: Types.ObjectId | string) {

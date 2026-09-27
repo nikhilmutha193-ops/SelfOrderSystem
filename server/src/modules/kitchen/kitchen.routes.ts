@@ -6,6 +6,7 @@ import {
   getKotQueue,
   markItemReady,
   printKot,
+  reprintKot,
   serveOrderItem,
   startPreparingItem,
 } from "./kitchen.controller";
@@ -15,6 +16,7 @@ const router = Router();
 router.get("/kot/queue", requireAuth("chef", "admin"), requireModule("kot"), getKotQueue);
 router.post("/:orderId/kot/print", requireAuth("chef", "admin"), requireModule("kot"), printKot);
 router.get("/:orderId/kot/:round/pdf", requireAuth("chef", "admin"), requireModule("kot"), getKotPdf);
+router.post("/:orderId/kot/:round/reprint", requireAuth("chef", "admin"), requireModule("kot"), reprintKot);
 
 router.patch("/items/:itemId/preparing", requireAuth("chef", "admin"), requireModule("kot"), startPreparingItem);
 router.patch("/items/:itemId/ready", requireAuth("chef", "admin"), requireModule("kot"), markItemReady);

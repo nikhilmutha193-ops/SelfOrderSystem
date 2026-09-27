@@ -1,10 +1,26 @@
+import { Archive, ChevronRight, ClipboardList, Download } from "lucide-react";
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
 import { useAdmin } from "../../../lib/adminAuth";
 import type { OrderStatus, OrderType } from "../../../lib/types";
 import { extractErrorMessage } from "../../../shared/api/client";
-import { Badge, Button, Card, ErrorText, Input, Select, TableWrap } from "../../../shared/ui/ui";
+import { buttonClass } from "../../../shared/ui/styles";
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  ErrorText,
+  Field,
+  Input,
+  Page,
+  PageHeader,
+  Select,
+  TableWrap,
+  Tabs,
+} from "../../../shared/ui/ui";
 import { ordersApi, type OrderFilters, type ReportFormat } from "../api";
 import { useArchiveOrders, useOrders } from "../queries";
 import { orderStatusBadge, orderTypeLabel } from "../status";
@@ -112,126 +128,217 @@ export default function Orders() {
     setSearchParams(next);
   }
 
-  return (
-    <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-bold text-slate-800">Orders</h1>
+  const title =
+    type === "dine-in"
+      ? "Dine-in orders"
+      : type === "takeaway"
+        ? "Take-away orders"
+        : type === "delivery"
+          ? "Delivery orders"
+          : "All orders";
+  const yesterday = dayFromToday(-1);
+  const tomorrow = dayFromToday(1);
+  const quick = today
+    ? "today"
+    : from && from === to
+      ? from === yesterday
+        ? "yesterday"
+        : from === tomorrow
+          ? "tomorrow"
+          : ""
+      : "";
 
-      <Card>
-        <div className="flex flex-wrap items-end gap-3">
-          <label className="text-sm font-medium text-slate-700">
-            Type
-            <Select className="mt-1" value={type} onChange={(e) => updateParam("type", e.target.value)}>
-              <option value="">All</option>
-              <option value="dine-in">Dine-in</option>
-              <option value="takeaway">Take away</option>
-              <option value="delivery">Delivery (old)</option>
-            </Select>
-          </label>
-          <label className="text-sm font-medium text-slate-700">
-            Status
-            <Select className="mt-1" value={status} onChange={(e) => updateParam("status", e.target.value)}>
-              <option value="">All</option>
-              <option value="unpaid">Unpaid (open or billed)</option>
-              <option value="open">Open</option>
-              <option value="billed">Billed, unpaid</option>
-              <option value="closed">Closed</option>
-              <option value="cancelled">Cancelled</option>
-            </Select>
-          </label>
-          <label className="text-sm font-medium text-slate-700">
-            From
-            <Input
-              className="mt-1"
-              type="date"
-              value={today ? "" : from}
-              onChange={(e) => updateParam("from", e.target.value)}
-            />
-          </label>
-          <label className="text-sm font-medium text-slate-700">
-            To
-            <Input
-              className="mt-1"
-              type="date"
-              value={today ? "" : to}
-              onChange={(e) => updateParam("to", e.target.value)}
-            />
-          </label>
-          <Button type="button" variant="secondary" onClick={() => selectDayFromToday(-1)}>
-            Yesterday
-          </Button>
-          <Button type="button" variant={today ? "primary" : "secondary"} onClick={selectToday}>
-            Today
-          </Button>
-          <Button type="button" variant="secondary" onClick={() => selectDayFromToday(1)}>
-            Tomorrow
-          </Button>
-          <div className="ml-auto flex flex-wrap gap-2">
-            <Button type="button" onClick={() => downloadReport("csv")} disabled={downloading !== null}>
-              {downloading === "csv" ? "Preparing..." : "Download CSV"}
+  return (
+    <Page>
+      <PageHeader
+        title={title}
+        description="Business-day filters follow your day-end time, so late-night orders stay on the right day."
+        actions={
+          <>
+            <Button
+              variant="secondary"
+              icon={Download}
+              loading={downloading === "csv"}
+              onClick={() => downloadReport("csv")}
+              disabled={downloading !== null}
+            >
+              CSV
             </Button>
-            <Button type="button" onClick={() => downloadReport("pdf")} disabled={downloading !== null}>
-              {downloading === "pdf" ? "Preparing..." : "Download PDF"}
+            <Button
+              variant="secondary"
+              icon={Download}
+              loading={downloading === "pdf"}
+              onClick={() => downloadReport("pdf")}
+              disabled={downloading !== null}
+            >
+              PDF
             </Button>
             {profile?.isOwner && (
-              <Button type="button" variant="danger" onClick={clearAll} disabled={clearing || orders.length === 0}>
-                {clearing ? "Archiving..." : "Archive"}
+              <Button
+                variant="secondary"
+                icon={Archive}
+                className="!text-red-600 hover:!bg-red-50"
+                onClick={clearAll}
+                loading={clearing}
+                disabled={orders.length === 0}
+              >
+                Archive
               </Button>
             )}
+          </>
+        }
+      />
+
+      <Card>
+        <div className="flex flex-col gap-4">
+          <Tabs
+            value={type || "all"}
+            onChange={(v) => updateParam("type", v === "all" ? "" : v)}
+            items={[
+              { value: "all", label: "All" },
+              { value: "dine-in", label: "Dine-in" },
+              { value: "takeaway", label: "Take away" },
+              { value: "delivery", label: "Delivery" },
+            ]}
+          />
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-[minmax(12rem,1fr)_auto_auto_auto] md:items-end">
+            <Field label="Status" htmlFor="orders-status" className="col-span-2 md:col-span-1">
+              <Select id="orders-status" value={status} onChange={(e) => updateParam("status", e.target.value)}>
+                <option value="">Any status</option>
+                <option value="unpaid">Unpaid (open or billed)</option>
+                <option value="open">Open</option>
+                <option value="billed">Billed, unpaid</option>
+                <option value="closed">Paid</option>
+                <option value="cancelled">Cancelled</option>
+              </Select>
+            </Field>
+            <Field label="From" htmlFor="orders-from">
+              <Input
+                id="orders-from"
+                type="date"
+                value={today ? "" : from}
+                onChange={(e) => updateParam("from", e.target.value)}
+              />
+            </Field>
+            <Field label="To" htmlFor="orders-to">
+              <Input
+                id="orders-to"
+                type="date"
+                value={today ? "" : to}
+                onChange={(e) => updateParam("to", e.target.value)}
+              />
+            </Field>
+            <div className="col-span-2 md:col-span-1">
+              <Tabs
+                value={quick || "none"}
+                onChange={(v) => (v === "today" ? selectToday() : selectDayFromToday(v === "yesterday" ? -1 : 1))}
+                items={[
+                  { value: "yesterday", label: "Yesterday" },
+                  { value: "today", label: "Today" },
+                  { value: "tomorrow", label: "Tomorrow" },
+                ]}
+              />
+            </div>
           </div>
         </div>
-        <p className="mt-2 text-xs text-slate-500">
-          "Today" and the From/To range use your restaurant's day-end time (Restaurant Settings), so late-night orders
-          placed after midnight but before that cutoff still count toward the previous business day instead of splitting
-          at midnight.
-        </p>
       </Card>
 
       <ErrorText>{error}</ErrorText>
-      {archiveNote && <p className="rounded-md bg-green-50 px-3 py-2 text-sm text-green-800">{archiveNote}</p>}
+      {archiveNote && (
+        <Alert tone="success" onClose={() => setArchiveNote(null)}>
+          {archiveNote}
+        </Alert>
+      )}
 
       <Card>
-        <TableWrap>
-          <table className="w-full min-w-[34rem] text-sm">
-            <thead>
-              <tr className="text-left text-slate-500">
-                <th className="pb-2">Invoice</th>
-                <th className="pb-2">Customer</th>
-                <th className="pb-2">Type</th>
-                <th className="pb-2">Check-in</th>
-                <th className="pb-2">Status</th>
-                <th className="pb-2">Payment</th>
-                <th className="pb-2"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {orders.map((order) => (
-                <tr key={order._id} className="border-t border-slate-100">
-                  <td className="py-1.5 tabular-nums text-slate-600">{order.invoiceNumber ?? "-"}</td>
-                  <td className="py-1.5">{order.customerName}</td>
-                  <td className="py-1.5">{orderTypeLabel(order)}</td>
-                  <td className="py-1.5">{new Date(order.checkinTime).toLocaleString()}</td>
-                  <td className="py-1.5">
-                    <Badge tone={orderStatusBadge(order).tone}>{orderStatusBadge(order).label}</Badge>
-                  </td>
-                  <td className="py-1.5 capitalize">{order.paymentMethod}</td>
-                  <td className="py-1.5">
-                    <Link className="text-orange-600 hover:underline" to={`/admin/orders/${order._id}`}>
-                      View
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-base font-semibold text-slate-900">Results</h2>
+          <Badge tone="gray">{orders.length} orders</Badge>
+        </div>
+        {orders.length === 0 ? (
+          <EmptyState icon={ClipboardList} title="No orders found" description="Try another type, status or date." />
+        ) : (
+          <>
+            <ul className="-mx-4 divide-y divide-slate-100 border-t border-slate-100 md:hidden">
+              {orders.map((order) => {
+                const badge = orderStatusBadge(order);
+                return (
+                  <li key={order._id}>
+                    <Link
+                      to={`/admin/orders/${order._id}`}
+                      className="flex items-center gap-3 px-4 py-3 active:bg-slate-50"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="truncate font-medium text-slate-900">{order.customerName || "Guest"}</span>
+                          <Badge tone={badge.tone}>{badge.label}</Badge>
+                        </div>
+                        <p className="mt-0.5 truncate text-xs text-slate-500">
+                          {orderTypeLabel(order)} ·{" "}
+                          {new Date(order.checkinTime).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}
+                        </p>
+                        {order.invoiceNumber && (
+                          <p className="font-mono text-xs text-slate-400">{order.invoiceNumber}</p>
+                        )}
+                      </div>
+                      <ChevronRight size={18} className="shrink-0 text-slate-300" aria-hidden="true" />
                     </Link>
-                  </td>
-                </tr>
-              ))}
-              {orders.length === 0 && (
-                <tr>
-                  <td colSpan={7} className="py-4 text-center text-slate-400">
-                    No orders found
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </TableWrap>
+                  </li>
+                );
+              })}
+            </ul>
+            <div className="hidden md:block">
+              <TableWrap>
+                <table className="min-w-[44rem]">
+                  <thead>
+                    <tr>
+                      <th>Invoice</th>
+                      <th>Customer</th>
+                      <th>Type</th>
+                      <th>Check-in</th>
+                      <th>Status</th>
+                      <th>Payment</th>
+                      <th className="text-right">
+                        <span className="sr-only">Open</span>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {orders.map((order) => (
+                      <tr key={order._id}>
+                        <td className="font-mono text-xs text-slate-600">{order.invoiceNumber ?? "—"}</td>
+                        <td className="font-medium text-slate-900">{order.customerName}</td>
+                        <td className="text-slate-600">{orderTypeLabel(order)}</td>
+                        <td className="whitespace-nowrap text-slate-600 tabular-nums">
+                          {new Date(order.checkinTime).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}
+                        </td>
+                        <td>
+                          <Badge tone={orderStatusBadge(order).tone} dot>
+                            {orderStatusBadge(order).label}
+                          </Badge>
+                        </td>
+                        <td className="text-slate-600 capitalize">{order.paymentMethod}</td>
+                        <td className="text-right">
+                          <Link className={buttonClass("ghost", "sm")} to={`/admin/orders/${order._id}`}>
+                            View
+                            <ChevronRight size={14} aria-hidden="true" />
+                          </Link>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </TableWrap>
+            </div>
+          </>
+        )}
       </Card>
-    </div>
+    </Page>
   );
+}
+
+function dayFromToday(offsetDays: number): string {
+  const base = new Date();
+  base.setDate(base.getDate() + offsetDays);
+  return base.toLocaleDateString("en-CA");
 }

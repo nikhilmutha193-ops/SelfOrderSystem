@@ -1,6 +1,6 @@
 import { model, Schema, Types } from "mongoose";
 
-export type TableStatus = "available" | "occupied";
+export type TableStatus = "available" | "occupied" | "awaiting_payment";
 
 export interface ITable {
   _id: Types.ObjectId;
@@ -13,6 +13,7 @@ export interface ITable {
   occupiedAt?: Date;
   isGuest: boolean;
   autoReleaseMinutes?: number | null;
+  captainId?: Types.ObjectId | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -23,11 +24,12 @@ const tableSchema = new Schema<ITable>(
     code: { type: String, required: true, trim: true },
     passwordHash: { type: String, required: true },
     password: { type: String, required: true },
-    status: { type: String, enum: ["available", "occupied"], default: "available" },
+    status: { type: String, enum: ["available", "occupied", "awaiting_payment"], default: "available" },
     sessionId: { type: String, default: null },
     occupiedAt: { type: Date, default: null },
     isGuest: { type: Boolean, default: false },
     autoReleaseMinutes: { type: Number, default: null, min: 0 },
+    captainId: { type: Schema.Types.ObjectId, ref: "Admin", default: null },
   },
   { timestamps: true }
 );

@@ -5,13 +5,14 @@ import { refreshOrderData } from "../orders/queries";
 import { kitchenApi } from "./api";
 
 export const kitchenKeys = {
-  queue: (tableId?: string) => ["kitchen", "queue", tableId ?? "all"] as const,
+  queue: (tableId?: string, stationId?: string) => ["kitchen", "queue", tableId ?? "all", stationId ?? "all"] as const,
 };
 
-export function useKotQueue(tableId?: string) {
+export function useKotQueue(tableId?: string, stationId?: string, enabled = true) {
   return useQuery({
-    queryKey: kitchenKeys.queue(tableId),
-    queryFn: () => kitchenApi.queue(tableId),
+    enabled,
+    queryKey: kitchenKeys.queue(tableId, stationId),
+    queryFn: () => kitchenApi.queue(tableId, stationId),
     refetchInterval: POLL.kitchenQueue,
     refetchIntervalInBackground: true,
   });

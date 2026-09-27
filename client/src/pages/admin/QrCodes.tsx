@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { buildTableQrFrame } from "../../lib/qrFrame";
 import type { QrSettings, Restaurant, TableRow } from "../../lib/types";
 import { api, extractErrorMessage } from "../../shared/api/client";
-import { Button, Card, ErrorText, Input } from "../../shared/ui/ui";
+import { Button, Card, ErrorText, Input, PageHeader } from "../../shared/ui/ui";
 
 interface FrameState {
   status: "loading" | "ready" | "error";
@@ -117,16 +117,18 @@ export default function QrCodes() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-800">Table QR Codes</h1>
-        <p className="text-sm text-slate-500">
-          Each QR code encodes an encrypted, table-specific link (not the plain table code), so a scan takes the
-          customer straight into ordering at that table - no PIN needed, since the encrypted code itself proves it's the
-          physical stand. A PIN is still required if a customer types in a table code manually instead of scanning.
-          Download and print for table stands.
-        </p>
-      </div>
+    <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 sm:gap-6">
+      <PageHeader
+        title="Table QR Codes"
+        description={
+          <>
+            Each QR code encodes an encrypted, table-specific link (not the plain table code), so a scan takes the
+            customer straight into ordering at that table - no PIN needed, since the encrypted code itself proves it's
+            the physical stand. A PIN is still required if a customer types in a table code manually instead of
+            scanning. Download and print for table stands.
+          </>
+        }
+      />
 
       {!restaurant?.publicUrl && /localhost|127\.0\.0\.1/i.test(window.location.origin) && (
         <div className="rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
@@ -141,7 +143,7 @@ export default function QrCodes() {
       )}
 
       <Card>
-        <h2 className="mb-3 text-lg font-semibold text-slate-800">Customize QR card</h2>
+        <h2 className="mb-4 text-base font-semibold text-slate-900">Customize QR card</h2>
         <form onSubmit={saveQrSettings} className="flex flex-col gap-4">
           <div className="flex flex-wrap gap-4">
             <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
@@ -188,7 +190,7 @@ export default function QrCodes() {
               />
             </label>
           </div>
-          {message && <p className="text-sm text-green-700">{message}</p>}
+          {message && <p className="text-sm font-medium text-emerald-700">{message}</p>}
           <Button type="submit" className="self-start" disabled={saving}>
             {saving ? "Saving..." : "Save QR settings"}
           </Button>

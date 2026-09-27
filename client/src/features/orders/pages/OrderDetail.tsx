@@ -1,25 +1,59 @@
+import {
+  ArrowLeft,
+  Ban,
+  CookingPot,
+  FileText,
+  Gift,
+  LockOpen,
+  Minus,
+  Plus,
+  Printer,
+  ReceiptText,
+  RotateCcw,
+  Send,
+  UtensilsCrossed,
+  Wallet,
+} from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { BestsellerTag, FoodTypeIcon, RatingChip } from "../../../components/FoodBadges";
 import { useAdmin } from "../../../lib/adminAuth";
 import { renderPrepMessage } from "../../../lib/prepTime";
-import type { MenuCategory, MenuFoodItem, PaymentMethod } from "../../../lib/types";
+import { TENDER_LABELS, type MenuCategory, type MenuFoodItem } from "../../../lib/types";
 import { extractErrorMessage } from "../../../shared/api/client";
 import ReasonDialog from "../../../shared/ui/ReasonDialog";
-import { Badge, Button, Card, ErrorText, Input, Select, TableWrap } from "../../../shared/ui/ui";
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  CardHeader,
+  EmptyState,
+  ErrorText,
+  Field,
+  Input,
+  Page,
+  PageHeader,
+  Select,
+  Tabs,
+} from "../../../shared/ui/ui";
 import { useMenu } from "../../catalog/queries";
+import { CustomerPanel } from "../../customers/components/CustomerPanel";
 import { kitchenApi, openPdfInTab } from "../../kitchen/api";
 import { usePrintKot } from "../../kitchen/queries";
+import { usePrintingStatus } from "../../printing/queries";
 import { ordersApi } from "../api";
+import BillActions from "../components/BillActions";
+import SettleDialog from "../components/SettleDialog";
 import {
   useAddOrderItems,
   useApplyCoupon,
   useCancelOrder,
+  useComplimentary,
   useGenerateBill,
   useOrder,
   useOrderCoupons,
-  usePayOrder,
   useRemoveCoupon,
   useReopenBill,
   useVoidBill,
@@ -47,20 +81,23 @@ export default function OrderDetail({
   const navigate = useNavigate();
   const [activeCat, setActiveCat] = useState("all");
   const [cart, setCart] = useState<Record<string, number>>({});
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
+  const [settleOpen, setSettleOpen] = useState(false);
+  const [complimentaryItem, setComplimentaryItem] = useState<{ id: string; name: string } | null>(null);
   const [customerGstin, setCustomerGstin] = useState("");
   const [billDialog, setBillDialog] = useState<BillDialog>(null);
   const { profile } = useAdmin();
   const [couponCode, setCouponCode] = useState("");
   const [couponError, setCouponError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const printing = usePrintingStatus().data;
   const orderQuery = useOrder(orderId);
   const data = orderQuery.data ?? null;
   const offers = useOrderCoupons(orderId, data?.totals.subtotal).data ?? [];
   const menu = useMenu().data ?? NO_MENU;
   const addItems = useAddOrderItems();
   const printTicket = usePrintKot();
-  const payOrder = usePayOrder();
+  const complimentary = useComplimentary();
   const cancelOrder = useCancelOrder();
   const generateBill = useGenerateBill();
   const reopenBill = useReopenBill();
@@ -123,6 +160,17 @@ export default function OrderDetail({
   async function sendNewKot() {
     if (!orderId || kotBusy) return;
     setActionError(null);
+    setNotice(null);
+    if (printing?.printersConfigured) {
+      try {
+        const result = await printTicket.mutateAsync(orderId);
+        if (!result.round) setActionError(result.message || "No new items to send to the kitchen");
+        else setNotice(`KOT T${result.tokenNumber} sent to the kitchen printers`);
+      } catch (err) {
+        setActionError(extractErrorMessage(err));
+      }
+      return;
+    }
     const pdfTab = window.open("", "_blank");
     try {
       const result = await printTicket.mutateAsync(orderId);
@@ -142,19 +190,19 @@ export default function OrderDetail({
   async function reprintKot(round: number) {
     if (!orderId) return;
     setActionError(null);
+    setNotice(null);
+    if (printing?.printersConfigured) {
+      try {
+        await kitchenApi.reprintKot(orderId, round);
+        setNotice("Reprint sent to the kitchen printers");
+      } catch (err) {
+        setActionError(extractErrorMessage(err));
+      }
+      return;
+    }
     const pdfTab = window.open("", "_blank");
     try {
       await openPdfInTab(pdfTab, () => kitchenApi.kotPdf(orderId, round));
-    } catch (err) {
-      setActionError(extractErrorMessage(err));
-    }
-  }
-
-  async function pay() {
-    if (!orderId) return;
-    setActionError(null);
-    try {
-      await payOrder.mutateAsync({ orderId, paymentMethod });
     } catch (err) {
       setActionError(extractErrorMessage(err));
     }
@@ -227,6 +275,18 @@ export default function OrderDetail({
     }
   }
 
+  async function printBillOnPrinter() {
+    if (!orderId) return;
+    setActionError(null);
+    setNotice(null);
+    try {
+      await ordersApi.printBill(orderId);
+      setNotice("Bill sent to the bill printer");
+    } catch (err) {
+      setActionError(extractErrorMessage(err));
+    }
+  }
+
   if (error && !data) return <ErrorText>{error}</ErrorText>;
   if (!data) return <p className="text-sm text-slate-500">Loading...</p>;
 
@@ -253,200 +313,183 @@ export default function OrderDetail({
       .values()
   ).sort((a, b) => b.round - a.round);
 
-  return (
-    <div className="flex flex-col gap-6">
-      {!embedded && (
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-slate-800">Order Detail</h1>
-          <Button variant="secondary" onClick={() => navigate(-1)}>
-            Back
-          </Button>
-        </div>
+  const statusBadge = orderStatusBadge(order);
+  const facts = [
+    orderTypeLabel(order),
+    order.members ? `${order.members} guest${order.members === 1 ? "" : "s"}` : null,
+    order.customerPhone || null,
+    order.customerGstin ? `GSTIN ${order.customerGstin}` : null,
+  ].filter(Boolean);
+  const canSettle = order.status === "open" || order.status === "billed";
+
+  const itemsCard = (
+    <Card>
+      <CardHeader
+        icon={UtensilsCrossed}
+        title="Items"
+        description={`${items.filter((i) => i.status !== "cancelled").length} on this order`}
+        className="mb-3"
+      />
+      {prepMessage && (
+        <Alert tone="warning" className="mb-3">
+          {prepMessage}
+        </Alert>
       )}
-
-      <Card>
-        <div className="flex flex-wrap justify-between gap-4">
-          <div>
-            <p className="text-sm text-slate-600">Customer: {order.customerName}</p>
-            <p className="text-sm text-slate-600">Phone: {order.customerPhone}</p>
-            <p className="text-sm text-slate-600">Members: {order.members}</p>
-            <p className="text-sm text-slate-600">Type: {orderTypeLabel(order)}</p>
-            {order.customerGstin && <p className="text-sm text-slate-600">Customer GSTIN: {order.customerGstin}</p>}
-          </div>
-          <div className="flex flex-col items-end gap-1 text-right">
-            <Badge tone={orderStatusBadge(order).tone}>{orderStatusBadge(order).label}</Badge>
-            {order.invoiceNumber && (
-              <p className="text-sm font-semibold tabular-nums text-slate-800">Invoice {order.invoiceNumber}</p>
-            )}
-            {order.billedAt && (
-              <p className="text-xs text-slate-500">Billed {new Date(order.billedAt).toLocaleString()}</p>
-            )}
-            {(order.voidReason || order.cancelReason) && (
-              <p className="max-w-xs text-xs text-red-700">Reason: {order.voidReason || order.cancelReason}</p>
-            )}
-          </div>
-        </div>
-      </Card>
-
-      <ErrorText>{error}</ErrorText>
-
-      <Card>
-        <h2 className="mb-2 text-lg font-semibold text-slate-800">Items</h2>
-        {prepMessage && (
-          <p className="mb-3 rounded-md bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900">{prepMessage}</p>
-        )}
-        <TableWrap>
-          <table className="w-full min-w-[34rem] text-sm">
-            <thead>
-              <tr className="text-left text-slate-500">
-                <th className="pb-2">Item</th>
-                <th className="pb-2">Qty</th>
-                <th className="pb-2">Amount</th>
-                <th className="pb-2">Status</th>
-                <th className="pb-2">KOT round</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((item) => (
-                <tr key={item._id} className="border-t border-slate-100">
-                  <td className="py-1.5">
-                    {item.foodName} {item.isJain && "(Jain)"}
-                    {(item.modifiers?.length || item.note) && (
-                      <span className="mt-0.5 block text-xs text-slate-400">
-                        {[...(item.modifiers?.map((m) => m.label) ?? []), item.note].filter(Boolean).join(", ")}
-                      </span>
-                    )}
-                  </td>
-                  <td className="py-1.5">{item.quantity}</td>
-                  <td className="py-1.5">₹{item.total.toFixed(2)}</td>
-                  <td className="py-1.5">
-                    <Badge tone={STATUS_TONE[item.status]}>{item.status}</Badge>
-                  </td>
-                  <td className="py-1.5">{item.kotRound ?? "-"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </TableWrap>
-
-        {order.status === "open" && (
-          <div className="mt-4 border-t border-slate-100 pt-4">
-            <p className="mb-2 text-sm font-semibold text-slate-700">Add items</p>
-
-            {menu.length > 0 && (
-              <div className="mb-3 flex gap-2 overflow-x-auto pb-1">
-                {[{ _id: "all", name: "All items" }, ...menu].map((c) => (
-                  <button
-                    key={c._id}
-                    type="button"
-                    onClick={() => setActiveCat(c._id)}
-                    className={`min-h-[36px] shrink-0 whitespace-nowrap rounded-xl px-3.5 text-sm font-semibold transition-colors ${
-                      activeCat === c._id
-                        ? "bg-orange-600 text-white shadow-sm"
-                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+      {items.length === 0 ? (
+        <EmptyState icon={UtensilsCrossed} title="No items yet" description="Add dishes below." />
+      ) : (
+        <ul className="-mx-4 divide-y divide-slate-100 border-y border-slate-100 sm:-mx-5">
+          {items.map((item) => {
+            const extras = [...(item.modifiers?.map((m) => m.label) ?? []), item.note].filter(Boolean).join(", ");
+            return (
+              <li
+                key={item._id}
+                className={`flex items-center gap-3 px-4 py-3 sm:px-5 ${item.status === "cancelled" ? "opacity-60" : ""}`}
+              >
+                <span className="flex h-8 min-w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 px-1.5 text-sm font-bold text-slate-800 tabular-nums">
+                  {item.quantity}×
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p
+                    className={`flex flex-wrap items-center gap-1.5 font-medium text-slate-900 ${
+                      item.status === "cancelled" ? "line-through" : ""
                     }`}
                   >
-                    {c.name}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {activeFoods.length === 0 ? (
-              <p className="text-sm text-slate-500">No dishes in this category.</p>
-            ) : (
-              <div className="grid gap-3 sm:grid-cols-2">
-                {activeFoods.map((f) => (
-                  <MenuPickCard
-                    key={f._id}
-                    food={f}
-                    qty={cart[f._id] ?? 0}
-                    onAdd={() => incCart(f._id)}
-                    onRemove={() => decCart(f._id)}
-                  />
-                ))}
-              </div>
-            )}
-
-            {cartCount > 0 && (
-              <div className="mt-4 flex items-center justify-between gap-3 rounded-xl bg-orange-50 px-3 py-2">
-                <span className="text-sm font-semibold text-orange-800">
-                  {cartCount} item{cartCount === 1 ? "" : "s"} · ₹{cartTotal.toFixed(2)}
-                </span>
-                <Button className="rounded-xl" onClick={addCartToOrder} disabled={addingCart}>
-                  {addingCart ? "Adding..." : "Add to order"}
-                </Button>
-              </div>
-            )}
-          </div>
-        )}
-      </Card>
-
-      {(pendingCount > 0 || printedRounds.length > 0) && (
-        <Card>
-          <h2 className="mb-2 text-lg font-semibold text-slate-800">Kitchen tickets (KOT)</h2>
-          {pendingCount > 0 ? (
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-amber-50 px-3 py-2">
-              <span className="text-sm font-medium text-amber-900">
-                {pendingCount} item{pendingCount === 1 ? "" : "s"} not sent to the kitchen yet
-              </span>
-              <Button className="rounded-xl" onClick={sendNewKot} disabled={kotBusy}>
-                {kotBusy ? "Sending..." : "Send new items (new token)"}
-              </Button>
-            </div>
-          ) : (
-            <p className="text-sm text-slate-500">All items have been sent to the kitchen.</p>
-          )}
-
-          {printedRounds.length > 0 && (
-            <div className="mt-3 flex flex-col gap-2">
-              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Printed tickets</p>
-              {printedRounds.map((r) => (
-                <div
-                  key={r.round}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm"
-                >
-                  <span className="text-slate-700">
-                    Round {r.round}
-                    {r.token != null && (
-                      <span className="ml-2 rounded-md bg-orange-600 px-2 py-0.5 text-xs font-bold text-white">
-                        TOKEN {r.token}
-                      </span>
-                    )}
-                    <span className="ml-2 text-slate-400">
-                      {r.count} item{r.count === 1 ? "" : "s"}
+                    {item.foodName}
+                    {item.isJain && <span className="text-xs font-semibold text-emerald-700">Jain</span>}
+                    {item.complimentary && <Badge tone="green">On the house</Badge>}
+                  </p>
+                  {extras && <p className="truncate text-xs text-slate-500">{extras}</p>}
+                  <div className="mt-1 flex flex-wrap items-center gap-2">
+                    <Badge tone={STATUS_TONE[item.status]} dot>
+                      {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
+                    </Badge>
+                    <span className="text-xs text-slate-400">
+                      {item.kotRound != null ? `KOT round ${item.kotRound}` : "Not sent"}
                     </span>
-                  </span>
-                  <Button variant="secondary" className="rounded-xl" onClick={() => reprintKot(r.round)}>
-                    Reprint KOT
-                  </Button>
+                  </div>
                 </div>
-              ))}
-              <p className="text-xs text-slate-400">
-                Reprinting keeps the same token number - it never issues a new one.
-              </p>
-            </div>
-          )}
-        </Card>
+                <div className="flex shrink-0 flex-col items-end gap-1">
+                  <span className="font-semibold text-slate-900 tabular-nums">₹{item.total.toFixed(2)}</span>
+                  {order.status === "open" && item.status !== "cancelled" && !item.complimentary && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      icon={Gift}
+                      className="!text-emerald-700 hover:!bg-emerald-50"
+                      onClick={() => setComplimentaryItem({ id: item._id, name: item.foodName })}
+                    >
+                      Comp
+                    </Button>
+                  )}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
       )}
 
       {order.status === "open" && (
-        <Card>
-          <h2 className="mb-2 text-sm font-semibold text-slate-700">Coupon</h2>
-          {order.couponCode ? (
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-slate-600">
-                <span className="font-semibold text-green-700">{order.couponCode}</span> applied
+        <div className="mt-5 flex flex-col gap-3">
+          <h3 className="text-sm font-semibold text-slate-900">Add items</h3>
+          {menu.length > 0 && (
+            <Tabs
+              size="sm"
+              value={activeCat}
+              onChange={setActiveCat}
+              items={[{ value: "all", label: "All items" }, ...menu.map((c) => ({ value: c._id, label: c.name }))]}
+            />
+          )}
+          {activeFoods.length === 0 ? (
+            <p className="text-sm text-slate-500">No dishes in this category.</p>
+          ) : (
+            <div className={`grid gap-3 sm:grid-cols-2 ${embedded ? "" : "2xl:grid-cols-3"}`}>
+              {activeFoods.map((f) => (
+                <MenuPickCard
+                  key={f._id}
+                  food={f}
+                  qty={cart[f._id] ?? 0}
+                  onAdd={() => incCart(f._id)}
+                  onRemove={() => decCart(f._id)}
+                />
+              ))}
+            </div>
+          )}
+          {cartCount > 0 && (
+            <div className="sticky bottom-20 z-10 flex items-center justify-between gap-3 rounded-xl bg-slate-900 px-4 py-3 text-white shadow-pop md:bottom-4">
+              <span className="text-sm font-semibold">
+                {cartCount} item{cartCount === 1 ? "" : "s"} · ₹{cartTotal.toFixed(2)}
               </span>
-              <button className="text-red-600 hover:underline" onClick={removeCoupon}>
+              <Button icon={Plus} onClick={addCartToOrder} loading={addingCart}>
+                {addingCart ? "Adding..." : "Add to order"}
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+    </Card>
+  );
+
+  const kotCard = (pendingCount > 0 || printedRounds.length > 0) && (
+    <Card>
+      <CardHeader icon={CookingPot} title="Kitchen tickets" className="mb-3" />
+      {pendingCount > 0 ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <span className="text-sm font-medium text-amber-900">
+            {pendingCount} item{pendingCount === 1 ? "" : "s"} not sent to the kitchen yet
+          </span>
+          <Button icon={Send} onClick={sendNewKot} loading={kotBusy}>
+            {kotBusy ? "Sending..." : "Send new items (new token)"}
+          </Button>
+        </div>
+      ) : (
+        <p className="text-sm text-slate-500">Everything has been sent to the kitchen.</p>
+      )}
+      {printedRounds.length > 0 && (
+        <div className="mt-3 flex flex-col gap-2">
+          {printedRounds.map((r) => (
+            <div
+              key={r.round}
+              className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm"
+            >
+              <span className="flex items-center gap-2 text-slate-700">
+                {r.token != null && (
+                  <span className="rounded-md bg-orange-600 px-2 py-0.5 text-xs font-bold text-white">T{r.token}</span>
+                )}
+                Round {r.round}
+                <span className="text-slate-400">
+                  · {r.count} item{r.count === 1 ? "" : "s"}
+                </span>
+              </span>
+              <Button size="sm" variant="secondary" icon={RotateCcw} onClick={() => reprintKot(r.round)}>
+                Reprint KOT
+              </Button>
+            </div>
+          ))}
+          <p className="text-xs text-slate-400">Reprinting keeps the same token number.</p>
+        </div>
+      )}
+    </Card>
+  );
+
+  const totalsCard = (
+    <Card>
+      <CardHeader icon={ReceiptText} title="Bill" className="mb-3" />
+      {order.status === "open" && (
+        <div className="mb-4 flex flex-col gap-2 border-b border-slate-100 pb-4">
+          {order.couponCode ? (
+            <div className="flex items-center justify-between rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm">
+              <span className="text-emerald-800">
+                <span className="font-semibold">{order.couponCode}</span> applied
+              </span>
+              <Button size="sm" variant="ghost" className="!text-red-600 hover:!bg-red-50" onClick={removeCoupon}>
                 Remove
-              </button>
+              </Button>
             </div>
           ) : (
-            <div className="flex flex-wrap items-end gap-2">
-              <label className="text-sm font-medium text-slate-700">
-                Select coupon
-                <Select className="mt-1 !w-64" value={couponCode} onChange={(e) => setCouponCode(e.target.value)}>
+            <Field label="Coupon" htmlFor="order-coupon">
+              <div className="flex gap-2">
+                <Select id="order-coupon" value={couponCode} onChange={(e) => setCouponCode(e.target.value)}>
                   <option value="">{offers.length === 0 ? "No coupons available" : "Select coupon"}</option>
                   {offers.map((offer) => (
                     <option key={offer.code} value={offer.code} disabled={!offer.eligible}>
@@ -455,111 +498,256 @@ export default function OrderDetail({
                     </option>
                   ))}
                 </Select>
-              </label>
-              <Button type="button" onClick={() => applyCode(couponCode)} disabled={applyingCoupon || !couponCode}>
-                {applyingCoupon ? "Applying..." : "Apply"}
-              </Button>
-            </div>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => applyCode(couponCode)}
+                  loading={applyingCoupon}
+                  disabled={!couponCode}
+                >
+                  Apply
+                </Button>
+              </div>
+            </Field>
           )}
           <ErrorText>{couponError}</ErrorText>
-        </Card>
-      )}
-
-      <Card>
-        <div className="flex justify-between text-sm text-slate-600">
-          <span>Subtotal</span>
-          <span>₹{totals.subtotal.toFixed(2)}</span>
         </div>
-        {totals.discount > 0 && (
-          <div className="flex justify-between text-sm text-green-700">
-            <span>Discount{order.couponCode ? ` (${order.couponCode})` : ""}</span>
-            <span>-₹{totals.discount.toFixed(2)}</span>
+      )}
+      <dl className="flex flex-col gap-1.5 text-sm">
+        <div className="flex justify-between text-slate-600">
+          <dt>Subtotal</dt>
+          <dd className="tabular-nums">₹{totals.subtotal.toFixed(2)}</dd>
+        </div>
+        {(totals.couponDiscount ?? totals.discount) > 0 && (
+          <div className="flex justify-between text-emerald-700">
+            <dt>Coupon{order.couponCode ? ` (${order.couponCode})` : ""}</dt>
+            <dd className="tabular-nums">-₹{(totals.couponDiscount ?? totals.discount).toFixed(2)}</dd>
           </div>
         )}
-        <div className="flex justify-between text-sm text-slate-600">
-          <span>Taxable value</span>
-          <span>₹{totals.taxableAmount.toFixed(2)}</span>
+        {(totals.manualDiscount ?? 0) > 0 && (
+          <div className="flex justify-between gap-2 text-emerald-700">
+            <dt className="min-w-0 truncate">
+              Discount{order.manualDiscount?.reason ? ` (${order.manualDiscount.reason})` : ""}
+            </dt>
+            <dd className="tabular-nums">-₹{(totals.manualDiscount ?? 0).toFixed(2)}</dd>
+          </div>
+        )}
+        {(totals.loyaltyDiscount ?? 0) > 0 && (
+          <div className="flex justify-between text-emerald-700">
+            <dt>Loyalty points{order.loyaltyRedeem ? ` (${order.loyaltyRedeem.points})` : ""}</dt>
+            <dd className="tabular-nums">-₹{(totals.loyaltyDiscount ?? 0).toFixed(2)}</dd>
+          </div>
+        )}
+        {(totals.serviceCharge ?? 0) > 0 && (
+          <div className="flex justify-between text-slate-600">
+            <dt>Service charge ({totals.serviceChargePercent}%)</dt>
+            <dd className="tabular-nums">₹{(totals.serviceCharge ?? 0).toFixed(2)}</dd>
+          </div>
+        )}
+        <div className="flex justify-between text-slate-600">
+          <dt>Taxable value</dt>
+          <dd className="tabular-nums">₹{totals.taxableAmount.toFixed(2)}</dd>
         </div>
         {totals.taxLines.map((t) => (
-          <div key={t.name} className="flex justify-between text-sm text-slate-600">
-            <span>
+          <div key={t.name} className="flex justify-between text-slate-600">
+            <dt>
               {t.name} ({t.percent}%)
-            </span>
-            <span>₹{t.amount.toFixed(2)}</span>
+            </dt>
+            <dd className="tabular-nums">₹{t.amount.toFixed(2)}</dd>
           </div>
         ))}
         {totals.roundOff !== 0 && (
-          <div className="flex justify-between text-sm text-slate-600">
-            <span>Round off</span>
-            <span>
+          <div className="flex justify-between text-slate-600">
+            <dt>Round off</dt>
+            <dd className="tabular-nums">
               {totals.roundOff > 0 ? "+" : "-"}₹{Math.abs(totals.roundOff).toFixed(2)}
-            </span>
+            </dd>
           </div>
         )}
-        <div className="mt-2 flex justify-between border-t border-slate-200 pt-2 text-base font-semibold text-slate-800">
-          <span>Grand total</span>
-          <span>₹{totals.grandTotal.toFixed(2)}</span>
+        <div className="mt-2 flex items-baseline justify-between border-t border-slate-200 pt-3">
+          <dt className="text-base font-semibold text-slate-900">Grand total</dt>
+          <dd className="text-2xl font-bold text-slate-900 tabular-nums">₹{totals.grandTotal.toFixed(2)}</dd>
         </div>
-      </Card>
-
-      {order.status === "open" && (
-        <Card>
-          <div className="flex flex-wrap items-end gap-3">
-            <label className="text-sm font-medium text-slate-700">
-              Customer GSTIN <span className="font-normal text-slate-400">(optional, for business bills)</span>
-              <Input
-                id="customer-gstin"
-                className="mt-1 !w-64 uppercase"
-                maxLength={15}
-                value={customerGstin}
-                onChange={(e) => setCustomerGstin(e.target.value.toUpperCase())}
-                placeholder="29ABCDE1234F1Z5"
-              />
-            </label>
-            <Button onClick={makeBill} disabled={generateBill.isPending}>
-              {generateBill.isPending ? "Generating..." : "Generate bill"}
-            </Button>
-          </div>
-          <p className="mt-2 text-xs text-slate-500">
-            Generating the bill gives it the next invoice number and locks the order. Reopen it if something changes.
-          </p>
-        </Card>
+      </dl>
+      {(order.payments ?? []).length > 0 && (
+        <div className="mt-3 flex flex-col gap-1 border-t border-slate-100 pt-3 text-sm text-slate-600">
+          {order.payments!.map((p, i) => (
+            <div key={i} className="flex justify-between gap-2">
+              <span className="min-w-0">
+                Paid by {TENDER_LABELS[p.method]}
+                {p.reference ? ` (${p.reference})` : ""}
+                {p.change ? ` · change ₹${p.change.toFixed(2)}` : ""}
+              </span>
+              <span className="tabular-nums">₹{p.amount.toFixed(2)}</span>
+            </div>
+          ))}
+        </div>
       )}
 
-      <div className="flex flex-wrap items-center gap-3">
-        {(order.status === "open" || order.status === "billed") && (
-          <>
-            <Select
-              className="!w-40"
-              value={paymentMethod}
-              onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
-            >
-              <option value="cash">Cash</option>
-              <option value="online">Online</option>
-              <option value="card">Card</option>
-            </Select>
-            <Button onClick={pay}>Mark paid</Button>
-          </>
+      {order.status === "open" && (
+        <div className="mt-4 flex flex-col gap-2 border-t border-slate-100 pt-4">
+          <Field
+            label={
+              <>
+                Customer GSTIN <span className="font-normal text-slate-400">(optional)</span>
+              </>
+            }
+            htmlFor="customer-gstin"
+          >
+            <Input
+              id="customer-gstin"
+              className="uppercase"
+              maxLength={15}
+              value={customerGstin}
+              onChange={(e) => setCustomerGstin(e.target.value.toUpperCase())}
+              placeholder="29ABCDE1234F1Z5"
+            />
+          </Field>
+          <Button variant="secondary" icon={FileText} onClick={makeBill} loading={generateBill.isPending}>
+            {generateBill.isPending ? "Generating..." : "Generate bill"}
+          </Button>
+          <p className="text-xs text-slate-500">
+            Gives the bill the next invoice number and locks the order. Reopen it if something changes.
+          </p>
+        </div>
+      )}
+
+      <div className="mt-4 flex flex-col gap-2 border-t border-slate-100 pt-4">
+        {canSettle && (
+          <Button size="lg" variant="success" icon={Wallet} onClick={() => setSettleOpen(true)}>
+            Settle bill
+          </Button>
         )}
+        <div className="flex flex-wrap gap-2 [&>*]:flex-1">
+          <Button variant="secondary" icon={Printer} onClick={printInvoice}>
+            {order.invoiceNumber && order.status !== "open" ? "Print invoice" : "Bill preview"}
+          </Button>
+          {printing?.billPrinterConfigured && order.invoiceNumber && order.status !== "open" && (
+            <Button variant="secondary" icon={Printer} onClick={printBillOnPrinter}>
+              Bill printer
+            </Button>
+          )}
+        </div>
         {order.status === "billed" && (
-          <Button variant="secondary" onClick={() => setBillDialog("reopen")}>
+          <Button variant="secondary" icon={LockOpen} onClick={() => setBillDialog("reopen")}>
             Reopen bill
           </Button>
         )}
-        {(order.status === "open" || order.status === "billed") && (
-          <Button variant="danger" onClick={cancel}>
+        {canSettle && (
+          <Button variant="ghost" icon={Ban} className="!text-red-600 hover:!bg-red-50" onClick={cancel}>
             {order.status === "billed" ? "Cancel bill" : "Cancel order"}
           </Button>
         )}
         {order.status === "closed" && profile?.isOwner && (
-          <Button variant="danger" onClick={() => setBillDialog("void")}>
+          <Button
+            variant="ghost"
+            icon={Ban}
+            className="!text-red-600 hover:!bg-red-50"
+            onClick={() => setBillDialog("void")}
+          >
             Void bill
           </Button>
         )}
-        <Button variant="secondary" onClick={printInvoice}>
-          {order.invoiceNumber && order.status !== "open" ? "Print invoice" : "Print bill preview"}
-        </Button>
       </div>
+    </Card>
+  );
+
+  const Wrapper = embedded ? "div" : Page;
+
+  return (
+    <Wrapper className="flex flex-col gap-5 sm:gap-6">
+      {!embedded && (
+        <PageHeader
+          back={
+            <button
+              type="button"
+              onClick={() => navigate(-1)}
+              className="inline-flex items-center gap-1 text-sm font-medium text-slate-500 hover:text-slate-800"
+            >
+              <ArrowLeft size={16} aria-hidden="true" />
+              Back
+            </button>
+          }
+          title={
+            <span className="flex flex-wrap items-center gap-3">
+              {order.customerName || "Guest"}
+              <Badge tone={statusBadge.tone} dot>
+                {statusBadge.label}
+              </Badge>
+            </span>
+          }
+          description={facts.join(" · ")}
+          actions={
+            order.invoiceNumber && (
+              <div className="text-left sm:text-right">
+                <p className="font-mono text-sm font-semibold text-slate-900">{order.invoiceNumber}</p>
+                {order.billedAt && (
+                  <p className="text-xs text-slate-500">Billed {new Date(order.billedAt).toLocaleString()}</p>
+                )}
+              </div>
+            )
+          }
+        />
+      )}
+      {embedded && (
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <p className="font-semibold text-slate-900">{order.customerName || "Guest"}</p>
+            <p className="text-sm text-slate-500">{facts.join(" · ")}</p>
+          </div>
+          <Badge tone={statusBadge.tone} dot>
+            {statusBadge.label}
+          </Badge>
+        </div>
+      )}
+
+      {(order.voidReason || order.cancelReason) && (
+        <Alert tone="error" title={order.voidedAt ? "Voided" : "Cancelled"}>
+          Reason: {order.voidReason || order.cancelReason}
+        </Alert>
+      )}
+      {notice && <Alert tone="success">{notice}</Alert>}
+      <ErrorText>{error}</ErrorText>
+
+      <div
+        className={`grid items-start gap-5 ${embedded ? "2xl:grid-cols-[minmax(0,1fr)_22rem]" : "xl:grid-cols-[minmax(0,1fr)_24rem]"}`}
+      >
+        <div className="flex min-w-0 flex-col gap-5">
+          {itemsCard}
+          {kotCard}
+        </div>
+        <div className={`flex min-w-0 flex-col gap-5 ${embedded ? "" : "xl:sticky xl:top-24"}`}>
+          {totalsCard}
+          <BillActions data={data} />
+          {order.status !== "cancelled" && (
+            <Card>
+              <CardHeader title="Guest" description="Loyalty points and WhatsApp bills." className="mb-3" />
+              <CustomerPanel order={order} />
+            </Card>
+          )}
+        </div>
+      </div>
+
+      <SettleDialog
+        open={settleOpen}
+        orderId={order._id}
+        total={totals.grandTotal}
+        invoiceNumber={order.invoiceNumber}
+        upi={data.payment}
+        onClose={() => setSettleOpen(false)}
+      />
+
+      <ReasonDialog
+        open={complimentaryItem !== null}
+        title={`Make ${complimentaryItem?.name ?? "this item"} complimentary?`}
+        description="The item stays on the bill at no charge and still counts for the kitchen and reports."
+        confirmLabel="Make complimentary"
+        onCancel={() => setComplimentaryItem(null)}
+        onConfirm={async ({ note }) => {
+          await complimentary.mutateAsync({ itemId: complimentaryItem!.id, reason: note });
+          setComplimentaryItem(null);
+        }}
+      />
 
       <ReasonDialog
         open={billDialog !== null}
@@ -582,7 +770,7 @@ export default function OrderDetail({
         onCancel={() => setBillDialog(null)}
         onConfirm={({ note }) => confirmBillDialog(note)}
       />
-    </div>
+    </Wrapper>
   );
 }
 
@@ -598,16 +786,20 @@ function MenuPickCard({
   onRemove: () => void;
 }) {
   return (
-    <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+    <div
+      className={`flex items-center gap-3 rounded-xl border bg-white p-3 transition-colors ${
+        qty > 0 ? "border-orange-300 ring-1 ring-orange-200" : "border-slate-200"
+      }`}
+    >
       {food.imageUrl ? (
         <img
           src={food.imageUrl}
           alt={food.name}
           loading="lazy"
-          className="h-16 w-16 shrink-0 rounded-xl object-cover"
+          className="h-14 w-14 shrink-0 rounded-lg object-cover"
         />
       ) : (
-        <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-orange-100 to-amber-50 text-xl font-bold text-orange-400">
+        <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-orange-100 to-amber-50 text-lg font-bold text-orange-400">
           {food.name.charAt(0).toUpperCase()}
         </div>
       )}
@@ -619,33 +811,37 @@ function MenuPickCard({
           {food.isBestseller && <BestsellerTag emoji={food.bestsellerEmoji} />}
         </div>
         <p className="mt-1 truncate text-sm font-semibold text-slate-900">{food.name}</p>
-        <p className="text-sm font-bold text-slate-800">₹{food.price.toFixed(2)}</p>
+        <p className="text-sm font-bold text-slate-800 tabular-nums">₹{food.price.toFixed(2)}</p>
       </div>
 
       <div className="w-24 shrink-0">
         {qty === 0 ? (
           <button
+            type="button"
             onClick={onAdd}
-            className="flex h-11 w-full items-center justify-center rounded-xl border border-orange-600 bg-white text-base font-bold tracking-wide text-orange-600 shadow-sm hover:bg-orange-50"
+            className="flex h-11 w-full items-center justify-center gap-1 rounded-lg border border-orange-600 bg-white text-sm font-bold tracking-wide text-orange-700 hover:bg-orange-50"
           >
+            <Plus size={16} aria-hidden="true" />
             ADD
           </button>
         ) : (
-          <div className="flex h-11 w-full items-center justify-between rounded-xl bg-orange-600 px-0.5 text-white shadow-sm">
+          <div className="flex h-11 w-full items-center justify-between rounded-lg bg-orange-600 px-0.5 text-white">
             <button
+              type="button"
               onClick={onRemove}
               aria-label={`Remove one ${food.name}`}
-              className="flex h-full w-8 items-center justify-center text-xl font-bold leading-none"
+              className="flex h-full w-9 items-center justify-center"
             >
-              −
+              <Minus size={18} aria-hidden="true" />
             </button>
             <span className="text-base font-bold tabular-nums">{qty}</span>
             <button
+              type="button"
               onClick={onAdd}
               aria-label={`Add one ${food.name}`}
-              className="flex h-full w-8 items-center justify-center text-xl font-bold leading-none"
+              className="flex h-full w-9 items-center justify-center"
             >
-              +
+              <Plus size={18} aria-hidden="true" />
             </button>
           </div>
         )}

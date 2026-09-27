@@ -1,14 +1,19 @@
 import { RequestContext } from "../../core/context";
 import { emit } from "../../core/events";
+import { IOrder } from "../../models/Order";
 import { HttpError } from "../../utils/httpError";
 import { nextTokenNumber } from "../../utils/kotQueue";
 import { getOwnedOrder } from "../orders/orders.service";
+import { enqueueKot } from "../printing/printing.service";
 import { KitchenRepository } from "./kitchen.repository";
 
-export async function getKotQueue(ctx: RequestContext, tableId?: string) {
+export async function getKotQueue(ctx: RequestContext, tableId?: string, stationId?: string) {
   const repo = new KitchenRepository(ctx.restaurantId);
   const orders = await repo.findOpenOrdersWithTable(tableId);
-  const items = await repo.findActiveItems(orders.map((o) => o._id));
+  const items = await repo.findActiveItems(
+    orders.map((o) => o._id),
+    stationId
+  );
 
   const itemsByOrder = new Map<string, typeof items>();
   for (const item of items) {
@@ -27,30 +32,54 @@ export async function getKotQueue(ctx: RequestContext, tableId?: string) {
     .sort((a, b) => (a.tokenNumber ?? Number.MAX_SAFE_INTEGER) - (b.tokenNumber ?? Number.MAX_SAFE_INTEGER));
 }
 
-export async function printKot(ctx: RequestContext, orderId: string) {
-  const order = await getOwnedOrder(ctx, orderId);
+export async function sendOrderToKitchen(restaurantId: string, order: Pick<IOrder, "_id" | "status">) {
   if (order.status !== "open" && order.status !== "billed") {
     throw new HttpError(409, "This order is closed, so nothing can be sent to the kitchen");
   }
-  const repo = new KitchenRepository(ctx.restaurantId);
+  const repo = new KitchenRepository(restaurantId);
   const nothingToSend = { round: null, items: [], message: "No new items to send to the kitchen" };
   if (!(await repo.hasUnsentItems(order._id))) return nothingToSend;
   const round = await repo.nextKotRound(order._id);
   if ((await repo.claimUnsentItems(order._id, round)) === 0) return nothingToSend;
 
-  const restaurant = await repo.findRestaurant("dayEndTime timezone");
-  const { tokenNumber } = await nextTokenNumber(ctx.restaurantId, restaurant?.dayEndTime, restaurant?.timezone);
+  const restaurant = await repo.findRestaurant("dayEndTime timezone prepBufferMinutes");
+  const { tokenNumber } = await nextTokenNumber(restaurantId, restaurant?.dayEndTime, restaurant?.timezone);
   await repo.setRoundToken(order._id, round, tokenNumber);
 
   const items = await repo.findRoundItems(order._id, round);
+  const prepTimes = await repo.findPrepTimes(items.filter((i) => i.foodItemId).map((i) => i.foodItemId!));
+  const longest = Math.max(0, ...prepTimes.map((f) => f.prepTimeMinutes ?? 0));
+  const buffer = restaurant?.prepBufferMinutes ?? 0;
+  await repo.pushEstimate(order._id, new Date(Date.now() + (longest + buffer) * 60_000));
+
   await emit("order.kotSent", {
-    restaurantId: ctx.restaurantId,
+    restaurantId,
     orderId: order._id.toString(),
     round,
     tokenNumber,
     itemIds: items.map((item) => item._id.toString()),
   });
   return { round, tokenNumber, items };
+}
+
+export async function printKot(ctx: RequestContext, orderId: string) {
+  const order = await getOwnedOrder(ctx, orderId);
+  return sendOrderToKitchen(ctx.restaurantId, order);
+}
+
+export async function reprintKot(ctx: RequestContext, orderId: string, round: number) {
+  const order = await getOwnedOrder(ctx, orderId);
+  const queued = await enqueueKot(ctx.restaurantId, order._id, round, { reprint: true });
+  if (queued === 0) throw new HttpError(409, "No printer is set up for this ticket");
+  return { queued };
+}
+
+export async function sendGuestItemsIfAutomatic(restaurantId: string, orderId: string) {
+  const repo = new KitchenRepository(restaurantId);
+  const restaurant = await repo.findRestaurant("kotSettings");
+  if (restaurant?.kotSettings?.guestOrderMode === "accept") return;
+  const order = await repo.findOrder(orderId);
+  if (order) await sendOrderToKitchen(restaurantId, order);
 }
 
 export async function getKotPdfData(ctx: RequestContext, orderId: string, round: number) {

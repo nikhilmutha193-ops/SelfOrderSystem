@@ -1,9 +1,37 @@
+import {
+  Armchair,
+  CircleCheck,
+  Clock,
+  CookingPot,
+  DoorOpen,
+  KeyRound,
+  Plus,
+  Timer,
+  Trash2,
+  Wallet,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 import type { TableRow } from "../../lib/types";
 import { api, extractErrorMessage } from "../../shared/api/client";
-import { Badge, Button, Card, ErrorText, Input, TableWrap } from "../../shared/ui/ui";
+import { buttonClass } from "../../shared/ui/styles";
+import {
+  Badge,
+  Button,
+  Card,
+  CardHeader,
+  EmptyState,
+  ErrorText,
+  Field,
+  Input,
+  Page,
+  PageHeader,
+  Select,
+  StatCard,
+  Switch,
+  TableWrap,
+} from "../../shared/ui/ui";
 
 function elapsedSince(iso?: string): string | null {
   if (!iso) return null;
@@ -36,6 +64,7 @@ export default function Tables() {
   const [expiryMessage, setExpiryMessage] = useState<string | null>(null);
   const [expiryDraft, setExpiryDraft] = useState<Record<string, string>>({});
   const [, forceTick] = useState(0);
+  const [captains, setCaptains] = useState<{ _id: string; username: string }[]>([]);
 
   const savedDefault = Number(autoReleaseMinutes);
   const defaultExpiryLabel = savedDefault > 0 ? `${savedDefault} (default)` : "never";
@@ -48,6 +77,23 @@ export default function Tables() {
   }
 
   useEffect(load, []);
+
+  useEffect(() => {
+    api
+      .get<{ _id: string; username: string }[]>("/tables/captains")
+      .then((res) => setCaptains(res.data))
+      .catch(() => setCaptains([]));
+  }, []);
+
+  async function assignCaptain(table: TableRow, captainId: string) {
+    setError(null);
+    try {
+      await api.put(`/tables/${table._id}/captain`, { captainId: captainId || null });
+      load();
+    } catch (err) {
+      setError(extractErrorMessage(err));
+    }
+  }
 
   useEffect(() => {
     api
@@ -169,176 +215,268 @@ export default function Tables() {
     }
   }
 
+  const seated = tables.filter((t) => !t.isGuest);
+  const counts = {
+    available: seated.filter((t) => t.status === "available").length,
+    occupied: seated.filter((t) => t.status === "occupied").length,
+    awaiting: seated.filter((t) => t.status === "awaiting_payment").length,
+  };
+
   return (
-    <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-bold text-slate-800">Tables</h1>
+    <Page>
+      <PageHeader
+        title="Tables"
+        description="Table logins for guests scanning the QR code, who looks after each table, and when idle tables free up."
+      />
 
-      <Card>
-        <form onSubmit={saveExpiry} className="flex flex-wrap items-end gap-3">
-          <label className="text-sm font-medium text-slate-700">
-            Auto-release after (minutes)
-            <Input
-              className="mt-1 w-40"
-              type="number"
-              min={0}
-              value={autoReleaseMinutes}
-              onChange={(e) => setAutoReleaseMinutes(e.target.value)}
-            />
-          </label>
-          <Button type="submit" disabled={savingExpiry}>
-            {savingExpiry ? "Saving..." : "Save"}
-          </Button>
-          {expiryMessage && <span className="text-xs text-green-700">{expiryMessage}</span>}
-        </form>
-        <p className="mt-2 text-xs text-slate-500">
-          If a table stays occupied longer than this, it is automatically freed and the guest's session ends. Set to 0
-          to disable auto-release. Any order the guest never sent to the kitchen is cancelled with the seating; counter
-          orders and anything already sent are left alone. Individual tables can override this below.
-        </p>
-      </Card>
+      <div className="grid grid-cols-3 gap-3 sm:gap-4">
+        <StatCard label="Free" value={counts.available} icon={CircleCheck} tone="green" />
+        <StatCard label="Seated" value={counts.occupied} icon={Armchair} tone="amber" />
+        <StatCard label="Waiting to pay" value={counts.awaiting} icon={Wallet} tone="red" />
+      </div>
 
-      <Card>
-        <form onSubmit={submit} className="flex flex-wrap items-end gap-3">
-          <label className="text-sm font-medium text-slate-700">
-            Table code
-            <Input
-              className="mt-1"
-              placeholder="e.g. tbl1"
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-              required
-            />
-          </label>
-          <label className="text-sm font-medium text-slate-700">
-            PIN
-            <Input className="mt-1" value={password} onChange={(e) => setPassword(e.target.value)} required />
-          </label>
-          <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
-            <input type="checkbox" checked={isGuest} onChange={(e) => setIsGuest(e.target.checked)} />
-            Guest table
-          </label>
-          <Button type="submit">Add table</Button>
-        </form>
-        <p className="mt-2 text-xs text-slate-500">
-          A guest table is for walk-ins and the counter: it is never marked occupied, so several people can order from
-          it at once and it never has to be released. They only give their name and mobile number.
-        </p>
-      </Card>
+      <div className="grid gap-4 lg:grid-cols-2 lg:gap-6">
+        <Card>
+          <CardHeader
+            icon={Plus}
+            title="Add a table"
+            description="A guest table is for walk-ins and the counter: several people can order from it at once and it never needs releasing."
+          />
+          <form onSubmit={submit} className="grid gap-4 sm:grid-cols-2">
+            <Field label="Table code" htmlFor="table-code">
+              <Input
+                id="table-code"
+                placeholder="e.g. tbl1"
+                autoComplete="off"
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+                required
+              />
+            </Field>
+            <Field label="PIN" htmlFor="table-pin">
+              <Input
+                id="table-pin"
+                autoComplete="off"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+            </Field>
+            <div className="rounded-lg border border-slate-200 px-3 py-2.5 sm:col-span-2">
+              <Switch
+                id="table-guest"
+                checked={isGuest}
+                onChange={setIsGuest}
+                label="Guest table"
+                description="Never marked occupied. Guests only give a name and mobile number."
+              />
+            </div>
+            <Button type="submit" icon={Plus} className="sm:col-span-2 sm:justify-self-start">
+              Add table
+            </Button>
+          </form>
+        </Card>
+
+        <Card>
+          <CardHeader
+            icon={Timer}
+            title="Auto-release"
+            description="Free a table that stays seated longer than this. Unsent guest orders are cancelled; anything sent to the kitchen is kept."
+          />
+          <form onSubmit={saveExpiry} className="flex flex-wrap items-end gap-3">
+            <Field label="Release after (minutes)" htmlFor="auto-release">
+              <Input
+                id="auto-release"
+                className="!w-40"
+                type="number"
+                inputMode="numeric"
+                min={0}
+                value={autoReleaseMinutes}
+                onChange={(e) => setAutoReleaseMinutes(e.target.value)}
+              />
+            </Field>
+            <Button type="submit" loading={savingExpiry}>
+              {savingExpiry ? "Saving..." : "Save"}
+            </Button>
+            {expiryMessage && <span className="pb-2.5 text-sm font-medium text-emerald-700">{expiryMessage}</span>}
+          </form>
+          <p className="mt-2 text-xs text-slate-500">0 turns auto-release off. Each table can override it below.</p>
+        </Card>
+      </div>
 
       <ErrorText>{error}</ErrorText>
 
       <Card>
-        <TableWrap>
-          <table className="w-full min-w-[34rem] text-sm">
-            <thead>
-              <tr className="text-left text-slate-500">
-                <th className="pb-2">Code</th>
-                <th className="pb-2">PIN</th>
-                <th className="pb-2">Type</th>
-                <th className="pb-2">Expires after</th>
-                <th className="pb-2">Status</th>
-                <th className="pb-2"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {tables.map((table) => (
-                <tr key={table._id} className="border-t border-slate-100">
-                  <td className="py-1.5">{table.code}</td>
-                  <td className="py-1.5 font-mono">{table.password || "-"}</td>
-                  <td className="py-1.5">
-                    {table.isGuest ? <Badge tone="blue">Guest</Badge> : <Badge tone="gray">Table</Badge>}
-                  </td>
-                  <td className="py-1.5">
-                    {table.isGuest ? (
-                      <span className="text-xs text-slate-400">n/a</span>
-                    ) : (
-                      (() => {
-                        const raw = expiryDraft[table._id] ?? table.autoReleaseMinutes ?? "";
-                        const effective = raw === "" ? savedDefault : Number(raw);
-                        const hint =
-                          !Number.isFinite(effective) || effective <= 0
-                            ? "never expires"
-                            : raw === ""
-                              ? `follows default (${formatMinutes(savedDefault)})`
-                              : `= ${formatMinutes(effective)}`;
-                        return (
-                          <div className="flex flex-col gap-0.5">
-                            <div className="flex items-center gap-1.5">
-                              <Input
-                                className="w-20"
-                                type="number"
-                                min={0}
-                                placeholder={defaultExpiryLabel}
-                                value={raw}
-                                onChange={(e) => setExpiryDraft((d) => ({ ...d, [table._id]: e.target.value }))}
-                                onBlur={() => saveExpiryOverride(table)}
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter") e.currentTarget.blur();
-                                }}
-                              />
-                              <span className="text-xs text-slate-500">min</span>
-                            </div>
-                            <span className="text-xs text-slate-400">{hint}</span>
-                          </div>
-                        );
-                      })()
-                    )}
-                  </td>
-                  <td className="py-1.5">
-                    {table.isGuest ? (
-                      <span className="text-xs text-slate-400">shared</span>
-                    ) : (
-                      <div className="flex flex-col gap-0.5">
-                        <Badge tone={table.status === "available" ? "green" : "amber"}>{table.status}</Badge>
-                        {table.status === "occupied" && elapsedSince(table.occupiedAt) && (
-                          <span className="text-xs text-slate-400">occupied {elapsedSince(table.occupiedAt)}</span>
-                        )}
-                      </div>
-                    )}
-                  </td>
-                  <td className="py-1.5">
-                    {resettingId === table._id ? (
-                      <div className="flex items-center gap-2">
-                        <Input
-                          className="w-28"
-                          placeholder="New PIN"
-                          value={newPin}
-                          onChange={(e) => setNewPin(e.target.value)}
-                          autoFocus
-                        />
-                        <Button type="button" onClick={() => submitReset(table._id)} disabled={!newPin}>
-                          Save
-                        </Button>
-                        <button className="text-slate-600 hover:underline" onClick={cancelReset}>
-                          Cancel
-                        </button>
-                        {resetError && <span className="text-xs text-red-600">{resetError}</span>}
-                      </div>
-                    ) : (
-                      <div className="flex gap-3">
-                        {table.status === "occupied" && !table.isGuest && (
-                          <button className="text-slate-600 hover:underline" onClick={() => release(table)}>
-                            Release
-                          </button>
-                        )}
-                        <button className="text-orange-600 hover:underline" onClick={() => startReset(table)}>
-                          Reset PIN
-                        </button>
-                        <Link className="text-orange-600 hover:underline" to={`/admin/kot?tableId=${table._id}`}>
-                          View KOT
-                        </Link>
-                        <button className="text-red-600 hover:underline" onClick={() => remove(table)}>
-                          Delete
-                        </button>
-                      </div>
-                    )}
-                  </td>
+        <CardHeader
+          title="All tables"
+          description={`${tables.length} table${tables.length === 1 ? "" : "s"}`}
+          className="mb-3"
+        />
+        {tables.length === 0 ? (
+          <EmptyState icon={Armchair} title="No tables yet" description="Add a table above, then print its QR code." />
+        ) : (
+          <TableWrap>
+            <table className="min-w-[60rem]">
+              <thead>
+                <tr>
+                  <th>Table</th>
+                  <th>PIN</th>
+                  <th>Status</th>
+                  <th>Captain</th>
+                  <th>Expires after</th>
+                  <th className="text-right">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </TableWrap>
+              </thead>
+              <tbody>
+                {tables.map((table) => (
+                  <tr key={table._id}>
+                    <td>
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-slate-900">{table.code}</span>
+                        {table.isGuest && <Badge tone="blue">Guest</Badge>}
+                      </div>
+                    </td>
+                    <td className="font-mono text-slate-600">{table.password || "—"}</td>
+                    <td>
+                      {table.isGuest ? (
+                        <span className="text-xs text-slate-400">Shared</span>
+                      ) : (
+                        <div className="flex flex-col items-start gap-1">
+                          <Badge
+                            dot
+                            tone={
+                              table.status === "available"
+                                ? "green"
+                                : table.status === "awaiting_payment"
+                                  ? "red"
+                                  : "amber"
+                            }
+                          >
+                            {table.status === "awaiting_payment"
+                              ? "Waiting to pay"
+                              : table.status === "available"
+                                ? "Free"
+                                : "Seated"}
+                          </Badge>
+                          {table.status !== "available" && elapsedSince(table.occupiedAt) && (
+                            <span className="inline-flex items-center gap-1 text-xs text-slate-500">
+                              <Clock size={12} aria-hidden="true" />
+                              {elapsedSince(table.occupiedAt)}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </td>
+                    <td>
+                      {table.isGuest ? (
+                        <span className="text-xs text-slate-400">—</span>
+                      ) : (
+                        <Select
+                          aria-label={`Captain for ${table.code}`}
+                          className="!w-36"
+                          value={table.captainId ?? ""}
+                          onChange={(e) => assignCaptain(table, e.target.value)}
+                        >
+                          <option value="">Anyone</option>
+                          {captains.map((c) => (
+                            <option key={c._id} value={c._id}>
+                              {c.username}
+                            </option>
+                          ))}
+                        </Select>
+                      )}
+                    </td>
+                    <td>
+                      {table.isGuest ? (
+                        <span className="text-xs text-slate-400">—</span>
+                      ) : (
+                        (() => {
+                          const raw = expiryDraft[table._id] ?? table.autoReleaseMinutes ?? "";
+                          const effective = raw === "" ? savedDefault : Number(raw);
+                          const hint =
+                            !Number.isFinite(effective) || effective <= 0
+                              ? "never expires"
+                              : raw === ""
+                                ? `default (${formatMinutes(savedDefault)})`
+                                : `= ${formatMinutes(effective)}`;
+                          return (
+                            <div className="flex flex-col gap-0.5">
+                              <div className="flex items-center gap-1.5">
+                                <Input
+                                  aria-label={`Auto-release minutes for ${table.code}`}
+                                  className="!w-24"
+                                  type="number"
+                                  inputMode="numeric"
+                                  min={0}
+                                  placeholder={defaultExpiryLabel}
+                                  value={raw}
+                                  onChange={(e) => setExpiryDraft((d) => ({ ...d, [table._id]: e.target.value }))}
+                                  onBlur={() => saveExpiryOverride(table)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") e.currentTarget.blur();
+                                  }}
+                                />
+                                <span className="text-xs text-slate-500">min</span>
+                              </div>
+                              <span className="text-xs text-slate-400">{hint}</span>
+                            </div>
+                          );
+                        })()
+                      )}
+                    </td>
+                    <td className="text-right">
+                      {resettingId === table._id ? (
+                        <div className="flex flex-wrap items-center justify-end gap-2">
+                          <Input
+                            aria-label={`New PIN for ${table.code}`}
+                            className="!w-28"
+                            placeholder="New PIN"
+                            value={newPin}
+                            onChange={(e) => setNewPin(e.target.value)}
+                            autoFocus
+                          />
+                          <Button type="button" size="sm" onClick={() => submitReset(table._id)} disabled={!newPin}>
+                            Save
+                          </Button>
+                          <Button type="button" size="sm" variant="ghost" onClick={cancelReset}>
+                            Cancel
+                          </Button>
+                          {resetError && <span className="w-full text-xs text-red-600">{resetError}</span>}
+                        </div>
+                      ) : (
+                        <div className="flex justify-end gap-1 whitespace-nowrap">
+                          {table.status === "occupied" && !table.isGuest && (
+                            <Button size="sm" variant="ghost" icon={DoorOpen} onClick={() => release(table)}>
+                              Release
+                            </Button>
+                          )}
+                          <Link className={buttonClass("ghost", "sm")} to={`/admin/kot?tableId=${table._id}`}>
+                            <CookingPot size={14} aria-hidden="true" />
+                            KOT
+                          </Link>
+                          <Button size="sm" variant="ghost" icon={KeyRound} onClick={() => startReset(table)}>
+                            PIN
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            icon={Trash2}
+                            className="!text-red-600 hover:!bg-red-50"
+                            onClick={() => remove(table)}
+                            aria-label={`Delete ${table.code}`}
+                          >
+                            Delete
+                          </Button>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </TableWrap>
+        )}
       </Card>
-    </div>
+    </Page>
   );
 }

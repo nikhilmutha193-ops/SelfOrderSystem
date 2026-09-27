@@ -14,7 +14,8 @@ export function connectDb(): Promise<void> {
 
   connection = mongoose
     .connect(uri, { serverSelectionTimeoutMS: 8000 })
-    .then(() => {
+    .then(async () => {
+      await Promise.all(Object.values(mongoose.models).map((model) => model.init()));
       logger.info("MongoDB connected");
     })
     .catch((err) => {

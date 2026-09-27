@@ -2,7 +2,7 @@ import { useState } from "react";
 
 import type { DeliveryProvider } from "../../../lib/types";
 import { extractErrorMessage } from "../../../shared/api/client";
-import { Button, Card, ErrorText, Input, Select } from "../../../shared/ui/ui";
+import { Button, Card, ErrorText, Input, PageHeader, Select } from "../../../shared/ui/ui";
 import { useStartStaffOrder } from "../queries";
 import OrderDetail from "./OrderDetail";
 
@@ -43,12 +43,12 @@ export default function NewOrder() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-bold text-slate-800">New Order</h1>
+    <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 sm:gap-6">
+      <PageHeader title="New Order" />
 
       <div className="grid items-start gap-6 lg:grid-cols-[340px_1fr]">
         <Card>
-          <h2 className="mb-3 text-lg font-semibold text-slate-800">Start an order</h2>
+          <h2 className="mb-4 text-base font-semibold text-slate-900">Start an order</h2>
           <form onSubmit={submit} className="flex flex-col gap-3">
             <div className="flex gap-2">
               {(["dine-in", "takeaway", "delivery"] as OrderKind[]).map((k) => (

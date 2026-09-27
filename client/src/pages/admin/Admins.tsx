@@ -1,3 +1,4 @@
+import { Pencil, ShieldCheck, Trash2, UserPlus, Wand2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import {
@@ -9,14 +10,48 @@ import {
   type PermissionLevel,
 } from "../../lib/adminAuth";
 import { api, extractErrorMessage } from "../../shared/api/client";
-import { Badge, Button, Card, ErrorText, Input, Select } from "../../shared/ui/ui";
+import { Alert, Badge, Button, Card, CardHeader, ErrorText, Field, Input, Page, PageHeader } from "../../shared/ui/ui";
 
 type Permissions = Partial<Record<ModuleKey, PermissionLevel>>;
 
+const PRESETS: { label: string; hint: string; permissions: Permissions }[] = [
+  {
+    label: "Captain (waiter)",
+    hint: "Takes orders on the Captain app, serves ready items and answers guest requests.",
+    permissions: { orders: "edit", tables: "view", kot: "edit", messages: "edit" },
+  },
+  {
+    label: "Cashier",
+    hint: "Bills and settles on the POS, runs cash shifts and prints.",
+    permissions: { orders: "edit", tables: "view", kot: "view", dayClose: "edit", messages: "view" },
+  },
+];
+
+function PresetButtons({ onPick, disabled }: { onPick: (permissions: Permissions) => void; disabled?: boolean }) {
+  return (
+    <div className="mb-3 flex flex-wrap gap-2">
+      {PRESETS.map((preset) => (
+        <Button
+          key={preset.label}
+          type="button"
+          size="sm"
+          variant="soft"
+          icon={Wand2}
+          disabled={disabled}
+          title={preset.hint}
+          onClick={() => onPick({ ...preset.permissions })}
+        >
+          {preset.label} preset
+        </Button>
+      ))}
+    </div>
+  );
+}
+
 const LEVEL_OPTIONS: { value: "" | PermissionLevel; label: string }[] = [
-  { value: "", label: "No access" },
-  { value: "view", label: "View only" },
-  { value: "edit", label: "View & edit" },
+  { value: "", label: "None" },
+  { value: "view", label: "View" },
+  { value: "edit", label: "Edit" },
 ];
 
 function PermissionGrid({
@@ -29,30 +64,46 @@ function PermissionGrid({
   disabled?: boolean;
 }) {
   return (
-    <div className="grid gap-2 sm:grid-cols-2">
-      {MODULE_KEYS.map((key) => (
-        <label key={key} className="flex items-center justify-between gap-3 rounded border border-slate-200 px-3 py-2">
-          <span className="text-sm text-slate-700">{MODULES[key]}</span>
-          <Select
-            className="w-36"
-            disabled={disabled}
-            value={value[key] ?? ""}
-            onChange={(e) => {
-              const level = e.target.value as "" | PermissionLevel;
-              const next = { ...value };
-              if (level === "") delete next[key];
-              else next[key] = level;
-              onChange(next);
-            }}
-          >
-            {LEVEL_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </Select>
-        </label>
-      ))}
+    <div className="grid gap-x-6 gap-y-1 lg:grid-cols-2">
+      {MODULE_KEYS.map((key) => {
+        const current = value[key] ?? "";
+        return (
+          <div key={key} className="flex items-center justify-between gap-3 border-b border-slate-100 py-2">
+            <span className="min-w-0 text-sm text-slate-700">{MODULES[key]}</span>
+            <div role="radiogroup" aria-label={MODULES[key]} className="flex shrink-0 rounded-lg bg-slate-100 p-0.5">
+              {LEVEL_OPTIONS.map((o) => {
+                const active = current === o.value;
+                return (
+                  <button
+                    key={o.value}
+                    type="button"
+                    role="radio"
+                    aria-checked={active}
+                    disabled={disabled}
+                    onClick={() => {
+                      const next = { ...value };
+                      if (o.value === "") delete next[key];
+                      else next[key] = o.value;
+                      onChange(next);
+                    }}
+                    className={`min-h-[36px] min-w-14 rounded-md px-2.5 text-xs font-semibold transition-colors sm:min-h-[30px] ${
+                      active
+                        ? o.value === "edit"
+                          ? "bg-orange-600 text-white shadow-card"
+                          : o.value === "view"
+                            ? "bg-white text-slate-900 shadow-card"
+                            : "bg-white text-slate-500 shadow-card"
+                        : "text-slate-500 hover:text-slate-800"
+                    }`}
+                  >
+                    {o.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -124,95 +175,128 @@ export default function Admins() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-bold text-slate-800">Admin Users</h1>
+    <Page>
+      <PageHeader
+        title="Admin Users"
+        description="Staff logins for the admin, POS and captain app. Each person only sees the pages you allow."
+      />
       <ErrorText>{error}</ErrorText>
-      {message && <p className="text-sm text-green-700">{message}</p>}
+      {message && <Alert tone="success">{message}</Alert>}
 
       <Card>
-        <h2 className="mb-3 text-lg font-semibold text-slate-800">Add an admin</h2>
-        <form onSubmit={createAdmin} className="flex flex-col gap-4">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="text-sm font-medium text-slate-700">
-              Username
-              <Input className="mt-1" value={username} onChange={(e) => setUsername(e.target.value)} required />
-            </label>
-            <label className="text-sm font-medium text-slate-700">
-              Password
+        <CardHeader icon={UserPlus} title="Add a staff login" />
+        <form onSubmit={createAdmin} className="flex flex-col gap-5">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Username" htmlFor="new-admin-username">
               <Input
-                className="mt-1"
+                id="new-admin-username"
+                autoComplete="off"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                required
+              />
+            </Field>
+            <Field label="Password" htmlFor="new-admin-password" hint="At least 6 characters.">
+              <Input
+                id="new-admin-password"
                 type="password"
+                autoComplete="new-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 minLength={6}
                 required
               />
-            </label>
+            </Field>
           </div>
           <div>
-            <p className="mb-2 text-sm font-medium text-slate-700">Module access</p>
+            <p className="mb-2 text-sm font-medium text-slate-700">Page access</p>
+            <PresetButtons onPick={setNewPermissions} />
             <PermissionGrid value={newPermissions} onChange={setNewPermissions} />
           </div>
-          <Button type="submit" disabled={creating}>
-            {creating ? "Creating..." : "Create admin"}
+          <Button type="submit" icon={UserPlus} loading={creating} className="self-start">
+            {creating ? "Creating..." : "Create login"}
           </Button>
         </form>
       </Card>
 
       <Card>
-        <h2 className="mb-3 text-lg font-semibold text-slate-800">Existing admins</h2>
-        <div className="flex flex-col gap-4">
-          {admins.map((admin) => (
-            <div key={admin.id} className="rounded border border-slate-200 p-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <span className="font-medium text-slate-800">{admin.username}</span>
-                  {admin.isOwner && <Badge tone="blue">Owner</Badge>}
-                  {admin.id === profile?.id && <Badge tone="gray">You</Badge>}
+        <CardHeader title="Staff logins" description={`${admins.length} account${admins.length === 1 ? "" : "s"}`} />
+        <div className="flex flex-col gap-3">
+          {admins.map((admin) => {
+            const granted = MODULE_KEYS.filter((k) => admin.permissions?.[k]);
+            return (
+              <div key={admin.id} className="rounded-xl border border-slate-200 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-sm font-bold text-slate-600">
+                      {admin.username.slice(0, 1).toUpperCase()}
+                    </span>
+                    <span className="truncate font-semibold text-slate-900">{admin.username}</span>
+                    {admin.isOwner && (
+                      <Badge tone="blue">
+                        <ShieldCheck size={12} aria-hidden="true" />
+                        Owner
+                      </Badge>
+                    )}
+                    {admin.id === profile?.id && <Badge tone="gray">You</Badge>}
+                  </div>
+                  <div className="flex gap-1">
+                    {!admin.isOwner && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={editingId === admin.id ? "secondary" : "ghost"}
+                        icon={editingId === admin.id ? undefined : Pencil}
+                        onClick={() => {
+                          setEditingId(editingId === admin.id ? null : admin.id);
+                          setDraft(admin.permissions ?? {});
+                        }}
+                      >
+                        {editingId === admin.id ? "Cancel" : "Edit access"}
+                      </Button>
+                    )}
+                    {!admin.isOwner && admin.id !== profile?.id && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        icon={Trash2}
+                        className="!text-red-600 hover:!bg-red-50"
+                        onClick={() => removeAdmin(admin.id, admin.username)}
+                      >
+                        Delete
+                      </Button>
+                    )}
+                  </div>
                 </div>
-                <div className="flex gap-2">
-                  {!admin.isOwner && (
-                    <Button
-                      type="button"
-                      onClick={() => {
-                        setEditingId(editingId === admin.id ? null : admin.id);
-                        setDraft(admin.permissions ?? {});
-                      }}
-                    >
-                      {editingId === admin.id ? "Cancel" : "Edit access"}
-                    </Button>
-                  )}
-                  {!admin.isOwner && admin.id !== profile?.id && (
-                    <Button type="button" onClick={() => removeAdmin(admin.id, admin.username)}>
-                      Delete
-                    </Button>
-                  )}
-                </div>
-              </div>
 
-              {admin.isOwner ? (
-                <p className="mt-2 text-sm text-slate-500">The owner account always has full access.</p>
-              ) : editingId === admin.id ? (
-                <div className="mt-3 flex flex-col gap-3">
-                  <PermissionGrid value={draft} onChange={setDraft} />
-                  <Button type="button" onClick={() => savePermissions(admin.id)}>
-                    Save permissions
-                  </Button>
-                </div>
-              ) : (
-                <p className="mt-2 text-sm text-slate-500">
-                  {MODULE_KEYS.filter((k) => admin.permissions?.[k]).length === 0
-                    ? "No modules assigned yet."
-                    : MODULE_KEYS.filter((k) => admin.permissions?.[k])
-                        .map((k) => `${MODULES[k]} (${admin.permissions![k]})`)
-                        .join(", ")}
-                </p>
-              )}
-            </div>
-          ))}
+                {admin.isOwner ? (
+                  <p className="mt-2 text-sm text-slate-500">The owner account always has full access.</p>
+                ) : editingId === admin.id ? (
+                  <div className="mt-4 flex flex-col gap-3 border-t border-slate-100 pt-4">
+                    <PresetButtons onPick={setDraft} />
+                    <PermissionGrid value={draft} onChange={setDraft} />
+                    <Button type="button" className="self-start" onClick={() => savePermissions(admin.id)}>
+                      Save access
+                    </Button>
+                  </div>
+                ) : granted.length === 0 ? (
+                  <p className="mt-2 text-sm text-slate-500">No pages assigned yet.</p>
+                ) : (
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    {granted.map((k) => (
+                      <Badge key={k} tone={admin.permissions![k] === "edit" ? "orange" : "gray"}>
+                        {MODULES[k]} · {admin.permissions![k] === "edit" ? "edit" : "view"}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
           {admins.length === 0 && <p className="text-sm text-slate-500">No admins yet.</p>}
         </div>
       </Card>
-    </div>
+    </Page>
   );
 }

@@ -8,6 +8,7 @@ import type {
   OrderDetailResponse,
   OrderItem,
   PaymentMethod,
+  TenderMethod,
 } from "../../lib/types";
 import { api } from "../../shared/api/client";
 
@@ -35,6 +36,26 @@ export interface NewOrderLine {
 
 export type ReportFormat = "csv" | "pdf";
 
+export interface PaymentLine {
+  method: TenderMethod;
+  amount: number;
+  reference?: string;
+  tendered?: number;
+}
+
+export interface DiscountInput {
+  type: "percent" | "flat";
+  value: number;
+  reason: string;
+}
+
+export interface InvoiceRegisterFilters {
+  from?: string;
+  to?: string;
+  number?: string;
+  amount?: string;
+}
+
 const once = () => ({ headers: { "Idempotency-Key": newId() } });
 
 export const ordersApi = {
@@ -47,8 +68,8 @@ export const ordersApi = {
     api.get<Blob>(`/orders/report.${format}`, { params: filters, responseType: "blob" }),
   archive: (filters: OrderFilters) =>
     api.delete<{ archived: number; deleted: number }>("/orders", { params: filters }).then((res) => res.data),
-  invoices: (range: { from?: string; to?: string }) =>
-    api.get<InvoiceRegisterRow[]>("/orders/invoices", { params: range }).then((res) => res.data),
+  invoices: (filters: InvoiceRegisterFilters) =>
+    api.get<InvoiceRegisterRow[]>("/orders/invoices", { params: filters }).then((res) => res.data),
 
   startDineIn: (input: CustomerInput) =>
     api.post<{ token: string; order: Order }>("/orders/dine-in", input, once()).then((res) => res.data),
@@ -63,6 +84,7 @@ export const ordersApi = {
   cancelItem: (itemId: string, reason?: ItemCancelReason, note?: string) =>
     api.patch<OrderItem>(`/orders/items/${itemId}/cancel`, { reason, note }).then((res) => res.data),
 
+  printBill: (orderId: string) => api.post<{ queued: number }>(`/orders/${orderId}/bill/print`).then((res) => res.data),
   generateBill: (orderId: string, customerGstin?: string) =>
     api.post<Order>(`/orders/${orderId}/bill`, { customerGstin }).then((res) => res.data),
   reopenBill: (orderId: string, reason: string) =>
@@ -71,6 +93,22 @@ export const ordersApi = {
     api.post<Order>(`/orders/${orderId}/void`, { reason }).then((res) => res.data),
   pay: (orderId: string, paymentMethod: PaymentMethod) =>
     api.patch<Order>(`/orders/${orderId}/pay`, { paymentMethod }).then((res) => res.data),
+  settle: (orderId: string, payments: PaymentLine[]) =>
+    api.patch<Order>(`/orders/${orderId}/pay`, { payments }).then((res) => res.data),
+  split: (orderId: string, itemIds: string[]) =>
+    api.post<{ order: Order; created: Order }>(`/orders/${orderId}/split`, { itemIds }).then((res) => res.data),
+  merge: (orderId: string, intoOrderId: string) =>
+    api.post<Order>(`/orders/${orderId}/merge`, { intoOrderId }).then((res) => res.data),
+  transfer: (orderId: string, tableId: string) =>
+    api.post<Order>(`/orders/${orderId}/transfer`, { tableId }).then((res) => res.data),
+  setDiscount: (orderId: string, input: DiscountInput) =>
+    api.put<Order>(`/orders/${orderId}/discount`, input).then((res) => res.data),
+  removeDiscount: (orderId: string) => api.delete<Order>(`/orders/${orderId}/discount`).then((res) => res.data),
+  setServiceCharge: (orderId: string, waived: boolean) =>
+    api.put<Order>(`/orders/${orderId}/service-charge`, { waived }).then((res) => res.data),
+  complimentary: (itemId: string, reason: string) =>
+    api.patch<OrderItem>(`/orders/items/${itemId}/complimentary`, { reason }).then((res) => res.data),
+  freeTables: () => api.get<{ _id: string; code: string }[]>("/tables/available").then((res) => res.data),
   cancel: (orderId: string, reason?: string) =>
     api.patch<Order>(`/orders/${orderId}/cancel`, { reason }).then((res) => res.data),
 

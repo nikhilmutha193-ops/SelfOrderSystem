@@ -1,11 +1,12 @@
 import { useQueryClient } from "@tanstack/react-query";
+import { ArrowLeft, MessagesSquare, SendHorizontal, TriangleAlert, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { useCanEdit } from "../../../lib/adminAuth";
 import type { ChatConversation, ChatMessage } from "../../../lib/types";
 import { extractErrorMessage } from "../../../shared/api/client";
 import { POLL } from "../../../shared/api/queryClient";
-import { Badge, Button, Card, ErrorText, Input } from "../../../shared/ui/ui";
+import { Button, Card, EmptyState, ErrorText, IconButton, Input, Page, PageHeader } from "../../../shared/ui/ui";
 import {
   markConversationRead,
   useChatThread,
@@ -81,102 +82,151 @@ export default function Messages() {
   const selected = conversations.find((c) => c.orderId === selectedOrderId) || null;
 
   return (
-    <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-bold text-slate-800">Messages</h1>
-      <p className="text-sm text-slate-500">Chat with tables currently browsing or dining, per order.</p>
+    <Page>
+      <PageHeader title="Messages" description="Chat with guests at their table, one conversation per order." />
 
       <ErrorText>{error}</ErrorText>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <Card className="lg:col-span-1">
-          <h2 className="mb-2 text-sm font-semibold text-slate-700">Conversations</h2>
-          <div className="flex flex-col divide-y divide-slate-100">
-            {conversations.length === 0 && <p className="py-4 text-sm text-slate-400">No conversations yet.</p>}
-            {conversations.map((convo) => (
-              <button
-                key={convo.orderId}
-                onClick={() => openConversation(convo.orderId)}
-                className={`flex flex-col gap-0.5 px-2 py-2.5 text-left hover:bg-slate-50 ${
-                  selectedOrderId === convo.orderId ? "bg-orange-50" : ""
-                }`}
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-sm font-medium text-slate-800">{describeOrder(convo)}</span>
-                  {convo.unreadCount > 0 && <Badge tone="red">{convo.unreadCount}</Badge>}
-                </div>
-                <span className="truncate text-xs text-slate-500">
-                  {convo.lastSenderRole === "admin" ? "You: " : ""}
-                  {convo.lastMessage}
-                </span>
-              </button>
-            ))}
+      <Card
+        padding="none"
+        className="grid h-[calc(100dvh-15rem)] min-h-[28rem] overflow-hidden lg:grid-cols-[20rem_1fr]"
+      >
+        <div className={`min-h-0 flex-col border-slate-200 lg:flex lg:border-r ${selected ? "hidden" : "flex"}`}>
+          <div className="border-b border-slate-100 px-4 py-3">
+            <h2 className="text-sm font-semibold text-slate-900">Conversations</h2>
           </div>
-        </Card>
-
-        <Card className="flex flex-col lg:col-span-2">
-          {!selected ? (
-            <p className="py-8 text-center text-sm text-slate-400">Select a conversation to view messages.</p>
-          ) : (
-            <>
-              <h2 className="mb-2 text-sm font-semibold text-slate-700">{describeOrder(selected)}</h2>
-              <div className="flex h-80 flex-col gap-2 overflow-y-auto rounded-md border border-slate-100 bg-slate-50 p-3">
-                {messages.map((msg) => (
-                  <div
-                    key={msg._id}
-                    className={`group relative max-w-[75%] rounded-lg px-3 py-2 text-sm ${
-                      msg.senderRole === "admin"
-                        ? "self-end bg-orange-600 text-white"
-                        : "self-start bg-white text-slate-800 shadow-sm"
+          <div className="ui-scrollbar min-h-0 flex-1 overflow-y-auto">
+            {conversations.length === 0 && (
+              <EmptyState
+                icon={MessagesSquare}
+                title="No conversations yet"
+                description="Guest messages appear here."
+              />
+            )}
+            {conversations.map((convo) => {
+              const active = selectedOrderId === convo.orderId;
+              return (
+                <button
+                  key={convo.orderId}
+                  type="button"
+                  onClick={() => openConversation(convo.orderId)}
+                  className={`flex w-full items-start gap-3 border-b border-slate-100 px-4 py-3 text-left transition-colors ${
+                    active ? "bg-orange-50" : "hover:bg-slate-50"
+                  }`}
+                >
+                  <span
+                    className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
+                      active ? "bg-orange-600 text-white" : "bg-slate-100 text-slate-600"
                     }`}
                   >
-                    <p className="pr-5">{msg.message}</p>
-                    {msg.flagged && (
-                      <p
-                        className={`mt-0.5 text-[10px] font-semibold ${msg.senderRole === "admin" ? "text-orange-100" : "text-red-500"}`}
-                      >
-                        ⚠ filtered for language
-                      </p>
-                    )}
-                    <p
-                      className={`mt-1 text-[10px] ${msg.senderRole === "admin" ? "text-orange-100" : "text-slate-400"}`}
+                    {(convo.order.customerName || "G").slice(0, 1).toUpperCase()}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="flex items-center justify-between gap-2">
+                      <span className="truncate text-sm font-semibold text-slate-900">{describeOrder(convo)}</span>
+                      {convo.unreadCount > 0 && (
+                        <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-orange-600 px-1.5 text-[11px] font-bold text-white">
+                          {convo.unreadCount}
+                        </span>
+                      )}
+                    </span>
+                    <span
+                      className={`block truncate text-xs ${convo.unreadCount > 0 ? "font-medium text-slate-800" : "text-slate-500"}`}
                     >
-                      {new Date(msg.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                    </p>
-                    {canEdit && (
-                      <button
-                        type="button"
-                        aria-label="Delete message"
-                        title="Delete message"
-                        onClick={() => deleteMessage(msg._id)}
-                        // Always visible on touch, where there is no hover to reveal it.
-                        className={`absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded text-xs opacity-100 sm:opacity-0 sm:group-hover:opacity-100 ${
-                          msg.senderRole === "admin"
-                            ? "text-orange-100 hover:bg-orange-700"
-                            : "text-slate-400 hover:bg-slate-100"
-                        }`}
-                      >
-                        ✕
-                      </button>
-                    )}
-                  </div>
-                ))}
+                      {convo.lastSenderRole === "admin" ? "You: " : ""}
+                      {convo.lastMessage}
+                    </span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className={`min-h-0 flex-col lg:flex ${selected ? "flex" : "hidden"}`}>
+          {!selected ? (
+            <EmptyState
+              className="h-full"
+              icon={MessagesSquare}
+              title="Pick a conversation"
+              description="Select a guest on the left to read and reply."
+            />
+          ) : (
+            <>
+              <div className="flex items-center gap-2 border-b border-slate-100 px-2 py-2 sm:px-4">
+                <div className="lg:hidden">
+                  <IconButton icon={ArrowLeft} label="Back to conversations" onClick={() => setSelectedOrderId(null)} />
+                </div>
+                <h2 className="min-w-0 truncate text-sm font-semibold text-slate-900">{describeOrder(selected)}</h2>
+              </div>
+              <div className="ui-scrollbar flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto bg-slate-50/70 p-4">
+                {messages.map((msg) => {
+                  const mine = msg.senderRole === "admin";
+                  return (
+                    <div
+                      key={msg._id}
+                      className={`group relative max-w-[85%] rounded-2xl px-3.5 py-2 text-sm shadow-card sm:max-w-[70%] ${
+                        mine
+                          ? "self-end rounded-br-md bg-orange-600 text-white"
+                          : "self-start rounded-bl-md bg-white text-slate-800"
+                      }`}
+                    >
+                      <p className={`break-words ${canEdit ? "pr-6" : ""}`}>{msg.message}</p>
+                      {msg.flagged && (
+                        <p
+                          className={`mt-0.5 inline-flex items-center gap-1 text-[11px] font-semibold ${mine ? "text-orange-100" : "text-red-600"}`}
+                        >
+                          <TriangleAlert size={12} aria-hidden="true" />
+                          Filtered for language
+                        </p>
+                      )}
+                      <p className={`mt-1 text-[11px] ${mine ? "text-orange-100" : "text-slate-400"}`}>
+                        {new Date(msg.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                      </p>
+                      {canEdit && (
+                        <button
+                          type="button"
+                          aria-label="Delete message"
+                          title="Delete message"
+                          onClick={() => deleteMessage(msg._id)}
+                          style={{ minHeight: "1.75rem" }}
+                          className={`absolute top-1 right-1 flex h-7 w-7 items-center justify-center rounded-full opacity-100 transition-opacity [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 ${
+                            mine ? "text-orange-100 hover:bg-orange-700" : "text-slate-400 hover:bg-slate-100"
+                          }`}
+                        >
+                          <X size={14} aria-hidden="true" />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
                 <div ref={bottomRef} />
               </div>
-              <form onSubmit={send} className="mt-3 flex gap-2">
+              <form
+                onSubmit={send}
+                className="flex gap-2 border-t border-slate-100 bg-white p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
+              >
                 <Input
                   className="flex-1"
-                  placeholder="Type a reply..."
+                  placeholder="Type a reply…"
+                  aria-label="Reply"
                   value={draft}
                   onChange={(e) => setDraft(e.target.value)}
                 />
-                <Button type="submit" disabled={sending || !draft.trim()}>
-                  Send
+                <Button
+                  type="submit"
+                  aria-label="Send"
+                  icon={SendHorizontal}
+                  loading={sending}
+                  disabled={!draft.trim()}
+                >
+                  <span className="hidden sm:inline">Send</span>
                 </Button>
               </form>
             </>
           )}
-        </Card>
-      </div>
-    </div>
+        </div>
+      </Card>
+    </Page>
   );
 }

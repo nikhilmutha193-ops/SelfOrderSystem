@@ -72,11 +72,30 @@ export const orderFilterQuery = z.object({
   to: blankToUndefined(businessDate),
 });
 
-export const payOrderSchema = z.object({
-  paymentMethod: z.enum(["cash", "online", "card"], {
-    error: "A valid paymentMethod (cash, online, card) is required",
-  }),
+const tenderMethod = z.enum(["cash", "upi", "card", "online", "wallet"], {
+  error: "A valid paymentMethod (cash, upi, card, online, wallet) is required",
 });
+
+const money = z
+  .number({ error: "Enter an amount" })
+  .positive({ error: "Payment amounts must be more than zero" })
+  .max(10_000_000, { error: "That amount is too large" });
+
+const paymentLine = z.object({
+  method: tenderMethod,
+  amount: money,
+  reference: blankToUndefined(z.string().trim().max(60, { error: "Keep the reference under 60 characters" })),
+  tendered: z.number({ error: "Cash received must be a number" }).min(0).optional(),
+});
+
+export const settleSchema = z
+  .object({
+    paymentMethod: tenderMethod.optional(),
+    payments: z.array(paymentLine).min(1, { error: "Add at least one payment" }).max(10).optional(),
+  })
+  .refine((body) => body.paymentMethod || body.payments, {
+    error: "A valid paymentMethod (cash, upi, card, online, wallet) is required",
+  });
 
 export const applyCouponSchema = z.object({
   code: z.string({ error: "code is required" }).trim().min(1, { error: "code is required" }),
@@ -117,6 +136,10 @@ export const generateBillSchema = z.object({
 export const invoiceRegisterQuery = z.object({
   from: blankToUndefined(businessDate),
   to: blankToUndefined(businessDate),
+  number: blankToUndefined(z.string().trim().max(30, { error: "Invoice number search is too long" })),
+  amount: blankToUndefined(
+    z.coerce.number({ error: "Amount must be a number" }).min(0, { error: "Amount must be a number" })
+  ),
 });
 
 export type StartDineInInput = z.output<typeof startDineInSchema>;
@@ -125,7 +148,26 @@ export type StartDeliveryInput = z.output<typeof startDeliverySchema>;
 export type StartCounterInput = z.output<typeof startCounterSchema>;
 export type AddItemsInput = z.output<typeof addItemsSchema>;
 export type OrderFilterInput = z.output<typeof orderFilterQuery>;
-export type PayOrderInput = z.output<typeof payOrderSchema>;
+export type SettleInput = z.output<typeof settleSchema>;
 export type CancelItemInput = z.output<typeof cancelItemSchema>;
 export type GenerateBillInput = z.output<typeof generateBillSchema>;
 export type InvoiceRegisterInput = z.output<typeof invoiceRegisterQuery>;
+
+export const splitSchema = z.object({
+  itemIds: z.array(objectId("Invalid item id")).min(1, { error: "Choose at least one item to move" }),
+});
+
+export const mergeSchema = z.object({ intoOrderId: objectId("Choose the order to merge into") });
+
+export const transferSchema = z.object({ tableId: objectId("Choose a table") });
+
+export const manualDiscountSchema = z.object({
+  type: z.enum(["percent", "flat"], { error: "Choose percent or flat" }),
+  value: z.number({ error: "Enter a discount value" }).positive({ error: "Enter a discount value" }),
+  reason,
+});
+
+export const serviceChargeSchema = z.object({ waived: z.boolean({ error: "waived must be true or false" }) });
+
+export type SplitInput = z.output<typeof splitSchema>;
+export type ManualDiscountInput = z.output<typeof manualDiscountSchema>;

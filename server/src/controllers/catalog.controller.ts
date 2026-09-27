@@ -4,8 +4,39 @@ import { Types } from "mongoose";
 import { asyncHandler } from "../middleware/errorHandler";
 import Category from "../models/Category";
 import FoodItem from "../models/FoodItem";
+import Station from "../models/Station";
 import Subcategory from "../models/Subcategory";
 import { HttpError } from "../utils/httpError";
+
+async function resolveStationId(value: unknown, restaurantId: string): Promise<Types.ObjectId | null | undefined> {
+  if (value === undefined) return undefined;
+  if (value === null || value === "") return null;
+  if (typeof value !== "string" || !Types.ObjectId.isValid(value)) throw new HttpError(400, "Invalid station");
+  const station = await Station.findOne({ _id: value, restaurantId }).select("_id");
+  if (!station) throw new HttpError(404, "Station not found");
+  return station._id;
+}
+
+const SHORT_CODE_PATTERN = /^[A-Z0-9]{1,6}$/;
+
+function normalizeShortCode(value: unknown): string | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null || value === "") return null;
+  const code = String(value).trim().toUpperCase();
+  if (!code) return null;
+  if (!SHORT_CODE_PATTERN.test(code)) throw new HttpError(400, "Short code must be 1 to 6 letters or digits");
+  return code;
+}
+
+async function assertShortCodeFree(restaurantId: string, code: string | null | undefined, exceptId?: string) {
+  if (!code) return;
+  const taken = await FoodItem.findOne({
+    restaurantId,
+    shortCode: code,
+    ...(exceptId && { _id: { $ne: exceptId } }),
+  }).select("name");
+  if (taken) throw new HttpError(409, `Short code ${code} is already used by ${taken.name}`);
+}
 
 function validId(id: string) {
   if (!Types.ObjectId.isValid(id)) throw new HttpError(400, "Invalid id");
@@ -19,33 +50,39 @@ export const listCategories = asyncHandler(async (req: Request, res: Response) =
 });
 
 export const createCategory = asyncHandler(async (req: Request, res: Response) => {
-  const { name, description, translations } = req.body as {
+  const { name, description, translations, defaultStationId } = req.body as {
     name?: string;
     description?: string;
     translations?: unknown;
+    defaultStationId?: unknown;
   };
   if (!name) throw new HttpError(400, "name is required");
+  const station = await resolveStationId(defaultStationId, req.restaurantId!);
   const category = await Category.create({
     restaurantId: req.restaurantId,
     name,
     description,
     translations: sanitizeTranslations(translations),
     isActive: true,
+    ...(station !== undefined && { defaultStationId: station }),
   });
   res.status(201).json(category);
 });
 
 export const updateCategory = asyncHandler(async (req: Request, res: Response) => {
   validId(req.params.id);
-  const { name, description, translations } = req.body as {
+  const { name, description, translations, defaultStationId } = req.body as {
     name?: string;
     description?: string;
     translations?: unknown;
+    defaultStationId?: unknown;
   };
+  const station = await resolveStationId(defaultStationId, req.restaurantId!);
   const category = await Category.findOneAndUpdate(
     { _id: req.params.id, restaurantId: req.restaurantId },
     {
       $set: {
+        ...(station !== undefined && { defaultStationId: station }),
         ...(name !== undefined && { name }),
         ...(description !== undefined && { description }),
         ...(translations !== undefined && { translations: sanitizeTranslations(translations) }),
@@ -230,6 +267,8 @@ export const createFoodItem = asyncHandler(async (req: Request, res: Response) =
     prepTimeMinutes,
     modifierGroups,
     translations,
+    stationId,
+    shortCode,
   } = req.body as {
     categoryId?: string;
     subcategoryId?: string;
@@ -244,7 +283,12 @@ export const createFoodItem = asyncHandler(async (req: Request, res: Response) =
     prepTimeMinutes?: number;
     modifierGroups?: unknown;
     translations?: unknown;
+    stationId?: unknown;
+    shortCode?: unknown;
   };
+  const station = await resolveStationId(stationId, req.restaurantId!);
+  const code = normalizeShortCode(shortCode);
+  await assertShortCodeFree(req.restaurantId!, code);
   if (!categoryId || !subcategoryId || !name || price === undefined) {
     throw new HttpError(400, "categoryId, subcategoryId, name and price are required");
   }
@@ -275,6 +319,8 @@ export const createFoodItem = asyncHandler(async (req: Request, res: Response) =
     ...(prepTimeMinutes !== undefined && { prepTimeMinutes: normalizePrepTime(prepTimeMinutes) }),
     ...(modifierGroups !== undefined && { modifierGroups: sanitizeModifierGroups(modifierGroups) }),
     ...(translations !== undefined && { translations: sanitizeTranslations(translations) }),
+    ...(station !== undefined && { stationId: station }),
+    ...(code && { shortCode: code }),
   });
   res.status(201).json(foodItem);
 });
@@ -295,6 +341,8 @@ export const updateFoodItem = asyncHandler(async (req: Request, res: Response) =
     prepTimeMinutes,
     modifierGroups,
     translations,
+    stationId,
+    shortCode,
   } = req.body as {
     categoryId?: string;
     subcategoryId?: string;
@@ -309,7 +357,12 @@ export const updateFoodItem = asyncHandler(async (req: Request, res: Response) =
     prepTimeMinutes?: number;
     modifierGroups?: unknown;
     translations?: unknown;
+    stationId?: unknown;
+    shortCode?: unknown;
   };
+  const station = await resolveStationId(stationId, req.restaurantId!);
+  const code = normalizeShortCode(shortCode);
+  await assertShortCodeFree(req.restaurantId!, code, req.params.id);
   if (price !== undefined && (typeof price !== "number" || price < 0)) {
     throw new HttpError(400, "price must be a non-negative number");
   }
@@ -333,7 +386,10 @@ export const updateFoodItem = asyncHandler(async (req: Request, res: Response) =
         ...(prepTimeMinutes !== undefined && { prepTimeMinutes: normalizePrepTime(prepTimeMinutes) }),
         ...(modifierGroups !== undefined && { modifierGroups: sanitizeModifierGroups(modifierGroups) }),
         ...(translations !== undefined && { translations: sanitizeTranslations(translations) }),
+        ...(station !== undefined && { stationId: station }),
+        ...(code && { shortCode: code }),
       },
+      ...(code === null && { $unset: { shortCode: 1 } }),
     },
     { new: true }
   );

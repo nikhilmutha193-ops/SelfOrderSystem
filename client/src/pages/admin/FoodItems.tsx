@@ -1,8 +1,27 @@
+import { Eye, EyeOff, ImagePlus, Pencil, Plus, Sparkles, Star, Trash2, UtensilsCrossed, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
+import { StationSelect } from "../../features/printing/components/StationSelect";
 import type { Category, FoodItem, FoodType, ModifierGroup, Subcategory, Translations } from "../../lib/types";
 import { api, extractErrorMessage, uploadImage } from "../../shared/api/client";
-import { Badge, Button, Card, ErrorText, Input, Select, TableWrap, Textarea } from "../../shared/ui/ui";
+import { Dialog } from "../../shared/ui/Dialog";
+import {
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  ErrorText,
+  Field,
+  IconButton,
+  Input,
+  Page,
+  PageHeader,
+  SearchInput,
+  Select,
+  Switch,
+  TableWrap,
+  Textarea,
+} from "../../shared/ui/ui";
 
 const EMOJI_CHOICES = ["⭐", "🔥", "👑", "💯", "🏆", "❤️"];
 const EMPTY_TR = { kn: { name: "", description: "" }, hi: { name: "", description: "" } };
@@ -23,6 +42,8 @@ export default function FoodItems() {
   const [foodType, setFoodType] = useState<FoodType>("veg");
   const [rating, setRating] = useState<number>(0);
   const [prepTimeMinutes, setPrepTimeMinutes] = useState<number>(10);
+  const [stationId, setStationId] = useState("");
+  const [shortCode, setShortCode] = useState("");
   const [modifierGroups, setModifierGroups] = useState<ModifierGroup[]>([]);
   const [tr, setTr] = useState<{
     kn: { name: string; description: string };
@@ -55,6 +76,11 @@ export default function FoodItems() {
   }
   const [editing, setEditing] = useState<FoodItem | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [filterCategory, setFilterCategory] = useState("");
+  const [filterStatus, setFilterStatus] = useState<"" | "active" | "hidden">("");
+  const [saving, setSaving] = useState(false);
 
   // ---- modifier group editing helpers ----
   function addGroup() {
@@ -169,9 +195,12 @@ export default function FoodItems() {
       foodType,
       rating,
       prepTimeMinutes,
+      stationId: stationId || null,
+      shortCode: shortCode.trim(),
       modifierGroups: cleanGroups,
       translations,
     };
+    setSaving(true);
     try {
       if (editing) {
         await api.put(`/food-items/${editing._id}`, payload);
@@ -187,16 +216,53 @@ export default function FoodItems() {
       setFoodType("veg");
       setRating(0);
       setPrepTimeMinutes(10);
+      setStationId("");
+      setShortCode("");
       setModifierGroups([]);
       setTr(structuredClone(EMPTY_TR));
       setEditing(null);
+      setFormOpen(false);
       load();
     } catch (err) {
       setError(extractErrorMessage(err));
+    } finally {
+      setSaving(false);
     }
   }
 
+  function resetForm() {
+    setEditing(null);
+    setName("");
+    setPrice(0);
+    setDescription("");
+    setImageUrl("");
+    setIsBestseller(false);
+    setBestsellerEmoji("⭐");
+    setFoodType("veg");
+    setRating(0);
+    setPrepTimeMinutes(10);
+    setStationId("");
+    setShortCode("");
+    setModifierGroups([]);
+    setTr(structuredClone(EMPTY_TR));
+  }
+
+  function startNew() {
+    resetForm();
+    setError(null);
+    if (filterCategory) setCategoryId(filterCategory);
+    setFormOpen(true);
+  }
+
+  function closeForm() {
+    setFormOpen(false);
+    setError(null);
+    resetForm();
+  }
+
   function edit(food: FoodItem) {
+    setError(null);
+    setFormOpen(true);
     setEditing(food);
     setCategoryId(food.categoryId);
     setSubcategoryId(food.subcategoryId);
@@ -209,6 +275,8 @@ export default function FoodItems() {
     setFoodType(food.foodType || "veg");
     setRating(food.rating || 0);
     setPrepTimeMinutes(food.prepTimeMinutes ?? 10);
+    setStationId(food.stationId ?? "");
+    setShortCode(food.shortCode ?? "");
     setModifierGroups((food.modifierGroups ?? []).map((g) => ({ ...g, options: g.options.map((o) => ({ ...o })) })));
     setTr({
       kn: { name: food.translations?.kn?.name || "", description: food.translations?.kn?.description || "" },
@@ -225,263 +293,510 @@ export default function FoodItems() {
     }
   }
 
+  const q = query.trim().toLowerCase();
+  const visibleFoods = foodItems.filter(
+    (f) =>
+      (!filterCategory || f.categoryId === filterCategory) &&
+      (!filterStatus || (filterStatus === "active" ? f.isActive : !f.isActive)) &&
+      (!q || f.name.toLowerCase().includes(q) || (f.shortCode ?? "").toLowerCase().startsWith(q))
+  );
+
+  function reviewText(food: FoodItem) {
+    if (!food.reviewCount) return null;
+    return (food.reviewSum! / food.reviewCount).toFixed(1);
+  }
+
   return (
-    <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-bold text-slate-800">Food Items</h1>
+    <Page>
+      <PageHeader
+        title="Food Items"
+        description="Every dish on your menu, with prices, photos, options and kitchen routing."
+        actions={
+          <Button icon={Plus} onClick={startNew}>
+            Add dish
+          </Button>
+        }
+      />
+
+      {!formOpen && <ErrorText>{error}</ErrorText>}
+
       <Card>
-        <form onSubmit={submit} className="flex flex-wrap items-end gap-3">
-          <label className="text-sm font-medium text-slate-700">
-            Category
-            <Select className="mt-1" value={categoryId} onChange={(e) => setCategoryId(e.target.value)} required>
-              {categories.map((c) => (
-                <option key={c._id} value={c._id}>
-                  {c.name}
-                </option>
-              ))}
-            </Select>
-          </label>
-          <label className="text-sm font-medium text-slate-700">
-            Subcategory
-            <Select className="mt-1" value={subcategoryId} onChange={(e) => setSubcategoryId(e.target.value)} required>
-              {subcategoriesForCategory.map((s) => (
-                <option key={s._id} value={s._id}>
-                  {s.name}
-                </option>
-              ))}
-            </Select>
-          </label>
-          <label className="text-sm font-medium text-slate-700">
-            Name
-            <Input className="mt-1" value={name} onChange={(e) => setName(e.target.value)} required />
-          </label>
-          <label className="text-sm font-medium text-slate-700">
-            Price
-            <Input
-              className="mt-1 w-28"
-              type="number"
-              min={0}
-              step="0.01"
-              value={price}
-              onChange={(e) => setPrice(Number(e.target.value))}
-              required
-            />
-          </label>
-          <label className="text-sm font-medium text-slate-700">
-            Description
-            <Input className="mt-1" value={description} onChange={(e) => setDescription(e.target.value)} />
-          </label>
+        <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-[1fr_auto_auto]">
+          <SearchInput
+            className="col-span-2 sm:col-span-1"
+            placeholder="Search by name or short code"
+            aria-label="Search dishes"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+          <Select
+            aria-label="Filter by category"
+            value={filterCategory}
+            onChange={(e) => setFilterCategory(e.target.value)}
+          >
+            <option value="">All categories</option>
+            {categories.map((c) => (
+              <option key={c._id} value={c._id}>
+                {c.name}
+              </option>
+            ))}
+          </Select>
+          <Select
+            aria-label="Filter by status"
+            value={filterStatus}
+            onChange={(e) => setFilterStatus(e.target.value as "" | "active" | "hidden")}
+          >
+            <option value="">Any status</option>
+            <option value="active">On the menu</option>
+            <option value="hidden">Hidden</option>
+          </Select>
+        </div>
+        <p className="mb-3 text-xs font-medium text-slate-500">
+          Showing {visibleFoods.length} of {foodItems.length} dishes
+        </p>
 
-          <div>
-            <span className="text-sm font-medium text-slate-700">Image</span>
-            <div className="mt-1 flex flex-wrap items-center gap-3">
-              {imageUrl ? (
-                <img src={imageUrl} alt="" className="h-14 w-14 rounded-md object-cover" />
-              ) : (
-                <div className="h-14 w-14 rounded-md bg-slate-100" />
-              )}
-              <div className="flex flex-col gap-1">
-                <input
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp,image/gif"
-                  onChange={handleImageFile}
-                  disabled={uploading}
-                  className="text-sm text-slate-600"
-                />
-                <Input
-                  className="w-64"
-                  placeholder="or paste an image URL"
-                  value={imageUrl}
-                  onChange={(e) => setImageUrl(e.target.value)}
-                />
-              </div>
-              {uploading && <span className="text-xs text-slate-400">Uploading...</span>}
+        {visibleFoods.length === 0 ? (
+          <EmptyState
+            icon={UtensilsCrossed}
+            title={foodItems.length === 0 ? "No dishes yet" : "No dishes match"}
+            description={
+              foodItems.length === 0 ? "Add your first dish to build the menu." : "Try a different search or filter."
+            }
+            action={
+              foodItems.length === 0 && (
+                <Button icon={Plus} onClick={startNew}>
+                  Add dish
+                </Button>
+              )
+            }
+          />
+        ) : (
+          <>
+            <ul className="-mx-4 divide-y divide-slate-100 border-t border-slate-100 md:hidden">
+              {visibleFoods.map((food) => (
+                <li key={food._id} className="flex items-center gap-3 px-4 py-3">
+                  <Thumb food={food} size="md" />
+                  <div className="min-w-0 flex-1">
+                    <p className="flex items-center gap-2 font-medium text-slate-900">
+                      <span className={`h-2 w-2 shrink-0 rounded-full ${typeDot[food.foodType || "veg"]}`} />
+                      <span className="truncate">{food.name}</span>
+                    </p>
+                    <p className="truncate text-xs text-slate-500">
+                      {categoryName(food.categoryId)} · {subcategoryName(food.subcategoryId)}
+                    </p>
+                    <div className="mt-1 flex flex-wrap items-center gap-2">
+                      <span className="text-sm font-semibold text-slate-900 tabular-nums">
+                        ₹{food.price.toFixed(2)}
+                      </span>
+                      {!food.isActive && <Badge tone="gray">Hidden</Badge>}
+                      {food.shortCode && <Badge tone="violet">{food.shortCode}</Badge>}
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 flex-col gap-1">
+                    <IconButton icon={Pencil} label={`Edit ${food.name}`} onClick={() => edit(food)} />
+                    <IconButton
+                      icon={food.isActive ? EyeOff : Eye}
+                      label={food.isActive ? `Hide ${food.name}` : `Show ${food.name}`}
+                      onClick={() => toggleActive(food)}
+                    />
+                  </div>
+                </li>
+              ))}
+            </ul>
+
+            <div className="hidden md:block">
+              <TableWrap>
+                <table className="min-w-[48rem]">
+                  <thead>
+                    <tr>
+                      <th>Dish</th>
+                      <th>Category</th>
+                      <th className="text-right">Price</th>
+                      <th>Prep</th>
+                      <th>Rating</th>
+                      <th>Status</th>
+                      <th className="text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {visibleFoods.map((food) => (
+                      <tr key={food._id}>
+                        <td>
+                          <div className="flex items-center gap-3">
+                            <Thumb food={food} size="sm" />
+                            <div className="min-w-0">
+                              <p className="flex items-center gap-2 font-medium text-slate-900">
+                                <span className={`h-2 w-2 shrink-0 rounded-full ${typeDot[food.foodType || "veg"]}`} />
+                                {food.name}
+                              </p>
+                              {food.shortCode && <p className="font-mono text-xs text-slate-500">{food.shortCode}</p>}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="text-slate-600">
+                          {categoryName(food.categoryId)}
+                          <span className="block text-xs text-slate-400">{subcategoryName(food.subcategoryId)}</span>
+                        </td>
+                        <td className="text-right font-medium text-slate-900 tabular-nums">₹{food.price.toFixed(2)}</td>
+                        <td className="whitespace-nowrap text-slate-600">{food.prepTimeMinutes ?? 10} min</td>
+                        <td className="whitespace-nowrap">
+                          {reviewText(food) ? (
+                            <span className="inline-flex items-center gap-1 text-slate-700">
+                              <Star size={14} className="fill-amber-400 text-amber-400" aria-hidden="true" />
+                              {reviewText(food)} <span className="text-slate-400">({food.reviewCount})</span>
+                            </span>
+                          ) : (
+                            <span className="text-slate-300">—</span>
+                          )}
+                        </td>
+                        <td>
+                          <div className="flex flex-wrap gap-1.5">
+                            <Badge tone={food.isActive ? "green" : "gray"} dot>
+                              {food.isActive ? "On menu" : "Hidden"}
+                            </Badge>
+                            {food.isBestseller && <Badge tone="amber">Bestseller</Badge>}
+                          </div>
+                        </td>
+                        <td className="text-right whitespace-nowrap">
+                          <Button size="sm" variant="ghost" icon={Pencil} onClick={() => edit(food)}>
+                            Edit
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            icon={food.isActive ? EyeOff : Eye}
+                            onClick={() => toggleActive(food)}
+                          >
+                            {food.isActive ? "Hide" : "Show"}
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </TableWrap>
             </div>
-          </div>
+          </>
+        )}
+      </Card>
 
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="text-sm font-medium text-slate-700">
-              Food type
-              <Select className="mt-1" value={foodType} onChange={(e) => setFoodType(e.target.value as FoodType)}>
+      <Dialog
+        open={formOpen}
+        onClose={closeForm}
+        size="xl"
+        title={editing ? `Edit ${editing.name}` : "Add a dish"}
+        description="Prices are recalculated on the server, so guests always pay what you set here."
+        onSubmit={submit}
+        dismissible={!saving}
+        footer={
+          <>
+            <Button type="button" variant="secondary" onClick={closeForm} disabled={saving}>
+              Cancel
+            </Button>
+            <Button type="submit" loading={saving}>
+              {editing ? "Save changes" : "Add dish"}
+            </Button>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-6">
+          <ErrorText>{error}</ErrorText>
+
+          <section className="grid gap-4 sm:grid-cols-2">
+            <Field label="Name" htmlFor="food-name" className="sm:col-span-2">
+              <Input id="food-name" value={name} onChange={(e) => setName(e.target.value)} required />
+            </Field>
+            <Field label="Category" htmlFor="food-category">
+              <Select id="food-category" value={categoryId} onChange={(e) => setCategoryId(e.target.value)} required>
+                {categories.map((c) => (
+                  <option key={c._id} value={c._id}>
+                    {c.name}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Subcategory" htmlFor="food-subcategory">
+              <Select
+                id="food-subcategory"
+                value={subcategoryId}
+                onChange={(e) => setSubcategoryId(e.target.value)}
+                required
+              >
+                {subcategoriesForCategory.map((s) => (
+                  <option key={s._id} value={s._id}>
+                    {s.name}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Price (₹)" htmlFor="food-price">
+              <Input
+                id="food-price"
+                type="number"
+                inputMode="decimal"
+                min={0}
+                step="0.01"
+                value={price}
+                onChange={(e) => setPrice(Number(e.target.value))}
+                required
+              />
+            </Field>
+            <Field label="Food type" htmlFor="food-type">
+              <Select id="food-type" value={foodType} onChange={(e) => setFoodType(e.target.value as FoodType)}>
                 <option value="veg">Veg</option>
                 <option value="non-veg">Non-veg</option>
                 <option value="egg">Contains egg</option>
               </Select>
-            </label>
-            <label className="text-sm font-medium text-slate-700">
-              Rating (0 = show as "New")
+            </Field>
+            <Field label="Description" htmlFor="food-description" className="sm:col-span-2">
+              <Textarea
+                id="food-description"
+                rows={2}
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+              />
+            </Field>
+          </section>
+
+          <section className="flex flex-col gap-3">
+            <h3 className="text-sm font-semibold text-slate-900">Photo</h3>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              {imageUrl ? (
+                <div className="relative h-24 w-24 shrink-0">
+                  <img src={imageUrl} alt="" className="h-24 w-24 rounded-xl object-cover ring-1 ring-slate-200" />
+                  <button
+                    type="button"
+                    onClick={() => setImageUrl("")}
+                    aria-label="Remove photo"
+                    className="absolute -top-2 -right-2 flex h-7 w-7 items-center justify-center rounded-full bg-white text-slate-600 shadow ring-1 ring-slate-200"
+                    style={{ minHeight: "1.75rem" }}
+                  >
+                    <X size={14} aria-hidden="true" />
+                  </button>
+                </div>
+              ) : (
+                <label className="flex h-24 w-24 shrink-0 cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-slate-300 text-xs font-medium text-slate-500 hover:border-orange-400 hover:text-orange-600">
+                  <ImagePlus size={20} aria-hidden="true" />
+                  {uploading ? "Uploading…" : "Upload"}
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp,image/gif"
+                    onChange={handleImageFile}
+                    disabled={uploading}
+                    className="sr-only"
+                  />
+                </label>
+              )}
+              <Field label="Or paste an image URL" htmlFor="food-image-url" className="flex-1">
+                <Input
+                  id="food-image-url"
+                  placeholder="https://…"
+                  value={imageUrl}
+                  onChange={(e) => setImageUrl(e.target.value)}
+                />
+              </Field>
+            </div>
+          </section>
+
+          <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <Field
+              label="Prep time (minutes)"
+              htmlFor="food-prep"
+              hint="The slowest dish in a round sets the guest's estimate."
+            >
               <Input
-                className="mt-1"
+                id="food-prep"
                 type="number"
+                inputMode="numeric"
+                min={0}
+                value={prepTimeMinutes}
+                onChange={(e) => setPrepTimeMinutes(Number(e.target.value))}
+              />
+            </Field>
+            <Field label="Short code" htmlFor="food-short-code" hint="Type it in POS search to add this dish fast.">
+              <Input
+                id="food-short-code"
+                className="uppercase"
+                placeholder="e.g. MD"
+                maxLength={6}
+                value={shortCode}
+                onChange={(e) => setShortCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))}
+              />
+            </Field>
+            <Field label='Rating (0 shows as "New")' htmlFor="food-rating">
+              <Input
+                id="food-rating"
+                type="number"
+                inputMode="decimal"
                 min={0}
                 max={5}
                 step="0.1"
                 value={rating}
                 onChange={(e) => setRating(Number(e.target.value))}
               />
-            </label>
-            <label className="text-sm font-medium text-slate-700">
-              Prep time (minutes)
-              <Input
-                className="mt-1"
-                type="number"
-                min={0}
-                value={prepTimeMinutes}
-                onChange={(e) => setPrepTimeMinutes(Number(e.target.value))}
-              />
-              <span className="mt-1 block text-xs font-normal text-slate-500">
-                How long the kitchen needs for this dish. The slowest dish in a round sets the order's estimate.
-              </span>
-            </label>
-          </div>
+            </Field>
+            <StationSelect
+              id="food-station"
+              label="Kitchen station"
+              value={stationId}
+              onChange={setStationId}
+              emptyLabel="Same as category"
+            />
+          </section>
 
-          <div className="flex flex-col gap-1.5">
-            <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
-              <input type="checkbox" checked={isBestseller} onChange={(e) => setIsBestseller(e.target.checked)} />
-              Bestseller
-            </label>
+          <section className="flex flex-col gap-3 rounded-xl border border-slate-200 p-4">
+            <Switch
+              id="food-bestseller"
+              checked={isBestseller}
+              onChange={setIsBestseller}
+              label="Bestseller"
+              description="Shows a badge on the guest menu."
+            />
             {isBestseller && (
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <Input
-                  className="w-16 text-center"
+                  className="!w-16 text-center"
+                  aria-label="Bestseller emoji"
                   value={bestsellerEmoji}
                   onChange={(e) => setBestsellerEmoji(e.target.value)}
                   maxLength={4}
                 />
-                <div className="flex gap-1">
-                  {EMOJI_CHOICES.map((emoji) => (
-                    <button
-                      key={emoji}
-                      type="button"
-                      className={`rounded-md border px-1.5 py-1 text-sm ${
-                        bestsellerEmoji === emoji ? "border-orange-500 bg-orange-50" : "border-slate-200"
-                      }`}
-                      onClick={() => setBestsellerEmoji(emoji)}
-                    >
-                      {emoji}
-                    </button>
-                  ))}
-                </div>
+                {EMOJI_CHOICES.map((emoji) => (
+                  <button
+                    key={emoji}
+                    type="button"
+                    aria-pressed={bestsellerEmoji === emoji}
+                    className={`flex h-11 w-11 items-center justify-center rounded-lg border text-lg sm:h-10 sm:w-10 ${
+                      bestsellerEmoji === emoji
+                        ? "border-orange-500 bg-orange-50"
+                        : "border-slate-200 hover:bg-slate-50"
+                    }`}
+                    onClick={() => setBestsellerEmoji(emoji)}
+                  >
+                    {emoji}
+                  </button>
+                ))}
               </div>
             )}
-          </div>
+          </section>
 
-          <div className="w-full border-t border-slate-100 pt-3">
-            <div className="mb-2 flex items-center justify-between">
-              <p className="text-sm font-semibold text-slate-700">Customization options</p>
-              <button
-                type="button"
-                onClick={addGroup}
-                className="text-sm font-semibold text-orange-600 hover:underline"
-              >
-                + Add group
-              </button>
+          <section className="flex flex-col gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h3 className="text-sm font-semibold text-slate-900">Customization options</h3>
+                <p className="text-xs text-slate-500">e.g. Size (pick one), Add-ons (pick many). Optional.</p>
+              </div>
+              <Button type="button" size="sm" variant="soft" icon={Plus} onClick={addGroup}>
+                Add group
+              </Button>
             </div>
-            {modifierGroups.length === 0 && (
-              <p className="text-xs text-slate-400">e.g. Size (pick one), Add-ons (pick many). Optional.</p>
-            )}
-            <div className="flex flex-col gap-3">
-              {modifierGroups.map((g, gi) => (
-                <div key={gi} className="rounded-xl border border-slate-200 p-3">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Input
-                      className="w-40"
-                      placeholder="Group name (e.g. Size)"
-                      value={g.name}
-                      onChange={(e) => updateGroup(gi, { name: e.target.value })}
+            {modifierGroups.map((g, gi) => (
+              <div key={gi} className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+                <div className="grid gap-2 sm:grid-cols-[1fr_9rem_auto_auto] sm:items-center">
+                  <Input
+                    aria-label="Group name"
+                    placeholder="Group name (e.g. Size)"
+                    value={g.name}
+                    onChange={(e) => updateGroup(gi, { name: e.target.value })}
+                  />
+                  <Select
+                    aria-label="Choice type"
+                    value={g.type}
+                    onChange={(e) => updateGroup(gi, { type: e.target.value as "single" | "multi" })}
+                  >
+                    <option value="single">Pick one</option>
+                    <option value="multi">Pick many</option>
+                  </Select>
+                  <label className="flex items-center gap-2 text-sm text-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={g.required}
+                      onChange={(e) => updateGroup(gi, { required: e.target.checked })}
                     />
-                    <Select
-                      className="!w-32"
-                      value={g.type}
-                      onChange={(e) => updateGroup(gi, { type: e.target.value as "single" | "multi" })}
-                    >
-                      <option value="single">Pick one</option>
-                      <option value="multi">Pick many</option>
-                    </Select>
-                    <label className="flex items-center gap-1 text-xs text-slate-600">
-                      <input
-                        type="checkbox"
-                        checked={g.required}
-                        onChange={(e) => updateGroup(gi, { required: e.target.checked })}
-                      />
-                      Required
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => removeGroup(gi)}
-                      className="ml-auto text-xs font-semibold text-red-600 hover:underline"
-                    >
-                      Remove group
-                    </button>
-                  </div>
-                  <div className="mt-2 flex flex-col gap-1.5">
-                    {g.options.map((o, oi) => (
-                      <div key={oi} className="flex items-center gap-2">
-                        <Input
-                          className="flex-1"
-                          placeholder="Option (e.g. Large)"
-                          value={o.label}
-                          onChange={(e) => updateOption(gi, oi, { label: e.target.value })}
-                        />
-                        <Input
-                          className="w-24"
-                          type="number"
-                          step="0.01"
-                          placeholder="+₹0"
-                          value={o.priceDelta}
-                          onChange={(e) => updateOption(gi, oi, { priceDelta: Number(e.target.value) })}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => removeOption(gi, oi)}
-                          className="text-slate-400 hover:text-red-600"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    ))}
-                    <button
-                      type="button"
-                      onClick={() => addOption(gi)}
-                      className="self-start text-xs font-semibold text-orange-600 hover:underline"
-                    >
-                      + Add option
-                    </button>
-                  </div>
+                    Required
+                  </label>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    icon={Trash2}
+                    className="!text-red-600 hover:!bg-red-50"
+                    onClick={() => removeGroup(gi)}
+                  >
+                    Remove
+                  </Button>
                 </div>
-              ))}
-            </div>
-          </div>
+                <div className="mt-3 flex flex-col gap-2">
+                  {g.options.map((o, oi) => (
+                    <div key={oi} className="flex items-center gap-2">
+                      <Input
+                        aria-label="Option name"
+                        className="flex-1"
+                        placeholder="Option (e.g. Large)"
+                        value={o.label}
+                        onChange={(e) => updateOption(gi, oi, { label: e.target.value })}
+                      />
+                      <Input
+                        aria-label="Extra price"
+                        className="!w-28"
+                        type="number"
+                        inputMode="decimal"
+                        step="0.01"
+                        placeholder="+₹0"
+                        value={o.priceDelta}
+                        onChange={(e) => updateOption(gi, oi, { priceDelta: Number(e.target.value) })}
+                      />
+                      <IconButton icon={X} label="Remove option" onClick={() => removeOption(gi, oi)} />
+                    </div>
+                  ))}
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    icon={Plus}
+                    className="self-start"
+                    onClick={() => addOption(gi)}
+                  >
+                    Add option
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </section>
 
-          <div className="w-full border-t border-slate-100 pt-3">
-            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-              <p className="text-sm font-semibold text-slate-700">
-                Translations <span className="font-normal text-slate-400">(optional)</span>
-              </p>
-              <button
+          <section className="flex flex-col gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h3 className="text-sm font-semibold text-slate-900">
+                  Translations <span className="font-normal text-slate-400">(optional)</span>
+                </h3>
+                <p className="text-xs text-slate-500">Review auto-translations before saving.</p>
+              </div>
+              <Button
                 type="button"
+                size="sm"
+                variant="soft"
+                icon={Sparkles}
+                loading={translating}
                 onClick={autoTranslate}
-                disabled={translating}
-                className="rounded-lg bg-orange-50 px-2.5 py-1.5 text-xs font-semibold text-orange-700 hover:bg-orange-100 disabled:opacity-50"
               >
-                {translating ? "Translating..." : "✨ Auto-translate from English"}
-              </button>
+                {translating ? "Translating…" : "Auto-translate"}
+              </Button>
             </div>
-            <p className="mb-2 text-xs text-slate-400">
-              Auto-translate fills these from the English name/description — review and edit before saving.
-            </p>
             <div className="grid gap-3 sm:grid-cols-2">
               {(["kn", "hi"] as const).map((lng) => (
-                <div key={lng} className="rounded-xl border border-slate-200 p-3">
-                  <p className="mb-1.5 text-xs font-bold uppercase tracking-wide text-slate-400">
+                <div key={lng} className="flex flex-col gap-2 rounded-xl border border-slate-200 p-3">
+                  <p className="text-xs font-semibold text-slate-500">
                     {lng === "kn" ? "ಕನ್ನಡ (Kannada)" : "हिन्दी (Hindi)"}
                   </p>
                   <Input
-                    className="mb-2"
+                    aria-label={`${lng === "kn" ? "Kannada" : "Hindi"} name`}
                     placeholder="Name"
                     value={tr[lng].name}
                     onChange={(e) => setTr((t) => ({ ...t, [lng]: { ...t[lng], name: e.target.value } }))}
                   />
                   <Textarea
+                    aria-label={`${lng === "kn" ? "Kannada" : "Hindi"} description`}
                     rows={2}
                     placeholder="Description"
                     value={tr[lng].description}
@@ -490,105 +805,34 @@ export default function FoodItems() {
                 </div>
               ))}
             </div>
-          </div>
+          </section>
+        </div>
+      </Dialog>
+    </Page>
+  );
+}
 
-          <Button type="submit">{editing ? "Update" : "Add food item"}</Button>
-          {editing && (
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => {
-                setEditing(null);
-                setName("");
-                setPrice(0);
-                setDescription("");
-                setImageUrl("");
-                setIsBestseller(false);
-                setBestsellerEmoji("⭐");
-                setPrepTimeMinutes(10);
-                setModifierGroups([]);
-                setTr(structuredClone(EMPTY_TR));
-              }}
-            >
-              Cancel
-            </Button>
-          )}
-        </form>
-      </Card>
-
-      <ErrorText>{error}</ErrorText>
-
-      <Card>
-        <TableWrap>
-          <table className="w-full min-w-[34rem] text-sm">
-            <thead>
-              <tr className="text-left text-slate-500">
-                <th className="pb-2">Image</th>
-                <th className="pb-2">Category</th>
-                <th className="pb-2">Subcategory</th>
-                <th className="pb-2">Name</th>
-                <th className="pb-2">Price</th>
-                <th className="pb-2">Prep</th>
-                <th className="pb-2">Reviews</th>
-                <th className="pb-2">Status</th>
-                <th className="pb-2"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {foodItems.map((food) => (
-                <tr key={food._id} className="border-t border-slate-100">
-                  <td className="py-1.5">
-                    <div className="relative h-10 w-10">
-                      {food.imageUrl ? (
-                        <img src={food.imageUrl} alt="" className="h-10 w-10 rounded-md object-cover" />
-                      ) : (
-                        <div className="h-10 w-10 rounded-md bg-slate-100" />
-                      )}
-                      {food.isBestseller && (
-                        <span
-                          className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-white text-[10px] shadow"
-                          title="Bestseller"
-                        >
-                          {food.bestsellerEmoji || "⭐"}
-                        </span>
-                      )}
-                    </div>
-                  </td>
-                  <td className="py-1.5">{categoryName(food.categoryId)}</td>
-                  <td className="py-1.5">{subcategoryName(food.subcategoryId)}</td>
-                  <td className="py-1.5">{food.name}</td>
-                  <td className="py-1.5">₹{food.price.toFixed(2)}</td>
-                  <td className="py-1.5 whitespace-nowrap">{food.prepTimeMinutes ?? 10} min</td>
-                  <td className="py-1.5 whitespace-nowrap">
-                    {food.reviewCount ? (
-                      <span className="text-slate-700">
-                        ★ {(food.reviewSum! / food.reviewCount).toFixed(1)}{" "}
-                        <span className="text-slate-400">({food.reviewCount})</span>
-                      </span>
-                    ) : (
-                      <span className="text-slate-300">—</span>
-                    )}
-                  </td>
-                  <td className="py-1.5">
-                    <div className="flex gap-1.5">
-                      <Badge tone={food.isActive ? "green" : "gray"}>{food.isActive ? "Active" : "Inactive"}</Badge>
-                      {food.isBestseller && <Badge tone="amber">{food.bestsellerEmoji || "⭐"} Bestseller</Badge>}
-                    </div>
-                  </td>
-                  <td className="flex gap-2 py-1.5">
-                    <button className="text-orange-600 hover:underline" onClick={() => edit(food)}>
-                      Edit
-                    </button>
-                    <button className="text-slate-600 hover:underline" onClick={() => toggleActive(food)}>
-                      {food.isActive ? "Deactivate" : "Activate"}
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </TableWrap>
-      </Card>
+function Thumb({ food, size }: { food: FoodItem; size: "sm" | "md" }) {
+  const box = size === "sm" ? "h-10 w-10" : "h-14 w-14";
+  return (
+    <div className={`relative shrink-0 ${box}`}>
+      {food.imageUrl ? (
+        <img src={food.imageUrl} alt="" className={`${box} rounded-lg object-cover ring-1 ring-slate-200`} />
+      ) : (
+        <div className={`${box} flex items-center justify-center rounded-lg bg-slate-100 text-slate-300`}>
+          <UtensilsCrossed size={16} aria-hidden="true" />
+        </div>
+      )}
+      {food.isBestseller && (
+        <span
+          className="absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-white text-[11px] shadow"
+          title="Bestseller"
+        >
+          {food.bestsellerEmoji || "⭐"}
+        </span>
+      )}
     </div>
   );
 }
+
+const typeDot: Record<FoodType, string> = { veg: "bg-emerald-600", "non-veg": "bg-red-600", egg: "bg-amber-500" };

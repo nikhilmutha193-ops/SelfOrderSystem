@@ -7,6 +7,7 @@ export interface IChef {
   passwordHash: string;
   password: string;
   tokenVersion: number;
+  stationId?: Types.ObjectId | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -18,6 +19,7 @@ const chefSchema = new Schema<IChef>(
     passwordHash: { type: String, required: true },
     password: { type: String, required: true },
     tokenVersion: { type: Number, default: 0 },
+    stationId: { type: Schema.Types.ObjectId, ref: "Station", default: null },
   },
   { timestamps: true }
 );

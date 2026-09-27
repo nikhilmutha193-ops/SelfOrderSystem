@@ -3,6 +3,7 @@ import { HydratedDocument } from "mongoose";
 
 import { asyncHandler } from "../middleware/errorHandler";
 import Admin, { IAdmin } from "../models/Admin";
+import TableModel from "../models/Table";
 import { HttpError } from "../utils/httpError";
 import { hashPassword } from "../utils/password";
 import { MODULES, sanitizePermissions } from "../utils/permissions";
@@ -87,5 +88,6 @@ export const deleteAdmin = asyncHandler(async (req: Request, res: Response) => {
   if (admin._id.toString() === req.auth!.id) throw new HttpError(400, "You cannot delete your own account");
 
   await Admin.deleteOne({ _id: admin._id });
+  await TableModel.updateMany({ restaurantId: req.restaurantId, captainId: admin._id }, { $set: { captainId: null } });
   res.json({ message: "Admin deleted" });
 });

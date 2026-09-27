@@ -140,7 +140,7 @@ export async function startCounterOrder(ctx: RequestContext, input: StartCounter
 
   const table = input.tableId ? await repo.findTable(input.tableId) : null;
   if (input.tableId && !table) throw new HttpError(404, "Table not found");
-  if (table && !table.isGuest && table.status === "occupied" && !input.allowOccupied) {
+  if (table && !table.isGuest && table.status !== "available" && !input.allowOccupied) {
     throw new HttpError(409, "This table is already occupied");
   }
 
@@ -169,9 +169,10 @@ export async function addOrderItems(ctx: RequestContext, orderId: string, input:
   const foodById = new Map(foods.map((food) => [food._id.toString(), food]));
   const missing = input.items.find((line) => !foodById.has(line.foodItemId));
   if (missing) throw new HttpError(404, `Food item ${missing.foodItemId} is not available`);
+  const categories = await repo.findCategoryStations(foods.map((food) => food.categoryId));
+  const categoryStation = new Map(categories.map((c) => [c._id.toString(), c.defaultStationId ?? null]));
 
   const created = [];
-  let longestPrepMinutes = 0;
   for (const line of input.items) {
     const food = foodById.get(line.foodItemId)!;
 
@@ -195,24 +196,18 @@ export async function addOrderItems(ctx: RequestContext, orderId: string, input:
       note: line.note,
       status: "pending",
       kotRound: null,
+      stationId: food.stationId ?? categoryStation.get(food.categoryId.toString()) ?? null,
     });
     created.push(orderItem);
-    longestPrepMinutes = Math.max(longestPrepMinutes, food.prepTimeMinutes ?? 0);
   }
 
-  const restaurant = await repo.findRestaurant("prepBufferMinutes");
-  const buffer = restaurant?.prepBufferMinutes ?? 0;
-  const roundReadyAt = new Date(Date.now() + (longestPrepMinutes + buffer) * 60 * 1000);
-  if (!order.estimatedReadyAt || roundReadyAt > order.estimatedReadyAt) {
-    order.estimatedReadyAt = roundReadyAt;
-    await repo.saveOrder(order);
-  }
   await refreshCouponDiscount(repo, order);
 
   await emit("order.itemsAdded", {
     restaurantId: ctx.restaurantId,
     orderId: order._id.toString(),
     itemIds: created.map((item) => item._id.toString()),
+    addedByRole: ctx.auth.role,
   });
   return created;
 }
@@ -241,6 +236,7 @@ export async function cancelOrderItem(ctx: RequestContext, itemId: string, input
     restaurantId: ctx.restaurantId,
     orderId: cancelled.orderId.toString(),
     itemId: cancelled._id.toString(),
+    previousStatus: item.status,
   });
   return cancelled;
 }
@@ -302,13 +298,18 @@ async function getOrderWithTotals(ctx: RequestContext, orderId: string, sortItem
   const repo = new OrdersRepository(ctx.restaurantId);
   const items = await repo.findItems(order._id, { sorted: sortItems });
   const restaurant = await repo.findRestaurant();
-  const totals = totalsForOrder(order, items, restaurant?.taxRates || []);
+  const totals = totalsForOrder(order, items, restaurant);
   return {
     order,
     items,
     totals,
     prepMessageTemplate: restaurant?.prepMessageTemplate || "",
     prepBufferMinutes: restaurant?.prepBufferMinutes ?? 2,
+    guestOrderMode: restaurant?.kotSettings?.guestOrderMode ?? "auto",
+    payment: {
+      upiVpa: restaurant?.billingSettings?.upiVpa ?? "",
+      upiPayeeName: restaurant?.billingSettings?.upiPayeeName || restaurant?.name || "",
+    },
   };
 }
 
@@ -326,7 +327,7 @@ export async function getInvoicePdfData(ctx: RequestContext, orderId: string) {
   const items = await repo.findItems(order._id);
   const restaurant = await repo.findRestaurant();
   if (!restaurant) throw new HttpError(404, "Restaurant not found");
-  const totals = totalsForOrder(order, items, restaurant.taxRates);
+  const totals = totalsForOrder(order, items, restaurant);
   return { restaurant, order, items, totals };
 }
 

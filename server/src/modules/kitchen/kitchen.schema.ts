@@ -4,6 +4,7 @@ import { blankToUndefined, objectId } from "../../core/validate";
 
 export const kotQueueQuery = z.object({
   tableId: blankToUndefined(objectId()),
+  stationId: blankToUndefined(objectId("Invalid station")),
 });
 
 export const kotPdfParams = z.object({

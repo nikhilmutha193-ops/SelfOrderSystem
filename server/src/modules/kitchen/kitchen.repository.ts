@@ -1,5 +1,6 @@
 import { FilterQuery, Types } from "mongoose";
 
+import FoodItem from "../../models/FoodItem";
 import Order, { IOrder } from "../../models/Order";
 import OrderItem, { IOrderItem, OrderItemStatus } from "../../models/OrderItem";
 import Restaurant from "../../models/Restaurant";
@@ -20,10 +21,34 @@ export class KitchenRepository {
     return Order.find(this.scoped(filter)).populate("tableId", "code");
   }
 
-  findActiveItems(orderIds: Types.ObjectId[]) {
+  findActiveItems(orderIds: Types.ObjectId[], stationId?: string) {
     return OrderItem.find(
-      this.scoped<IOrderItem>({ orderId: { $in: orderIds }, status: { $in: ACTIVE_STATUSES } })
+      this.scoped<IOrderItem>({
+        orderId: { $in: orderIds },
+        status: { $in: ACTIVE_STATUSES },
+        ...(stationId && { stationId }),
+      })
     ).sort({ createdAt: 1 });
+  }
+
+  findOrder(orderId: Types.ObjectId | string) {
+    return Order.findOne(this.scoped<IOrder>({ _id: orderId }));
+  }
+
+  findPrepTimes(foodItemIds: Types.ObjectId[]) {
+    return FoodItem.find(this.scoped({ _id: { $in: foodItemIds } }))
+      .select("prepTimeMinutes")
+      .lean();
+  }
+
+  async pushEstimate(orderId: Types.ObjectId, readyAt: Date) {
+    await Order.updateOne(
+      this.scoped<IOrder>({
+        _id: orderId,
+        $or: [{ estimatedReadyAt: null }, { estimatedReadyAt: { $lt: readyAt } }],
+      }),
+      { $set: { estimatedReadyAt: readyAt } }
+    );
   }
 
   hasUnsentItems(orderId: Types.ObjectId) {

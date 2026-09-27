@@ -20,9 +20,9 @@ describe("event bus", () => {
       }),
       on("order.cancelled", (event) => void received.push(event.orderId)),
     ];
-    await emit("order.cancelled", { restaurantId: world.restaurantId, orderId: "o1" });
+    await emit("order.cancelled", { restaurantId: world.restaurantId, orderId: "o1", voided: true });
     stops.forEach((stop) => stop());
-    await emit("order.cancelled", { restaurantId: world.restaurantId, orderId: "o2" });
+    await emit("order.cancelled", { restaurantId: world.restaurantId, orderId: "o2", voided: true });
     expect(received).toEqual(["o1"]);
   });
 });

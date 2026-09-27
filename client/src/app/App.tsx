@@ -1,7 +1,7 @@
 import { lazy, Suspense } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 
-import { AdminHomeRedirect, RequireModule } from "../lib/adminAuth";
+import { AdminHomeRedirect, AdminProfileProvider, RequireModule } from "../lib/adminAuth";
 import { useSiteBranding } from "../lib/useSiteBranding";
 import ErrorBoundary from "../shared/ui/ErrorBoundary";
 import PageLoader from "../shared/ui/PageLoader";
@@ -29,7 +29,15 @@ const Chefs = lazy(() => import("../pages/admin/Chefs"));
 const Orders = lazy(() => import("../features/orders/pages/Orders"));
 const OrderDetail = lazy(() => import("../features/orders/pages/OrderDetail"));
 const Invoices = lazy(() => import("../features/orders/pages/Invoices"));
+const Shifts = lazy(() => import("../features/shifts/pages/Shifts"));
+const DayClose = lazy(() => import("../features/shifts/pages/DayClose"));
+const Printing = lazy(() => import("../features/printing/pages/Printing"));
+const Inventory = lazy(() => import("../features/inventory/pages/Inventory"));
+const Customers = lazy(() => import("../features/customers/pages/Customers"));
+const PublicBill = lazy(() => import("../features/customers/pages/PublicBill"));
 const NewOrder = lazy(() => import("../features/orders/pages/NewOrder"));
+const Pos = lazy(() => import("../features/pos/pages/Pos"));
+const Captain = lazy(() => import("../features/captain/pages/Captain"));
 const RestaurantSettings = lazy(() => import("../pages/admin/RestaurantSettings"));
 const ChangePassword = lazy(() => import("../pages/admin/ChangePassword"));
 const Team = lazy(() => import("../pages/admin/Team"));
@@ -59,6 +67,7 @@ export default function App() {
             <Routes>
               <Route path="/" element={<Landing />} />
               <Route path="/order" element={<TableLogin />} />
+              <Route path="/bill/:token" element={<PublicBill />} />
               <Route
                 path="/order/details"
                 element={
@@ -84,6 +93,30 @@ export default function App() {
                 }
               />
 
+              <Route
+                path="/pos"
+                element={
+                  <ProtectedRoute role="admin" redirectTo="/admin/login">
+                    <AdminProfileProvider>
+                      <RequireModule module="orders">
+                        <Pos />
+                      </RequireModule>
+                    </AdminProfileProvider>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/captain"
+                element={
+                  <ProtectedRoute role="admin" redirectTo="/admin/login">
+                    <AdminProfileProvider>
+                      <RequireModule module="orders">
+                        <Captain />
+                      </RequireModule>
+                    </AdminProfileProvider>
+                  </ProtectedRoute>
+                }
+              />
               <Route path="/admin/login" element={<AdminLogin />} />
               <Route path="/admin/forgot-password" element={<ForgotPassword />} />
               <Route
@@ -172,6 +205,46 @@ export default function App() {
                   element={
                     <RequireModule module="orders">
                       <Orders />
+                    </RequireModule>
+                  }
+                />
+                <Route
+                  path="shifts"
+                  element={
+                    <RequireModule module="dayClose">
+                      <Shifts />
+                    </RequireModule>
+                  }
+                />
+                <Route
+                  path="day-close"
+                  element={
+                    <RequireModule module="dayClose">
+                      <DayClose />
+                    </RequireModule>
+                  }
+                />
+                <Route
+                  path="customers"
+                  element={
+                    <RequireModule module="customers">
+                      <Customers />
+                    </RequireModule>
+                  }
+                />
+                <Route
+                  path="inventory"
+                  element={
+                    <RequireModule module="inventory">
+                      <Inventory />
+                    </RequireModule>
+                  }
+                />
+                <Route
+                  path="printing"
+                  element={
+                    <RequireModule module="printing">
+                      <Printing />
                     </RequireModule>
                   }
                 />

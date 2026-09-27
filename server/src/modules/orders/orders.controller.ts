@@ -4,8 +4,11 @@ import { getContext } from "../../core/context";
 import { idempotencyKey, runIdempotent } from "../../core/idempotency";
 import { parse } from "../../core/validate";
 import { asyncHandler } from "../../middleware/errorHandler";
+import { HttpError } from "../../utils/httpError";
 import { streamInvoicePdf, streamOrdersReportPdf } from "../../utils/pdf";
+import { enqueueBill } from "../printing/printing.service";
 import * as billing from "./orders.billing";
+import * as operations from "./orders.operations";
 import { buildOrdersCsv, buildOrdersPdfData, listInvoices, reportFilename } from "./orders.report";
 import {
   addItemsSchema,
@@ -15,14 +18,19 @@ import {
   generateBillSchema,
   invoiceRegisterQuery,
   itemIdParams,
+  manualDiscountSchema,
+  mergeSchema,
   orderFilterQuery,
   orderIdParams,
-  payOrderSchema,
   reasonSchema,
+  serviceChargeSchema,
+  settleSchema,
+  splitSchema,
   startCounterSchema,
   startDeliverySchema,
   startDineInSchema,
   startTakeawaySchema,
+  transferSchema,
 } from "./orders.schema";
 import * as ordersService from "./orders.service";
 
@@ -146,7 +154,7 @@ export const voidBill = asyncHandler(async (req: Request, res: Response) => {
 
 export const payOrder = asyncHandler(async (req: Request, res: Response) => {
   const { orderId } = parse(orderIdParams, req.params);
-  const input = parse(payOrderSchema, req.body);
+  const input = parse(settleSchema, req.body);
   res.json(await billing.settleOrder(getContext(req), orderId, input));
 });
 
@@ -154,4 +162,54 @@ export const cancelOrder = asyncHandler(async (req: Request, res: Response) => {
   const { orderId } = parse(orderIdParams, req.params);
   const { reason } = parse(cancelOrderSchema, req.body);
   res.json(await billing.cancelOrder(getContext(req), orderId, reason));
+});
+
+export const printBill = asyncHandler(async (req: Request, res: Response) => {
+  const { orderId } = parse(orderIdParams, req.params);
+  const ctx = getContext(req);
+  const order = await ordersService.getOwnedOrder(ctx, orderId);
+  const queued = await enqueueBill(ctx.restaurantId, order._id);
+  if (queued === 0) throw new HttpError(409, "No printer is set up to print bills");
+  res.json({ queued });
+});
+
+export const splitOrder = asyncHandler(async (req: Request, res: Response) => {
+  const { orderId } = parse(orderIdParams, req.params);
+  const input = parse(splitSchema, req.body);
+  res.status(201).json(await operations.splitOrder(getContext(req), orderId, input));
+});
+
+export const mergeOrder = asyncHandler(async (req: Request, res: Response) => {
+  const { orderId } = parse(orderIdParams, req.params);
+  const { intoOrderId } = parse(mergeSchema, req.body);
+  res.json(await operations.mergeOrders(getContext(req), orderId, intoOrderId));
+});
+
+export const transferOrder = asyncHandler(async (req: Request, res: Response) => {
+  const { orderId } = parse(orderIdParams, req.params);
+  const { tableId } = parse(transferSchema, req.body);
+  res.json(await operations.transferOrder(getContext(req), orderId, tableId));
+});
+
+export const setDiscount = asyncHandler(async (req: Request, res: Response) => {
+  const { orderId } = parse(orderIdParams, req.params);
+  const input = parse(manualDiscountSchema, req.body);
+  res.json(await operations.setManualDiscount(getContext(req), orderId, input));
+});
+
+export const removeDiscount = asyncHandler(async (req: Request, res: Response) => {
+  const { orderId } = parse(orderIdParams, req.params);
+  res.json(await operations.removeManualDiscount(getContext(req), orderId));
+});
+
+export const setServiceCharge = asyncHandler(async (req: Request, res: Response) => {
+  const { orderId } = parse(orderIdParams, req.params);
+  const { waived } = parse(serviceChargeSchema, req.body);
+  res.json(await operations.setServiceCharge(getContext(req), orderId, waived));
+});
+
+export const markComplimentary = asyncHandler(async (req: Request, res: Response) => {
+  const { itemId } = parse(itemIdParams, req.params);
+  const { reason } = parse(reasonSchema, req.body);
+  res.json(await operations.markComplimentary(getContext(req), itemId, reason));
 });

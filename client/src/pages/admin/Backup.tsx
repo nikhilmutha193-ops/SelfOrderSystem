@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { api, extractErrorMessage } from "../../shared/api/client";
-import { Button, Card, ErrorText } from "../../shared/ui/ui";
+import { Button, Card, ErrorText, Input, PageHeader, Switch } from "../../shared/ui/ui";
 
 interface RestoreSummary {
   message: string;
@@ -223,17 +223,21 @@ export default function Backup() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-bold text-slate-800">Backup &amp; Restore</h1>
-      <p className="text-sm text-slate-500">
-        Generate snapshots of this restaurant's data (menu, tables, chefs, team, awards, coupons, reviews, orders and
-        chat history), stored on the server so they can be downloaded or restored later - into this same database, or a
-        fresh one after migrating servers. Admin logins are not included; you always sign in with your current admin
-        account.
-      </p>
+    <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 sm:gap-6">
+      <PageHeader
+        title="Backup & Restore"
+        description={
+          <>
+            Generate snapshots of this restaurant's data (menu, tables, chefs, team, awards, coupons, reviews, orders
+            and chat history), stored on the server so they can be downloaded or restored later - into this same
+            database, or a fresh one after migrating servers. Admin logins are not included; you always sign in with
+            your current admin account.
+          </>
+        }
+      />
 
       <Card>
-        <h2 className="mb-2 text-lg font-semibold text-slate-800">Generate a backup</h2>
+        <h2 className="mb-3 text-base font-semibold text-slate-900">Generate a backup</h2>
         <p className="mb-3 text-sm text-slate-500">
           <strong>Download backup</strong> saves the snapshot straight to your device and works on any host.
           {serverStorage
@@ -255,28 +259,30 @@ export default function Backup() {
 
       {serverStorage && (
         <Card>
-          <h2 className="mb-2 text-lg font-semibold text-slate-800">Automatic daily backup</h2>
+          <h2 className="mb-3 text-base font-semibold text-slate-900">Automatic daily backup</h2>
           <p className="mb-3 text-sm text-slate-500">
             When enabled, a backup is generated automatically every day at the chosen time.
           </p>
           <ErrorText>{scheduleError}</ErrorText>
           <div className="flex flex-wrap items-center gap-4">
-            <label className="flex items-center gap-2 text-sm text-slate-700">
-              <input
-                type="checkbox"
+            <div className="flex items-center gap-3">
+              <Switch
+                id="backup-enabled"
                 checked={schedule.enabled}
-                onChange={(e) => {
-                  setSchedule((s) => ({ ...s, enabled: e.target.checked }));
+                onChange={(v) => {
+                  setSchedule((s) => ({ ...s, enabled: v }));
                   setScheduleSaved(false);
                 }}
               />
-              Enabled
-            </label>
-            <label className="flex items-center gap-2 text-sm text-slate-700">
+              <label htmlFor="backup-enabled" className="text-sm font-medium text-slate-700">
+                Enabled
+              </label>
+            </div>
+            <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
               Time
-              <input
+              <Input
                 type="time"
-                className="rounded-md border border-slate-300 px-2 py-1 text-sm"
+                className="!w-36"
                 value={schedule.time}
                 onChange={(e) => {
                   setSchedule((s) => ({ ...s, time: e.target.value }));
@@ -287,7 +293,7 @@ export default function Backup() {
             <Button onClick={saveSchedule} disabled={scheduleSaving} className="self-start">
               {scheduleSaving ? "Saving..." : "Save schedule"}
             </Button>
-            {scheduleSaved && <span className="text-sm text-green-700">Saved</span>}
+            {scheduleSaved && <span className="text-sm font-medium text-emerald-700">Saved</span>}
           </div>
           {schedule.lastRunAt && (
             <p className="mt-2 text-xs text-slate-400">
@@ -299,7 +305,7 @@ export default function Backup() {
 
       {serverStorage && (
         <Card>
-          <h2 className="mb-2 text-lg font-semibold text-slate-800">Backups on this server</h2>
+          <h2 className="mb-3 text-base font-semibold text-slate-900">Backups on this server</h2>
           <ErrorText>{listError}</ErrorText>
           <ErrorText>{rowError}</ErrorText>
           {rowResult && (
@@ -323,21 +329,21 @@ export default function Backup() {
               <table className="w-full text-left text-sm">
                 <thead>
                   <tr className="border-b border-slate-200 text-slate-500">
-                    <th className="py-2 pr-3 font-medium">File</th>
-                    <th className="py-2 pr-3 font-medium">Created</th>
-                    <th className="py-2 pr-3 font-medium">Trigger</th>
-                    <th className="py-2 pr-3 font-medium">Size</th>
-                    <th className="py-2 pr-3 font-medium">Actions</th>
+                    <th>File</th>
+                    <th>Created</th>
+                    <th>Trigger</th>
+                    <th>Size</th>
+                    <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {records.map((record) => (
                     <tr key={record._id} className="border-b border-slate-100">
-                      <td className="py-2 pr-3 font-mono text-xs text-slate-700">{record.filename}</td>
-                      <td className="py-2 pr-3 text-slate-600">{new Date(record.createdAt).toLocaleString()}</td>
-                      <td className="py-2 pr-3 text-slate-600 capitalize">{record.trigger}</td>
-                      <td className="py-2 pr-3 text-slate-600">{formatSize(record.sizeBytes)}</td>
-                      <td className="py-2 pr-3">
+                      <td className="pr-3 font-mono text-xs text-slate-700">{record.filename}</td>
+                      <td className="pr-3 text-slate-600">{new Date(record.createdAt).toLocaleString()}</td>
+                      <td className="pr-3 text-slate-600 capitalize">{record.trigger}</td>
+                      <td className="pr-3 text-slate-600">{formatSize(record.sizeBytes)}</td>
+                      <td className="pr-3">
                         <div className="flex flex-wrap gap-2">
                           <Button
                             variant="secondary"
@@ -372,7 +378,7 @@ export default function Backup() {
       )}
 
       <Card>
-        <h2 className="mb-2 text-lg font-semibold text-slate-800">Restore from an uploaded file</h2>
+        <h2 className="mb-3 text-base font-semibold text-slate-900">Restore from an uploaded file</h2>
         <p className="mb-3 text-sm text-slate-500">
           For migrating from a different server: upload a backup JSON file downloaded from there. This replaces this
           restaurant's current menu, tables, chefs, team, awards, coupons, reviews, orders and chat history with what's
@@ -393,7 +399,7 @@ export default function Backup() {
           )}
           <ErrorText>{restoreError}</ErrorText>
           {restoreResult && (
-            <div className="rounded-md bg-green-50 px-3 py-2 text-sm text-green-800">
+            <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm text-emerald-800">
               <p className="font-medium">{restoreResult.message}</p>
               <ul className="mt-1 grid grid-cols-2 gap-x-4 gap-y-0.5 sm:grid-cols-3">
                 {Object.entries(restoreResult.summary).map(([key, count]) => (

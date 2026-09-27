@@ -21,4 +21,6 @@ export const POLL = {
   guestInvoice: 8000,
   conversations: 8000,
   conversationThread: 4000,
+  printing: 10000,
+  posFloor: 10000,
 } as const;

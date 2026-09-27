@@ -89,3 +89,13 @@ export function getBusinessDayRangeForDate(
     end: wallTimeToUtc(next.year, next.month, next.day, cutoffMinutes, zone),
   };
 }
+
+export function businessDateLabel(now: Date, dayEndTime: string | undefined, timeZone?: string): string {
+  const start = getBusinessDayStart(now, dayEndTime, timeZone);
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: resolveZone(timeZone),
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(start);
+}

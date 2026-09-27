@@ -9,13 +9,18 @@ import { kotPdfParams, kotQueueQuery } from "./kitchen.schema";
 import * as kitchenService from "./kitchen.service";
 
 export const getKotQueue = asyncHandler(async (req: Request, res: Response) => {
-  const { tableId } = parse(kotQueueQuery, req.query);
-  res.json(await kitchenService.getKotQueue(getContext(req), tableId));
+  const { tableId, stationId } = parse(kotQueueQuery, req.query);
+  res.json(await kitchenService.getKotQueue(getContext(req), tableId, stationId));
 });
 
 export const printKot = asyncHandler(async (req: Request, res: Response) => {
   const { orderId } = parse(orderIdParams, req.params);
   res.json(await kitchenService.printKot(getContext(req), orderId));
+});
+
+export const reprintKot = asyncHandler(async (req: Request, res: Response) => {
+  const { orderId, round } = parse(kotPdfParams, req.params);
+  res.json(await kitchenService.reprintKot(getContext(req), orderId, round));
 });
 
 export const getKotPdf = asyncHandler(async (req: Request, res: Response) => {

@@ -19,7 +19,10 @@ export type PrintPaperSize = "thermal58" | "thermal80" | "a5" | "a4";
 
 export type PrintFontSize = "compact" | "normal" | "large";
 
+export type GuestOrderMode = "auto" | "accept";
+
 export interface IKotSettings {
+  guestOrderMode: GuestOrderMode;
   headerText: string;
   showCustomerName: boolean;
   showTableInfo: boolean;
@@ -34,6 +37,7 @@ export interface IKotSettings {
 export interface IInvoiceSettings {
   invoicePrefix: string;
   placeOfSupply: string;
+  autoPrintBill: boolean;
   showCustomerPhone: boolean;
   footerNote: string;
   termsText: string;
@@ -54,6 +58,25 @@ export interface IChatModeration {
   enabled: boolean;
   mode: "mask" | "block";
   customWords: string[];
+}
+
+export interface IBillingSettings {
+  serviceChargePercent: number;
+  maxStaffDiscountPercent: number;
+  upiVpa: string;
+  upiPayeeName: string;
+}
+
+export interface ILoyaltySettings {
+  enabled: boolean;
+  pointsPer100: number;
+  pointValue: number;
+  minRedeem: number;
+  expiryDays: number;
+}
+
+export interface IInventorySettings {
+  autoSoldOut: boolean;
 }
 
 export interface IRestaurant {
@@ -81,6 +104,9 @@ export interface IRestaurant {
   qrSettings: IQrSettings;
   kotSettings: IKotSettings;
   invoiceSettings: IInvoiceSettings;
+  billingSettings: IBillingSettings;
+  inventorySettings: IInventorySettings;
+  loyaltySettings: ILoyaltySettings;
   backupSchedule: IBackupSchedule;
   createdAt: Date;
   updatedAt: Date;
@@ -111,6 +137,7 @@ const qrSettingsSchema = new Schema<IQrSettings>(
 
 const kotSettingsSchema = new Schema<IKotSettings>(
   {
+    guestOrderMode: { type: String, enum: ["auto", "accept"], default: "auto" },
     headerText: { type: String, default: "Kitchen Order Ticket" },
     showCustomerName: { type: Boolean, default: true },
     showTableInfo: { type: Boolean, default: true },
@@ -128,6 +155,7 @@ const invoiceSettingsSchema = new Schema<IInvoiceSettings>(
   {
     invoicePrefix: { type: String, default: "INV", trim: true, uppercase: true },
     placeOfSupply: { type: String, default: "", trim: true },
+    autoPrintBill: { type: Boolean, default: false },
     showCustomerPhone: { type: Boolean, default: true },
     footerNote: { type: String, default: "Thank you for dining with us!" },
     termsText: { type: String, default: "" },
@@ -136,6 +164,16 @@ const invoiceSettingsSchema = new Schema<IInvoiceSettings>(
     showLogo: { type: Boolean, default: true },
     showUnitPrice: { type: Boolean, default: true },
     showJainTag: { type: Boolean, default: true },
+  },
+  { _id: false }
+);
+
+const billingSettingsSchema = new Schema<IBillingSettings>(
+  {
+    serviceChargePercent: { type: Number, default: 0, min: 0, max: 20 },
+    maxStaffDiscountPercent: { type: Number, default: 10, min: 0, max: 100 },
+    upiVpa: { type: String, default: "", trim: true },
+    upiPayeeName: { type: String, default: "", trim: true },
   },
   { _id: false }
 );
@@ -184,6 +222,24 @@ const restaurantSchema = new Schema<IRestaurant>(
     qrSettings: { type: qrSettingsSchema, default: () => ({}) },
     kotSettings: { type: kotSettingsSchema, default: () => ({}) },
     invoiceSettings: { type: invoiceSettingsSchema, default: () => ({}) },
+    billingSettings: { type: billingSettingsSchema, default: () => ({}) },
+    loyaltySettings: {
+      type: new Schema<ILoyaltySettings>(
+        {
+          enabled: { type: Boolean, default: false },
+          pointsPer100: { type: Number, default: 5, min: 0 },
+          pointValue: { type: Number, default: 1, min: 0 },
+          minRedeem: { type: Number, default: 50, min: 0 },
+          expiryDays: { type: Number, default: 365, min: 0 },
+        },
+        { _id: false }
+      ),
+      default: () => ({}),
+    },
+    inventorySettings: {
+      type: new Schema<IInventorySettings>({ autoSoldOut: { type: Boolean, default: false } }, { _id: false }),
+      default: () => ({}),
+    },
     backupSchedule: { type: backupScheduleSchema, default: () => ({}) },
     chatModeration: { type: chatModerationSchema, default: () => ({}) },
     aggregatorWebhookSecret: { type: String, default: "" },

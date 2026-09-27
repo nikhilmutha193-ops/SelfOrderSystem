@@ -11,6 +11,7 @@ import { useTableSession } from "../../lib/useTableSession";
 import { api, clearStoredToken, extractErrorMessage, setActiveAuth } from "../../shared/api/client";
 import { POLL } from "../../shared/api/queryClient";
 import { Badge, Button, Card, ErrorText, Input } from "../../shared/ui/ui";
+import UpiQr from "../../shared/ui/UpiQr";
 
 const STATUS_TONE = {
   pending: "amber",
@@ -131,6 +132,8 @@ export default function CustomerInvoice() {
   // Cancelled items are settled, so they don't hold the table up.
   const activeItems = items.filter((i) => i.status !== "cancelled");
   const pendingCount = activeItems.filter((i) => i.status !== "served").length;
+  const awaitingAccept =
+    order.status === "open" && data.guestOrderMode === "accept" && activeItems.some((i) => i.kotRound == null);
   const orderComplete =
     order.status === "closed" || order.status === "billed" || (activeItems.length > 0 && pendingCount === 0);
   const statusBadge =
@@ -150,15 +153,37 @@ export default function CustomerInvoice() {
       </div>
 
       {order.status === "billed" && (
-        <p className="mb-4 rounded-md bg-blue-50 px-3 py-2 text-sm text-blue-900">
-          Your bill{order.invoiceNumber ? ` ${order.invoiceNumber}` : ""} is ready. Please pay at the counter.
-        </p>
+        <Card className="mb-4">
+          <p className="text-sm text-blue-900">
+            Your bill{order.invoiceNumber ? ` ${order.invoiceNumber}` : ""} is ready.{" "}
+            {data.payment?.upiVpa ? "Pay at the counter or scan to pay by UPI." : "Please pay at the counter."}
+          </p>
+          {data.payment?.upiVpa && (
+            <div className="mt-3">
+              <UpiQr
+                vpa={data.payment.upiVpa}
+                payee={data.payment.upiPayeeName}
+                amount={totals.grandTotal}
+                note={order.invoiceNumber ?? "Bill"}
+              />
+              <p className="mt-2 text-center text-xs text-slate-500">
+                Show the payment confirmation to staff so they can close your bill.
+              </p>
+            </div>
+          )}
+        </Card>
       )}
 
       <Card className="mb-4">
         <p className="text-sm text-slate-600">Customer: {order.customerName}</p>
         <p className="text-sm text-slate-600">Phone: {order.customerPhone}</p>
       </Card>
+
+      {awaitingAccept && (
+        <p className="mb-4 rounded-md bg-blue-50 px-3 py-2 text-sm font-medium text-blue-900">
+          Waiting for the restaurant to accept your order. It goes to the kitchen as soon as they do.
+        </p>
+      )}
 
       <Card className="mb-4">
         {prepMessage && (
@@ -235,6 +260,12 @@ export default function CustomerInvoice() {
           <div className="flex justify-between text-sm text-green-700">
             <span>Discount{order.couponCode ? ` (${order.couponCode})` : ""}</span>
             <span>-₹{totals.discount.toFixed(2)}</span>
+          </div>
+        )}
+        {(totals.serviceCharge ?? 0) > 0 && (
+          <div className="flex justify-between text-sm text-slate-600">
+            <span>Service charge ({totals.serviceChargePercent}%)</span>
+            <span>₹{(totals.serviceCharge ?? 0).toFixed(2)}</span>
           </div>
         )}
         {totals.taxLines.map((t) => (

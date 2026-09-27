@@ -2,11 +2,13 @@ import { Request, Response } from "express";
 import { Types } from "mongoose";
 
 import { asyncHandler } from "../middleware/errorHandler";
+import Admin from "../models/Admin";
 import Order from "../models/Order";
 import TableModel from "../models/Table";
 import { HttpError } from "../utils/httpError";
 import { hashPassword } from "../utils/password";
 import { cancelUnsentOrdersForTables } from "../utils/tableRelease";
+import { syncTableState } from "../utils/tableState";
 import { encryptTableToken } from "../utils/tableToken";
 
 function validId(id: string) {
@@ -20,6 +22,37 @@ export const listTables = asyncHandler(async (req: Request, res: Response) => {
     qrToken: encryptTableToken(table._id.toString(), req.restaurantId!),
   }));
   res.json(withTokens);
+});
+
+export const listCaptains = asyncHandler(async (req: Request, res: Response) => {
+  const admins = await Admin.find({ restaurantId: req.restaurantId })
+    .select("username isOwner permissions")
+    .sort({ username: 1 });
+  res.json(
+    admins
+      .filter((admin) => admin.isOwner || admin.permissions?.get("orders") === "edit")
+      .map((admin) => ({ _id: admin._id, username: admin.username }))
+  );
+});
+
+export const setTableCaptain = asyncHandler(async (req: Request, res: Response) => {
+  if (!Types.ObjectId.isValid(req.params.id)) throw new HttpError(400, "Invalid id");
+  const { captainId } = req.body as { captainId?: unknown };
+  let captain: Types.ObjectId | null = null;
+  if (captainId !== null && captainId !== undefined && captainId !== "") {
+    if (typeof captainId !== "string" || !Types.ObjectId.isValid(captainId))
+      throw new HttpError(400, "Choose a staff member");
+    const admin = await Admin.findOne({ _id: captainId, restaurantId: req.restaurantId }).select("_id");
+    if (!admin) throw new HttpError(404, "Staff member not found");
+    captain = admin._id;
+  }
+  const table = await TableModel.findOneAndUpdate(
+    { _id: req.params.id, restaurantId: req.restaurantId },
+    { $set: { captainId: captain } },
+    { new: true }
+  ).select("-passwordHash");
+  if (!table) throw new HttpError(404, "Table not found");
+  res.json(table);
 });
 
 export const listAvailableTables = asyncHandler(async (req: Request, res: Response) => {
@@ -88,33 +121,30 @@ export const updateTable = asyncHandler(async (req: Request, res: Response) => {
 
 export const releaseTable = asyncHandler(async (req: Request, res: Response) => {
   validId(req.params.id);
-  const table = await TableModel.findOneAndUpdate(
-    { _id: req.params.id, restaurantId: req.restaurantId },
-    { $set: { status: "available" }, $unset: { sessionId: "", occupiedAt: "" } },
-    { new: true }
-  ).select("-passwordHash");
-  if (!table) throw new HttpError(404, "Table not found");
+  const existing = await TableModel.findOne({ _id: req.params.id, restaurantId: req.restaurantId });
+  if (!existing) throw new HttpError(404, "Table not found");
 
-  const cancelledOrders = await cancelUnsentOrdersForTables([table._id]);
+  const cancelledOrders = await cancelUnsentOrdersForTables([existing._id]);
+  const status = await syncTableState(existing._id, { endSession: true });
+  const table = await TableModel.findById(existing._id).select("-passwordHash");
 
-  res.json({ ...table.toObject(), cancelledOrders });
+  res.json({ ...table!.toObject(), cancelledOrders, awaitingPayment: status === "awaiting_payment" });
 });
 
 export const releaseOwnTableSession = asyncHandler(async (req: Request, res: Response) => {
   if (!req.auth?.tableId) throw new HttpError(400, "No table session to release");
 
-  const table = await TableModel.findOneAndUpdate(
-    {
-      _id: req.auth.tableId,
-      restaurantId: req.restaurantId,
-      sessionId: req.auth.sessionId,
-    },
-    { $set: { status: "available" }, $unset: { sessionId: "", occupiedAt: "" } },
-    { new: true }
-  );
-  if (table) await cancelUnsentOrdersForTables([table._id]);
+  const table = await TableModel.findOne({
+    _id: req.auth.tableId,
+    restaurantId: req.restaurantId,
+    sessionId: req.auth.sessionId,
+  });
+  if (!table) return res.json({ released: false });
 
-  res.json({ released: !!table });
+  await cancelUnsentOrdersForTables([table._id]);
+  const status = await syncTableState(table._id, { endSession: true });
+
+  res.json({ released: true, awaitingPayment: status === "awaiting_payment" });
 });
 
 export const deleteTable = asyncHandler(async (req: Request, res: Response) => {

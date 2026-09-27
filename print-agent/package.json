@@ -1,0 +1,15 @@
+{
+  "name": "selforder-print-agent",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Prints KOTs and bills from the SelfOrder server on the restaurant's thermal printers",
+  "main": "agent.js",
+  "bin": "agent.js",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node agent.js",
+    "pair": "node agent.js pair"
+  }
+}

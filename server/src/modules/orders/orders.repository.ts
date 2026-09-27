@@ -1,6 +1,7 @@
 import { ClientSession, FilterQuery, HydratedDocument, Types } from "mongoose";
 
 import Admin from "../../models/Admin";
+import Category from "../../models/Category";
 import ChatMessage from "../../models/ChatMessage";
 import Coupon from "../../models/Coupon";
 import FoodItem from "../../models/FoodItem";
@@ -52,9 +53,7 @@ export class OrdersRepository {
   }
 
   findInvoices(filter: FilterQuery<IOrder>) {
-    return Order.find(this.scoped<IOrder>({ ...filter, invoiceNumber: { $type: "string" } }))
-      .sort({ billedAt: 1, invoiceNumber: 1 })
-      .lean();
+    return Order.find(this.scoped<IOrder>(filter)).sort({ billedAt: 1, checkoutTime: 1, invoiceNumber: 1 }).lean();
   }
 
   findClosedOrdersWithoutBill() {
@@ -96,6 +95,22 @@ export class OrdersRepository {
       .lean();
   }
 
+  moveItems(itemIds: Types.ObjectId[], toOrderId: Types.ObjectId) {
+    return OrderItem.updateMany(this.scoped<IOrderItem>({ _id: { $in: itemIds } }), { $set: { orderId: toOrderId } });
+  }
+
+  moveAllItems(fromOrderId: Types.ObjectId, toOrderId: Types.ObjectId) {
+    return OrderItem.updateMany(this.scoped<IOrderItem>({ orderId: fromOrderId }), { $set: { orderId: toOrderId } });
+  }
+
+  markItemComplimentary(itemId: Types.ObjectId, reason: string) {
+    return OrderItem.findOneAndUpdate(
+      this.scoped<IOrderItem>({ _id: itemId, status: { $ne: "cancelled" } }),
+      { $set: { complimentary: true, complimentaryReason: reason, total: 0 } },
+      { new: true }
+    );
+  }
+
   findItem(itemId: string) {
     return OrderItem.findOne(this.scoped<IOrderItem>({ _id: itemId }));
   }
@@ -126,6 +141,12 @@ export class OrdersRepository {
 
   findActiveFoodItems(foodItemIds: string[]) {
     return FoodItem.find(this.scoped({ _id: { $in: foodItemIds }, isActive: true }));
+  }
+
+  findCategoryStations(categoryIds: Types.ObjectId[]) {
+    return Category.find(this.scoped({ _id: { $in: categoryIds } }))
+      .select("defaultStationId")
+      .lean();
   }
 
   findTable(tableId: string) {

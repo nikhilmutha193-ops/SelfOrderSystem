@@ -37,7 +37,8 @@ export default function AdminLogin() {
       const res = await api.post("/auth/admin/login", { username, password });
       storeToken("admin", res.data.token);
       setActiveAuth({ role: "admin", token: res.data.token });
-      navigate("/admin/dashboard");
+      const next = searchParams.get("next");
+      navigate(next && next.startsWith("/") && !next.startsWith("//") ? next : "/admin", { replace: true });
     } catch (err) {
       setError(extractErrorMessage(err));
     } finally {
