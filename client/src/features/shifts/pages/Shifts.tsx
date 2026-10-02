@@ -1,14 +1,36 @@
 import { useState } from "react";
 
 import { useCanEdit } from "../../../lib/adminAuth";
+import { cashSuggestions } from "../../../lib/cash";
 import { extractErrorMessage } from "../../../shared/api/client";
 import { Badge, Button, Card, ErrorText, Input, PageHeader, Select, TableWrap } from "../../../shared/ui/ui";
 import { useCashMovement, useCloseShift, useCurrentShift, useOpenShift, useShiftHistory } from "../queries";
 
 const rupees = (n: number | undefined | null) => `₹${(n ?? 0).toFixed(2)}`;
 
+const OPENING_FLOAT_PRESETS = [500, 1000, 2000, 5000, 10000];
+const CASH_MOVEMENT_PRESETS = [50, 100, 200, 500, 1000, 2000];
+
 function when(iso?: string | null) {
   return iso ? new Date(iso).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }) : "-";
+}
+
+function AmountChips({ values, onPick }: { values: number[]; onPick: (v: number) => void }) {
+  if (values.length === 0) return null;
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {values.map((v) => (
+        <button
+          key={v}
+          type="button"
+          onClick={() => onPick(v)}
+          className="min-h-[36px] rounded-full border border-slate-200 bg-slate-50 px-3 text-sm font-medium text-slate-700 tabular-nums hover:bg-slate-100"
+        >
+          ₹{v}
+        </button>
+      ))}
+    </div>
+  );
 }
 
 export default function Shifts() {
@@ -39,6 +61,10 @@ export default function Shifts() {
 
   const shift = current.data;
   const variancePreview = shift && counted !== "" ? Number(counted) - (shift.expectedCash ?? 0) : null;
+  // Cash is physical, so round the expected figure to whole rupees before offering it as a chip -
+  // the first value is the exact expected amount, the rest are round-up alternatives.
+  const expectedRounded = shift ? Math.round(shift.expectedCash ?? 0) : null;
+  const closeChipValues = expectedRounded !== null ? [expectedRounded, ...cashSuggestions(expectedRounded)] : [];
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 sm:gap-6">
@@ -58,27 +84,30 @@ export default function Shifts() {
           <h2 className="mb-4 text-base font-semibold text-slate-900">No shift is open</h2>
           {canEdit ? (
             <form
-              className="flex flex-wrap items-end gap-3"
+              className="flex flex-col gap-3"
               onSubmit={(e) => {
                 e.preventDefault();
                 run(() => openShift.mutateAsync(Number(float) || 0));
               }}
             >
-              <label className="text-sm font-medium text-slate-700">
-                Cash in the drawer now (₹)
-                <Input
-                  id="shift-float"
-                  className="mt-1 !w-40"
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  value={float}
-                  onChange={(e) => setFloat(e.target.value)}
-                />
-              </label>
-              <Button type="submit" disabled={openShift.isPending}>
-                Open shift
-              </Button>
+              <div className="flex flex-wrap items-end gap-3">
+                <label className="text-sm font-medium text-slate-700">
+                  Cash in the drawer now (₹)
+                  <Input
+                    id="shift-float"
+                    className="mt-1 !w-40"
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={float}
+                    onChange={(e) => setFloat(e.target.value)}
+                  />
+                </label>
+                <Button type="submit" disabled={openShift.isPending}>
+                  Open shift
+                </Button>
+              </div>
+              <AmountChips values={OPENING_FLOAT_PRESETS} onPick={(v) => setFloat(String(v))} />
             </form>
           ) : (
             <p className="text-sm text-slate-500">You can view shifts but not open one.</p>
@@ -173,6 +202,7 @@ export default function Shifts() {
                       onChange={(e) => setMoveAmount(e.target.value)}
                     />
                   </div>
+                  <AmountChips values={CASH_MOVEMENT_PRESETS} onPick={(v) => setMoveAmount(String(v))} />
                   <Input
                     id="cash-reason"
                     placeholder="Reason, e.g. bought milk"
@@ -215,6 +245,9 @@ export default function Shifts() {
                       onChange={(e) => setCounted(e.target.value)}
                     />
                   </label>
+                  {closeChipValues.length > 0 && (
+                    <AmountChips values={closeChipValues} onPick={(v) => setCounted(String(v))} />
+                  )}
                   {variancePreview !== null && (
                     <p
                       className={`text-sm font-semibold ${

@@ -979,3 +979,46 @@ export interface PublicBill {
   items: { foodName: string; quantity: number; unitPrice: number; total: number; complimentary: boolean }[];
   totals: InvoiceTotals;
 }
+
+export interface BookingSettings {
+  enabled: boolean;
+  openTime: string; // "HH:mm"
+  closeTime: string; // "HH:mm"
+  slotMinutes: number;
+}
+
+export type BookingStatus = "pending" | "confirmed" | "seated" | "cancelled" | "no_show";
+
+export interface Booking {
+  _id: string;
+  customerName: string;
+  phone: string;
+  phoneDisplay?: string;
+  partySize: number;
+  bookingDate: string; // "YYYY-MM-DD"
+  slotStart: string;
+  slotEnd: string;
+  tableId: string | null;
+  tableCode?: string | null;
+  status: BookingStatus;
+  notes: string;
+  createdByName?: string;
+  confirmedAt: string | null;
+  seatedAt: string | null;
+  cancelledAt: string | null;
+  cancelReason: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BookingAvailabilitySlot {
+  slotStart: string; // "HH:mm"
+  slotEnd: string;
+  available: boolean;
+  remaining: number;
+}
+
+export interface BookingsForDate {
+  date: string;
+  bookings: Booking[];
+}

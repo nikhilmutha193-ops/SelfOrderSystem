@@ -11,6 +11,8 @@ import { apiLimiter, authLimiter } from "./middleware/rateLimit";
 import { requestLogger } from "./middleware/requestLogger";
 import { sanitizeRequest } from "./middleware/sanitize";
 import { resolveTenant } from "./middleware/tenant";
+import { registerBookingHandlers } from "./modules/bookings/bookings.handlers";
+import bookingRoutes from "./modules/bookings/bookings.routes";
 import chatRoutes from "./modules/chat/chat.routes";
 import { registerCustomerHandlers } from "./modules/customers/customers.handlers";
 import { billRoutes, customerRoutes } from "./modules/customers/customers.routes";
@@ -49,6 +51,7 @@ registerKitchenHandlers();
 registerPrintingHandlers();
 registerInventoryHandlers();
 registerCustomerHandlers();
+registerBookingHandlers();
 
 const app = express();
 
@@ -119,6 +122,7 @@ app.use("/api/pos", posRoutes);
 app.use("/api/inventory", inventoryRoutes);
 app.use("/api/customers", customerRoutes);
 app.use("/api/bills", billRoutes);
+app.use("/api/bookings", bookingRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/team", teamRoutes);
 app.use("/api/reviews", reviewRoutes);

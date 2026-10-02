@@ -1,7 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import QrScanner from "qr-scanner";
 
-import type { TableRow } from "../../lib/types";
+import { todayIst } from "../../lib/istDate";
+import type { BookingAvailabilitySlot, BookingSettings, TableRow } from "../../lib/types";
 import { useTableSession } from "../../lib/useTableSession";
 import {
   activateStoredAuth,
@@ -15,9 +17,33 @@ import {
 
 import "../../styles/order.css";
 
+/**
+ * The printed table QR encodes a full URL like ".../order?t=<token>" (see admin QrCodes.tsx).
+ * A camera scan decodes that same string, so pull the "t" param back out of it - falling back
+ * to treating the whole scanned text as the token itself, in case it's ever just the bare value.
+ */
+function extractQrTokenFromScan(text: string): string {
+  try {
+    const url = new URL(text, window.location.origin);
+    const t = url.searchParams.get("t");
+    if (t) return t;
+  } catch {
+    /* not a parseable URL - fall through to the raw-text fallback below */
+  }
+  return text.trim();
+}
+
+/** "14:30" -> "2:30 PM", for the slot picker boxes. */
+function formatSlotLabel(hhmm: string): string {
+  const [h, m] = hhmm.split(":").map(Number);
+  const period = h >= 12 ? "PM" : "AM";
+  const hour12 = h % 12 === 0 ? 12 : h % 12;
+  return `${hour12}:${String(m).padStart(2, "0")} ${period}`;
+}
+
 export default function TableLogin() {
   const [searchParams] = useSearchParams();
-  const qrToken = searchParams.get("t") || "";
+  const urlQrToken = searchParams.get("t") || "";
   const [sessionExpired] = useState(() => searchParams.get("expired") === "1" || wasSessionExpired("table"));
   const [code, setCode] = useState(() => searchParams.get("code") || "");
   const [password, setPassword] = useState("");
@@ -27,8 +53,34 @@ export default function TableLogin() {
   const [loading, setLoading] = useState(false);
   const [brand, setBrand] = useState<{ name: string; logoUrl: string }>({ name: "Benne Kaffi", logoUrl: "" });
   const [needsOrderChoice, setNeedsOrderChoice] = useState(false);
+  // In-page camera QR scanning, as an alternative to arriving via a scanned-elsewhere link
+  // (?t=) or typing the code+PIN by hand. Once a scan succeeds, its token is kept here and
+  // treated exactly like a URL-provided one everywhere else (retry, the continue/new-order
+  // choice, etc.) via `qrToken` below - only the *source* of the token differs.
+  const [scannedToken, setScannedToken] = useState("");
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [scannerError, setScannerError] = useState<string | null>(null);
+  const [cameraAvailable, setCameraAvailable] = useState(false);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const qrScannerRef = useRef<QrScanner | null>(null);
   const navigate = useNavigate();
   const session = useTableSession();
+  const qrToken = urlQrToken || scannedToken;
+
+  // Prebooking - a guest can reserve a table for a later time slot without needing to be at a
+  // table (or logged in) at all. Staff then confirm it and assign a table from the admin side.
+  const [bookingSettings, setBookingSettings] = useState<BookingSettings | null>(null);
+  const [bookingOpen, setBookingOpen] = useState(false);
+  const [bkName, setBkName] = useState("");
+  const [bkPhone, setBkPhone] = useState("");
+  const [bkParty, setBkParty] = useState(2);
+  const [bkDate, setBkDate] = useState(() => todayIst());
+  const [bkSlot, setBkSlot] = useState("");
+  const [bkSlots, setBkSlots] = useState<BookingAvailabilitySlot[]>([]);
+  const [bkSlotsLoading, setBkSlotsLoading] = useState(false);
+  const [bkError, setBkError] = useState<string | null>(null);
+  const [bkSubmitting, setBkSubmitting] = useState(false);
+  const [bkDone, setBkDone] = useState(false);
 
   useEffect(() => {
     api
@@ -37,15 +89,37 @@ export default function TableLogin() {
       .catch(() => {});
   }, []);
 
+  // Camera access (getUserMedia/enumerateDevices) only exists in a "secure context" - HTTPS,
+  // or the special case of "localhost". Loaded over plain HTTP via a LAN IP (e.g. a phone
+  // opening the Docker deployment's http://192.168.x.x:8080 during local testing), the browser
+  // doesn't expose navigator.mediaDevices at all, so QrScanner.hasCamera() harmlessly resolves
+  // to false regardless of whether a camera actually exists - the button then just vanishes
+  // with no explanation ("not able to see the QR scan option"). Distinguish that case so the
+  // guest (or whoever's testing it) sees why, instead of a silently missing button.
+  const insecureContext = typeof window !== "undefined" && !window.isSecureContext;
+
+  // Only offer "Scan QR code" where a camera can plausibly exist - avoids a button that would
+  // just fail on a desktop with no webcam.
+  useEffect(() => {
+    if (insecureContext) return;
+    QrScanner.hasCamera()
+      .then(setCameraAvailable)
+      .catch(() => setCameraAvailable(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const OWN_TABLE_OCCUPIED_MESSAGE = "You already have an order in progress at this table";
 
-  async function attemptLogin(opts: { startNewOrder?: boolean; continueOrder?: boolean } = {}) {
+  async function attemptLogin(
+    opts: { startNewOrder?: boolean; continueOrder?: boolean; qrTokenOverride?: string } = {}
+  ) {
+    const tokenToUse = opts.qrTokenOverride ?? qrToken;
     setError(null);
     setNeedsOrderChoice(false);
     setLoading(true);
     try {
       const res = await api.post("/auth/table/login", {
-        ...(qrToken ? { token: qrToken } : { code, password }),
+        ...(tokenToUse ? { token: tokenToUse } : { code, password }),
         ...(session.tableId ? { currentTableId: session.tableId } : {}),
         ...(opts.startNewOrder ? { startNewOrder: true } : {}),
         ...(opts.continueOrder ? { continueOrder: true } : {}),
@@ -66,7 +140,7 @@ export default function TableLogin() {
         setLoading(false);
         return;
       }
-      if (qrToken && session.tableId) {
+      if (tokenToUse && session.tableId) {
         navigate(session.orderId ? "/order/menu" : "/order/details", { replace: true });
         return;
       }
@@ -83,7 +157,55 @@ export default function TableLogin() {
     attemptLogin({ continueOrder: true });
   }
 
+  function stopScanner() {
+    qrScannerRef.current?.stop();
+    qrScannerRef.current?.destroy();
+    qrScannerRef.current = null;
+  }
+
+  function closeScanner() {
+    stopScanner();
+    setScannerOpen(false);
+  }
+
+  function openScanner() {
+    setScannerError(null);
+    setError(null);
+    setScannerOpen(true);
+  }
+
+  // Starts the camera once the <video> element for it exists (i.e. once scannerOpen renders
+  // the overlay), and always tears it down again on close/unmount - a live camera stream left
+  // running would keep draining the guest's battery and showing the "camera in use" indicator.
   useEffect(() => {
+    if (!scannerOpen || !videoRef.current) return;
+    const scanner = new QrScanner(
+      videoRef.current,
+      (result) => {
+        const token = extractQrTokenFromScan(result.data);
+        closeScanner();
+        setScannedToken(token);
+        attemptLogin({ qrTokenOverride: token });
+      },
+      {
+        preferredCamera: "environment",
+        highlightScanRegion: true,
+        highlightCodeOutline: true,
+        onDecodeError: () => {
+          /* fires continuously while no code is in frame - not a real error */
+        },
+      }
+    );
+    qrScannerRef.current = scanner;
+    scanner.start().catch(() => {
+      setScannerError("Couldn't access the camera. Check your browser's camera permission and try again.");
+    });
+    return stopScanner;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scannerOpen]);
+
+  useEffect(() => {
+
     clearExpiredFlag("table");
     const token = activateStoredAuth("table");
 
@@ -102,8 +224,59 @@ export default function TableLogin() {
       .get<TableRow[]>("/tables/available")
       .then((res) => setAvailable(res.data))
       .catch(() => setAvailable([]));
+    api
+      .get<BookingSettings>("/bookings/public/settings")
+      .then((res) => setBookingSettings(res.data))
+      .catch(() => setBookingSettings(null));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Reload the slot list whenever the dialog is open and the chosen date changes - a slot that
+  // was free a moment ago may already be gone by the time the guest picks it.
+  useEffect(() => {
+    if (!bookingOpen) return;
+    setBkSlotsLoading(true);
+    setBkSlot("");
+    api
+      .get<BookingAvailabilitySlot[]>("/bookings/public/availability", { params: { date: bkDate } })
+      .then((res) => setBkSlots(res.data))
+      .catch(() => setBkSlots([]))
+      .finally(() => setBkSlotsLoading(false));
+  }, [bookingOpen, bkDate]);
+
+  function openBooking() {
+    setBkError(null);
+    setBkDone(false);
+    setBookingOpen(true);
+  }
+
+  function closeBooking() {
+    setBookingOpen(false);
+  }
+
+  async function submitBooking(e: React.FormEvent) {
+    e.preventDefault();
+    setBkError(null);
+    if (!bkSlot) {
+      setBkError("Choose a time slot");
+      return;
+    }
+    setBkSubmitting(true);
+    try {
+      await api.post("/bookings/public", {
+        customerName: bkName.trim(),
+        phone: bkPhone.trim(),
+        partySize: bkParty,
+        bookingDate: bkDate,
+        slotStart: bkSlot,
+      });
+      setBkDone(true);
+    } catch (err) {
+      setBkError(extractErrorMessage(err));
+    } finally {
+      setBkSubmitting(false);
+    }
+  }
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -229,6 +402,34 @@ export default function TableLogin() {
 
               {!qrToken && !needsOrderChoice && (
                 <>
+                  {cameraAvailable && (
+                    <>
+                      <button type="button" className="btn btn--primary btn--lg btn--block" onClick={openScanner}>
+                        <svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          aria-hidden="true"
+                          style={{ width: 20, height: 20 }}
+                        >
+                          <path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2" />
+                          <rect x="7" y="7" width="10" height="10" rx="1" />
+                        </svg>
+                        Scan table QR code
+                      </button>
+                      <p className="field__divider">or enter your table code and PIN</p>
+                    </>
+                  )}
+                  {insecureContext && (
+                    <p className="order-note order-note--warn">
+                      Camera scanning needs a secure (https) connection, so it isn't available here - enter your
+                      table code and PIN below instead.
+                    </p>
+                  )}
+
                   <div className="field">
                     <label className="field__label" htmlFor="table-code">
                       Table code
@@ -330,6 +531,15 @@ export default function TableLogin() {
                       </ul>
                     </div>
                   )}
+
+                  {bookingSettings?.enabled && (
+                    <>
+                      <p className="field__divider">or</p>
+                      <button type="button" className="btn btn--secondary btn--lg btn--block" onClick={openBooking}>
+                        Reserve a table for later
+                      </button>
+                    </>
+                  )}
                 </>
               )}
 
@@ -353,6 +563,144 @@ export default function TableLogin() {
           © {new Date().getFullYear()} {brand.name} · Taste of Bengaluru
         </p>
       </footer>
+
+      {scannerOpen && (
+        <div className="scanner-overlay" role="dialog" aria-modal="true" aria-label="Scan table QR code">
+          <div className="scanner-overlay__inner">
+            <div className="scanner-overlay__head">
+              <p className="scanner-overlay__title">Scan the QR code on your table</p>
+              <button type="button" className="scanner-overlay__close" onClick={closeScanner} aria-label="Close scanner">
+                ✕
+              </button>
+            </div>
+            <div className="scanner-overlay__video-wrap">
+              {/* muted+playsInline are required for iOS Safari to auto-play the camera stream inline. */}
+              <video ref={videoRef} className="scanner-overlay__video" muted playsInline />
+            </div>
+            {scannerError ? (
+              <p className="order-note order-note--error">{scannerError}</p>
+            ) : (
+              <p className="scanner-overlay__hint">Line the QR code up inside the frame.</p>
+            )}
+            <button type="button" className="btn btn--secondary btn--lg btn--block" onClick={closeScanner}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {bookingOpen && (
+        <div className="scanner-overlay" role="dialog" aria-modal="true" aria-label="Reserve a table">
+          <div className="scanner-overlay__inner">
+            <div className="scanner-overlay__head">
+              <p className="scanner-overlay__title">{bkDone ? "Booking requested" : "Reserve a table"}</p>
+              <button type="button" className="scanner-overlay__close" onClick={closeBooking} aria-label="Close">
+                ✕
+              </button>
+            </div>
+
+            {bkDone ? (
+              <>
+                <p className="order-note order-note--info">
+                  Thanks{bkName ? `, ${bkName}` : ""}! We've noted your booking for {bkDate} at {bkSlot}. Our staff
+                  will confirm it and may call {bkPhone} to coordinate.
+                </p>
+                <button type="button" className="btn btn--primary btn--lg btn--block" onClick={closeBooking}>
+                  Done
+                </button>
+              </>
+            ) : (
+              <form onSubmit={submitBooking} noValidate>
+                <div className="field">
+                  <label className="field__label" htmlFor="bk-name">
+                    Your name
+                  </label>
+                  <input
+                    className="field__input"
+                    id="bk-name"
+                    value={bkName}
+                    onChange={(e) => setBkName(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="field">
+                  <label className="field__label" htmlFor="bk-phone">
+                    Contact number
+                  </label>
+                  <input
+                    className="field__input"
+                    id="bk-phone"
+                    type="tel"
+                    value={bkPhone}
+                    onChange={(e) => setBkPhone(e.target.value)}
+                    required
+                  />
+                  <p className="field__hint">We may call to confirm your booking.</p>
+                </div>
+                <div className="field">
+                  <label className="field__label" htmlFor="bk-party">
+                    Number of guests
+                  </label>
+                  <input
+                    className="field__input"
+                    id="bk-party"
+                    type="number"
+                    min={1}
+                    max={100}
+                    value={bkParty}
+                    onChange={(e) => setBkParty(Number(e.target.value))}
+                    required
+                  />
+                </div>
+                <div className="field">
+                  <label className="field__label" htmlFor="bk-date">
+                    Date
+                  </label>
+                  <input
+                    className="field__input"
+                    id="bk-date"
+                    type="date"
+                    min={todayIst()}
+                    value={bkDate}
+                    onChange={(e) => setBkDate(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="field">
+                  <span className="field__label" id="bk-slot-label">
+                    Time slot
+                  </span>
+                  {bkSlotsLoading ? (
+                    <p className="field__hint">Loading slots…</p>
+                  ) : bkSlots.some((s) => s.available) ? (
+                    <div className="slot-grid" role="group" aria-labelledby="bk-slot-label">
+                      {bkSlots
+                        .filter((s) => s.available)
+                        .map((s) => (
+                          <button
+                            key={s.slotStart}
+                            type="button"
+                            className={`slot-box${bkSlot === s.slotStart ? " slot-box--active" : ""}`}
+                            aria-pressed={bkSlot === s.slotStart}
+                            onClick={() => setBkSlot(s.slotStart)}
+                          >
+                            {formatSlotLabel(s.slotStart)}
+                          </button>
+                        ))}
+                    </div>
+                  ) : (
+                    <p className="field__hint">No slots available for this date</p>
+                  )}
+                </div>
+                {bkError && <p className="order-note order-note--error">{bkError}</p>}
+                <button className="btn btn--primary btn--lg btn--block" type="submit" disabled={bkSubmitting}>
+                  {bkSubmitting ? "Requesting…" : "Request booking"}
+                </button>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

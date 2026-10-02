@@ -18,14 +18,33 @@ export interface SaveResult {
 const sameModifiers = (a: SelectedModifier[], b: SelectedModifier[]) =>
   a.length === b.length && a.every((m, i) => m.groupName === b[i].groupName && m.label === b[i].label);
 
+/**
+ * Ranks a dish against the typed term so the best match lands first - what Enter adds and what
+ * appears at the top of the grid while searching. Exact short code beats a short code prefix
+ * (both are a deliberate fast-add shortcut) beats the dish name starting with the term beats the
+ * term just appearing somewhere in the name or code. 0 means no match at all.
+ */
+function matchScore(item: PosMenuItem, code: string, lower: string): number {
+  const shortCode = item.shortCode?.toUpperCase() ?? "";
+  const name = item.name.toLowerCase();
+  if (shortCode === code) return 5;
+  if (shortCode.startsWith(code)) return 4;
+  if (name.startsWith(lower)) return 3;
+  if (name.includes(lower)) return 2;
+  if (shortCode.includes(code)) return 1;
+  return 0;
+}
+
 export function filterMenu(menu: PosMenu, search: string, category: string): PosMenuItem[] {
   const term = search.trim();
   if (term) {
     const code = term.toUpperCase();
     const lower = term.toLowerCase();
     return menu.items
-      .filter((i) => i.shortCode?.startsWith(code) || i.name.toLowerCase().includes(lower))
-      .sort((a, b) => Number(b.shortCode === code) - Number(a.shortCode === code));
+      .map((item) => ({ item, score: matchScore(item, code, lower) }))
+      .filter((ranked) => ranked.score > 0)
+      .sort((a, b) => b.score - a.score || a.item.name.localeCompare(b.item.name))
+      .map((ranked) => ranked.item);
   }
   return category === "all" ? menu.items : menu.items.filter((i) => i.categoryId === category);
 }

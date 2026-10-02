@@ -34,6 +34,7 @@ const DayClose = lazy(() => import("../features/shifts/pages/DayClose"));
 const Printing = lazy(() => import("../features/printing/pages/Printing"));
 const Inventory = lazy(() => import("../features/inventory/pages/Inventory"));
 const Customers = lazy(() => import("../features/customers/pages/Customers"));
+const Bookings = lazy(() => import("../features/bookings/pages/Bookings"));
 const PublicBill = lazy(() => import("../features/customers/pages/PublicBill"));
 const NewOrder = lazy(() => import("../features/orders/pages/NewOrder"));
 const Pos = lazy(() => import("../features/pos/pages/Pos"));
@@ -229,6 +230,14 @@ export default function App() {
                   element={
                     <RequireModule module="customers">
                       <Customers />
+                    </RequireModule>
+                  }
+                />
+                <Route
+                  path="bookings"
+                  element={
+                    <RequireModule module="bookings">
+                      <Bookings />
                     </RequireModule>
                   }
                 />

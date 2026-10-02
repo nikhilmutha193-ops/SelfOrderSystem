@@ -284,3 +284,40 @@ describe("alerts, sold out and food cost", () => {
     expect(recipes.body.find((r: { name: string }) => r.name === "Medu Vada").recipe).toBeNull();
   });
 });
+
+describe("deleting stock items", () => {
+  it("permanently deletes an item that has no history and isn't used in a recipe", async () => {
+    const created = await api().post(inv("/items")).set(bearer(owner)).send({ name: "Sugar", unit: "g" });
+    expect(created.status).toBe(201);
+
+    const res = await api().delete(inv(`/items/${created.body._id}`)).set(bearer(owner));
+    expect(res.status).toBe(204);
+
+    const items = await api().get(inv("/items")).set(bearer(owner));
+    expect(items.body.map((i: { name: string }) => i.name)).not.toContain("Sugar");
+  });
+
+  it("refuses to delete an item that has stock history", async () => {
+    const res = await api().delete(inv(`/items/${stock.Oil}`)).set(bearer(owner));
+    expect(res.status).toBe(409);
+    expect(res.body.message).toMatch(/stock history/);
+    expect((await onHand("Oil")).name).toBe("Oil");
+  });
+
+  it("refuses to delete an item that's used in a recipe", async () => {
+    const created = await api().post(inv("/items")).set(bearer(owner)).send({ name: "Ghee", unit: "g" });
+    await api()
+      .put(inv(`/recipes/${world.food.vada}`))
+      .set(bearer(owner))
+      .send({ lines: [{ stockItemId: created.body._id, quantity: 5, key: false }] });
+
+    const res = await api().delete(inv(`/items/${created.body._id}`)).set(bearer(owner));
+    expect(res.status).toBe(409);
+    expect(res.body.message).toMatch(/Medu Vada/);
+  });
+
+  it("404s deleting a stock item that doesn't exist", async () => {
+    const res = await api().delete(inv(`/items/${stock.Oil.slice(0, -3)}abc`)).set(bearer(owner));
+    expect(res.status).toBe(404);
+  });
+});

@@ -2,6 +2,7 @@ import { randomUUID } from "crypto";
 import { Request, Response } from "express";
 
 import { asyncHandler } from "../middleware/errorHandler";
+import { findActiveReservationForTable } from "../modules/bookings/bookings.service";
 import Admin, { IAdmin } from "../models/Admin";
 import Chef from "../models/Chef";
 import Order from "../models/Order";
@@ -160,6 +161,15 @@ export const tableLogin = asyncHandler(async (req: Request, res: Response) => {
     if (!table || !(await comparePassword(tablePassword, table.passwordHash))) {
       throw new HttpError(401, "Invalid table code or password");
     }
+  }
+
+  // A table currently held by a confirmed booking can't be grabbed by a walk-in via QR/code
+  // login - it stays reserved for the booked party until staff mark them seated (or the
+  // booking is cancelled/no-show). Checked before the ordinary occupied-check below, and
+  // regardless of table status, since a reserved table might otherwise still show "available".
+  const reservation = await findActiveReservationForTable(req.restaurantId!, table._id.toString());
+  if (reservation) {
+    throw new HttpError(409, "This table is reserved right now. Please check with staff.");
   }
 
   if (!table.isGuest && table.status !== "available") {

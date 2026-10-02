@@ -49,6 +49,7 @@ function useInventoryMutation<TInput, TResult>(mutationFn: (input: TInput) => Pr
 
 export const useCreateStockItem = () => useInventoryMutation(inventoryApi.createItem);
 export const useUpdateStockItem = () => useInventoryMutation(inventoryApi.updateItem);
+export const useDeleteStockItem = () => useInventoryMutation(inventoryApi.deleteItem);
 export const useMoveStock = () => useInventoryMutation(inventoryApi.move);
 export const useSaveRecipe = () => useInventoryMutation(inventoryApi.saveRecipe);
 export const useCreateVendor = () => useInventoryMutation(inventoryApi.createVendor);

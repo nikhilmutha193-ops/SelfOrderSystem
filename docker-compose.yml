@@ -23,6 +23,8 @@ services:
       R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
       R2_PUBLIC_BASE_URL: ${R2_PUBLIC_BASE_URL:-}
       R2_PRIVATE_BUCKET: ${R2_PRIVATE_BUCKET:-}
+      # Texts guests when a table booking is confirmed or cancelled/no-show. Leave unset to skip SMS entirely.
+      FAST2SMS_API_KEY: ${FAST2SMS_API_KEY:-}
     volumes:
       - uploads_data:/app/uploads
       - backups_data:/app/backups
@@ -50,9 +52,22 @@ services:
     depends_on:
       server:
         condition: service_healthy
+    environment:
+      # Extra Subject Alternative Name(s) for the self-signed HTTPS cert, so it's also valid
+      # for your LAN IP, e.g. TLS_EXTRA_SAN=IP:192.168.1.20 in your .env. Needed for camera
+      # access (the in-page QR scanner) to work when a phone opens the site over the LAN -
+      # browsers only expose the camera on a "secure context" (HTTPS, or localhost).
+      TLS_EXTRA_SAN: ${TLS_EXTRA_SAN:-}
     ports:
       - "${CLIENT_PORT:-8080}:80"
+      - "${CLIENT_TLS_PORT:-8443}:443"
+    volumes:
+      # Persists the generated self-signed cert across restarts/redeploys, so browsers don't
+      # need the one-time "accept this certificate" warning re-done every time you redeploy -
+      # only the first time, or after `docker compose down -v` / removing this volume.
+      - client_tls:/etc/nginx/tls
 
 volumes:
   uploads_data:
   backups_data:
+  client_tls:

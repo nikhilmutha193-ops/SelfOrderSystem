@@ -79,6 +79,16 @@ export interface IInventorySettings {
   autoSoldOut: boolean;
 }
 
+export interface IBookingSettings {
+  enabled: boolean;
+  /** "HH:mm" local time (restaurant's timezone) the first bookable slot starts. */
+  openTime: string;
+  /** "HH:mm" local time the last bookable slot must end by. */
+  closeTime: string;
+  /** Length of one slot in minutes, e.g. 30 for 11:00-11:30, 11:30-12:00, ... */
+  slotMinutes: number;
+}
+
 export interface IRestaurant {
   _id: Types.ObjectId;
   name: string;
@@ -107,6 +117,7 @@ export interface IRestaurant {
   billingSettings: IBillingSettings;
   inventorySettings: IInventorySettings;
   loyaltySettings: ILoyaltySettings;
+  bookingSettings: IBookingSettings;
   backupSchedule: IBackupSchedule;
   createdAt: Date;
   updatedAt: Date;
@@ -238,6 +249,18 @@ const restaurantSchema = new Schema<IRestaurant>(
     },
     inventorySettings: {
       type: new Schema<IInventorySettings>({ autoSoldOut: { type: Boolean, default: false } }, { _id: false }),
+      default: () => ({}),
+    },
+    bookingSettings: {
+      type: new Schema<IBookingSettings>(
+        {
+          enabled: { type: Boolean, default: false },
+          openTime: { type: String, default: "11:00" },
+          closeTime: { type: String, default: "22:00" },
+          slotMinutes: { type: Number, default: 30, min: 5, max: 240 },
+        },
+        { _id: false }
+      ),
       default: () => ({}),
     },
     backupSchedule: { type: backupScheduleSchema, default: () => ({}) },
