@@ -1,6 +1,7 @@
 import { Plus, Split, Trash2 } from "lucide-react";
 import { useState } from "react";
 
+import { cashSuggestions } from "../../../lib/cash";
 import { TENDER_LABELS, type TenderMethod } from "../../../lib/types";
 import { extractErrorMessage } from "../../../shared/api/client";
 import { Dialog } from "../../../shared/ui/Dialog";
@@ -33,16 +34,6 @@ function money(n: number): string {
 function toNumber(value: string): number {
   const n = Number(value);
   return Number.isFinite(n) ? n : 0;
-}
-
-function cashSuggestions(amount: number): number[] {
-  const out = new Set<number>();
-  for (const step of [10, 50, 100, 500]) {
-    const up = Math.ceil(amount / step) * step;
-    if (up > amount) out.add(up);
-  }
-  for (const note of [200, 500, 2000]) if (note > amount) out.add(note);
-  return [...out].sort((a, b) => a - b).slice(0, 4);
 }
 
 export default function SettleDialog(props: SettleDialogProps) {

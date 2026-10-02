@@ -5,7 +5,9 @@ import { extractErrorMessage } from "../../../shared/api/client";
 import { Badge, Button, Card, ErrorText, Input, Select, Switch, TableWrap } from "../../../shared/ui/ui";
 import { inPurchaseUnits, MOVEMENT_LABEL, qty, rupees } from "../format";
 import {
+  useCreateCount,
   useCreateStockItem,
+  useDeleteStockItem,
   useInventorySettings,
   useLedger,
   useMoveStock,
@@ -29,8 +31,6 @@ const UNIT_PRESETS: Record<StockUnit, Pick<StockItemInput, "purchaseUnit" | "pur
   pcs: { purchaseUnit: "", purchaseFactor: 1 },
 };
 
-type MoveKind = "opening" | "wastage" | "adjustment";
-
 function ItemForm({
   initial,
   saving,
@@ -43,16 +43,22 @@ function ItemForm({
   onCancel?: () => void;
 }) {
   const [form, setForm] = useState(initial);
+  // Most items fit the g→kg / ml→L presets fine, so the purchase-unit conversion stays tucked
+  // away unless someone actually needs to change it - one less thing to fill in for every dish.
+  const [advanced, setAdvanced] = useState(
+    () => initial.purchaseUnit !== UNIT_PRESETS[initial.unit].purchaseUnit ||
+      initial.purchaseFactor !== UNIT_PRESETS[initial.unit].purchaseFactor
+  );
   const set = (patch: Partial<StockItemInput>) => setForm((f) => ({ ...f, ...patch }));
   return (
     <form
-      className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6"
+      className="grid gap-3 sm:grid-cols-3"
       onSubmit={(e) => {
         e.preventDefault();
         onSave(form);
       }}
     >
-      <label className="text-sm font-medium text-slate-700 sm:col-span-2">
+      <label className="text-sm font-medium text-slate-700">
         Name
         <Input id="stock-name" className="mt-1" value={form.name} onChange={(e) => set({ name: e.target.value })} />
       </label>
@@ -73,27 +79,6 @@ function ItemForm({
         </Select>
       </label>
       <label className="text-sm font-medium text-slate-700">
-        Bought in
-        <Input
-          id="stock-purchase-unit"
-          className="mt-1"
-          placeholder="kg, L, tray"
-          value={form.purchaseUnit}
-          onChange={(e) => set({ purchaseUnit: e.target.value })}
-        />
-      </label>
-      <label className="text-sm font-medium text-slate-700">
-        {form.unit} per {form.purchaseUnit || "unit"}
-        <Input
-          id="stock-factor"
-          className="mt-1"
-          type="number"
-          min={1}
-          value={form.purchaseFactor}
-          onChange={(e) => set({ purchaseFactor: Number(e.target.value) || 1 })}
-        />
-      </label>
-      <label className="text-sm font-medium text-slate-700">
         Alert below ({form.unit})
         <Input
           id="stock-reorder"
@@ -104,7 +89,39 @@ function ItemForm({
           onChange={(e) => set({ reorderLevel: Number(e.target.value) || 0 })}
         />
       </label>
-      <div className="flex items-end gap-2 sm:col-span-3 lg:col-span-6">
+      {advanced ? (
+        <>
+          <label className="text-sm font-medium text-slate-700">
+            Bought in
+            <Input
+              id="stock-purchase-unit"
+              className="mt-1"
+              placeholder="kg, L, tray"
+              value={form.purchaseUnit}
+              onChange={(e) => set({ purchaseUnit: e.target.value })}
+            />
+          </label>
+          <label className="text-sm font-medium text-slate-700">
+            {form.unit} per {form.purchaseUnit || "unit"}
+            <Input
+              id="stock-factor"
+              className="mt-1"
+              type="number"
+              min={1}
+              value={form.purchaseFactor}
+              onChange={(e) => set({ purchaseFactor: Number(e.target.value) || 1 })}
+            />
+          </label>
+        </>
+      ) : (
+        <p className="self-end pb-2 text-xs text-slate-500 sm:col-span-1">
+          Bought in {form.purchaseUnit || "unit"} ({form.purchaseFactor} {form.unit} each) ·{" "}
+          <button type="button" className="font-medium text-orange-600 hover:underline" onClick={() => setAdvanced(true)}>
+            Change
+          </button>
+        </p>
+      )}
+      <div className="flex items-center gap-2 sm:col-span-3">
         <Button type="submit" disabled={saving || !form.name.trim()}>
           Save item
         </Button>
@@ -113,18 +130,32 @@ function ItemForm({
             Cancel
           </Button>
         )}
+        <label className="ml-2 flex items-center gap-2 text-sm text-slate-700">
+          <Switch id="stock-active" checked={form.isActive} onChange={(v) => set({ isActive: v })} />
+          Active
+        </label>
       </div>
     </form>
   );
 }
 
-function MoveForm({ item, kind, onDone }: { item: StockItem; kind: MoveKind; onDone: () => void }) {
+/**
+ * One form for every routine stock correction - no more choosing between "opening", "wastage"
+ * and "adjustment" up front. Staff just say what's actually on the shelf; for a brand-new item
+ * with nothing on hand yet, an optional cost field appears so the first stock-in also sets the
+ * average cost (that's what "opening" used to be for). Everything else posts through the same
+ * count endpoint the bulk stock-take uses, so the ledger still records it as a real adjustment.
+ */
+function UpdateStockForm({ item, onDone }: { item: StockItem; onDone: () => void }) {
   const move = useMoveStock();
-  const [amount, setAmount] = useState("");
+  const count = useCreateCount();
+  const isFirstStock = item.onHand === 0;
+  const [amount, setAmount] = useState(String(item.onHand));
   const [cost, setCost] = useState("");
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
   const unitWord = item.purchaseUnit || item.unit;
+  const pending = move.isPending || count.isPending;
 
   return (
     <form
@@ -133,13 +164,19 @@ function MoveForm({ item, kind, onDone }: { item: StockItem; kind: MoveKind; onD
         e.preventDefault();
         setError(null);
         try {
-          await move.mutateAsync({
-            stockItemId: item._id,
-            type: kind,
-            quantity: Number(amount),
-            unitCost: kind === "opening" && cost !== "" ? Number(cost) / item.purchaseFactor : undefined,
-            note: note.trim() || undefined,
-          });
+          if (isFirstStock && cost !== "") {
+            await move.mutateAsync({
+              stockItemId: item._id,
+              type: "opening",
+              quantity: Number(amount),
+              unitCost: Number(cost) / item.purchaseFactor,
+            });
+          } else {
+            await count.mutateAsync({
+              note: note.trim() || undefined,
+              lines: [{ stockItemId: item._id, counted: Number(amount) }],
+            });
+          }
           onDone();
         } catch (err) {
           setError(extractErrorMessage(err));
@@ -147,21 +184,22 @@ function MoveForm({ item, kind, onDone }: { item: StockItem; kind: MoveKind; onD
       }}
     >
       <label className="text-sm font-medium text-slate-700">
-        {kind === "adjustment" ? `Change (${item.unit}, use − to reduce)` : `Quantity (${item.unit})`}
+        Now on hand ({item.unit})
         <Input
-          id="move-quantity"
+          id="update-amount"
           className="mt-1 !w-40"
           type="number"
+          min={0}
           step="any"
           value={amount}
           onChange={(e) => setAmount(e.target.value)}
         />
       </label>
-      {kind === "opening" && (
+      {isFirstStock && (
         <label className="text-sm font-medium text-slate-700">
           Cost per {unitWord} (₹, optional)
           <Input
-            id="move-cost"
+            id="update-cost"
             className="mt-1 !w-40"
             type="number"
             min={0}
@@ -171,20 +209,18 @@ function MoveForm({ item, kind, onDone }: { item: StockItem; kind: MoveKind; onD
           />
         </label>
       )}
-      {kind !== "opening" && (
-        <label className="min-w-[12rem] flex-1 text-sm font-medium text-slate-700">
-          Reason
-          <Input
-            id="move-note"
-            className="mt-1"
-            placeholder={kind === "wastage" ? "e.g. milk turned sour" : "e.g. found extra in store"}
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-          />
-        </label>
-      )}
-      <Button type="submit" disabled={move.isPending || amount === ""}>
-        Save {MOVEMENT_LABEL[kind].toLowerCase()}
+      <label className="min-w-[12rem] flex-1 text-sm font-medium text-slate-700">
+        Note (optional)
+        <Input
+          id="update-note"
+          className="mt-1"
+          placeholder="e.g. some spoiled, found extra, restocked"
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+        />
+      </label>
+      <Button type="submit" disabled={pending || amount === ""}>
+        Update stock
       </Button>
       <Button type="button" variant="secondary" onClick={onDone}>
         Cancel
@@ -239,11 +275,15 @@ export function StockTab({ canEdit }: { canEdit: boolean }) {
   const saveSettings = useSaveInventorySettings();
   const create = useCreateStockItem();
   const update = useUpdateStockItem();
+  const remove = useDeleteStockItem();
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
-  const [open, setOpen] = useState<{ id: string; panel: MoveKind | "history" } | null>(null);
+  const [open, setOpen] = useState<{ id: string; panel: "update" | "history" } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const list = items.data ?? NO_ITEMS;
+  const [showInactive, setShowInactive] = useState(false);
+  const allItems = items.data ?? NO_ITEMS;
+  const inactiveCount = allItems.filter((i) => !i.isActive).length;
+  const list = showInactive ? allItems : allItems.filter((i) => i.isActive);
   const lowCount = list.filter((i) => i.low).length;
 
   async function run(action: () => Promise<unknown>, after: () => void) {
@@ -282,6 +322,12 @@ export function StockTab({ canEdit }: { canEdit: boolean }) {
                 Mark dishes sold out when a key ingredient runs out
               </label>
             </div>
+            {inactiveCount > 0 && (
+              <label className="mt-2 flex items-center gap-2 text-sm text-slate-700">
+                <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} />
+                Show {inactiveCount} inactive item{inactiveCount === 1 ? "" : "s"}
+              </label>
+            )}
           </div>
           {canEdit && !adding && <Button onClick={() => setAdding(true)}>Add stock item</Button>}
         </div>
@@ -334,6 +380,13 @@ export function StockTab({ canEdit }: { canEdit: boolean }) {
                     )
                   }
                   saving={update.isPending}
+                  onDelete={() => {
+                    if (!window.confirm(`Delete ${item.name}? This can't be undone.`)) return;
+                    run(
+                      () => remove.mutateAsync(item._id),
+                      () => {}
+                    );
+                  }}
                 />
               ))}
               {list.length === 0 && (
@@ -360,15 +413,17 @@ function StockRow({
   onEdit,
   onSave,
   saving,
+  onDelete,
 }: {
   item: StockItem;
   canEdit: boolean;
   editing: boolean;
-  open: MoveKind | "history" | null;
-  onOpen: (panel: MoveKind | "history" | null) => void;
+  open: "update" | "history" | null;
+  onOpen: (panel: "update" | "history" | null) => void;
   onEdit: (on: boolean) => void;
   onSave: (input: StockItemInput) => void;
   saving: boolean;
+  onDelete: () => void;
 }) {
   const bought = inPurchaseUnits(item.onHand, item);
   return (
@@ -397,23 +452,9 @@ function StockRow({
                 <button
                   type="button"
                   className="rounded-md px-2 py-1 text-sm font-medium transition-colors text-orange-700 hover:bg-orange-50"
-                  onClick={() => onOpen("opening")}
+                  onClick={() => onOpen("update")}
                 >
-                  Opening
-                </button>
-                <button
-                  type="button"
-                  className="rounded-md px-2 py-1 text-sm font-medium transition-colors text-orange-700 hover:bg-orange-50"
-                  onClick={() => onOpen("wastage")}
-                >
-                  Wastage
-                </button>
-                <button
-                  type="button"
-                  className="rounded-md px-2 py-1 text-sm font-medium transition-colors text-orange-700 hover:bg-orange-50"
-                  onClick={() => onOpen("adjustment")}
-                >
-                  Adjust
+                  Update stock
                 </button>
                 <button
                   type="button"
@@ -421,6 +462,13 @@ function StockRow({
                   onClick={() => onEdit(!editing)}
                 >
                   Edit
+                </button>
+                <button
+                  type="button"
+                  className="rounded-md px-2 py-1 text-sm font-medium transition-colors text-red-600 hover:bg-red-50"
+                  onClick={onDelete}
+                >
+                  Delete
                 </button>
               </>
             )}
@@ -442,7 +490,7 @@ function StockRow({
             ) : open === "history" ? (
               <Ledger item={item} />
             ) : (
-              open && <MoveForm item={item} kind={open} onDone={() => onOpen(null)} />
+              open && <UpdateStockForm item={item} onDone={() => onOpen(null)} />
             )}
           </td>
         </tr>

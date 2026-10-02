@@ -37,6 +37,7 @@ export const inventoryApi = {
   createItem: (input: StockItemInput) => api.post<StockItem>("/inventory/items", input).then((res) => res.data),
   updateItem: ({ id, input }: { id: string; input: StockItemInput }) =>
     api.put<StockItem>(`/inventory/items/${id}`, input).then((res) => res.data),
+  deleteItem: (id: string) => api.delete(`/inventory/items/${id}`).then(() => undefined),
   ledger: (id: string) =>
     api
       .get<{ item: StockItem; movements: StockMovement[] }>(`/inventory/items/${id}/movements`)

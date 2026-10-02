@@ -26,6 +26,7 @@ export const MODULES = {
   printing: "Printers & Stations",
   inventory: "Inventory",
   customers: "Customers & Loyalty",
+  bookings: "Table Bookings",
 } as const;
 
 export const MODULE_KEYS = Object.keys(MODULES) as ModuleKey[];

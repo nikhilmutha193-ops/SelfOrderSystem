@@ -73,6 +73,36 @@ export async function updateStockItem(ctx: RequestContext, id: string, input: St
   return stockRow(item.toObject(), onHand);
 }
 
+/**
+ * A real delete, not the "isActive: false" soft-hide - only allowed when nothing depends on this
+ * item, since stock-on-hand and recipe costs are both derived from records that reference it by
+ * id. Deleting it out from under a purchase/count/wastage entry or a dish's recipe would corrupt
+ * that math, so either of those blocks the delete instead.
+ */
+export async function deleteStockItem(ctx: RequestContext, id: string) {
+  const repo = new InventoryRepository(ctx.restaurantId);
+  const item = await repo.findStockItem(id);
+  if (!item) throw new HttpError(404, "Stock item not found");
+
+  if (await repo.hasMovements(id)) {
+    throw new HttpError(
+      409,
+      `${item.name} has stock history (purchases, counts or adjustments) and can't be deleted. Turn off "Active" instead to remove it from lists while keeping its records.`
+    );
+  }
+  const recipe = await repo.recipeUsingItem(item._id);
+  if (recipe) {
+    const food = await repo.findFood(recipe.foodItemId.toString());
+    throw new HttpError(
+      409,
+      `${item.name} is used in ${food?.name ?? "a dish"}'s recipe and can't be deleted. Remove it from that recipe first.`
+    );
+  }
+
+  await repo.deleteStockItem(id);
+  await writeAudit(ctx, "inventory.item.delete", `Deleted stock item ${item.name}`);
+}
+
 export async function postMovement(ctx: RequestContext, input: MovementInput) {
   const repo = new InventoryRepository(ctx.restaurantId);
   const item = await repo.findStockItem(input.stockItemId);

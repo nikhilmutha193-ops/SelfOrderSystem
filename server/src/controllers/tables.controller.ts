@@ -56,7 +56,10 @@ export const setTableCaptain = asyncHandler(async (req: Request, res: Response) 
 });
 
 export const listAvailableTables = asyncHandler(async (req: Request, res: Response) => {
-  const tables = await TableModel.find({ restaurantId: req.restaurantId, status: "available" })
+  // Guest/counter tables are shared walk-in tables, always open for anyone to log into - they
+  // don't belong in the "pick your table" list on the public sign-in page, which is meant to
+  // help a guest find their own assigned, PIN-gated table.
+  const tables = await TableModel.find({ restaurantId: req.restaurantId, status: "available", isGuest: { $ne: true } })
     .select("code")
     .sort({ code: 1 });
   res.json(tables);

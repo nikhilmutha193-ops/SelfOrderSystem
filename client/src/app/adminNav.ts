@@ -3,6 +3,7 @@ import {
   Award,
   Boxes,
   CalendarCheck,
+  CalendarClock,
   ChartColumn,
   ChefHat,
   ClipboardPlus,
@@ -100,6 +101,13 @@ export const ADMIN_NAV: AdminNavGroup[] = [
     items: [
       { to: "/admin/tables", label: "Tables", module: "tables", icon: Table2 },
       { to: "/admin/qr-codes", label: "QR Codes", module: "tables", icon: QrCode },
+      {
+        to: "/admin/bookings",
+        label: "Table Bookings",
+        module: "bookings",
+        icon: CalendarClock,
+        keywords: "reservation reserve prebook",
+      },
     ],
   },
   {

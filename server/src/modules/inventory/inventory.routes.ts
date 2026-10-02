@@ -6,6 +6,7 @@ import {
   createPurchase,
   createStockItem,
   createVendor,
+  deleteStockItem,
   getSettings,
   itemLedger,
   listCounts,
@@ -27,6 +28,7 @@ router.use(requireAuth("admin"), requireModule("inventory"));
 router.get("/items", listStock);
 router.post("/items", createStockItem);
 router.put("/items/:id", updateStockItem);
+router.delete("/items/:id", deleteStockItem);
 router.get("/items/:id/movements", itemLedger);
 router.post("/movements", postMovement);
 router.get("/recipes", listRecipes);

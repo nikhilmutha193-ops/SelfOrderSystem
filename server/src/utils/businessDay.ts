@@ -22,7 +22,7 @@ export function isValidTimezone(value: string): boolean {
   }
 }
 
-function resolveZone(timeZone: string | undefined): string {
+export function resolveZone(timeZone: string | undefined): string {
   return timeZone && isValidTimezone(timeZone) ? timeZone : DEFAULT_TIMEZONE;
 }
 
@@ -54,7 +54,7 @@ function zoneOffsetMinutes(at: Date, timeZone: string): number {
   return (wall - Math.floor(at.getTime() / 60000) * 60000) / 60000;
 }
 
-function wallTimeToUtc(year: number, month: number, day: number, minutesIntoDay: number, timeZone: string): Date {
+export function wallTimeToUtc(year: number, month: number, day: number, minutesIntoDay: number, timeZone: string): Date {
   const asIfUtc = Date.UTC(year, month - 1, day, 0, minutesIntoDay);
   const candidate = new Date(asIfUtc - zoneOffsetMinutes(new Date(asIfUtc), timeZone) * 60000);
   return new Date(asIfUtc - zoneOffsetMinutes(candidate, timeZone) * 60000);

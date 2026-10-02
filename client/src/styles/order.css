@@ -560,6 +560,93 @@
   color: var(--color-text-muted);
 }
 
+/* "or enter your table code and PIN" divider between the scan button and the manual form */
+.field__divider {
+  position: relative;
+  margin: var(--space-4) 0;
+  text-align: center;
+  font-size: var(--fs-xs);
+  color: var(--color-text-muted);
+}
+.field__divider::before,
+.field__divider::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  width: calc(50% - 5.5em);
+  height: 1px;
+  background-color: var(--color-border);
+}
+.field__divider::before { left: 0; }
+.field__divider::after { right: 0; }
+
+/* ---- QR camera scanner overlay ---- */
+.scanner-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--gutter);
+  background-color: rgba(43, 29, 24, 0.75);
+}
+.scanner-overlay__inner {
+  width: 100%;
+  max-width: 420px;
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: var(--space-4);
+  background-color: var(--color-surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+}
+.scanner-overlay__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-3);
+}
+.scanner-overlay__title {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  color: var(--color-text);
+}
+.scanner-overlay__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  font-size: 1rem;
+  color: var(--color-text-muted);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.scanner-overlay__close:hover {
+  background-color: var(--color-bg-tint);
+}
+.scanner-overlay__video-wrap {
+  position: relative;
+  overflow: hidden;
+  aspect-ratio: 1;
+  border-radius: var(--radius-md);
+  background-color: #000;
+}
+.scanner-overlay__video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.scanner-overlay__hint {
+  margin: var(--space-3) 0;
+  text-align: center;
+  font-size: var(--fs-sm);
+  color: var(--color-text-muted);
+}
+
 .tables {
   margin-top: var(--space-3);
   padding-top: var(--space-2);
@@ -626,6 +713,39 @@
 .table-chip:hover {
   border-color: var(--color-primary);
   transform: translateY(-1px);
+}
+
+.slot-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  gap: var(--space-2);
+}
+.slot-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: var(--space-2);
+  font: inherit;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--color-text);
+  background-color: var(--color-bg);
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition:
+    border-color var(--transition),
+    background-color var(--transition),
+    color var(--transition);
+}
+.slot-box:hover {
+  border-color: var(--color-primary);
+}
+.slot-box--active {
+  color: var(--color-primary);
+  background-color: var(--color-primary-tint);
+  border-color: var(--color-primary);
 }
 
 .order-note {

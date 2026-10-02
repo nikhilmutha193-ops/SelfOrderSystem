@@ -47,6 +47,24 @@ export class InventoryRepository {
     return StockItem.findOne(this.scoped<IStockItem>({ _id: id }));
   }
 
+  deleteStockItem(id: string) {
+    return StockItem.deleteOne(this.scoped<IStockItem>({ _id: id }));
+  }
+
+  hasMovements(stockItemId: string) {
+    return StockMovement.exists(this.scoped<IStockMovement>({ stockItemId }));
+  }
+
+  recipeUsingItem(stockItemId: Types.ObjectId) {
+    return Recipe.findOne(
+      this.scoped<IRecipe>({
+        $or: [{ "lines.stockItemId": stockItemId }, { "modifierLines.stockItemId": stockItemId }],
+      })
+    )
+      .select("foodItemId")
+      .lean();
+  }
+
   createStockItem(data: Partial<IStockItem>) {
     return StockItem.create({ ...data, restaurantId: this.restaurantId });
   }

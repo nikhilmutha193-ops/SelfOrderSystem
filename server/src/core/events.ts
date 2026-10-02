@@ -13,6 +13,8 @@ export interface DomainEvents {
   "order.billed": OrderRef;
   "order.settled": OrderRef;
   "order.cancelled": OrderRef & { voided: boolean };
+  "booking.confirmed": { restaurantId: string; bookingId: string };
+  "booking.cancelled": { restaurantId: string; bookingId: string; status: "cancelled" | "no_show" };
 }
 
 export type DomainEventName = keyof DomainEvents;

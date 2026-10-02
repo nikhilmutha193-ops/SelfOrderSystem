@@ -32,6 +32,12 @@ export const updateStockItem = asyncHandler(async (req: Request, res: Response) 
   res.json(await inventory.updateStockItem(getContext(req), id, input));
 });
 
+export const deleteStockItem = asyncHandler(async (req: Request, res: Response) => {
+  const { id } = parse(idParams, req.params);
+  await inventory.deleteStockItem(getContext(req), id);
+  res.status(204).end();
+});
+
 export const itemLedger = asyncHandler(async (req: Request, res: Response) => {
   const { id } = parse(idParams, req.params);
   res.json(await inventory.itemLedger(getContext(req), id));
