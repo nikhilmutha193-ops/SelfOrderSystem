@@ -54,7 +54,12 @@ export default function PublicBill() {
           <span>
             Bill <span className="font-semibold">{order.invoiceNumber}</span>
           </span>
-          <span>{new Date(order.billedAt).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}</span>
+          <span>
+            {new Date(order.billedAt).toLocaleString([], {
+              dateStyle: "medium",
+              timeStyle: "short",
+            })}
+          </span>
         </div>
         {order.status === "cancelled" && (
           <p className="mb-3 rounded-md bg-red-50 px-3 py-2 text-center text-sm font-semibold text-red-700">
@@ -88,6 +93,7 @@ export default function PublicBill() {
           {(totals.serviceCharge ?? 0) > 0 && (
             <Row label={`Service charge (${totals.serviceChargePercent}%)`} value={rupees(totals.serviceCharge!)} />
           )}
+          {(totals.packagingCharge ?? 0) > 0 && <Row label="Packaging" value={rupees(totals.packagingCharge!)} />}
           {totals.taxLines.map((t) => (
             <Row key={t.name} label={`${t.name} ${t.percent}%`} value={rupees(t.amount)} />
           ))}

@@ -151,7 +151,7 @@ describe("coupons, paying and cancelling", () => {
 
     const bad = await api().patch(`/api/orders/${orderId}/pay`).set(bearer(owner)).send({ paymentMethod: "gold" });
     expect(bad.status).toBe(400);
-    expect(bad.body.message).toBe("A valid paymentMethod (cash, upi, card, online, wallet) is required");
+    expect(bad.body.message).toBe("A valid paymentMethod (cash, upi, card, online, wallet, credit) is required");
     const unsent = await api().patch(`/api/orders/${orderId}/pay`).set(bearer(owner)).send({ paymentMethod: "cash" });
     expect(unsent.body.message).toBe("Send 1 item to the kitchen or cancel it before billing");
     await api().post(`/api/orders/${orderId}/kot/print`).set(bearer(owner));

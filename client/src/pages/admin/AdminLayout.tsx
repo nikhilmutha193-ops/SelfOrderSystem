@@ -30,6 +30,7 @@ import NotificationCenter from "../../features/dashboard/components/Notification
 import ActiveOrders from "../../features/orders/components/ActiveOrders";
 import { AdminProfileProvider, can, useAdmin } from "../../lib/adminAuth";
 import { activateStoredAuth, api, clearStoredToken, setActiveAuth } from "../../shared/api/client";
+import { useStaffTheme } from "../../shared/theme";
 import { buttonClass } from "../../shared/ui/styles";
 import { IconButton } from "../../shared/ui/ui";
 
@@ -249,6 +250,7 @@ function MobileTabs({ items, onMore }: { items: AdminNavItem[]; onMore: () => vo
 }
 
 function Shell() {
+  useStaffTheme();
   const navigate = useNavigate();
   const location = useLocation();
   const { profile } = useAdmin();

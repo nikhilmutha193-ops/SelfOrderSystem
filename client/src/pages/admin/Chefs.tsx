@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useSetChefStation, useStationList } from "../../features/printing/queries";
 import type { ChefRow } from "../../lib/types";
 import { api, extractErrorMessage } from "../../shared/api/client";
+import { confirmDialog } from "../../shared/ui/confirm";
 import {
   Button,
   Card,
@@ -62,7 +63,14 @@ export default function Chefs() {
   }
 
   async function remove(chef: ChefRow) {
-    if (!confirm(`Remove chef "${chef.username}"?`)) return;
+    if (
+      !(await confirmDialog({
+        title: `Remove chef ${chef.username}?`,
+        message: "They are signed out of the kitchen display straight away.",
+        confirmLabel: "Remove chef",
+      }))
+    )
+      return;
     try {
       await api.delete(`/chefs/${chef._id}`);
       load();

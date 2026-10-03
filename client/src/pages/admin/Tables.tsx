@@ -13,8 +13,12 @@ import {
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
+import { AreasCard } from "../../features/pricing/components/AreasCard";
+import { useAreas, useSetTableArea } from "../../features/pricing/queries";
+import { useCanEdit } from "../../lib/adminAuth";
 import type { TableRow } from "../../lib/types";
 import { api, extractErrorMessage } from "../../shared/api/client";
+import { confirmDialog } from "../../shared/ui/confirm";
 import { buttonClass } from "../../shared/ui/styles";
 import {
   Badge,
@@ -84,6 +88,20 @@ export default function Tables() {
       .then((res) => setCaptains(res.data))
       .catch(() => setCaptains([]));
   }, []);
+
+  const { areas } = useAreas();
+  const setArea = useSetTableArea();
+  const canEditTables = useCanEdit("tables");
+
+  async function assignArea(table: TableRow, areaId: string) {
+    setError(null);
+    try {
+      await setArea.mutateAsync({ tableId: table._id, areaId: areaId || null });
+      load();
+    } catch (err) {
+      setError(extractErrorMessage(err));
+    }
+  }
 
   async function assignCaptain(table: TableRow, captainId: string) {
     setError(null);
@@ -171,7 +189,14 @@ export default function Tables() {
   }
 
   async function remove(table: TableRow) {
-    if (!window.confirm(`Delete table "${table.code}"? This cannot be undone.`)) return;
+    if (
+      !(await confirmDialog({
+        title: `Delete table ${table.code}?`,
+        message: "Its printed QR code stops working. This can't be undone.",
+        confirmLabel: "Delete table",
+      }))
+    )
+      return;
     setError(null);
     try {
       await api.delete(`/tables/${table._id}`);
@@ -304,6 +329,8 @@ export default function Tables() {
         </Card>
       </div>
 
+      <AreasCard areas={areas} canEdit={canEditTables} />
+
       <ErrorText>{error}</ErrorText>
 
       <Card>
@@ -322,6 +349,7 @@ export default function Tables() {
                   <th>Table</th>
                   <th>PIN</th>
                   <th>Status</th>
+                  {areas.length > 0 && <th>Area</th>}
                   <th>Captain</th>
                   <th>Expires after</th>
                   <th className="text-right">Actions</th>
@@ -367,6 +395,27 @@ export default function Tables() {
                         </div>
                       )}
                     </td>
+                    {areas.length > 0 && (
+                      <td>
+                        {table.isGuest ? (
+                          <span className="text-xs text-slate-400">—</span>
+                        ) : (
+                          <Select
+                            aria-label={`Area for ${table.code}`}
+                            className="!w-36"
+                            value={table.areaId ?? ""}
+                            onChange={(e) => assignArea(table, e.target.value)}
+                          >
+                            <option value="">No area</option>
+                            {areas.map((a) => (
+                              <option key={a._id} value={a._id}>
+                                {a.name}
+                              </option>
+                            ))}
+                          </Select>
+                        )}
+                      </td>
+                    )}
                     <td>
                       {table.isGuest ? (
                         <span className="text-xs text-slate-400">—</span>

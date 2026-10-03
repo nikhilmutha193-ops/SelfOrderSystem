@@ -3,8 +3,9 @@ import { FilterQuery, Types } from "mongoose";
 import Admin, { IAdmin } from "../../models/Admin";
 import Category, { ICategory } from "../../models/Category";
 import FoodItem, { IFoodItem } from "../../models/FoodItem";
-import Order, { IOrder } from "../../models/Order";
+import Order, { IOfflineSync, IOrder } from "../../models/Order";
 import OrderItem from "../../models/OrderItem";
+import Restaurant from "../../models/Restaurant";
 import Subcategory, { ISubcategory } from "../../models/Subcategory";
 import TableModel, { ITable } from "../../models/Table";
 
@@ -38,7 +39,9 @@ export class PosRepository {
 
   activeFoodItems() {
     return FoodItem.find(this.scoped<IFoodItem>({ isActive: true }))
-      .select("name price categoryId subcategoryId foodType shortCode modifierGroups stationId isBestseller")
+      .select(
+        "name price categoryId subcategoryId foodType shortCode modifierGroups stationId isBestseller priceRules packagingCharge comboItems"
+      )
       .sort({ name: 1 })
       .lean();
   }
@@ -47,9 +50,42 @@ export class PosRepository {
     return FoodItem.countDocuments(this.scoped<IFoodItem>({ _id: { $in: ids }, isActive: true }));
   }
 
+  findOfflineOrder(clientId: string) {
+    return Order.findOne(this.scoped<IOrder>({ "offline.clientId": clientId }));
+  }
+
+  markOffline(orderId: Types.ObjectId, offline: IOfflineSync) {
+    return Order.updateOne(this.scoped<IOrder>({ _id: orderId }), {
+      $set: { offline, checkinTime: offline.createdAt },
+    });
+  }
+
+  flagOffline(orderId: Types.ObjectId, note: string) {
+    return Order.updateOne(this.scoped<IOrder>({ _id: orderId }), {
+      $set: { "offline.mismatch": true, "offline.note": note },
+    });
+  }
+
+  markItemsServed(orderId: Types.ObjectId) {
+    return OrderItem.updateMany(
+      { orderId, restaurantId: this.restaurantId, status: { $in: ["pending", "preparing", "ready"] } },
+      { $set: { status: "served" } }
+    );
+  }
+
+  billingInfo() {
+    return Restaurant.findById(this.restaurantId)
+      .select("name address gstin taxRates billingSettings.serviceChargePercent invoiceSettings.footerNote")
+      .lean();
+  }
+
+  areas() {
+    return Restaurant.findById(this.restaurantId).select("areas").lean();
+  }
+
   floorTables() {
     return TableModel.find(this.scoped<ITable>({ isGuest: { $ne: true } }))
-      .select("code status occupiedAt captainId")
+      .select("code status occupiedAt captainId areaId")
       .sort({ code: 1 })
       .lean();
   }

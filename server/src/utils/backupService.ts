@@ -3,14 +3,18 @@ import { Model, Types } from "mongoose";
 import { getR2 } from "../config/r2";
 import Award from "../models/Award";
 import BackupRecord, { BackupTrigger, IBackupRecord } from "../models/BackupRecord";
+import Booking from "../models/Booking";
 import Category from "../models/Category";
 import ChatMessage from "../models/ChatMessage";
 import Chef from "../models/Chef";
 import Coupon from "../models/Coupon";
+import CreditEntry from "../models/CreditEntry";
 import Customer from "../models/Customer";
 import DayClose from "../models/DayClose";
 import FoodItem from "../models/FoodItem";
+import FoodReview from "../models/FoodReview";
 import InvoiceCounter from "../models/InvoiceCounter";
+import LandingContent from "../models/LandingContent";
 import LoyaltyEntry from "../models/LoyaltyEntry";
 import Order from "../models/Order";
 import OrderItem from "../models/OrderItem";
@@ -59,6 +63,10 @@ const TENANT_MODELS: { key: string; model: Model<any> }[] = [
   { key: "stockCounts", model: StockCount },
   { key: "customers", model: Customer },
   { key: "loyaltyEntries", model: LoyaltyEntry },
+  { key: "bookings", model: Booking },
+  { key: "foodReviews", model: FoodReview },
+  { key: "landingContent", model: LandingContent },
+  { key: "creditEntries", model: CreditEntry },
 ];
 
 async function buildBackupPayload(restaurantId: Types.ObjectId | string) {

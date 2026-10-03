@@ -176,7 +176,7 @@ export class InventoryRepository {
 
   findOrderItems(ids: (string | Types.ObjectId)[]) {
     return OrderItem.find(this.scoped<IOrderItem>({ _id: { $in: ids } }))
-      .select("orderId foodItemId foodName quantity modifiers status")
+      .select("orderId foodItemId foodName quantity modifiers status components")
       .lean();
   }
 

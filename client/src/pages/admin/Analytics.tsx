@@ -1,6 +1,8 @@
-import { ClipboardList, IndianRupee, ReceiptText } from "lucide-react";
+import { ChartColumn, ClipboardList, IndianRupee, Lightbulb, ReceiptText } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 
+import MenuEngineering from "../../features/analytics/components/MenuEngineering";
 import { api, extractErrorMessage } from "../../shared/api/client";
 import { Card, ErrorText, Page, PageHeader, Skeleton, StatCard, TableWrap, Tabs } from "../../shared/ui/ui";
 
@@ -53,6 +55,8 @@ function BarChart({
 
 export default function Analytics() {
   const [days, setDays] = useState(14);
+  const [params, setParams] = useSearchParams();
+  const view = params.get("view") === "menu" ? "menu" : "sales";
   const [sales, setSales] = useState<SalesData | null>(null);
   const [prep, setPrep] = useState<PrepData | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -89,148 +93,168 @@ export default function Analytics() {
         }
       />
 
-      <ErrorText>{error}</ErrorText>
+      <Tabs
+        value={view}
+        onChange={(v) => setParams(v === "menu" ? { view: "menu" } : {}, { replace: true })}
+        items={[
+          { value: "sales", label: "Sales & kitchen", icon: ChartColumn },
+          { value: "menu", label: "Menu engineering", icon: Lightbulb },
+        ]}
+      />
 
-      {!sales && !error && (
-        <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3">
-          {Array.from({ length: 3 }, (_, i) => (
-            <Skeleton key={i} className="h-[104px] rounded-xl" />
-          ))}
-        </div>
-      )}
-
-      {sales && (
+      {view === "menu" ? (
+        <MenuEngineering days={days} />
+      ) : (
         <>
-          <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3">
-            <StatCard
-              label={`Revenue (${sales.days}d)`}
-              value={rupee(sales.totalRevenue)}
-              icon={IndianRupee}
-              tone="green"
-            />
-            <StatCard label={`Orders (${sales.days}d)`} value={sales.totalOrders} icon={ClipboardList} tone="orange" />
-            <StatCard
-              label="Avg order value"
-              value={rupee(sales.totalOrders ? sales.totalRevenue / sales.totalOrders : 0)}
-              icon={ReceiptText}
-              tone="blue"
-            />
-          </div>
+          <ErrorText>{error}</ErrorText>
+
+          {!sales && !error && (
+            <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3">
+              {Array.from({ length: 3 }, (_, i) => (
+                <Skeleton key={i} className="h-[104px] rounded-xl" />
+              ))}
+            </div>
+          )}
+
+          {sales && (
+            <>
+              <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3">
+                <StatCard
+                  label={`Revenue (${sales.days}d)`}
+                  value={rupee(sales.totalRevenue)}
+                  icon={IndianRupee}
+                  tone="green"
+                />
+                <StatCard
+                  label={`Orders (${sales.days}d)`}
+                  value={sales.totalOrders}
+                  icon={ClipboardList}
+                  tone="orange"
+                />
+                <StatCard
+                  label="Avg order value"
+                  value={rupee(sales.totalOrders ? sales.totalRevenue / sales.totalOrders : 0)}
+                  icon={ReceiptText}
+                  tone="blue"
+                />
+              </div>
+
+              <Card>
+                <h2 className="mb-4 text-base font-semibold text-slate-900">Revenue by day</h2>
+                <BarChart
+                  data={sales.byDay.map((d) => ({ label: d.date.slice(5), value: d.revenue }))}
+                  valueFormat={rupee}
+                />
+              </Card>
+
+              <Card>
+                <h2 className="mb-1 text-base font-semibold text-slate-900">Orders by hour (peak times)</h2>
+                <p className="mb-3 text-xs text-slate-500">When orders come in, across the period.</p>
+                <BarChart
+                  data={sales.byHour.map((h) => ({ label: String(h.hour), value: h.orders }))}
+                  color="var(--color-sky-500)"
+                />
+              </Card>
+
+              <div className="grid gap-6 lg:grid-cols-2">
+                <Card>
+                  <h2 className="mb-4 text-base font-semibold text-slate-900">Order type mix</h2>
+                  {sales.byType.length === 0 ? (
+                    <p className="text-sm text-slate-400">No data yet.</p>
+                  ) : (
+                    <div className="flex flex-col gap-2">
+                      {sales.byType.map((t) => {
+                        const pct = sales.totalOrders ? Math.round((t.orders / sales.totalOrders) * 100) : 0;
+                        return (
+                          <div key={t.type}>
+                            <div className="mb-0.5 flex justify-between text-sm">
+                              <span className="text-slate-700">{typeLabel(t.type)}</span>
+                              <span className="text-slate-500">
+                                {t.orders} · {rupee(t.revenue)} ({pct}%)
+                              </span>
+                            </div>
+                            <div className="h-2 w-full rounded-full bg-slate-100">
+                              <div className="h-2 rounded-full bg-orange-500" style={{ width: `${pct}%` }} />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </Card>
+
+                <Card>
+                  <h2 className="mb-4 text-base font-semibold text-slate-900">Top dishes</h2>
+                  {sales.topDishes.length === 0 ? (
+                    <p className="text-sm text-slate-400">No data yet.</p>
+                  ) : (
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr>
+                          <th>Dish</th>
+                          <th className="text-right">Qty</th>
+                          <th className="text-right">Revenue</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sales.topDishes.map((d) => (
+                          <tr key={d.name} className="border-t border-slate-100">
+                            <td>{d.name}</td>
+                            <td className="text-right tabular-nums">{d.qty}</td>
+                            <td className="text-right tabular-nums">{rupee(d.revenue)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </Card>
+              </div>
+            </>
+          )}
 
           <Card>
-            <h2 className="mb-4 text-base font-semibold text-slate-900">Revenue by day</h2>
-            <BarChart
-              data={sales.byDay.map((d) => ({ label: d.date.slice(5), value: d.revenue }))}
-              valueFormat={rupee}
-            />
-          </Card>
-
-          <Card>
-            <h2 className="mb-1 text-base font-semibold text-slate-900">Orders by hour (peak times)</h2>
-            <p className="mb-3 text-xs text-slate-500">When orders come in, across the period.</p>
-            <BarChart
-              data={sales.byHour.map((h) => ({ label: String(h.hour), value: h.orders }))}
-              color="var(--color-sky-500)"
-            />
-          </Card>
-
-          <div className="grid gap-6 lg:grid-cols-2">
-            <Card>
-              <h2 className="mb-4 text-base font-semibold text-slate-900">Order type mix</h2>
-              {sales.byType.length === 0 ? (
-                <p className="text-sm text-slate-400">No data yet.</p>
-              ) : (
-                <div className="flex flex-col gap-2">
-                  {sales.byType.map((t) => {
-                    const pct = sales.totalOrders ? Math.round((t.orders / sales.totalOrders) * 100) : 0;
-                    return (
-                      <div key={t.type}>
-                        <div className="mb-0.5 flex justify-between text-sm">
-                          <span className="text-slate-700">{typeLabel(t.type)}</span>
-                          <span className="text-slate-500">
-                            {t.orders} · {rupee(t.revenue)} ({pct}%)
-                          </span>
-                        </div>
-                        <div className="h-2 w-full rounded-full bg-slate-100">
-                          <div className="h-2 rounded-full bg-orange-500" style={{ width: `${pct}%` }} />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </Card>
-
-            <Card>
-              <h2 className="mb-4 text-base font-semibold text-slate-900">Top dishes</h2>
-              {sales.topDishes.length === 0 ? (
-                <p className="text-sm text-slate-400">No data yet.</p>
-              ) : (
-                <table className="w-full text-sm">
+            <h2 className="mb-1 text-base font-semibold text-slate-900">Preparation time — actual vs estimated</h2>
+            <p className="mb-3 text-xs text-slate-500">
+              Actual is measured from KOT print to "ready". Use it to tune each dish's prep time under Food Items.
+            </p>
+            {!prep || prep.rows.length === 0 ? (
+              <p className="text-sm text-slate-400">
+                No measured prep times yet — they appear once items are marked ready in the kitchen.
+              </p>
+            ) : (
+              <TableWrap>
+                <table className="w-full min-w-[30rem] text-sm">
                   <thead>
                     <tr>
                       <th>Dish</th>
-                      <th className="text-right">Qty</th>
-                      <th className="text-right">Revenue</th>
+                      <th className="text-right">Estimate</th>
+                      <th className="text-right">Actual avg</th>
+                      <th className="text-right">Difference</th>
+                      <th className="text-right">Samples</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {sales.topDishes.map((d) => (
-                      <tr key={d.name} className="border-t border-slate-100">
-                        <td>{d.name}</td>
-                        <td className="text-right tabular-nums">{d.qty}</td>
-                        <td className="text-right tabular-nums">{rupee(d.revenue)}</td>
+                    {prep.rows.map((r) => (
+                      <tr key={r.name} className="border-t border-slate-100">
+                        <td>{r.name}</td>
+                        <td className="text-right tabular-nums">{r.estimate}m</td>
+                        <td className="text-right tabular-nums">{r.actualAvg}m</td>
+                        <td
+                          className={`py-1.5 text-right tabular-nums font-medium ${r.diff > 0 ? "text-red-600" : "text-green-600"}`}
+                        >
+                          {r.diff > 0 ? "+" : ""}
+                          {r.diff}m
+                        </td>
+                        <td className="text-right tabular-nums text-slate-400">{r.samples}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
-              )}
-            </Card>
-          </div>
+              </TableWrap>
+            )}
+          </Card>
         </>
       )}
-
-      <Card>
-        <h2 className="mb-1 text-base font-semibold text-slate-900">Preparation time — actual vs estimated</h2>
-        <p className="mb-3 text-xs text-slate-500">
-          Actual is measured from KOT print to "ready". Use it to tune each dish's prep time under Food Items.
-        </p>
-        {!prep || prep.rows.length === 0 ? (
-          <p className="text-sm text-slate-400">
-            No measured prep times yet — they appear once items are marked ready in the kitchen.
-          </p>
-        ) : (
-          <TableWrap>
-            <table className="w-full min-w-[30rem] text-sm">
-              <thead>
-                <tr>
-                  <th>Dish</th>
-                  <th className="text-right">Estimate</th>
-                  <th className="text-right">Actual avg</th>
-                  <th className="text-right">Difference</th>
-                  <th className="text-right">Samples</th>
-                </tr>
-              </thead>
-              <tbody>
-                {prep.rows.map((r) => (
-                  <tr key={r.name} className="border-t border-slate-100">
-                    <td>{r.name}</td>
-                    <td className="text-right tabular-nums">{r.estimate}m</td>
-                    <td className="text-right tabular-nums">{r.actualAvg}m</td>
-                    <td
-                      className={`py-1.5 text-right tabular-nums font-medium ${r.diff > 0 ? "text-red-600" : "text-green-600"}`}
-                    >
-                      {r.diff > 0 ? "+" : ""}
-                      {r.diff}m
-                    </td>
-                    <td className="text-right tabular-nums text-slate-400">{r.samples}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </TableWrap>
-        )}
-      </Card>
     </Page>
   );
 }

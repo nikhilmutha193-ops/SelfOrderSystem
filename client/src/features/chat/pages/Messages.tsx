@@ -6,6 +6,7 @@ import { useCanEdit } from "../../../lib/adminAuth";
 import type { ChatConversation, ChatMessage } from "../../../lib/types";
 import { extractErrorMessage } from "../../../shared/api/client";
 import { POLL } from "../../../shared/api/queryClient";
+import { confirmDialog } from "../../../shared/ui/confirm";
 import { Button, Card, EmptyState, ErrorText, IconButton, Input, Page, PageHeader } from "../../../shared/ui/ui";
 import {
   markConversationRead,
@@ -60,7 +61,14 @@ export default function Messages() {
   }
 
   async function deleteMessage(messageId: string) {
-    if (!window.confirm("Delete this message? This cannot be undone.")) return;
+    if (
+      !(await confirmDialog({
+        title: "Delete this message?",
+        message: "It disappears for the guest too. This can't be undone.",
+        confirmLabel: "Delete",
+      }))
+    )
+      return;
     setActionError(null);
     try {
       await deleteChat.mutateAsync(messageId);

@@ -11,7 +11,11 @@ export const shiftKeys = {
 };
 
 export function useCurrentShift() {
-  return useQuery({ queryKey: shiftKeys.current, queryFn: shiftsApi.current, refetchInterval: 30000 });
+  return useQuery({
+    queryKey: shiftKeys.current,
+    queryFn: shiftsApi.current,
+    refetchInterval: 30000,
+  });
 }
 
 export function useShiftHistory() {
@@ -19,16 +23,25 @@ export function useShiftHistory() {
 }
 
 export function useDayReport(date?: string) {
-  return useQuery({ queryKey: shiftKeys.day(date), queryFn: () => shiftsApi.dayPreview(date) });
+  return useQuery({
+    queryKey: shiftKeys.day(date),
+    queryFn: () => shiftsApi.dayPreview(date),
+  });
 }
 
 export function useDayHistory() {
-  return useQuery({ queryKey: shiftKeys.dayHistory, queryFn: shiftsApi.dayHistory });
+  return useQuery({
+    queryKey: shiftKeys.dayHistory,
+    queryFn: shiftsApi.dayHistory,
+  });
 }
 
 function useShiftMutation<TInput, TResult>(mutationFn: (input: TInput) => Promise<TResult>) {
   const queryClient = useQueryClient();
-  return useMutation({ mutationFn, onSuccess: () => queryClient.invalidateQueries({ queryKey: shiftKeys.all }) });
+  return useMutation({
+    mutationFn,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: shiftKeys.all }),
+  });
 }
 
 export function useOpenShift() {

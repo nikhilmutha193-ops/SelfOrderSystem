@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { api, extractErrorMessage } from "../../shared/api/client";
+import { confirmDialog } from "../../shared/ui/confirm";
 import { Button, Card, ErrorText, Input, PageHeader, Switch } from "../../shared/ui/ui";
 
 interface RestoreSummary {
@@ -137,9 +138,11 @@ export default function Backup() {
 
   async function restoreRecord(record: BackupRecordDto) {
     if (
-      !confirm(
-        `Restore "${record.filename}"? This replaces this restaurant's current menu, tables, chefs, team, awards, coupons, reviews, orders and chat history with what's in the backup.`
-      )
+      !(await confirmDialog({
+        title: "Restore this backup?",
+        message: `${record.filename} replaces this restaurant's current menu, tables, orders, customers, bookings, inventory, staff and website content.`,
+        confirmLabel: "Restore backup",
+      }))
     )
       return;
     setRowError(null);
@@ -156,7 +159,14 @@ export default function Backup() {
   }
 
   async function removeRecord(record: BackupRecordDto) {
-    if (!confirm(`Delete "${record.filename}"? This cannot be undone.`)) return;
+    if (
+      !(await confirmDialog({
+        title: "Delete this backup?",
+        message: `${record.filename} is removed from the server. This can't be undone.`,
+        confirmLabel: "Delete backup",
+      }))
+    )
+      return;
     setRowError(null);
     setBusyId(record._id);
     try {
@@ -194,9 +204,12 @@ export default function Backup() {
   async function restoreFromUpload() {
     if (!file || !confirmed) return;
     if (
-      !confirm(
-        "This replaces this restaurant's current menu, tables, chefs, team, awards, coupons, reviews, orders and chat history with what's in the file. Continue?"
-      )
+      !(await confirmDialog({
+        title: "Restore from this file?",
+        message:
+          "This replaces this restaurant's current menu, tables, orders, customers, bookings, inventory, staff and website content with what's in the file.",
+        confirmLabel: "Restore",
+      }))
     )
       return;
 
@@ -228,8 +241,8 @@ export default function Backup() {
         title="Backup & Restore"
         description={
           <>
-            Generate snapshots of this restaurant's data (menu, tables, chefs, team, awards, coupons, reviews, orders
-            and chat history), stored on the server so they can be downloaded or restored later - into this same
+            Generate snapshots of this restaurant's data (menu, tables, orders, customers, bookings, inventory, staff
+            and website content), stored on the server so they can be downloaded or restored later - into this same
             database, or a fresh one after migrating servers. Admin logins are not included; you always sign in with
             your current admin account.
           </>
@@ -381,8 +394,8 @@ export default function Backup() {
         <h2 className="mb-3 text-base font-semibold text-slate-900">Restore from an uploaded file</h2>
         <p className="mb-3 text-sm text-slate-500">
           For migrating from a different server: upload a backup JSON file downloaded from there. This replaces this
-          restaurant's current menu, tables, chefs, team, awards, coupons, reviews, orders and chat history with what's
-          in the file.
+          restaurant's current menu, tables, orders, customers, bookings, inventory, staff and website content with
+          what's in the file.
         </p>
         <div className="flex flex-col gap-3">
           <input type="file" accept="application/json,.json" onChange={handleFile} className="text-sm text-slate-600" />

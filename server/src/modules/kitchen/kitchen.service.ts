@@ -32,7 +32,11 @@ export async function getKotQueue(ctx: RequestContext, tableId?: string, station
     .sort((a, b) => (a.tokenNumber ?? Number.MAX_SAFE_INTEGER) - (b.tokenNumber ?? Number.MAX_SAFE_INTEGER));
 }
 
-export async function sendOrderToKitchen(restaurantId: string, order: Pick<IOrder, "_id" | "status">) {
+export async function sendOrderToKitchen(
+  restaurantId: string,
+  order: Pick<IOrder, "_id" | "status">,
+  options: { silent?: boolean } = {}
+) {
   if (order.status !== "open" && order.status !== "billed") {
     throw new HttpError(409, "This order is closed, so nothing can be sent to the kitchen");
   }
@@ -58,6 +62,7 @@ export async function sendOrderToKitchen(restaurantId: string, order: Pick<IOrde
     round,
     tokenNumber,
     itemIds: items.map((item) => item._id.toString()),
+    ...(options.silent && { silent: true }),
   });
   return { round, tokenNumber, items };
 }

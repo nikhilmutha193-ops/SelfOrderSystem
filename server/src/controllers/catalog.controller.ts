@@ -4,9 +4,14 @@ import { Types } from "mongoose";
 import { asyncHandler } from "../middleware/errorHandler";
 import Category from "../models/Category";
 import FoodItem from "../models/FoodItem";
+import Restaurant from "../models/Restaurant";
+import { clearRecommendationCache } from "../modules/recommendations/recommendations.service";
 import Station from "../models/Station";
 import Subcategory from "../models/Subcategory";
 import { HttpError } from "../utils/httpError";
+import { verifyToken } from "../utils/jwt";
+import { basePriceFor } from "../modules/pricing/pricing";
+import TableModel from "../models/Table";
 
 async function resolveStationId(value: unknown, restaurantId: string): Promise<Types.ObjectId | null | undefined> {
   if (value === undefined) return undefined;
@@ -40,6 +45,83 @@ async function assertShortCodeFree(restaurantId: string, code: string | null | u
 
 function validId(id: string) {
   if (!Types.ObjectId.isValid(id)) throw new HttpError(400, "Invalid id");
+}
+
+
+function optionalPrice(value: unknown, label: string): number | null {
+  if (value === undefined || value === null || value === "") return null;
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 0) throw new HttpError(400, `${label} must be zero or more`);
+  return Math.round(n * 100) / 100;
+}
+
+async function resolvePriceRules(value: unknown, restaurantId: string) {
+  if (value === undefined) return undefined;
+  if (value === null) return { takeaway: null, delivery: null, areas: [] };
+  if (typeof value !== "object") throw new HttpError(400, "Invalid prices");
+  const raw = value as { takeaway?: unknown; delivery?: unknown; areas?: unknown };
+  const areas = Array.isArray(raw.areas) ? raw.areas : [];
+  const restaurant = await Restaurant.findById(restaurantId).select("areas").lean();
+  const known = new Set((restaurant?.areas ?? []).map((a) => a._id.toString()));
+  const seen = new Set<string>();
+  const areaPrices = [];
+  for (const entry of areas) {
+    const areaId = String((entry as { areaId?: unknown })?.areaId ?? "");
+    const price = optionalPrice((entry as { price?: unknown })?.price, "An area price");
+    if (price == null) continue;
+    if (!known.has(areaId)) throw new HttpError(400, "One of the area prices is for an area that no longer exists");
+    if (seen.has(areaId)) continue;
+    seen.add(areaId);
+    areaPrices.push({ areaId: new Types.ObjectId(areaId), price });
+  }
+  return {
+    takeaway: optionalPrice(raw.takeaway, "The takeaway price"),
+    delivery: optionalPrice(raw.delivery, "The delivery price"),
+    areas: areaPrices,
+  };
+}
+
+function resolvePackaging(value: unknown): number | undefined {
+  if (value === undefined) return undefined;
+  return optionalPrice(value, "The packaging charge") ?? 0;
+}
+
+const MAX_COMBO_PARTS = 10;
+
+async function resolveComboItems(value: unknown, restaurantId: string, selfId?: string) {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) throw new HttpError(400, "Combo items must be a list");
+  const parts = value
+    .map((entry) => ({
+      foodItemId: String((entry as { foodItemId?: unknown })?.foodItemId ?? ""),
+      quantity: Math.round(Number((entry as { quantity?: unknown })?.quantity ?? 1)),
+    }))
+    .filter((p) => p.foodItemId);
+  if (parts.length > MAX_COMBO_PARTS) throw new HttpError(400, `A combo can have at most ${MAX_COMBO_PARTS} dishes`);
+  if (parts.some((p) => !Types.ObjectId.isValid(p.foodItemId))) throw new HttpError(400, "One of the combo dishes is invalid");
+  if (parts.some((p) => p.foodItemId === selfId)) throw new HttpError(400, "A combo can't include itself");
+  if (parts.some((p) => !Number.isFinite(p.quantity) || p.quantity < 1 || p.quantity > 20)) {
+    throw new HttpError(400, "Each combo dish needs a quantity between 1 and 20");
+  }
+  const ids = [...new Set(parts.map((p) => p.foodItemId))];
+  if (ids.length !== parts.length) throw new HttpError(400, "Each dish can appear in a combo only once");
+  const found = await FoodItem.find({ _id: { $in: ids }, restaurantId }).select("comboItems").lean();
+  if (found.length !== ids.length) throw new HttpError(404, "One of the combo dishes no longer exists");
+  if (found.some((food) => (food.comboItems ?? []).length > 0)) throw new HttpError(400, "A combo can't contain another combo");
+  return parts.map((p) => ({ foodItemId: new Types.ObjectId(p.foodItemId), quantity: p.quantity }));
+}
+
+const MAX_PAIRINGS = 4;
+
+async function resolvePairings(value: unknown, restaurantId: string, selfId?: string): Promise<Types.ObjectId[] | undefined> {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) throw new HttpError(400, "Pairings must be a list of dishes");
+  const ids = [...new Set(value.map(String))].filter((id) => id !== selfId);
+  if (ids.length > MAX_PAIRINGS) throw new HttpError(400, `Pick at most ${MAX_PAIRINGS} dishes that go well with this one`);
+  if (ids.some((id) => !Types.ObjectId.isValid(id))) throw new HttpError(400, "One of the paired dishes is invalid");
+  const found = await FoodItem.countDocuments({ _id: { $in: ids }, restaurantId });
+  if (found !== ids.length) throw new HttpError(404, "One of the paired dishes no longer exists");
+  return ids.map((id) => new Types.ObjectId(id));
 }
 
 // ---------- Categories ----------
@@ -269,6 +351,10 @@ export const createFoodItem = asyncHandler(async (req: Request, res: Response) =
     translations,
     stationId,
     shortCode,
+    pairsWith,
+    priceRules,
+    packagingCharge,
+    comboItems,
   } = req.body as {
     categoryId?: string;
     subcategoryId?: string;
@@ -285,10 +371,18 @@ export const createFoodItem = asyncHandler(async (req: Request, res: Response) =
     translations?: unknown;
     stationId?: unknown;
     shortCode?: unknown;
+    pairsWith?: unknown;
+    priceRules?: unknown;
+    packagingCharge?: unknown;
+    comboItems?: unknown;
   };
   const station = await resolveStationId(stationId, req.restaurantId!);
   const code = normalizeShortCode(shortCode);
   await assertShortCodeFree(req.restaurantId!, code);
+  const pairings = await resolvePairings(pairsWith, req.restaurantId!);
+  const rules = await resolvePriceRules(priceRules, req.restaurantId!);
+  const packaging = resolvePackaging(packagingCharge);
+  const combo = await resolveComboItems(comboItems, req.restaurantId!, undefined);
   if (!categoryId || !subcategoryId || !name || price === undefined) {
     throw new HttpError(400, "categoryId, subcategoryId, name and price are required");
   }
@@ -321,7 +415,12 @@ export const createFoodItem = asyncHandler(async (req: Request, res: Response) =
     ...(translations !== undefined && { translations: sanitizeTranslations(translations) }),
     ...(station !== undefined && { stationId: station }),
     ...(code && { shortCode: code }),
+    ...(pairings !== undefined && { pairsWith: pairings }),
+    ...(rules !== undefined && { priceRules: rules }),
+    ...(packaging !== undefined && { packagingCharge: packaging }),
+    ...(combo !== undefined && { comboItems: combo }),
   });
+  clearRecommendationCache(req.restaurantId!);
   res.status(201).json(foodItem);
 });
 
@@ -343,6 +442,10 @@ export const updateFoodItem = asyncHandler(async (req: Request, res: Response) =
     translations,
     stationId,
     shortCode,
+    pairsWith,
+    priceRules,
+    packagingCharge,
+    comboItems,
   } = req.body as {
     categoryId?: string;
     subcategoryId?: string;
@@ -359,10 +462,18 @@ export const updateFoodItem = asyncHandler(async (req: Request, res: Response) =
     translations?: unknown;
     stationId?: unknown;
     shortCode?: unknown;
+    pairsWith?: unknown;
+    priceRules?: unknown;
+    packagingCharge?: unknown;
+    comboItems?: unknown;
   };
   const station = await resolveStationId(stationId, req.restaurantId!);
   const code = normalizeShortCode(shortCode);
   await assertShortCodeFree(req.restaurantId!, code, req.params.id);
+  const pairings = await resolvePairings(pairsWith, req.restaurantId!, req.params.id);
+  const rules = await resolvePriceRules(priceRules, req.restaurantId!);
+  const packaging = resolvePackaging(packagingCharge);
+  const combo = await resolveComboItems(comboItems, req.restaurantId!, req.params.id);
   if (price !== undefined && (typeof price !== "number" || price < 0)) {
     throw new HttpError(400, "price must be a non-negative number");
   }
@@ -388,12 +499,17 @@ export const updateFoodItem = asyncHandler(async (req: Request, res: Response) =
         ...(translations !== undefined && { translations: sanitizeTranslations(translations) }),
         ...(station !== undefined && { stationId: station }),
         ...(code && { shortCode: code }),
+        ...(pairings !== undefined && { pairsWith: pairings }),
+    ...(rules !== undefined && { priceRules: rules }),
+    ...(packaging !== undefined && { packagingCharge: packaging }),
+    ...(combo !== undefined && { comboItems: combo }),
       },
       ...(code === null && { $unset: { shortCode: 1 } }),
     },
     { new: true }
   );
   if (!foodItem) throw new HttpError(404, "Food item not found");
+  clearRecommendationCache(req.restaurantId!);
   res.json(foodItem);
 });
 
@@ -406,12 +522,27 @@ export const setFoodItemActive = asyncHandler(async (req: Request, res: Response
     { new: true }
   );
   if (!foodItem) throw new HttpError(404, "Food item not found");
+  clearRecommendationCache(req.restaurantId!);
   res.json(foodItem);
 });
 
 // ---------- Public menu (effective-active computed on read, not cascaded on write) ----------
 
+async function guestAreaId(req: Request): Promise<string | null> {
+  const header = req.headers.authorization;
+  if (!header || !header.startsWith("Bearer ")) return null;
+  try {
+    const payload = verifyToken(header.slice("Bearer ".length));
+    if (payload.role !== "table" || !payload.tableId || !Types.ObjectId.isValid(payload.tableId)) return null;
+    const table = await TableModel.findOne({ _id: payload.tableId, restaurantId: req.restaurantId }).select("areaId").lean();
+    return table?.areaId?.toString() ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export const getPublicMenu = asyncHandler(async (req: Request, res: Response) => {
+  const areaId = await guestAreaId(req);
   const [categories, subcategories, foodItems] = await Promise.all([
     Category.find({ restaurantId: req.restaurantId, isActive: true }).sort({ name: 1 }),
     Subcategory.find({ restaurantId: req.restaurantId, isActive: true }).sort({ name: 1 }),
@@ -423,6 +554,13 @@ export const getPublicMenu = asyncHandler(async (req: Request, res: Response) =>
   const activeSubcategoryIds = new Set(visibleSubcategories.map((s) => s._id.toString()));
   const visibleFoodItems = foodItems.filter(
     (f) => activeCategoryIds.has(f.categoryId.toString()) && activeSubcategoryIds.has(f.subcategoryId.toString())
+  );
+  const componentIds = visibleFoodItems.flatMap((f) => (f.comboItems ?? []).map((c) => c.foodItemId));
+  const componentName = new Map(
+    (componentIds.length
+      ? await FoodItem.find({ _id: { $in: componentIds }, restaurantId: req.restaurantId }).select("name").lean()
+      : []
+    ).map((c) => [c._id.toString(), c.name])
   );
 
   const menu = categories.map((category) => ({
@@ -442,9 +580,12 @@ export const getPublicMenu = asyncHandler(async (req: Request, res: Response) =>
           .map((f) => ({
             _id: f._id,
             name: f.name,
-            price: f.price,
+            price: basePriceFor(f, { orderType: "dine-in", areaId }),
             description: f.description,
             imageUrl: f.imageUrl,
+            components: (f.comboItems ?? [])
+              .filter((c) => componentName.has(c.foodItemId.toString()))
+              .map((c) => ({ name: componentName.get(c.foodItemId.toString())!, quantity: c.quantity })),
             isBestseller: f.isBestseller,
             bestsellerEmoji: f.bestsellerEmoji,
             foodType: f.foodType,

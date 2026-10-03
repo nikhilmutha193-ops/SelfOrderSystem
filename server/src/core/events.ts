@@ -9,7 +9,7 @@ export interface DomainEvents {
   "order.created": OrderRef;
   "order.itemsAdded": OrderRef & { itemIds: string[]; addedByRole: "admin" | "chef" | "table" };
   "order.itemCancelled": OrderRef & { itemId: string; previousStatus: string };
-  "order.kotSent": OrderRef & { round: number; tokenNumber: number; itemIds: string[] };
+  "order.kotSent": OrderRef & { round: number; tokenNumber: number; itemIds: string[]; silent?: boolean };
   "order.billed": OrderRef;
   "order.settled": OrderRef;
   "order.cancelled": OrderRef & { voided: boolean };

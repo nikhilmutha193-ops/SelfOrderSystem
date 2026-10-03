@@ -10,7 +10,11 @@ export const shiftsApi = {
   close: (input: { countedCash: number; note?: string }) =>
     api.post<Shift>("/shifts/current/close", input).then((res) => res.data),
   dayPreview: (date?: string) =>
-    api.get<DayReport>("/day-close/preview", { params: date ? { date } : undefined }).then((res) => res.data),
+    api
+      .get<DayReport>("/day-close/preview", {
+        params: date ? { date } : undefined,
+      })
+      .then((res) => res.data),
   closeDay: (input: { date?: string; carryForward?: boolean }) =>
     api.post<DayReport>("/day-close", input).then((res) => res.data),
   dayHistory: () => api.get<DayCloseRecord[]>("/day-close").then((res) => res.data),

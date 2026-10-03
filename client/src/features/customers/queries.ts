@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { refreshOrderData } from "../orders/queries";
+import { shiftKeys } from "../shifts/queries";
 import { customersApi, type Segment } from "./api";
 
 export const customerKeys = {
@@ -9,13 +10,36 @@ export const customerKeys = {
   profile: (id: string) => ["customers", "profile", id] as const,
   order: (orderId: string) => ["orders", "customer", orderId] as const,
   settings: ["customers", "settings"] as const,
+  credit: (id: string) => ["customers", "credit", id] as const,
+  dues: ["customers", "dues"] as const,
 };
 
+export const useCustomerCredit = (id: string | null) =>
+  useQuery({
+    queryKey: customerKeys.credit(id ?? ""),
+    queryFn: () => customersApi.credit(id!),
+    enabled: !!id,
+  });
+
+export const useDues = (enabled = true) =>
+  useQuery({
+    queryKey: customerKeys.dues,
+    queryFn: customersApi.dues,
+    enabled,
+  });
+
 export const useCustomers = (segment?: Segment, q?: string) =>
-  useQuery({ queryKey: customerKeys.list(segment, q), queryFn: () => customersApi.list({ segment, q }) });
+  useQuery({
+    queryKey: customerKeys.list(segment, q),
+    queryFn: () => customersApi.list({ segment, q }),
+  });
 
 export const useCustomerProfile = (id: string | null) =>
-  useQuery({ queryKey: customerKeys.profile(id ?? ""), queryFn: () => customersApi.profile(id!), enabled: !!id });
+  useQuery({
+    queryKey: customerKeys.profile(id ?? ""),
+    queryFn: () => customersApi.profile(id!),
+    enabled: !!id,
+  });
 
 export const useOrderCustomer = (orderId: string | null | undefined) =>
   useQuery({
@@ -40,3 +64,17 @@ export const useAttachCustomer = () => useCustomerMutation(customersApi.attach);
 export const useRedeemPoints = () => useCustomerMutation(customersApi.redeem);
 export const useRemoveRedemption = () => useCustomerMutation(customersApi.removeRedemption);
 export const useSaveLoyaltySettings = () => useCustomerMutation(customersApi.saveSettings);
+export const useSetCreditLimit = () => useCustomerMutation(customersApi.setCreditLimit);
+
+export function useRecordCreditPayment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: customersApi.recordCreditPayment,
+    onSuccess: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: customerKeys.all }),
+        queryClient.invalidateQueries({ queryKey: shiftKeys.all }),
+        refreshOrderData(queryClient),
+      ]),
+  });
+}

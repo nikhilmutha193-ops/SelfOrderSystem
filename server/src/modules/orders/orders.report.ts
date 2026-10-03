@@ -166,6 +166,8 @@ export async function listInvoices(ctx: RequestContext, query: InvoiceRegisterIn
     status: invoiceStatus(order),
     paymentMethod: order.paymentMethod,
     grandTotal: order.bill?.grandTotal ?? null,
+    taxableAmount: order.bill?.taxableAmount ?? null,
+    taxLines: (order.bill?.taxLines ?? []).map((t) => ({ name: t.name, percent: t.percent, amount: t.amount })),
     reason: order.voidReason || order.cancelReason || "",
   }));
 }

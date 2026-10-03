@@ -10,6 +10,7 @@ import {
   type PermissionLevel,
 } from "../../lib/adminAuth";
 import { api, extractErrorMessage } from "../../shared/api/client";
+import { confirmDialog } from "../../shared/ui/confirm";
 import { Alert, Badge, Button, Card, CardHeader, ErrorText, Field, Input, Page, PageHeader } from "../../shared/ui/ui";
 
 type Permissions = Partial<Record<ModuleKey, PermissionLevel>>;
@@ -163,7 +164,14 @@ export default function Admins() {
   }
 
   async function removeAdmin(id: string, name: string) {
-    if (!window.confirm(`Delete admin "${name}"? This cannot be undone.`)) return;
+    if (
+      !(await confirmDialog({
+        title: `Delete ${name}?`,
+        message: "This login stops working at once and any assigned tables are freed. This can't be undone.",
+        confirmLabel: "Delete login",
+      }))
+    )
+      return;
     setError(null);
     try {
       await api.delete(`/admins/${id}`);

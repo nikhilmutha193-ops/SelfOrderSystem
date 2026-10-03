@@ -3,6 +3,8 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { activateStoredAuth, clearStoredToken, setActiveAuth } from "../../../shared/api/client";
+import { useStaffTheme } from "../../../shared/theme";
+import { ThemeToggleButton } from "../../../shared/ui/ThemeToggle";
 import { Button } from "../../../shared/ui/ui";
 import KotQueueView from "../components/KotQueueView";
 
@@ -16,6 +18,7 @@ function useClock() {
 }
 
 export default function ChefDashboard() {
+  useStaffTheme();
   const navigate = useNavigate();
   const now = useClock();
 
@@ -42,6 +45,7 @@ export default function ChefDashboard() {
         <span className="hidden text-lg font-semibold tabular-nums sm:block">
           {now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
         </span>
+        <ThemeToggleButton />
         <Button
           variant="ghost"
           icon={LogOut}

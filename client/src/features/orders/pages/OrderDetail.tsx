@@ -22,6 +22,7 @@ import { useAdmin } from "../../../lib/adminAuth";
 import { renderPrepMessage } from "../../../lib/prepTime";
 import { TENDER_LABELS, type MenuCategory, type MenuFoodItem } from "../../../lib/types";
 import { extractErrorMessage } from "../../../shared/api/client";
+import { confirmDialog } from "../../../shared/ui/confirm";
 import ReasonDialog from "../../../shared/ui/ReasonDialog";
 import {
   Alert,
@@ -82,7 +83,10 @@ export default function OrderDetail({
   const [activeCat, setActiveCat] = useState("all");
   const [cart, setCart] = useState<Record<string, number>>({});
   const [settleOpen, setSettleOpen] = useState(false);
-  const [complimentaryItem, setComplimentaryItem] = useState<{ id: string; name: string } | null>(null);
+  const [complimentaryItem, setComplimentaryItem] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
   const [customerGstin, setCustomerGstin] = useState("");
   const [billDialog, setBillDialog] = useState<BillDialog>(null);
   const { profile } = useAdmin();
@@ -149,7 +153,10 @@ export default function OrderDetail({
     try {
       await addItems.mutateAsync({
         orderId,
-        items: Object.entries(cart).map(([foodItemId, quantity]) => ({ foodItemId, quantity })),
+        items: Object.entries(cart).map(([foodItemId, quantity]) => ({
+          foodItemId,
+          quantity,
+        })),
       });
       setCart({});
     } catch (err) {
@@ -214,7 +221,15 @@ export default function OrderDetail({
       setBillDialog("cancelBill");
       return;
     }
-    if (!confirm("Cancel this entire order?")) return;
+    if (
+      !(await confirmDialog({
+        title: "Cancel this entire order?",
+        message: "Every item on it is cancelled. This can't be undone.",
+        confirmLabel: "Cancel order",
+        cancelLabel: "Keep order",
+      }))
+    )
+      return;
     setActionError(null);
     try {
       await cancelOrder.mutateAsync({ orderId });
@@ -227,7 +242,10 @@ export default function OrderDetail({
     if (!orderId) return;
     setActionError(null);
     try {
-      await generateBill.mutateAsync({ orderId, customerGstin: customerGstin.trim() || undefined });
+      await generateBill.mutateAsync({
+        orderId,
+        customerGstin: customerGstin.trim() || undefined,
+      });
       setCustomerGstin("");
     } catch (err) {
       setActionError(extractErrorMessage(err));
@@ -305,7 +323,11 @@ export default function OrderDetail({
       .filter((i) => i.kotRound != null)
       .reduce((map, i) => {
         const r = i.kotRound as number;
-        const entry = map.get(r) ?? { round: r, token: i.tokenNumber, count: 0 };
+        const entry = map.get(r) ?? {
+          round: r,
+          token: i.tokenNumber,
+          count: 0,
+        };
         entry.count += i.quantity;
         map.set(r, entry);
         return map;
@@ -360,6 +382,12 @@ export default function OrderDetail({
                     {item.complimentary && <Badge tone="green">On the house</Badge>}
                   </p>
                   {extras && <p className="truncate text-xs text-slate-500">{extras}</p>}
+                  {(item.components ?? []).length > 0 && (
+                    <p className="text-xs text-slate-500">
+                      Includes{" "}
+                      {item.components!.map((p) => (p.quantity > 1 ? `${p.quantity}× ${p.name}` : p.name)).join(", ")}
+                    </p>
+                  )}
                   <div className="mt-1 flex flex-wrap items-center gap-2">
                     <Badge tone={STATUS_TONE[item.status]} dot>
                       {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
@@ -377,7 +405,12 @@ export default function OrderDetail({
                       variant="ghost"
                       icon={Gift}
                       className="!text-emerald-700 hover:!bg-emerald-50"
-                      onClick={() => setComplimentaryItem({ id: item._id, name: item.foodName })}
+                      onClick={() =>
+                        setComplimentaryItem({
+                          id: item._id,
+                          name: item.foodName,
+                        })
+                      }
                     >
                       Comp
                     </Button>
@@ -527,14 +560,18 @@ export default function OrderDetail({
         {(totals.manualDiscount ?? 0) > 0 && (
           <div className="flex justify-between gap-2 text-emerald-700">
             <dt className="min-w-0 truncate">
-              Discount{order.manualDiscount?.reason ? ` (${order.manualDiscount.reason})` : ""}
+              Discount
+              {order.manualDiscount?.reason ? ` (${order.manualDiscount.reason})` : ""}
             </dt>
             <dd className="tabular-nums">-₹{(totals.manualDiscount ?? 0).toFixed(2)}</dd>
           </div>
         )}
         {(totals.loyaltyDiscount ?? 0) > 0 && (
           <div className="flex justify-between text-emerald-700">
-            <dt>Loyalty points{order.loyaltyRedeem ? ` (${order.loyaltyRedeem.points})` : ""}</dt>
+            <dt>
+              Loyalty points
+              {order.loyaltyRedeem ? ` (${order.loyaltyRedeem.points})` : ""}
+            </dt>
             <dd className="tabular-nums">-₹{(totals.loyaltyDiscount ?? 0).toFixed(2)}</dd>
           </div>
         )}
@@ -542,6 +579,12 @@ export default function OrderDetail({
           <div className="flex justify-between text-slate-600">
             <dt>Service charge ({totals.serviceChargePercent}%)</dt>
             <dd className="tabular-nums">₹{(totals.serviceCharge ?? 0).toFixed(2)}</dd>
+          </div>
+        )}
+        {(totals.packagingCharge ?? 0) > 0 && (
+          <div className="flex justify-between text-slate-600">
+            <dt>Packaging</dt>
+            <dd className="tabular-nums">₹{(totals.packagingCharge ?? 0).toFixed(2)}</dd>
           </div>
         )}
         <div className="flex justify-between text-slate-600">
@@ -706,6 +749,14 @@ export default function OrderDetail({
           Reason: {order.voidReason || order.cancelReason}
         </Alert>
       )}
+      {order.offline && (
+        <Alert tone={order.offline.mismatch && order.status !== "closed" ? "warning" : "info"} title="Billed offline">
+          Taken on the POS while offline on{" "}
+          {new Date(order.offline.createdAt).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })} and synced
+          later. Provisional total ₹{order.offline.clientTotal.toFixed(2)}.
+          {order.offline.note && order.status !== "closed" && <> {order.offline.note}</>}
+        </Alert>
+      )}
       {notice && <Alert tone="success">{notice}</Alert>}
       <ErrorText>{error}</ErrorText>
 
@@ -744,7 +795,10 @@ export default function OrderDetail({
         confirmLabel="Make complimentary"
         onCancel={() => setComplimentaryItem(null)}
         onConfirm={async ({ note }) => {
-          await complimentary.mutateAsync({ itemId: complimentaryItem!.id, reason: note });
+          await complimentary.mutateAsync({
+            itemId: complimentaryItem!.id,
+            reason: note,
+          });
           setComplimentaryItem(null);
         }}
       />

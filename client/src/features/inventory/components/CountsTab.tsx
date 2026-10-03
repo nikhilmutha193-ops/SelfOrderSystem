@@ -53,7 +53,12 @@ export function CountsTab({ canEdit }: { canEdit: boolean }) {
                           min={0}
                           step="any"
                           value={value}
-                          onChange={(e) => setCounted((c) => ({ ...c, [item._id]: e.target.value }))}
+                          onChange={(e) =>
+                            setCounted((c) => ({
+                              ...c,
+                              [item._id]: e.target.value,
+                            }))
+                          }
                         />
                       </td>
                       <td
@@ -90,7 +95,10 @@ export function CountsTab({ canEdit }: { canEdit: boolean }) {
                 try {
                   await create.mutateAsync({
                     note: note.trim() || undefined,
-                    lines: entered.map(([stockItemId, v]) => ({ stockItemId, counted: Number(v) })),
+                    lines: entered.map(([stockItemId, v]) => ({
+                      stockItemId,
+                      counted: Number(v),
+                    })),
                   });
                   setCounted({});
                   setNote("");
@@ -118,10 +126,14 @@ export function CountsTab({ canEdit }: { canEdit: boolean }) {
                 onClick={() => setOpenId(openId === count._id ? null : count._id)}
               >
                 <span>
-                  {new Date(count.countedAt).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}
+                  {new Date(count.countedAt).toLocaleString([], {
+                    dateStyle: "medium",
+                    timeStyle: "short",
+                  })}
                   <span className="text-slate-500">
                     {" "}
-                    · {count.lines.length} items{count.note ? ` · ${count.note}` : ""}
+                    · {count.lines.length} items
+                    {count.note ? ` · ${count.note}` : ""}
                     {count.byName ? ` · ${count.byName}` : ""}
                   </span>
                 </span>

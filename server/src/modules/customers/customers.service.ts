@@ -11,6 +11,7 @@ import { HttpError } from "../../utils/httpError";
 import { computeInvoiceTotals, round2 } from "../../utils/invoice";
 import { normalizePhone } from "../../utils/phone";
 import { pricingFor, totalsForOrder } from "../orders/orders.billing";
+import { creditBalance } from "../credit/credit.service";
 import { CustomersRepository } from "./customers.repository";
 import { LoyaltySettingsInput, UpdateCustomerInput } from "./customers.schema";
 import { loyaltyBalance } from "./loyalty";
@@ -244,6 +245,9 @@ export async function orderCustomer(ctx: RequestContext, orderId: string) {
     customer: customer ? summary(customer, await repo.entries(customer._id), settings) : null,
     redeem: order.loyaltyRedeem ?? null,
     loyalty,
+    credit: customer
+      ? { balance: await creditBalance(ctx.restaurantId, customer._id), creditLimit: customer.creditLimit ?? null }
+      : null,
   };
 }
 

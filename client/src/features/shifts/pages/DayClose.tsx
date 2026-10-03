@@ -4,12 +4,18 @@ import { Link } from "react-router-dom";
 import { useCanEdit } from "../../../lib/adminAuth";
 import { TENDER_LABELS, type NamedAmount, type TenderMethod } from "../../../lib/types";
 import { extractErrorMessage } from "../../../shared/api/client";
+import { ExcelButton } from "../../../shared/ui/ExcelButton";
 import { Badge, Button, Card, ErrorText, Input, TableWrap } from "../../../shared/ui/ui";
+import { dayReportSheets } from "../dayReportExcel";
 import { useCloseDay, useDayHistory, useDayReport } from "../queries";
 
 const rupees = (n: number | null | undefined) => `₹${(n ?? 0).toFixed(2)}`;
 
-const TYPE_LABELS: Record<string, string> = { "dine-in": "Dine-in", takeaway: "Take away", delivery: "Delivery" };
+const TYPE_LABELS: Record<string, string> = {
+  "dine-in": "Dine-in",
+  takeaway: "Take away",
+  delivery: "Delivery",
+};
 
 function Breakdown({ title, rows, label }: { title: string; rows: NamedAmount[]; label?: (name: string) => string }) {
   return (
@@ -63,16 +69,19 @@ export default function DayClose() {
             Check the day's takings, then close it. A closed day's bills can only be changed by the owner.
           </p>
         </div>
-        <label className="text-sm font-medium text-slate-700">
-          Business day
-          <Input
-            id="day-close-date"
-            className="mt-1"
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-          />
-        </label>
+        <div className="flex flex-wrap items-end gap-2">
+          {r && <ExcelButton fileName={`day-close-${r.businessDate}`} sheets={() => dayReportSheets(r)} />}
+          <label className="text-sm font-medium text-slate-700">
+            Business day
+            <Input
+              id="day-close-date"
+              className="mt-1"
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+            />
+          </label>
+        </div>
       </div>
 
       <ErrorText>{error ?? (report.error ? extractErrorMessage(report.error) : null)}</ErrorText>
@@ -104,6 +113,7 @@ export default function DayClose() {
                 ["Items sold", rupees(r.totals.gross)],
                 ["Discounts", rupees(r.totals.discounts)],
                 ["Service charge", rupees(r.totals.serviceCharge)],
+                ["Packaging", rupees(r.totals.packagingCharge ?? 0)],
                 ["Taxable value", rupees(r.totals.taxable)],
                 ["Tax", rupees(r.totals.tax)],
                 ["Round off", rupees(r.totals.roundOff)],
@@ -162,7 +172,12 @@ export default function DayClose() {
               ) : (
                 r.shifts.map((s) => (
                   <p key={s.openedAt} className="flex justify-between text-sm">
-                    <span>{new Date(s.openedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                    <span>
+                      {new Date(s.openedAt).toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </span>
                     <span
                       className={`tabular-nums ${(s.variance ?? 0) < 0 ? "text-red-600" : (s.variance ?? 0) > 0 ? "text-amber-700" : ""}`}
                     >
@@ -179,7 +194,8 @@ export default function DayClose() {
               {r.unsettled.length > 0 && (
                 <div className="mb-4">
                   <h3 className="mb-2 text-sm font-semibold text-red-700">
-                    {r.unsettled.length} unpaid order{r.unsettled.length === 1 ? "" : "s"}
+                    {r.unsettled.length} unpaid order
+                    {r.unsettled.length === 1 ? "" : "s"}
                   </h3>
                   <ul className="flex flex-col gap-1 text-sm">
                     {r.unsettled.map((u) => (

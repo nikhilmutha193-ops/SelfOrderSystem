@@ -89,6 +89,11 @@ export interface IBookingSettings {
   slotMinutes: number;
 }
 
+export interface IArea {
+  _id: Types.ObjectId;
+  name: string;
+}
+
 export interface IRestaurant {
   _id: Types.ObjectId;
   name: string;
@@ -118,6 +123,7 @@ export interface IRestaurant {
   inventorySettings: IInventorySettings;
   loyaltySettings: ILoyaltySettings;
   bookingSettings: IBookingSettings;
+  areas: IArea[];
   backupSchedule: IBackupSchedule;
   createdAt: Date;
   updatedAt: Date;
@@ -262,6 +268,10 @@ const restaurantSchema = new Schema<IRestaurant>(
         { _id: false }
       ),
       default: () => ({}),
+    },
+    areas: {
+      type: [new Schema<IArea>({ name: { type: String, required: true, trim: true } })],
+      default: [],
     },
     backupSchedule: { type: backupScheduleSchema, default: () => ({}) },
     chatModeration: { type: chatModerationSchema, default: () => ({}) },

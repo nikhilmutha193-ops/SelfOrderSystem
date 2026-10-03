@@ -6,6 +6,7 @@ import { can, useAdmin } from "../../../lib/adminAuth";
 import type { Order, PaymentMethod } from "../../../lib/types";
 import { extractErrorMessage } from "../../../shared/api/client";
 import { POLL } from "../../../shared/api/queryClient";
+import { confirmDialog } from "../../../shared/ui/confirm";
 import ReasonDialog from "../../../shared/ui/ReasonDialog";
 import { useCancelOrder, useOrders, usePayOrder } from "../queries";
 
@@ -57,7 +58,14 @@ export default function ActiveOrders() {
   const fresh = orders.filter((o) => Date.now() - new Date(o.checkinTime).getTime() <= STALE_MS);
 
   async function closeOrder(o: Order) {
-    if (!window.confirm(`Complete & close ${o.customerName || "this order"}? It will be marked paid (${method}).`))
+    if (
+      !(await confirmDialog({
+        title: `Close ${o.customerName || "this order"} as paid?`,
+        message: `It will be marked paid by ${method}.`,
+        confirmLabel: "Mark paid",
+        tone: "primary",
+      }))
+    )
       return;
     setError(null);
     setBusy(true);
@@ -76,7 +84,15 @@ export default function ActiveOrders() {
       setCancellingBill(o);
       return;
     }
-    if (!window.confirm(`Cancel ${o.customerName || "this order"}? This cannot be undone.`)) return;
+    if (
+      !(await confirmDialog({
+        title: `Cancel ${o.customerName || "this order"}?`,
+        message: "This can't be undone.",
+        confirmLabel: "Cancel order",
+        cancelLabel: "Keep order",
+      }))
+    )
+      return;
     setError(null);
     setBusy(true);
     try {

@@ -5,6 +5,9 @@ import { Link, useSearchParams } from "react-router-dom";
 import { useAdmin } from "../../../lib/adminAuth";
 import type { OrderStatus, OrderType } from "../../../lib/types";
 import { extractErrorMessage } from "../../../shared/api/client";
+import { csvToSheet } from "../../../shared/export/excel";
+import { confirmDialog } from "../../../shared/ui/confirm";
+import { ExcelButton } from "../../../shared/ui/ExcelButton";
 import { buttonClass } from "../../../shared/ui/styles";
 import {
   Alert,
@@ -81,10 +84,13 @@ export default function Orders() {
   async function clearAll() {
     if (orders.length === 0) return;
     if (
-      !window.confirm(
-        "Archive the paid and cancelled orders shown here? They disappear from this list but stay in reports and the invoice register. " +
-          "Test orders that never reached the kitchen are deleted. Unpaid bills and orders in the kitchen are left alone."
-      )
+      !(await confirmDialog({
+        title: "Archive these orders?",
+        message:
+          "Paid and cancelled orders shown here leave this list but stay in reports and the invoice register. Test orders that never reached the kitchen are deleted. Unpaid bills and orders in the kitchen are left alone.",
+        confirmLabel: "Archive",
+        tone: "primary",
+      }))
     )
       return;
     setActionError(null);
@@ -164,6 +170,14 @@ export default function Orders() {
             >
               CSV
             </Button>
+            <ExcelButton
+              fileName="orders"
+              disabled={downloading !== null}
+              sheets={async () => {
+                const res = await ordersApi.report("csv", currentParams());
+                return [csvToSheet("Orders", await (res.data as Blob).text())];
+              }}
+            />
             <Button
               variant="secondary"
               icon={Download}
@@ -275,7 +289,10 @@ export default function Orders() {
                         </div>
                         <p className="mt-0.5 truncate text-xs text-slate-500">
                           {orderTypeLabel(order)} ·{" "}
-                          {new Date(order.checkinTime).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}
+                          {new Date(order.checkinTime).toLocaleString([], {
+                            dateStyle: "medium",
+                            timeStyle: "short",
+                          })}
                         </p>
                         {order.invoiceNumber && (
                           <p className="font-mono text-xs text-slate-400">{order.invoiceNumber}</p>
@@ -310,7 +327,10 @@ export default function Orders() {
                         <td className="font-medium text-slate-900">{order.customerName}</td>
                         <td className="text-slate-600">{orderTypeLabel(order)}</td>
                         <td className="whitespace-nowrap text-slate-600 tabular-nums">
-                          {new Date(order.checkinTime).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}
+                          {new Date(order.checkinTime).toLocaleString([], {
+                            dateStyle: "medium",
+                            timeStyle: "short",
+                          })}
                         </td>
                         <td>
                           <Badge tone={orderStatusBadge(order).tone} dot>

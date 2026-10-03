@@ -43,8 +43,8 @@ async function refreshActiveToken(auth: ActiveAuth): Promise<void> {
     });
     storeToken(auth.role, res.data.token);
     if (activeAuth?.token === auth.token) activeAuth = { role: auth.role, token: res.data.token };
-  } catch {
-    refreshRefusedFor = auth.token;
+  } catch (err) {
+    if (!axios.isAxiosError(err) || err.response) refreshRefusedFor = auth.token;
   }
 }
 
@@ -130,6 +130,7 @@ export function storeToken(role: Role, token: string) {
 
 export function clearStoredToken(role: Role) {
   localStorage.removeItem(TOKEN_KEYS[role]);
+  if (role === "admin") localStorage.removeItem("selforder_admin_profile");
 }
 
 const EXPIRED_KEY = (role: Role) => `selforder_expired_${role}`;

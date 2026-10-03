@@ -1,22 +1,41 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, ChevronDown, ChevronUp, ShoppingBasket } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { ArrowLeft, ChevronDown, ChevronUp, CloudOff, ShoppingBasket } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
 import DishDialog from "../../../components/DishDialog";
-import type { PosMenu, PosMenuItem, PosOrderSummary, PosTable } from "../../../lib/types";
+import type { InvoiceTotals, PosMenu, PosMenuItem, PosOrderSummary, PosTable } from "../../../lib/types";
 import { extractErrorMessage } from "../../../shared/api/client";
+import { useStaffTheme } from "../../../shared/theme";
+import { ThemeToggleButton } from "../../../shared/ui/ThemeToggle";
 import { CustomerPanel } from "../../customers/components/CustomerPanel";
 import { kitchenApi, openPdfInTab } from "../../kitchen/api";
 import { ordersApi } from "../../orders/api";
 import SettleDialog from "../../orders/components/SettleDialog";
-import { orderKeys } from "../../orders/queries";
+import { orderKeys, refreshOrderData } from "../../orders/queries";
 import { usePrintingStatus } from "../../printing/queries";
 import { MenuGrid } from "../components/MenuGrid";
+import { OfflineBar } from "../components/OfflineBar";
+import { OfflineSettleDialog } from "../components/OfflineSettleDialog";
 import { OrderPanel } from "../components/OrderPanel";
 import { TableMap } from "../components/TableMap";
+import {
+  addToOpenSale,
+  finishSale,
+  isOfflineError,
+  offlineDetail,
+  offlineTotals,
+  syncOfflineSales,
+  toOfflineLines,
+  useOfflineSales,
+  useOfflineSync,
+  useOnlineStatus,
+  type OfflinePayment,
+  type OfflineTarget,
+} from "../offline";
+import { kotHtml, printHtml, receiptHtml } from "../offlinePrint";
 import { usePosFloor, usePosMenu } from "../queries";
-import { filterMenu, hasOptions, usePosCart } from "../usePosCart";
+import { filterMenu, hasOptions, pricedMenu, usePosCart } from "../usePosCart";
 
 type Mode = "tables" | "takeaway";
 
@@ -39,8 +58,9 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
 }
 
 export default function Pos() {
+  useStaffTheme();
   const queryClient = useQueryClient();
-  const menu = usePosMenu().data ?? NO_MENU;
+  const rawMenu = usePosMenu().data ?? NO_MENU;
   const floor = usePosFloor();
   const tables = floor.data?.tables ?? NO_TABLES;
   const takeaways = floor.data?.takeaways ?? NO_TAKEAWAYS;
@@ -48,6 +68,19 @@ export default function Pos() {
   const cart = usePosCart();
   const { orderId, draft, detail: activeDetail } = cart;
   const [panelOpen, setPanelOpen] = useState(false);
+  const billing = rawMenu.billing;
+  const online = useOnlineStatus();
+  const [forcedOffline, setForcedOffline] = useState<{ at: number; manual: boolean } | null>(null);
+  const recovered =
+    forcedOffline !== null &&
+    !forcedOffline.manual &&
+    floor.isSuccess &&
+    !floor.isFetching &&
+    floor.dataUpdatedAt > forcedOffline.at;
+  const forced = forcedOffline !== null && !recovered;
+  const offline = forced || !online;
+  const offlineSales = useOfflineSales();
+  const [offlineSettle, setOfflineSettle] = useState<InvoiceTotals | null>(null);
 
   const [mode, setMode] = useState<Mode>("tables");
   const [tableId, setTableId] = useState<string | null>(null);
@@ -58,12 +91,32 @@ export default function Pos() {
   const [dishFor, setDishFor] = useState<PosMenuItem | null>(null);
   const [settleOpen, setSettleOpen] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
+  const [message, setMessage] = useState<{
+    tone: "ok" | "error";
+    text: string;
+  } | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
   const table = tables.find((t) => t._id === tableId) ?? null;
+  const areaId = table?.areaId ?? null;
+  const offlineTarget: OfflineTarget | null =
+    mode === "takeaway"
+      ? { orderType: "takeaway", customerName: customerName.trim() }
+      : table
+        ? { orderType: "dine-in", tableId: table._id, tableCode: table.code, customerName: customerName.trim() }
+        : null;
+  const openSale = offlineTarget
+    ? (offlineSales.find(
+        (s) =>
+          s.state === "open" &&
+          s.orderType === offlineTarget.orderType &&
+          (offlineTarget.orderType === "takeaway" || s.tableId === offlineTarget.tableId)
+      ) ?? null)
+    : null;
+  const offlineFlow = offline || !!openSale;
+  const menu = pricedMenu(rawMenu, mode === "takeaway" ? { orderType: "takeaway" } : { orderType: "dine-in", areaId });
   const term = search.trim();
-  const visibleItems = useMemo(() => filterMenu(menu, search, category), [menu, search, category]);
+  const visibleItems = filterMenu(menu, search, category);
 
   function reset(nextMode: Mode) {
     setMode(nextMode);
@@ -106,10 +159,74 @@ export default function Pos() {
     try {
       await action();
     } catch (err) {
-      setMessage({ tone: "error", text: extractErrorMessage(err) });
+      if (isOfflineError(err)) {
+        setForcedOffline({ at: floor.dataUpdatedAt, manual: false });
+        setMessage({
+          tone: "error",
+          text: "Can't reach the server, so this till is billing offline now. Press the same button again to continue.",
+        });
+      } else {
+        setMessage({ tone: "error", text: extractErrorMessage(err) });
+      }
     } finally {
       setBusy(false);
     }
+  }
+
+  const afterSync = useCallback(
+    (result: { synced: number; failed: number }) => {
+      void refreshOrderData(queryClient);
+      if (result.synced > 0 || result.failed > 0) {
+        setMessage({
+          tone: result.failed > 0 ? "error" : "ok",
+          text: [
+            result.synced > 0 && `${result.synced} offline bill${result.synced === 1 ? "" : "s"} synced`,
+            result.failed > 0 && `${result.failed} need${result.failed === 1 ? "s" : ""} attention (see Offline bills)`,
+          ]
+            .filter(Boolean)
+            .join(" · "),
+        });
+      }
+    },
+    [queryClient]
+  );
+  useOfflineSync(!forced, afterSync);
+
+  function offlineKot() {
+    if (!offlineTarget) return;
+    if (draft.length === 0) {
+      setMessage({ tone: "error", text: "Add dishes first. Earlier offline KOTs are already printed." });
+      return;
+    }
+    const lines = toOfflineLines(draft);
+    const sale = addToOpenSale(offlineTarget, lines);
+    printHtml(kotHtml(sale, lines));
+    cart.open(orderId);
+    setMessage({ tone: "ok", text: "KOT printed on this device (offline)" });
+    if (mode === "tables") reset("tables");
+  }
+
+  function offlineFinish(payments: OfflinePayment[]) {
+    if (!offlineTarget) return;
+    const sale = finishSale(offlineTarget, toOfflineLines(draft), billing, payments);
+    setOfflineSettle(null);
+    if (!sale) return;
+    printHtml(receiptHtml(sale, offlineTotals(sale.lines, sale.orderType, billing), billing));
+    setMessage({
+      tone: "ok",
+      text: payments.length
+        ? `Paid offline · ₹${sale.clientTotal.toFixed(2)}. It syncs when the connection is back.`
+        : `Bill saved offline · ₹${sale.clientTotal.toFixed(2)}. Settle it from Orders once it syncs.`,
+    });
+    reset(mode);
+    if (!offline) void syncOfflineSales().then(afterSync);
+  }
+
+  function offlineSettleOpen() {
+    if (!offlineTarget) return;
+    const lines = [...(openSale?.lines ?? []), ...toOfflineLines(draft)];
+    if (lines.length === 0) return;
+    setOfflineSettle(offlineTotals(lines, offlineTarget.orderType, billing));
   }
 
   const save = (send: boolean) =>
@@ -120,6 +237,7 @@ export default function Pos() {
     });
 
   function saveAndKot() {
+    if (offlineFlow) return offlineKot();
     const tab = printing?.printersConfigured ? null : window.open("", "_blank");
     void run(async () => {
       try {
@@ -127,7 +245,10 @@ export default function Pos() {
         if (kot && id && tab) await openPdfInTab(tab, () => kitchenApi.kotPdf(id, kot.round));
         else tab?.close();
         if (kot)
-          setMessage({ tone: "ok", text: `KOT${kot.tokenNumber ? ` T${kot.tokenNumber}` : ""} sent to the kitchen` });
+          setMessage({
+            tone: "ok",
+            text: `KOT${kot.tokenNumber ? ` T${kot.tokenNumber}` : ""} sent to the kitchen`,
+          });
         if (mode === "tables" && kot) reset("tables");
       } catch (err) {
         tab?.close();
@@ -145,6 +266,7 @@ export default function Pos() {
   }
 
   function bill() {
+    if (offlineFlow) return offlineFinish([]);
     const toPrinter = !!printing?.billPrinterConfigured;
     const tab = toPrinter ? null : window.open("", "_blank");
     void run(async () => {
@@ -166,6 +288,7 @@ export default function Pos() {
   }
 
   function settle() {
+    if (offlineFlow) return offlineSettleOpen();
     void run(async () => {
       const { id } = await save(true);
       if (!id) return;
@@ -181,7 +304,10 @@ export default function Pos() {
     if (!orderId) return;
     const fresh = await ordersApi.get(orderId);
     if (fresh.order.status !== "closed") return;
-    setMessage({ tone: "ok", text: `Paid · ${fresh.order.invoiceNumber ?? fresh.order.customerName}` });
+    setMessage({
+      tone: "ok",
+      text: `Paid · ${fresh.order.invoiceNumber ?? fresh.order.customerName}`,
+    });
     reset(mode);
   }
 
@@ -192,7 +318,7 @@ export default function Pos() {
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (settleOpen || dishFor) return;
+      if (settleOpen || dishFor || offlineSettle) return;
       const target = e.target as HTMLElement;
       const typing = ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName);
       if (e.key === "F2") {
@@ -219,7 +345,7 @@ export default function Pos() {
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [settleOpen, dishFor]);
+  }, [settleOpen, dishFor, offlineSettle]);
 
   const showTables = mode === "tables" && !tableId;
   const title =
@@ -305,7 +431,28 @@ export default function Pos() {
           }}
           className="ml-auto h-10 w-full min-w-0 flex-1 sm:max-w-xs rounded-lg border-0 bg-white px-3 text-base text-slate-900 placeholder:text-slate-400 focus:ring-4 focus:ring-orange-500/30 focus:outline-none disabled:opacity-40 sm:text-sm"
         />
+        <button
+          type="button"
+          aria-pressed={forced}
+          aria-label={forced ? "Go back online" : "Bill offline"}
+          title={forced ? "Go back online" : "Bill offline"}
+          onClick={() => setForcedOffline(forced ? null : { at: 0, manual: true })}
+          className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg transition-colors ${
+            forced ? "bg-amber-500 text-slate-900" : "text-slate-300 hover:bg-slate-800 hover:text-white"
+          }`}
+        >
+          <CloudOff size={18} aria-hidden="true" />
+        </button>
+        <ThemeToggleButton className="hidden sm:inline-flex" />
       </header>
+
+      <OfflineBar
+        offline={offline}
+        forced={forced}
+        billing={billing}
+        onReconnect={() => setForcedOffline(null)}
+        onSynced={() => afterSync({ synced: 0, failed: 0 })}
+      />
 
       {message && (
         <div
@@ -321,7 +468,7 @@ export default function Pos() {
       <main className="relative flex min-h-0 flex-1">
         <section className="min-w-0 flex-1 pb-20 md:pb-0">
           {showTables ? (
-            <TableMap tables={tables} onSelect={chooseTable} />
+            <TableMap tables={tables} areas={floor.data?.areas} onSelect={chooseTable} />
           ) : (
             <MenuGrid
               categories={menu.categories}
@@ -359,21 +506,45 @@ export default function Pos() {
             headerExtra={
               <>
                 {headerExtra}
-                {activeDetail && activeDetail.order.status !== "cancelled" && (
+                {offlineFlow && orderId && (
+                  <p className="mt-2 rounded-lg bg-amber-50 px-2 py-1.5 text-xs text-amber-900">
+                    This table's running order is on the server. Dishes added offline become a separate bill.
+                  </p>
+                )}
+                {!offlineFlow && activeDetail && activeDetail.order.status !== "cancelled" && (
                   <div className="mt-2 border-t border-slate-100 pt-2">
                     <CustomerPanel order={activeDetail.order} compact />
                   </div>
                 )}
               </>
             }
-            detail={activeDetail}
+            detail={
+              offlineFlow
+                ? openSale
+                  ? {
+                      ...offlineDetail(openSale, billing),
+                      totals: offlineTotals([...openSale.lines, ...toOfflineLines(draft)], openSale.orderType, billing),
+                    }
+                  : null
+                : activeDetail
+            }
+            offline={offlineFlow}
+            offlineTotal={
+              offlineFlow && offlineTarget && (openSale || draft.length > 0)
+                ? offlineTotals(
+                    [...(openSale?.lines ?? []), ...toOfflineLines(draft)],
+                    offlineTarget.orderType,
+                    billing
+                  ).grandTotal
+                : null
+            }
             draft={draft}
             customerName={mode === "takeaway" && !orderId ? customerName : null}
             onCustomerName={setCustomerName}
             onDraftQuantity={cart.changeQuantity}
             onDraftRemove={cart.removeLine}
             onSaveKot={saveAndKot}
-            onHold={mode === "takeaway" ? hold : null}
+            onHold={mode === "takeaway" && !offlineFlow ? hold : null}
             onBill={bill}
             onSettle={settle}
             busy={busy || showTables}
@@ -402,6 +573,10 @@ export default function Pos() {
           </button>
         )}
       </main>
+
+      {offlineSettle && (
+        <OfflineSettleDialog totals={offlineSettle} onClose={() => setOfflineSettle(null)} onConfirm={offlineFinish} />
+      )}
 
       <DishDialog
         food={dishFor}

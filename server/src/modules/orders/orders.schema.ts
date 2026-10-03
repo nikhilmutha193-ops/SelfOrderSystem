@@ -72,8 +72,8 @@ export const orderFilterQuery = z.object({
   to: blankToUndefined(businessDate),
 });
 
-const tenderMethod = z.enum(["cash", "upi", "card", "online", "wallet"], {
-  error: "A valid paymentMethod (cash, upi, card, online, wallet) is required",
+const tenderMethod = z.enum(["cash", "upi", "card", "online", "wallet", "credit"], {
+  error: "A valid paymentMethod (cash, upi, card, online, wallet, credit) is required",
 });
 
 const money = z
@@ -81,7 +81,7 @@ const money = z
   .positive({ error: "Payment amounts must be more than zero" })
   .max(10_000_000, { error: "That amount is too large" });
 
-const paymentLine = z.object({
+export const paymentLine = z.object({
   method: tenderMethod,
   amount: money,
   reference: blankToUndefined(z.string().trim().max(60, { error: "Keep the reference under 60 characters" })),
@@ -94,7 +94,7 @@ export const settleSchema = z
     payments: z.array(paymentLine).min(1, { error: "Add at least one payment" }).max(10).optional(),
   })
   .refine((body) => body.paymentMethod || body.payments, {
-    error: "A valid paymentMethod (cash, upi, card, online, wallet) is required",
+    error: "A valid paymentMethod (cash, upi, card, online, wallet, credit) is required",
   });
 
 export const applyCouponSchema = z.object({

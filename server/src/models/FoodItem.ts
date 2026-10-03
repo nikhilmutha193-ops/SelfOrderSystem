@@ -34,11 +34,56 @@ export interface IFoodItem {
   soldOutByStock: boolean;
   translations?: Record<string, { name?: string; description?: string }>;
   modifierGroups: IModifierGroup[];
+  pairsWith: Types.ObjectId[];
+  priceRules: IPriceRules;
+  packagingCharge: number;
+  comboItems: IComboItem[];
   reviewSum: number;
   reviewCount: number;
   createdAt: Date;
   updatedAt: Date;
 }
+
+export interface IAreaPrice {
+  areaId: Types.ObjectId;
+  price: number;
+}
+
+export interface IPriceRules {
+  takeaway?: number | null;
+  delivery?: number | null;
+  areas: IAreaPrice[];
+}
+
+export interface IComboItem {
+  foodItemId: Types.ObjectId;
+  quantity: number;
+}
+
+const priceRulesSchema = new Schema<IPriceRules>(
+  {
+    takeaway: { type: Number, default: null, min: 0 },
+    delivery: { type: Number, default: null, min: 0 },
+    areas: {
+      type: [
+        new Schema<IAreaPrice>(
+          { areaId: { type: Schema.Types.ObjectId, required: true }, price: { type: Number, required: true, min: 0 } },
+          { _id: false }
+        ),
+      ],
+      default: [],
+    },
+  },
+  { _id: false }
+);
+
+const comboItemSchema = new Schema<IComboItem>(
+  {
+    foodItemId: { type: Schema.Types.ObjectId, ref: "FoodItem", required: true },
+    quantity: { type: Number, required: true, min: 1 },
+  },
+  { _id: false }
+);
 
 const modifierOptionSchema = new Schema<IModifierOption>(
   { label: { type: String, required: true, trim: true }, priceDelta: { type: Number, default: 0 } },
@@ -75,6 +120,10 @@ const foodItemSchema = new Schema<IFoodItem>(
     soldOutByStock: { type: Boolean, default: false },
     translations: { type: Schema.Types.Mixed, default: {} },
     modifierGroups: { type: [modifierGroupSchema], default: [] },
+    pairsWith: { type: [{ type: Schema.Types.ObjectId, ref: "FoodItem" }], default: [] },
+    priceRules: { type: priceRulesSchema, default: () => ({}) },
+    packagingCharge: { type: Number, default: 0, min: 0 },
+    comboItems: { type: [comboItemSchema], default: [] },
     reviewSum: { type: Number, default: 0 },
     reviewCount: { type: Number, default: 0 },
   },

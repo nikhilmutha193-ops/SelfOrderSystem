@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 
 import type { TeamMember, TeamMemberRole } from "../../lib/types";
 import { api, extractErrorMessage, uploadImage } from "../../shared/api/client";
+import { confirmDialog } from "../../shared/ui/confirm";
 import { Badge, Button, Card, ErrorText, Input, PageHeader, Select, Textarea } from "../../shared/ui/ui";
 
 export default function Team() {
@@ -88,7 +89,14 @@ export default function Team() {
   }
 
   async function remove(member: TeamMember) {
-    if (!confirm(`Remove "${member.name}" from the team?`)) return;
+    if (
+      !(await confirmDialog({
+        title: `Remove ${member.name}?`,
+        message: "They disappear from the team section of your landing page.",
+        confirmLabel: "Remove",
+      }))
+    )
+      return;
     try {
       await api.delete(`/team/${member._id}`);
       load();

@@ -66,8 +66,10 @@ export function Dialog({
     const first = panel?.querySelector<HTMLElement>(
       "[autofocus], input:not([type=hidden]):not([disabled]), select:not([disabled]), textarea:not([disabled])"
     );
-    if (first && window.matchMedia("(pointer: fine)").matches) first.focus();
-    else panel?.focus();
+    if (!panel?.contains(document.activeElement)) {
+      if (first && window.matchMedia("(pointer: fine)").matches) first.focus();
+      else panel?.focus();
+    }
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape" && dismissible) {
         e.stopPropagation();

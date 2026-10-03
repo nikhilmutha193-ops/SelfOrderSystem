@@ -10,10 +10,11 @@ import { writeAudit } from "../../utils/audit";
 import { computeDiscountAmount, findValidCoupon } from "../../utils/coupon";
 import { assertDayOpen } from "../../utils/dayLock";
 import { HttpError } from "../../utils/httpError";
-import { computeInvoiceTotals, InvoiceTotals, PricingInput, round2 } from "../../utils/invoice";
+import { computeInvoiceTotals, InvoiceItem, InvoiceTotals, PricingInput, round2 } from "../../utils/invoice";
 import { DEFAULT_SAC, financialYearLabel, nextInvoiceNumber } from "../../utils/invoiceNumber";
 import { syncTableState } from "../../utils/tableState";
 import { getOwnedOrder, requireOwner } from "./orders.access";
+import { assertCreditAllowed, assertCreditCustomer } from "../credit/credit.service";
 import { OrdersRepository } from "./orders.repository";
 import { GenerateBillInput, SettleInput } from "./orders.schema";
 
@@ -36,7 +37,7 @@ export function pricingFor(
 
 export function totalsForOrder(
   order: Pick<IOrder, "bill" | "discountAmount" | "manualDiscount" | "serviceChargeWaived" | "loyaltyRedeem">,
-  items: Pick<IOrderItem, "status" | "total">[],
+  items: InvoiceItem[],
   restaurant: PricingRestaurant
 ): InvoiceTotals {
   if (order.bill) {
@@ -49,6 +50,7 @@ export function totalsForOrder(
       discount: bill.discount,
       serviceChargePercent: bill.serviceChargePercent ?? 0,
       serviceCharge: bill.serviceCharge ?? 0,
+      packagingCharge: bill.packagingCharge ?? 0,
       taxableAmount: bill.taxableAmount,
       taxLines: bill.taxLines.map(({ name, percent, base, amount }) => ({ name, percent, base, amount })),
       roundOff: bill.roundOff,
@@ -72,6 +74,7 @@ export function snapshotFromTotals(
     discount: totals.discount,
     serviceChargePercent: totals.serviceChargePercent,
     serviceCharge: totals.serviceCharge,
+    packagingCharge: totals.packagingCharge,
     couponCode,
     taxableAmount: totals.taxableAmount,
     taxLines: totals.taxLines,
@@ -241,10 +244,14 @@ function summarizeMethod(payments: IPayment[]): PaymentMethod {
 export async function settleOrder(ctx: RequestContext, orderId: string, input: SettleInput) {
   const order = await getOwnedOrder(ctx, orderId);
   const repo = new OrdersRepository(ctx.restaurantId);
+  const wantsCredit = input.paymentMethod === "credit" || (input.payments ?? []).some((p) => p.method === "credit");
+  if (wantsCredit) assertCreditCustomer(order);
   if (order.status === "open") await billOpenOrder(ctx, repo, order, {});
   if (order.status !== "billed" || !order.bill) throw new HttpError(409, "This order is not open");
 
   const payments = buildPayments(ctx, input, order.bill.grandTotal);
+  const onAccount = payments.filter((p) => p.method === "credit").reduce((sum, p) => sum + p.amount, 0);
+  if (onAccount > 0) await assertCreditAllowed(ctx.restaurantId, order, onAccount);
   const changes: Partial<IOrder> = {
     status: "closed",
     payments,

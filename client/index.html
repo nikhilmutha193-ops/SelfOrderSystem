@@ -9,6 +9,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#ffffff" />
     <title>Restaurant</title>
+    <script>
+      try {
+        var p = location.pathname;
+        var t = localStorage.getItem("selforder_staff_theme");
+        if (
+          /^\/(admin|pos|captain|chef)(\/|$)/.test(p) &&
+          !/\/login\/?$/.test(p) &&
+          (t === "dark" || (t === "system" && matchMedia("(prefers-color-scheme: dark)").matches))
+        )
+          document.documentElement.dataset.theme = "dark";
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

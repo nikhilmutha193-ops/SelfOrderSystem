@@ -44,6 +44,8 @@ export function OrderPanel({
   onSettle,
   busy,
   phone = false,
+  offline = false,
+  offlineTotal = null,
   className = "w-[340px] border-l lg:w-[390px]",
 }: {
   title: string;
@@ -61,6 +63,8 @@ export function OrderPanel({
   onSettle: (() => void) | null;
   busy: boolean;
   phone?: boolean;
+  offline?: boolean;
+  offlineTotal?: number | null;
   className?: string;
 }) {
   const [moreOpen, setMoreOpen] = useState(false);
@@ -79,14 +83,18 @@ export function OrderPanel({
           <h2 className="truncate text-lg font-bold text-slate-800" data-testid="pos-order-title">
             {title}
           </h2>
-          {order && (
-            <Badge tone={order.status === "billed" ? "blue" : order.status === "closed" ? "green" : "amber"}>
-              {order.status === "billed"
-                ? (order.invoiceNumber ?? "Billed")
-                : order.status === "closed"
-                  ? "Paid"
-                  : "Open"}
-            </Badge>
+          {offline ? (
+            <Badge tone="amber">Offline</Badge>
+          ) : (
+            order && (
+              <Badge tone={order.status === "billed" ? "blue" : order.status === "closed" ? "green" : "amber"}>
+                {order.status === "billed"
+                  ? (order.invoiceNumber ?? "Billed")
+                  : order.status === "closed"
+                    ? "Paid"
+                    : "Open"}
+              </Badge>
+            )
           )}
         </div>
         {customerName !== null && (
@@ -181,14 +189,20 @@ export function OrderPanel({
             <Row label="Subtotal" value={rupees(totals.subtotal)} />
             {totals.discount > 0 && <Row label="Discount" value={`−${rupees(totals.discount)}`} />}
             {(totals.serviceCharge ?? 0) > 0 && <Row label="Service charge" value={rupees(totals.serviceCharge!)} />}
+            {(totals.packagingCharge ?? 0) > 0 && <Row label="Packaging" value={rupees(totals.packagingCharge!)} />}
             {totals.taxLines.map((t) => (
               <Row key={t.name} label={`${t.name} ${t.percent}%`} value={rupees(t.amount)} />
             ))}
             {totals.roundOff !== 0 && <Row label="Round off" value={rupees(totals.roundOff)} />}
-            <Row label={draft.length > 0 ? "Saved total" : "Total"} value={rupees(totals.grandTotal)} strong />
+            {!offline && (
+              <Row label={draft.length > 0 ? "Saved total" : "Total"} value={rupees(totals.grandTotal)} strong />
+            )}
           </>
         )}
-        {!totals && draft.length > 0 && <p className="text-xs text-slate-400">Tax is added when the order is saved.</p>}
+        {offline && offlineTotal !== null && <Row label="Total with tax" value={rupees(offlineTotal)} strong />}
+        {!offline && !totals && draft.length > 0 && (
+          <p className="text-xs text-slate-400">Tax is added when the order is saved.</p>
+        )}
       </div>
 
       <div className="grid grid-cols-2 gap-2 border-t border-slate-200 p-3">
@@ -200,7 +214,7 @@ export function OrderPanel({
             Hold
           </Button>
         ) : (
-          <Button variant="secondary" onClick={() => setMoreOpen((v) => !v)} disabled={!order}>
+          <Button variant="secondary" onClick={() => setMoreOpen((v) => !v)} disabled={!order || offline}>
             {moreOpen ? "Hide options" : "More"}
           </Button>
         )}
@@ -223,13 +237,13 @@ export function OrderPanel({
             Settle <kbd className="text-[10px] opacity-70">F10</kbd>
           </Button>
         )}
-        {onHold && order && (
+        {onHold && order && !offline && (
           <Button variant="secondary" className="col-span-2" onClick={() => setMoreOpen((v) => !v)}>
             {moreOpen ? "Hide options" : "Split, merge, discount…"}
           </Button>
         )}
       </div>
-      {moreOpen && detail && (
+      {moreOpen && detail && !offline && (
         <div className="max-h-64 overflow-y-auto border-t border-slate-200 p-3">
           <BillActions data={detail} />
         </div>

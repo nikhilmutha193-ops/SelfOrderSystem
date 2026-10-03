@@ -403,6 +403,13 @@ export async function streamInvoicePdf(
         ]);
         doc.y = ty + 2;
       }
+      if ((totals.packagingCharge ?? 0) > 0) {
+        ty = drawRow(doc, x0, doc.y, [
+          { text: "Packaging", width: totalsLabelWidth },
+          { text: totals.packagingCharge.toFixed(2), width: totalsAmountWidth, align: "right" },
+        ]);
+        doc.y = ty + 2;
+      }
 
       ty = drawRow(doc, x0, doc.y, [
         { text: "Taxable value", width: totalsLabelWidth },
@@ -610,6 +617,15 @@ export async function streamKotPdf(
           .text(`  → ${extras}`, x0 + colWidths[0], doc.y, { width: usableWidth - colWidths[0] });
         doc.font("Helvetica").fontSize(fz(10));
         doc.y += 2;
+      }
+      for (const part of item.components ?? []) {
+        doc
+          .fontSize(fz(9))
+          .text(`  - ${part.quantity * item.quantity} x ${part.name}`, x0 + colWidths[0], doc.y, {
+            width: usableWidth - colWidths[0],
+          });
+        doc.fontSize(fz(10));
+        doc.y += 1;
       }
     });
 

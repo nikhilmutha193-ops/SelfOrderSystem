@@ -2,6 +2,8 @@ import { useState } from "react";
 
 import type { RecipeRow } from "../../../lib/types";
 import { extractErrorMessage } from "../../../shared/api/client";
+import { MONEY, PERCENT, sheet } from "../../../shared/export/excel";
+import { ExcelButton } from "../../../shared/ui/ExcelButton";
 import { Card, ErrorText, Input, TableWrap } from "../../../shared/ui/ui";
 import { daysAgo, isoDate, qty, rupees } from "../format";
 import { useRecipes, useUsage } from "../queries";
@@ -31,7 +33,37 @@ export function ReportsTab() {
               </p>
             )}
           </div>
-          <div className="flex items-end gap-2">
+          <div className="flex flex-wrap items-end gap-2">
+            <ExcelButton
+              fileName={`stock-usage-${from}-to-${to}`}
+              disabled={!usage.data}
+              sheets={() => [
+                sheet({
+                  name: "Stock usage",
+                  rows: usage.data?.lines ?? [],
+                  columns: [
+                    { header: "Item", value: (l) => l.name, width: 26 },
+                    { header: "Unit", value: (l) => l.unit },
+                    { header: "Bought", value: (l) => l.purchased },
+                    { header: "Used", value: (l) => l.consumed },
+                    { header: "Wasted", value: (l) => l.wasted },
+                    { header: "Adjusted", value: (l) => l.adjusted },
+                    {
+                      header: "Used value",
+                      value: (l) => l.consumedValue,
+                      format: MONEY,
+                      width: 12,
+                    },
+                    {
+                      header: "Wasted value",
+                      value: (l) => l.wastedValue,
+                      format: MONEY,
+                      width: 13,
+                    },
+                  ],
+                }),
+              ]}
+            />
             <Input
               aria-label="From"
               type="date"
@@ -83,8 +115,32 @@ export function ReportsTab() {
       </Card>
 
       <Card>
-        <h2 className="text-base font-semibold text-slate-900">Food cost by dish</h2>
-        <p className="mb-3 text-sm text-slate-500">Recipe cost at today's average prices, against the menu price.</p>
+        <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-base font-semibold text-slate-900">Food cost by dish</h2>
+            <p className="text-sm text-slate-500">Recipe cost at today's average prices, against the menu price.</p>
+          </div>
+          <ExcelButton
+            fileName="food-cost"
+            disabled={costed.length === 0}
+            sheets={() => [
+              sheet({
+                name: "Food cost",
+                rows: costed,
+                columns: [
+                  { header: "Dish", value: (r) => r.name, width: 28 },
+                  { header: "Price", value: (r) => r.price, format: MONEY },
+                  { header: "Cost", value: (r) => r.cost, format: MONEY },
+                  {
+                    header: "Food cost",
+                    value: (r) => (r.costPercent == null ? null : r.costPercent / 100),
+                    format: PERCENT,
+                  },
+                ],
+              }),
+            ]}
+          />
+        </div>
         <TableWrap>
           <table className="w-full min-w-[32rem] text-sm">
             <thead>

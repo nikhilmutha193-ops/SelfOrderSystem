@@ -3,6 +3,8 @@ import { useState } from "react";
 import { useCanEdit } from "../../../lib/adminAuth";
 import type { CustomerProfile, CustomerSummary, LoyaltySettings } from "../../../lib/types";
 import { extractErrorMessage } from "../../../shared/api/client";
+import { DATE, MONEY, sheet } from "../../../shared/export/excel";
+import { ExcelButton } from "../../../shared/ui/ExcelButton";
 import {
   Badge,
   Button,
@@ -16,6 +18,7 @@ import {
   Tabs,
 } from "../../../shared/ui/ui";
 import type { Segment } from "../api";
+import { CreditSection, DuesCard } from "../components/CreditSection";
 import {
   useCustomerProfile,
   useCustomers,
@@ -241,6 +244,7 @@ function Profile({ id, canEdit, onClose }: { id: string; canEdit: boolean; onClo
       {p && (
         <div className="flex flex-col gap-4">
           <ProfileEditor key={p.customer._id} profile={p} canEdit={canEdit} />
+          <CreditSection key={`credit-${p.customer._id}`} customerId={p.customer._id} name={p.customer.name} />
           <div className="grid gap-4 lg:grid-cols-2">
             <div>
               <h3 className="mb-2 text-sm font-semibold text-slate-700">Visits</h3>
@@ -300,16 +304,57 @@ export default function Customers() {
             pay.
           </>
         }
+        actions={
+          <ExcelButton
+            fileName={`customers-${segment || "everyone"}`}
+            disabled={list.length === 0}
+            sheets={() => [
+              sheet({
+                name: "Customers",
+                rows: list,
+                columns: [
+                  {
+                    header: "Name",
+                    value: (c) => c.name || "Guest",
+                    width: 22,
+                  },
+                  { header: "Phone", value: (c) => `+${c.phone}`, width: 16 },
+                  { header: "Visits", value: (c) => c.visitCount },
+                  {
+                    header: "Spent",
+                    value: (c) => c.totalSpend,
+                    format: MONEY,
+                  },
+                  { header: "Points", value: (c) => c.points },
+                  {
+                    header: "Last visit",
+                    value: (c) => (c.lastVisitAt ? new Date(c.lastVisitAt) : null),
+                    format: DATE,
+                  },
+                  {
+                    header: "Tags",
+                    value: (c) => c.tags.join(", "),
+                    width: 20,
+                  },
+                ],
+              }),
+            ]}
+          />
+        }
       />
       <LoyaltyCard canEdit={canEdit} />
       {openId && <Profile id={openId} canEdit={canEdit} onClose={() => setOpenId(null)} />}
+      <DuesCard onOpen={setOpenId} />
       <Card>
         <div className="mb-4 flex flex-col gap-3 xl:flex-row xl:items-center">
           <Tabs
             className="min-w-0 xl:flex-1"
             value={segment || "all"}
             onChange={(v) => setSegment(v === "all" ? "" : (v as Segment))}
-            items={SEGMENTS.map((s) => ({ value: s.key || "all", label: s.label }))}
+            items={SEGMENTS.map((s) => ({
+              value: s.key || "all",
+              label: s.label,
+            }))}
           />
           <form
             className="flex gap-2"

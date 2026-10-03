@@ -14,6 +14,7 @@ export interface ICustomer {
   tags: string[];
   marketingConsent: boolean;
   consentAt?: Date | null;
+  creditLimit?: number | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -32,6 +33,7 @@ const customerSchema = new Schema<ICustomer>(
     tags: { type: [String], default: [] },
     marketingConsent: { type: Boolean, default: false },
     consentAt: { type: Date, default: null },
+    creditLimit: { type: Number, default: null, min: 0 },
   },
   { timestamps: true }
 );

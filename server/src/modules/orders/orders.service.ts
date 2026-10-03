@@ -21,6 +21,7 @@ import {
   StartDineInInput,
   StartTakeawayInput,
 } from "./orders.schema";
+import { basePriceFor, packagingFor } from "../pricing/pricing";
 
 export interface KitchenSummary {
   active: number;
@@ -171,6 +172,12 @@ export async function addOrderItems(ctx: RequestContext, orderId: string, input:
   if (missing) throw new HttpError(404, `Food item ${missing.foodItemId} is not available`);
   const categories = await repo.findCategoryStations(foods.map((food) => food.categoryId));
   const categoryStation = new Map(categories.map((c) => [c._id.toString(), c.defaultStationId ?? null]));
+  const table = order.orderType === "dine-in" && order.tableId ? await repo.findTable(order.tableId.toString()) : null;
+  const priceContext = { orderType: order.orderType, areaId: table?.areaId?.toString() ?? null };
+  const componentIds = foods.flatMap((food) => (food.comboItems ?? []).map((c) => c.foodItemId));
+  const componentNames = new Map(
+    (componentIds.length ? await repo.findFoodNames(componentIds) : []).map((f) => [f._id.toString(), f.name])
+  );
 
   const created = [];
   for (const line of input.items) {
@@ -182,7 +189,10 @@ export async function addOrderItems(ctx: RequestContext, orderId: string, input:
       const option = group?.options.find((o) => o.label === selection.label);
       if (group && option) chosen.push({ groupName: group.name, label: option.label, priceDelta: option.priceDelta });
     }
-    const unitPrice = round2(food.price + chosen.reduce((sum, m) => sum + m.priceDelta, 0));
+    const unitPrice = round2(basePriceFor(food, priceContext) + chosen.reduce((sum, m) => sum + m.priceDelta, 0));
+    const components = (food.comboItems ?? [])
+      .filter((c) => componentNames.has(c.foodItemId.toString()))
+      .map((c) => ({ foodItemId: c.foodItemId, name: componentNames.get(c.foodItemId.toString())!, quantity: c.quantity }));
 
     const orderItem = await repo.createItem({
       orderId: order._id,
@@ -194,6 +204,8 @@ export async function addOrderItems(ctx: RequestContext, orderId: string, input:
       isJain: !!line.isJain,
       modifiers: chosen,
       note: line.note,
+      packagingCharge: packagingFor(food, order.orderType),
+      components,
       status: "pending",
       kotRound: null,
       stationId: food.stationId ?? categoryStation.get(food.categoryId.toString()) ?? null,

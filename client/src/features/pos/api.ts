@@ -32,7 +32,10 @@ export function toOrderLines(lines: DraftLine[]): NewOrderLine[] {
     foodItemId: line.item._id,
     quantity: line.quantity,
     note: line.note || undefined,
-    modifiers: line.modifiers.map(({ groupName, label }) => ({ groupName, label })),
+    modifiers: line.modifiers.map(({ groupName, label }) => ({
+      groupName,
+      label,
+    })),
   }));
 }
 
@@ -40,11 +43,37 @@ export function draftUnitPrice(line: DraftLine): number {
   return line.item.price + line.modifiers.reduce((sum, m) => sum + m.priceDelta, 0);
 }
 
+export interface OfflineSyncInput {
+  clientId: string;
+  createdAt: string;
+  orderType: "dine-in" | "takeaway";
+  tableId?: string;
+  customerName?: string;
+  clientTotal: number;
+  items: NewOrderLine[];
+  payments?: { method: string; amount: number; reference?: string; tendered?: number }[];
+}
+
+export interface OfflineSyncResult {
+  orderId: string;
+  invoiceNumber: string | null;
+  status: string;
+  grandTotal: number | null;
+  clientTotal: number | null;
+  mismatch: boolean;
+  note: string | null;
+  duplicate: boolean;
+}
+
 export const posApi = {
   menu: () => api.get<PosMenu>("/pos/menu").then((res) => res.data),
   floor: () => api.get<PosFloor>("/pos/floor").then((res) => res.data),
   createOrder: (input: CreatePosOrderInput) =>
     api
-      .post<CreatePosOrderResult>("/pos/orders", input, { headers: { "Idempotency-Key": newId() } })
+      .post<CreatePosOrderResult>("/pos/orders", input, {
+        headers: { "Idempotency-Key": newId() },
+      })
       .then((res) => res.data),
+  syncOffline: (input: OfflineSyncInput) =>
+    api.post<OfflineSyncResult>("/pos/offline-orders", input).then((res) => res.data),
 };

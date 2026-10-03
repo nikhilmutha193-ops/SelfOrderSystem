@@ -35,6 +35,31 @@ function matchScore(item: PosMenuItem, code: string, lower: string): number {
   return 0;
 }
 
+export interface PriceTarget {
+  orderType: "dine-in" | "takeaway";
+  areaId?: string | null;
+}
+
+export function priceFor(item: PosMenuItem, target: PriceTarget): number {
+  const prices = item.prices;
+  if (!prices) return item.price;
+  if (target.orderType === "takeaway" && prices.takeaway != null) return prices.takeaway;
+  if (target.orderType === "dine-in" && target.areaId && prices.areas[target.areaId] != null) {
+    return prices.areas[target.areaId];
+  }
+  return item.price;
+}
+
+export function pricedMenu(menu: PosMenu, target: PriceTarget): PosMenu {
+  return {
+    ...menu,
+    items: menu.items.map((item) => ({
+      ...item,
+      price: priceFor(item, target),
+    })),
+  };
+}
+
 export function filterMenu(menu: PosMenu, search: string, category: string): PosMenuItem[] {
   const term = search.trim();
   if (term) {
@@ -97,7 +122,11 @@ export function usePosCart() {
     if (draft.length > 0) {
       const items = toOrderLines(draft);
       if (!id) {
-        const created = await createOrder.mutateAsync({ ...target, sendToKitchen: send, items });
+        const created = await createOrder.mutateAsync({
+          ...target,
+          sendToKitchen: send,
+          items,
+        });
         setOrderId(created.order._id);
         setDraft([]);
         return { id: created.order._id, kot: created.kot };

@@ -1,6 +1,7 @@
 import { Eye, EyeOff, ImagePlus, Pencil, Plus, Sparkles, Star, Trash2, UtensilsCrossed, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
+import { useAreas } from "../../features/pricing/queries";
 import { StationSelect } from "../../features/printing/components/StationSelect";
 import type { Category, FoodItem, FoodType, ModifierGroup, Subcategory, Translations } from "../../lib/types";
 import { api, extractErrorMessage, uploadImage } from "../../shared/api/client";
@@ -24,7 +25,10 @@ import {
 } from "../../shared/ui/ui";
 
 const EMOJI_CHOICES = ["⭐", "🔥", "👑", "💯", "🏆", "❤️"];
-const EMPTY_TR = { kn: { name: "", description: "" }, hi: { name: "", description: "" } };
+const EMPTY_TR = {
+  kn: { name: "", description: "" },
+  hi: { name: "", description: "" },
+};
 
 export default function FoodItems() {
   const [foodItems, setFoodItems] = useState<FoodItem[]>([]);
@@ -44,6 +48,14 @@ export default function FoodItems() {
   const [prepTimeMinutes, setPrepTimeMinutes] = useState<number>(10);
   const [stationId, setStationId] = useState("");
   const [shortCode, setShortCode] = useState("");
+  const [pairsWith, setPairsWith] = useState<string[]>([]);
+  const [takeawayPrice, setTakeawayPrice] = useState("");
+  const [deliveryPrice, setDeliveryPrice] = useState("");
+  const [packaging, setPackaging] = useState("");
+  const [areaPrices, setAreaPrices] = useState<Record<string, string>>({});
+  const [isCombo, setIsCombo] = useState(false);
+  const [comboItems, setComboItems] = useState<{ foodItemId: string; quantity: number }[]>([]);
+  const { areas } = useAreas();
   const [modifierGroups, setModifierGroups] = useState<ModifierGroup[]>([]);
   const [tr, setTr] = useState<{
     kn: { name: string; description: string };
@@ -59,13 +71,19 @@ export default function FoodItems() {
     setError(null);
     setTranslating(true);
     try {
-      const next = { kn: { name: "", description: "" }, hi: { name: "", description: "" } };
+      const next = {
+        kn: { name: "", description: "" },
+        hi: { name: "", description: "" },
+      };
       for (const lng of ["kn", "hi"] as const) {
         const res = await api.post<{ translations: string[] }>("/translate", {
           texts: [name, description || ""],
           to: lng,
         });
-        next[lng] = { name: res.data.translations[0] || "", description: res.data.translations[1] || "" };
+        next[lng] = {
+          name: res.data.translations[0] || "",
+          description: res.data.translations[1] || "",
+        };
       }
       setTr(next);
     } catch (err) {
@@ -86,7 +104,12 @@ export default function FoodItems() {
   function addGroup() {
     setModifierGroups((g) => [
       ...g,
-      { name: "", type: "single", required: false, options: [{ label: "", priceDelta: 0 }] },
+      {
+        name: "",
+        type: "single",
+        required: false,
+        options: [{ label: "", priceDelta: 0 }],
+      },
     ]);
   }
   function updateGroup(i: number, patch: Partial<ModifierGroup>) {
@@ -103,7 +126,12 @@ export default function FoodItems() {
   function updateOption(gi: number, oi: number, patch: Partial<{ label: string; priceDelta: number }>) {
     setModifierGroups((g) =>
       g.map((grp, idx) =>
-        idx === gi ? { ...grp, options: grp.options.map((o, j) => (j === oi ? { ...o, ...patch } : o)) } : grp
+        idx === gi
+          ? {
+              ...grp,
+              options: grp.options.map((o, j) => (j === oi ? { ...o, ...patch } : o)),
+            }
+          : grp
       )
     );
   }
@@ -181,7 +209,10 @@ export default function FoodItems() {
         name: g.name.trim(),
         options: g.options
           .filter((o) => o.label.trim())
-          .map((o) => ({ label: o.label.trim(), priceDelta: Number(o.priceDelta) || 0 })),
+          .map((o) => ({
+            label: o.label.trim(),
+            priceDelta: Number(o.priceDelta) || 0,
+          })),
       }));
     const payload = {
       categoryId,
@@ -197,6 +228,16 @@ export default function FoodItems() {
       prepTimeMinutes,
       stationId: stationId || null,
       shortCode: shortCode.trim(),
+      pairsWith,
+      priceRules: {
+        takeaway: takeawayPrice.trim() === "" ? null : Number(takeawayPrice),
+        delivery: deliveryPrice.trim() === "" ? null : Number(deliveryPrice),
+        areas: Object.entries(areaPrices)
+          .filter(([, value]) => value.trim() !== "")
+          .map(([areaId, value]) => ({ areaId, price: Number(value) })),
+      },
+      packagingCharge: packaging.trim() === "" ? 0 : Number(packaging),
+      comboItems: isCombo ? comboItems.filter((c) => c.foodItemId) : [],
       modifierGroups: cleanGroups,
       translations,
     };
@@ -218,6 +259,13 @@ export default function FoodItems() {
       setPrepTimeMinutes(10);
       setStationId("");
       setShortCode("");
+      setPairsWith([]);
+      setTakeawayPrice("");
+      setDeliveryPrice("");
+      setPackaging("");
+      setAreaPrices({});
+      setComboItems([]);
+      setIsCombo(false);
       setModifierGroups([]);
       setTr(structuredClone(EMPTY_TR));
       setEditing(null);
@@ -243,6 +291,13 @@ export default function FoodItems() {
     setPrepTimeMinutes(10);
     setStationId("");
     setShortCode("");
+    setPairsWith([]);
+    setTakeawayPrice("");
+    setDeliveryPrice("");
+    setPackaging("");
+    setAreaPrices({});
+    setComboItems([]);
+    setIsCombo(false);
     setModifierGroups([]);
     setTr(structuredClone(EMPTY_TR));
   }
@@ -277,16 +332,36 @@ export default function FoodItems() {
     setPrepTimeMinutes(food.prepTimeMinutes ?? 10);
     setStationId(food.stationId ?? "");
     setShortCode(food.shortCode ?? "");
-    setModifierGroups((food.modifierGroups ?? []).map((g) => ({ ...g, options: g.options.map((o) => ({ ...o })) })));
+    setPairsWith(food.pairsWith ?? []);
+    setTakeawayPrice(food.priceRules?.takeaway != null ? String(food.priceRules.takeaway) : "");
+    setDeliveryPrice(food.priceRules?.delivery != null ? String(food.priceRules.delivery) : "");
+    setPackaging(food.packagingCharge ? String(food.packagingCharge) : "");
+    setAreaPrices(Object.fromEntries((food.priceRules?.areas ?? []).map((a) => [a.areaId, String(a.price)])));
+    setComboItems((food.comboItems ?? []).map((c) => ({ ...c })));
+    setIsCombo((food.comboItems ?? []).length > 0);
+    setModifierGroups(
+      (food.modifierGroups ?? []).map((g) => ({
+        ...g,
+        options: g.options.map((o) => ({ ...o })),
+      }))
+    );
     setTr({
-      kn: { name: food.translations?.kn?.name || "", description: food.translations?.kn?.description || "" },
-      hi: { name: food.translations?.hi?.name || "", description: food.translations?.hi?.description || "" },
+      kn: {
+        name: food.translations?.kn?.name || "",
+        description: food.translations?.kn?.description || "",
+      },
+      hi: {
+        name: food.translations?.hi?.name || "",
+        description: food.translations?.hi?.description || "",
+      },
     });
   }
 
   async function toggleActive(food: FoodItem) {
     try {
-      await api.patch(`/food-items/${food._id}/active`, { isActive: !food.isActive });
+      await api.patch(`/food-items/${food._id}/active`, {
+        isActive: !food.isActive,
+      });
       load();
     } catch (err) {
       setError(extractErrorMessage(err));
@@ -559,6 +634,143 @@ export default function FoodItems() {
           </section>
 
           <section className="flex flex-col gap-3">
+            <div>
+              <h3 className="text-sm font-semibold text-slate-900">Prices &amp; packaging</h3>
+              <p className="text-xs text-slate-500">Leave a price empty to use the normal price above.</p>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <Field label="Takeaway price (₹)" htmlFor="food-takeaway-price">
+                <Input
+                  id="food-takeaway-price"
+                  type="number"
+                  inputMode="decimal"
+                  min={0}
+                  step="0.01"
+                  placeholder={String(price)}
+                  value={takeawayPrice}
+                  onChange={(e) => setTakeawayPrice(e.target.value)}
+                />
+              </Field>
+              <Field label="Delivery price (₹)" htmlFor="food-delivery-price">
+                <Input
+                  id="food-delivery-price"
+                  type="number"
+                  inputMode="decimal"
+                  min={0}
+                  step="0.01"
+                  placeholder={String(price)}
+                  value={deliveryPrice}
+                  onChange={(e) => setDeliveryPrice(e.target.value)}
+                />
+              </Field>
+              <Field label="Packaging (₹ per plate)" htmlFor="food-packaging" hint="Takeaway and delivery only.">
+                <Input
+                  id="food-packaging"
+                  type="number"
+                  inputMode="decimal"
+                  min={0}
+                  step="0.01"
+                  placeholder="0"
+                  value={packaging}
+                  onChange={(e) => setPackaging(e.target.value)}
+                />
+              </Field>
+              {areas.map((area) => (
+                <Field key={area._id} label={`${area.name} price (₹)`} htmlFor={`food-area-${area._id}`}>
+                  <Input
+                    id={`food-area-${area._id}`}
+                    type="number"
+                    inputMode="decimal"
+                    min={0}
+                    step="0.01"
+                    placeholder={String(price)}
+                    value={areaPrices[area._id] ?? ""}
+                    onChange={(e) =>
+                      setAreaPrices((p) => ({
+                        ...p,
+                        [area._id]: e.target.value,
+                      }))
+                    }
+                  />
+                </Field>
+              ))}
+            </div>
+          </section>
+
+          <section className="flex flex-col gap-3 rounded-xl border border-slate-200 p-4">
+            <Switch
+              id="food-combo"
+              checked={isCombo}
+              onChange={(value) => {
+                setIsCombo(value);
+                if (value && comboItems.length === 0) setComboItems([{ foodItemId: "", quantity: 1 }]);
+              }}
+              label="This dish is a combo"
+              description="The kitchen ticket lists every dish inside it, and stock is used from their recipes."
+            />
+            {isCombo && (
+              <div className="flex flex-col gap-2">
+                {comboItems.map((part, index) => (
+                  <div key={index} className="flex items-center gap-2">
+                    <Select
+                      aria-label={`Combo dish ${index + 1}`}
+                      value={part.foodItemId}
+                      onChange={(e) =>
+                        setComboItems((items) =>
+                          items.map((c, i) => (i === index ? { ...c, foodItemId: e.target.value } : c))
+                        )
+                      }
+                    >
+                      <option value="">Choose a dish</option>
+                      {foodItems
+                        .filter(
+                          (f) =>
+                            f._id !== editing?._id &&
+                            (f.comboItems ?? []).length === 0 &&
+                            (f._id === part.foodItemId || !comboItems.some((c) => c.foodItemId === f._id))
+                        )
+                        .map((f) => (
+                          <option key={f._id} value={f._id}>
+                            {f.name}
+                          </option>
+                        ))}
+                    </Select>
+                    <Input
+                      aria-label={`Quantity of combo dish ${index + 1}`}
+                      className="!w-20"
+                      type="number"
+                      inputMode="numeric"
+                      min={1}
+                      max={20}
+                      value={part.quantity}
+                      onChange={(e) =>
+                        setComboItems((items) =>
+                          items.map((c, i) => (i === index ? { ...c, quantity: Number(e.target.value) || 1 } : c))
+                        )
+                      }
+                    />
+                    <IconButton
+                      icon={X}
+                      label={`Remove combo dish ${index + 1}`}
+                      onClick={() => setComboItems((items) => items.filter((_, i) => i !== index))}
+                    />
+                  </div>
+                ))}
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  icon={Plus}
+                  className="self-start"
+                  onClick={() => setComboItems((items) => [...items, { foodItemId: "", quantity: 1 }])}
+                >
+                  Add a dish to the combo
+                </Button>
+              </div>
+            )}
+          </section>
+
+          <section className="flex flex-col gap-3">
             <h3 className="text-sm font-semibold text-slate-900">Photo</h3>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
               {imageUrl ? (
@@ -681,6 +893,52 @@ export default function FoodItems() {
           </section>
 
           <section className="flex flex-col gap-3">
+            <div>
+              <h3 className="text-sm font-semibold text-slate-900">Goes well with</h3>
+              <p className="text-xs text-slate-500">
+                Suggested to guests who add this dish. Leave it empty and the menu suggests dishes guests often order
+                together.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {pairsWith.map((id) => {
+                const other = foodItems.find((f) => f._id === id);
+                return (
+                  <span
+                    key={id}
+                    className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 py-1 pr-1 pl-3 text-sm text-slate-700"
+                  >
+                    {other?.name ?? "Removed dish"}
+                    <IconButton
+                      icon={X}
+                      size="sm"
+                      label={`Remove ${other?.name ?? "dish"}`}
+                      onClick={() => setPairsWith((p) => p.filter((x) => x !== id))}
+                    />
+                  </span>
+                );
+              })}
+              {pairsWith.length < 4 && (
+                <Select
+                  aria-label="Add a dish that goes well with this one"
+                  className="!w-56"
+                  value=""
+                  onChange={(e) => e.target.value && setPairsWith((p) => [...p, e.target.value])}
+                >
+                  <option value="">+ Add a dish</option>
+                  {foodItems
+                    .filter((f) => f._id !== editing?._id && !pairsWith.includes(f._id))
+                    .map((f) => (
+                      <option key={f._id} value={f._id}>
+                        {f.name}
+                      </option>
+                    ))}
+                </Select>
+              )}
+            </div>
+          </section>
+
+          <section className="flex flex-col gap-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <h3 className="text-sm font-semibold text-slate-900">Customization options</h3>
@@ -702,7 +960,11 @@ export default function FoodItems() {
                   <Select
                     aria-label="Choice type"
                     value={g.type}
-                    onChange={(e) => updateGroup(gi, { type: e.target.value as "single" | "multi" })}
+                    onChange={(e) =>
+                      updateGroup(gi, {
+                        type: e.target.value as "single" | "multi",
+                      })
+                    }
                   >
                     <option value="single">Pick one</option>
                     <option value="multi">Pick many</option>
@@ -744,7 +1006,11 @@ export default function FoodItems() {
                         step="0.01"
                         placeholder="+₹0"
                         value={o.priceDelta}
-                        onChange={(e) => updateOption(gi, oi, { priceDelta: Number(e.target.value) })}
+                        onChange={(e) =>
+                          updateOption(gi, oi, {
+                            priceDelta: Number(e.target.value),
+                          })
+                        }
                       />
                       <IconButton icon={X} label="Remove option" onClick={() => removeOption(gi, oi)} />
                     </div>
@@ -793,14 +1059,24 @@ export default function FoodItems() {
                     aria-label={`${lng === "kn" ? "Kannada" : "Hindi"} name`}
                     placeholder="Name"
                     value={tr[lng].name}
-                    onChange={(e) => setTr((t) => ({ ...t, [lng]: { ...t[lng], name: e.target.value } }))}
+                    onChange={(e) =>
+                      setTr((t) => ({
+                        ...t,
+                        [lng]: { ...t[lng], name: e.target.value },
+                      }))
+                    }
                   />
                   <Textarea
                     aria-label={`${lng === "kn" ? "Kannada" : "Hindi"} description`}
                     rows={2}
                     placeholder="Description"
                     value={tr[lng].description}
-                    onChange={(e) => setTr((t) => ({ ...t, [lng]: { ...t[lng], description: e.target.value } }))}
+                    onChange={(e) =>
+                      setTr((t) => ({
+                        ...t,
+                        [lng]: { ...t[lng], description: e.target.value },
+                      }))
+                    }
                   />
                 </div>
               ))}
@@ -835,4 +1111,8 @@ function Thumb({ food, size }: { food: FoodItem; size: "sm" | "md" }) {
   );
 }
 
-const typeDot: Record<FoodType, string> = { veg: "bg-emerald-600", "non-veg": "bg-red-600", egg: "bg-amber-500" };
+const typeDot: Record<FoodType, string> = {
+  veg: "bg-emerald-600",
+  "non-veg": "bg-red-600",
+  egg: "bg-amber-500",
+};

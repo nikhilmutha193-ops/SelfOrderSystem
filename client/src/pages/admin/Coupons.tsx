@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 
 import type { Coupon, CouponType } from "../../lib/types";
 import { api, extractErrorMessage } from "../../shared/api/client";
+import { confirmDialog } from "../../shared/ui/confirm";
 import { Badge, Button, Card, ErrorText, Input, PageHeader, Select, TableWrap } from "../../shared/ui/ui";
 
 export default function Coupons() {
@@ -82,7 +83,14 @@ export default function Coupons() {
   }
 
   async function remove(coupon: Coupon) {
-    if (!confirm(`Delete coupon "${coupon.code}"?`)) return;
+    if (
+      !(await confirmDialog({
+        title: `Delete coupon ${coupon.code}?`,
+        message: "Guests can no longer apply it. Bills that already used it keep their discount.",
+        confirmLabel: "Delete coupon",
+      }))
+    )
+      return;
     try {
       await api.delete(`/coupons/${coupon._id}`);
       load();

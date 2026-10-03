@@ -1,5 +1,8 @@
 import type {
   BillShare,
+  CreditEntry,
+  CustomerCredit,
+  CustomerDue,
   CustomerProfile,
   CustomerSummary,
   LoyaltySettings,
@@ -18,7 +21,26 @@ export interface CustomerUpdate {
   marketingConsent: boolean;
 }
 
+export interface CreditPaymentInput {
+  amount: number;
+  method: "cash" | "upi" | "card" | "online";
+  reference?: string;
+  note?: string;
+}
+
 export const customersApi = {
+  credit: (id: string) => api.get<CustomerCredit>(`/credit/customers/${id}`).then((res) => res.data),
+  dues: () => api.get<CustomerDue[]>("/credit/dues").then((res) => res.data),
+  setCreditLimit: ({ id, creditLimit }: { id: string; creditLimit: number | null }) =>
+    api
+      .put<{ creditLimit: number | null }>(`/credit/customers/${id}/limit`, {
+        creditLimit,
+      })
+      .then((res) => res.data),
+  recordCreditPayment: ({ id, input }: { id: string; input: CreditPaymentInput }) =>
+    api
+      .post<{ entry: CreditEntry; balance: number }>(`/credit/customers/${id}/payments`, input)
+      .then((res) => res.data),
   list: (params: { segment?: Segment; q?: string }) =>
     api.get<CustomerSummary[]>("/customers", { params }).then((res) => res.data),
   profile: (id: string) => api.get<CustomerProfile>(`/customers/${id}`).then((res) => res.data),
@@ -30,7 +52,12 @@ export const customersApi = {
       .then((res) => res.data),
   orderCustomer: (orderId: string) => api.get<OrderCustomer>(`/customers/orders/${orderId}`).then((res) => res.data),
   attach: ({ orderId, phone, name }: { orderId: string; phone: string; name?: string }) =>
-    api.post<OrderCustomer>(`/customers/orders/${orderId}/attach`, { phone, name }).then((res) => res.data),
+    api
+      .post<OrderCustomer>(`/customers/orders/${orderId}/attach`, {
+        phone,
+        name,
+      })
+      .then((res) => res.data),
   redeem: ({ orderId, points }: { orderId: string; points: number }) =>
     api.post<OrderCustomer>(`/customers/orders/${orderId}/redeem`, { points }).then((res) => res.data),
   removeRedemption: (orderId: string) =>

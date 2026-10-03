@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 
 import type { Review } from "../../lib/types";
 import { api, extractErrorMessage } from "../../shared/api/client";
+import { confirmDialog } from "../../shared/ui/confirm";
 import { Badge, Card, ErrorText, PageHeader } from "../../shared/ui/ui";
 
 function Stars({ rating }: { rating: number }) {
@@ -36,7 +37,14 @@ export default function Reviews() {
   }
 
   async function remove(review: Review) {
-    if (!confirm(`Delete this review from "${review.customerName}"?`)) return;
+    if (
+      !(await confirmDialog({
+        title: "Delete this review?",
+        message: `The review from ${review.customerName} is removed for good.`,
+        confirmLabel: "Delete review",
+      }))
+    )
+      return;
     try {
       await api.delete(`/reviews/${review._id}`);
       load();

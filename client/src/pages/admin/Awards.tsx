@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 
 import type { Award } from "../../lib/types";
 import { api, extractErrorMessage, uploadImage } from "../../shared/api/client";
+import { confirmDialog } from "../../shared/ui/confirm";
 import { Badge, Button, Card, ErrorText, Input, PageHeader, Textarea } from "../../shared/ui/ui";
 
 export default function Awards() {
@@ -95,7 +96,14 @@ export default function Awards() {
   }
 
   async function remove(award: Award) {
-    if (!confirm(`Remove award "${award.title}"?`)) return;
+    if (
+      !(await confirmDialog({
+        title: "Remove this award?",
+        message: `${award.title} disappears from your landing page.`,
+        confirmLabel: "Remove award",
+      }))
+    )
+      return;
     try {
       await api.delete(`/awards/${award._id}`);
       load();

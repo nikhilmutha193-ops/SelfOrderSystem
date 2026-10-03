@@ -143,6 +143,12 @@ export class OrdersRepository {
     return FoodItem.find(this.scoped({ _id: { $in: foodItemIds }, isActive: true }));
   }
 
+  findFoodNames(foodItemIds: Types.ObjectId[]) {
+    return FoodItem.find(this.scoped({ _id: { $in: foodItemIds } }))
+      .select("name")
+      .lean();
+  }
+
   findCategoryStations(categoryIds: Types.ObjectId[]) {
     return Category.find(this.scoped({ _id: { $in: categoryIds } }))
       .select("defaultStationId")

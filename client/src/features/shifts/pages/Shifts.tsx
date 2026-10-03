@@ -12,7 +12,12 @@ const OPENING_FLOAT_PRESETS = [500, 1000, 2000, 5000, 10000];
 const CASH_MOVEMENT_PRESETS = [50, 100, 200, 500, 1000, 2000];
 
 function when(iso?: string | null) {
-  return iso ? new Date(iso).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }) : "-";
+  return iso
+    ? new Date(iso).toLocaleString([], {
+        dateStyle: "medium",
+        timeStyle: "short",
+      })
+    : "-";
 }
 
 function AmountChips({ values, onPick }: { values: number[]; onPick: (v: number) => void }) {
@@ -174,7 +179,12 @@ export default function Shifts() {
                   onSubmit={(e) => {
                     e.preventDefault();
                     run(
-                      () => cash.mutateAsync({ type: moveType, amount: Number(moveAmount), reason: moveReason.trim() }),
+                      () =>
+                        cash.mutateAsync({
+                          type: moveType,
+                          amount: Number(moveAmount),
+                          reason: moveReason.trim(),
+                        }),
                       () => {
                         setMoveAmount("");
                         setMoveReason("");
@@ -225,7 +235,11 @@ export default function Shifts() {
                   onSubmit={(e) => {
                     e.preventDefault();
                     run(
-                      () => closeShift.mutateAsync({ countedCash: Number(counted), note: note.trim() || undefined }),
+                      () =>
+                        closeShift.mutateAsync({
+                          countedCash: Number(counted),
+                          note: note.trim() || undefined,
+                        }),
                       () => {
                         setCounted("");
                         setNote("");

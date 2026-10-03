@@ -514,7 +514,10 @@ export async function consumeForKot(restaurantId: string, itemIds: string[]) {
   const repo = new InventoryRepository(restaurantId);
   const orderItems = (await repo.findOrderItems(itemIds)).filter((i) => i.status !== "cancelled" && i.foodItemId);
   if (orderItems.length === 0) return;
-  const recipes = await repo.findRecipesForFoods(orderItems.map((i) => i.foodItemId!));
+  const componentIds = orderItems.flatMap((i) =>
+    (i.components ?? []).flatMap((c) => (c.foodItemId ? [c.foodItemId] : []))
+  );
+  const recipes = await repo.findRecipesForFoods([...orderItems.map((i) => i.foodItemId!), ...componentIds]);
   if (recipes.length === 0) return;
   const recipeOf = new Map(recipes.map((r) => [r.foodItemId.toString(), r]));
   const stockIds = [
@@ -524,19 +527,27 @@ export async function consumeForKot(restaurantId: string, itemIds: string[]) {
 
   const movements: NewMovement[] = [];
   for (const item of orderItems) {
-    const recipe = recipeOf.get(item.foodItemId!.toString());
-    if (!recipe) continue;
+    const own = recipeOf.get(item.foodItemId!.toString());
+    const parts = own
+      ? [{ recipe: own, multiplier: item.quantity, modifiers: item.modifiers ?? [] }]
+      : (item.components ?? []).flatMap((c) => {
+          const recipe = c.foodItemId ? recipeOf.get(c.foodItemId.toString()) : undefined;
+          return recipe ? [{ recipe, multiplier: item.quantity * c.quantity, modifiers: [] }] : [];
+        });
+    if (parts.length === 0) continue;
     const needed = new Map<string, number>();
-    for (const line of recipe.lines) {
-      const key = line.stockItemId.toString();
-      needed.set(key, (needed.get(key) ?? 0) + line.quantity * item.quantity);
-    }
-    for (const chosen of item.modifiers ?? []) {
-      for (const extra of recipe.modifierLines.filter(
-        (m) => m.groupName === chosen.groupName && m.label === chosen.label
-      )) {
-        const key = extra.stockItemId.toString();
-        needed.set(key, (needed.get(key) ?? 0) + extra.quantity * item.quantity);
+    for (const { recipe, multiplier, modifiers } of parts) {
+      for (const line of recipe.lines) {
+        const key = line.stockItemId.toString();
+        needed.set(key, (needed.get(key) ?? 0) + line.quantity * multiplier);
+      }
+      for (const chosen of modifiers) {
+        for (const extra of recipe.modifierLines.filter(
+          (m) => m.groupName === chosen.groupName && m.label === chosen.label
+        )) {
+          const key = extra.stockItemId.toString();
+          needed.set(key, (needed.get(key) ?? 0) + extra.quantity * multiplier);
+        }
       }
     }
     for (const [stockItemId, qty] of needed) {
