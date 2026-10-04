@@ -1,11 +1,12 @@
 import { CalendarClock, Phone, Users } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { useCanEdit } from "../../../lib/adminAuth";
 import { formatIstTime, todayIst } from "../../../lib/istDate";
 import type { Booking, BookingSettings } from "../../../lib/types";
 import { extractErrorMessage } from "../../../shared/api/client";
 import { Dialog } from "../../../shared/ui/Dialog";
+import { usePageTour, type TourStep } from "../../../shared/ui/PageTour";
 import {
   Badge,
   type BadgeTone,
@@ -82,7 +83,7 @@ function SettingsCard({ canEdit }: { canEdit: boolean }) {
   };
 
   return (
-    <Card>
+    <Card data-tour="booking-settings">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-base font-semibold text-slate-900">Booking settings</h2>
         <div className="flex items-center gap-3">
@@ -386,6 +387,38 @@ export default function Bookings() {
   const bookings = useBookings(date);
   const list = (bookings.data?.bookings ?? NO_BOOKINGS).filter((b) => b.status !== "cancelled");
 
+  const tourSteps: TourStep[] = useMemo(
+    () => [
+      {
+        target: "booking-settings",
+        title: "Booking settings",
+        description: "Turn bookings on or off, and set the hours and slot length guests can book into.",
+      },
+      {
+        target: "booking-date",
+        title: "Pick a date",
+        description: "See the bookings for any day.",
+      },
+      ...(canEdit
+        ? [
+            {
+              target: "booking-new",
+              title: "New booking",
+              description: "Take a booking over the phone or in person - pick an open time slot and a party size.",
+            },
+          ]
+        : []),
+      {
+        target: "booking-list",
+        title: "Bookings for this day",
+        description:
+          "Confirm a booking to a table, seat the guest when they arrive, or mark it cancelled/no-show. A confirmed booking holds its table until seated.",
+      },
+    ],
+    [canEdit]
+  );
+  usePageTour(tourSteps);
+
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-5 sm:gap-6">
       <PageHeader
@@ -393,13 +426,13 @@ export default function Bookings() {
         description="Bookings are taken over the phone or in person. A confirmed booking holds its table until the guest is seated."
       />
       <SettingsCard canEdit={canEdit} />
-      <Card>
+      <Card data-tour="booking-list">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <Field label="Date" htmlFor="booking-date" className="w-48">
-            <Input id="booking-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+            <Input id="booking-date" data-tour="booking-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </Field>
           {canEdit && (
-            <Button type="button" onClick={() => setCreating(true)}>
+            <Button type="button" data-tour="booking-new" onClick={() => setCreating(true)}>
               New booking
             </Button>
           )}

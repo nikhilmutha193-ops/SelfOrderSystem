@@ -2,6 +2,12 @@ import { model, Schema, Types } from "mongoose";
 
 export type OrderItemStatus = "pending" | "preparing" | "ready" | "served" | "cancelled";
 
+export interface IOrderItemComponent {
+  foodItemId?: Types.ObjectId;
+  name: string;
+  quantity: number;
+}
+
 export interface IOrderItem {
   _id: Types.ObjectId;
   restaurantId: Types.ObjectId;
@@ -22,6 +28,8 @@ export interface IOrderItem {
   cancelReason?: string;
   cancelNote?: string;
   complimentary?: boolean;
+  packagingCharge?: number;
+  components?: IOrderItemComponent[];
   stationId?: Types.ObjectId | null;
   complimentaryReason?: string;
   cancelledAt?: Date | null;
@@ -56,6 +64,20 @@ const orderItemSchema = new Schema<IOrderItem>(
     readyAt: { type: Date, default: null },
     cancelReason: { type: String },
     complimentary: { type: Boolean, default: false },
+    packagingCharge: { type: Number, default: 0, min: 0 },
+    components: {
+      type: [
+        new Schema<IOrderItemComponent>(
+          {
+            foodItemId: { type: Schema.Types.ObjectId, ref: "FoodItem" },
+            name: { type: String, required: true },
+            quantity: { type: Number, required: true, min: 1 },
+          },
+          { _id: false }
+        ),
+      ],
+      default: [],
+    },
     stationId: { type: Schema.Types.ObjectId, ref: "Station", default: null },
     complimentaryReason: { type: String, trim: true },
     cancelNote: { type: String, trim: true },

@@ -5,15 +5,26 @@ import { RequestContext } from "../../core/context";
 import { withTransaction } from "../../core/transaction";
 import { ICustomer } from "../../models/Customer";
 import { ILoyaltyEntry } from "../../models/LoyaltyEntry";
-import { ILoyaltySettings } from "../../models/Restaurant";
+import { IBirthdaySmsSettings, ILoyaltySettings } from "../../models/Restaurant";
 import { writeAudit } from "../../utils/audit";
 import { HttpError } from "../../utils/httpError";
 import { computeInvoiceTotals, round2 } from "../../utils/invoice";
+import { sendBirthdayGreetingsForRestaurant } from "../../utils/birthdaySmsScheduler";
 import { normalizePhone } from "../../utils/phone";
+import { sendSms } from "../../utils/sms";
 import { pricingFor, totalsForOrder } from "../orders/orders.billing";
+import { creditBalance } from "../credit/credit.service";
 import { CustomersRepository } from "./customers.repository";
-import { LoyaltySettingsInput, UpdateCustomerInput } from "./customers.schema";
+import {
+  BirthdaySmsSettingsInput,
+  LoyaltySettingsInput,
+  SendCampaignInput,
+  SmsTemplateInput,
+  UpdateCustomerInput,
+} from "./customers.schema";
 import { loyaltyBalance } from "./loyalty";
+
+const CAMPAIGN_CONCURRENCY = 10;
 
 const GENERIC_NAMES = new Set(["", "walk-in", "guest", "counter"]);
 const DEFAULT_LOYALTY: ILoyaltySettings = {
@@ -22,6 +33,10 @@ const DEFAULT_LOYALTY: ILoyaltySettings = {
   pointValue: 1,
   minRedeem: 50,
   expiryDays: 365,
+};
+const DEFAULT_BIRTHDAY_SMS: IBirthdaySmsSettings = {
+  enabled: false,
+  template: "Happy Birthday {name}! From all of us at {restaurant}, have a wonderful day. See you soon!",
 };
 const BILL_LINK_DAYS = 30;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -61,7 +76,7 @@ function summary(
   };
 }
 
-export async function linkOrder(restaurantId: string, orderId: string) {
+export async function linkOrder(restaurantId: string, orderId: string, birthday?: string) {
   const repo = new CustomersRepository(restaurantId);
   const order = await repo.findOrder(orderId);
   if (!order || order.customerId) return;
@@ -69,11 +84,52 @@ export async function linkOrder(restaurantId: string, orderId: string) {
   if (!phone) return;
   const name = cleanName(order.customerName);
   const customer = await repo.upsertByPhone(phone, name);
+  let dirty = false;
   if (!customer.name && name) {
     customer.name = name;
-    await customer.save();
+    dirty = true;
   }
+  // Only fills in a birthday the customer doesn't already have - never overwrites one staff
+  // already set from the admin side.
+  if (!customer.birthday && birthday) {
+    customer.birthday = birthday;
+    dirty = true;
+  }
+  // Consent only ever turns on here, never off - a later order with the box unchecked isn't a
+  // guest withdrawing consent, just a form they didn't see again.
+  if (order.customerMarketingConsent && !customer.marketingConsent) {
+    customer.marketingConsent = true;
+    dirty = true;
+  }
+  if (dirty) await customer.save();
   await repo.setOrderCustomer(order._id, customer._id);
+}
+
+/**
+ * A guest filled in or completed their details after the order was already created - link it if
+ * it wasn't already (now that there may be a usable phone), or, if it was already linked, just
+ * fill in the birthday and/or marketing consent on the existing customer if still missing.
+ */
+export async function applyCustomerUpdate(restaurantId: string, orderId: string, birthday?: string) {
+  const repo = new CustomersRepository(restaurantId);
+  const order = await repo.findOrder(orderId);
+  if (!order) return;
+  if (!order.customerId) {
+    await linkOrder(restaurantId, orderId, birthday);
+    return;
+  }
+  const customer = await repo.findById(order.customerId);
+  if (!customer) return;
+  let dirty = false;
+  if (birthday && !customer.birthday) {
+    customer.birthday = birthday;
+    dirty = true;
+  }
+  if (order.customerMarketingConsent && !customer.marketingConsent) {
+    customer.marketingConsent = true;
+    dirty = true;
+  }
+  if (dirty) await customer.save();
 }
 
 export async function onSettled(restaurantId: string, orderId: string) {
@@ -224,6 +280,19 @@ export async function removeRedemption(ctx: RequestContext, orderId: string) {
   return orderCustomer(ctx, orderId);
 }
 
+/**
+ * A guest checking their own phone number on the table sign-in/menu page, not a staff lookup -
+ * returns only what's needed to pre-fill a form (name, birthday), never spend/points/visit
+ * history, so one guest can't fish for another's loyalty details by guessing phone numbers.
+ */
+export async function guestLookup(restaurantId: string, rawPhone: string) {
+  const phone = normalizePhone(rawPhone);
+  if (!phone) return null;
+  const customer = await new CustomersRepository(restaurantId).findByPhone(phone);
+  if (!customer) return null;
+  return { name: customer.name || "", birthday: customer.birthday || "" };
+}
+
 export async function lookup(ctx: RequestContext, rawPhone: string) {
   const phone = normalizePhone(rawPhone);
   if (!phone) throw new HttpError(400, "Enter a valid phone number");
@@ -244,6 +313,9 @@ export async function orderCustomer(ctx: RequestContext, orderId: string) {
     customer: customer ? summary(customer, await repo.entries(customer._id), settings) : null,
     redeem: order.loyaltyRedeem ?? null,
     loyalty,
+    credit: customer
+      ? { balance: await creditBalance(ctx.restaurantId, customer._id), creditLimit: customer.creditLimit ?? null }
+      : null,
   };
 }
 
@@ -352,6 +424,98 @@ export async function saveLoyaltySettings(ctx: RequestContext, input: LoyaltySet
       : "Loyalty turned off"
   );
   return input;
+}
+
+export async function getBirthdaySmsSettings(ctx: RequestContext) {
+  const repo = new CustomersRepository(ctx.restaurantId);
+  const restaurant = await repo.findRestaurant("birthdaySmsSettings");
+  const saved = restaurant?.birthdaySmsSettings;
+  return saved ? { ...DEFAULT_BIRTHDAY_SMS, ...JSON.parse(JSON.stringify(saved)) } : DEFAULT_BIRTHDAY_SMS;
+}
+
+export async function saveBirthdaySmsSettings(ctx: RequestContext, input: BirthdaySmsSettingsInput) {
+  await new CustomersRepository(ctx.restaurantId).updateBirthdaySmsSettings(input);
+  await writeAudit(ctx, "customers.birthdaySms", input.enabled ? "Birthday SMS turned on" : "Birthday SMS turned off");
+  return input;
+}
+
+// Lets staff send today's birthday texts on demand instead of waiting for the hourly scheduler -
+// e.g. to test the template, or if the automatic toggle is off. Still only texts each guest once
+// per year (sendBirthdayGreetingsForRestaurant checks birthdayGreetedYear), so it's safe to click
+// more than once.
+export async function sendBirthdayGreetingsNow(ctx: RequestContext) {
+  const repo = new CustomersRepository(ctx.restaurantId);
+  const restaurant = await repo.findRestaurant("name timezone birthdaySmsSettings");
+  if (!restaurant) throw new HttpError(404, "Restaurant not found");
+  const template = restaurant.birthdaySmsSettings?.template;
+  if (!template) throw new HttpError(400, "Save a message template first");
+
+  const sentCount = await sendBirthdayGreetingsForRestaurant(restaurant);
+  await writeAudit(
+    ctx,
+    "customers.birthdaySms.sendNow",
+    `Manually sent birthday SMS to ${sentCount} guest${sentCount === 1 ? "" : "s"}`
+  );
+  return { sentCount };
+}
+
+export async function listSmsTemplates(ctx: RequestContext) {
+  return new CustomersRepository(ctx.restaurantId).listSmsTemplates();
+}
+
+export async function createSmsTemplate(ctx: RequestContext, input: SmsTemplateInput) {
+  const template = await new CustomersRepository(ctx.restaurantId).createSmsTemplate(input);
+  await writeAudit(ctx, "customers.smsTemplate.create", `Saved SMS template "${input.name}"`);
+  return template;
+}
+
+export async function updateSmsTemplate(ctx: RequestContext, id: string, input: SmsTemplateInput) {
+  const template = await new CustomersRepository(ctx.restaurantId).updateSmsTemplate(id, input);
+  if (!template) throw new HttpError(404, "Template not found");
+  await writeAudit(ctx, "customers.smsTemplate.update", `Updated SMS template "${input.name}"`);
+  return template;
+}
+
+export async function deleteSmsTemplate(ctx: RequestContext, id: string) {
+  const template = await new CustomersRepository(ctx.restaurantId).deleteSmsTemplate(id);
+  if (!template) throw new HttpError(404, "Template not found");
+  await writeAudit(ctx, "customers.smsTemplate.delete", `Deleted SMS template "${template.name}"`);
+}
+
+// Sends in small concurrent batches rather than all at once (to stay polite to the SMS provider)
+// or one at a time (which could take minutes for a large list).
+async function sendInBatches(recipients: { phone: string }[], message: string): Promise<number> {
+  let sent = 0;
+  for (let i = 0; i < recipients.length; i += CAMPAIGN_CONCURRENCY) {
+    const batch = recipients.slice(i, i + CAMPAIGN_CONCURRENCY);
+    const results = await Promise.all(batch.map((r) => sendSms(r.phone, message)));
+    sent += results.filter(Boolean).length;
+  }
+  return sent;
+}
+
+export async function sendSmsCampaign(ctx: RequestContext, input: SendCampaignInput) {
+  const repo = new CustomersRepository(ctx.restaurantId);
+  const recipients = await repo.listConsented();
+  if (recipients.length === 0) throw new HttpError(400, "No customers have agreed to receive offers yet");
+
+  const sentCount = await sendInBatches(recipients, input.message);
+  const record = await repo.createSmsCampaign({
+    message: input.message,
+    recipientCount: recipients.length,
+    sentCount,
+    sentBy: ctx.admin?.username ?? "",
+  });
+  await writeAudit(
+    ctx,
+    "customers.smsCampaign.send",
+    `Sent "${input.message.slice(0, 40)}" to ${sentCount}/${recipients.length} guests who agreed to offers`
+  );
+  return record;
+}
+
+export async function listSmsCampaigns(ctx: RequestContext) {
+  return new CustomersRepository(ctx.restaurantId).listSmsCampaigns(50);
 }
 
 function billSecret() {

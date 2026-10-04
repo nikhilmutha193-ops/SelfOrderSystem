@@ -10,11 +10,16 @@ import {
   Trash2,
   Wallet,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
+import { AreasCard } from "../../features/pricing/components/AreasCard";
+import { useAreas, useSetTableArea } from "../../features/pricing/queries";
+import { useCanEdit } from "../../lib/adminAuth";
 import type { TableRow } from "../../lib/types";
 import { api, extractErrorMessage } from "../../shared/api/client";
+import { confirmDialog } from "../../shared/ui/confirm";
+import { usePageTour, type TourStep } from "../../shared/ui/PageTour";
 import { buttonClass } from "../../shared/ui/styles";
 import {
   Badge,
@@ -65,6 +70,8 @@ export default function Tables() {
   const [expiryDraft, setExpiryDraft] = useState<Record<string, string>>({});
   const [, forceTick] = useState(0);
   const [captains, setCaptains] = useState<{ _id: string; username: string }[]>([]);
+  const [allowQrScan, setAllowQrScanState] = useState(true);
+  const [qrScanSaving, setQrScanSaving] = useState(false);
 
   const savedDefault = Number(autoReleaseMinutes);
   const defaultExpiryLabel = savedDefault > 0 ? `${savedDefault} (default)` : "never";
@@ -85,6 +92,20 @@ export default function Tables() {
       .catch(() => setCaptains([]));
   }, []);
 
+  const { areas } = useAreas();
+  const setArea = useSetTableArea();
+  const canEditTables = useCanEdit("tables");
+
+  async function assignArea(table: TableRow, areaId: string) {
+    setError(null);
+    try {
+      await setArea.mutateAsync({ tableId: table._id, areaId: areaId || null });
+      load();
+    } catch (err) {
+      setError(extractErrorMessage(err));
+    }
+  }
+
   async function assignCaptain(table: TableRow, captainId: string) {
     setError(null);
     try {
@@ -103,6 +124,28 @@ export default function Tables() {
         // Non-critical: the input just falls back to "0" (disabled) if this fails.
       });
   }, []);
+
+  useEffect(() => {
+    api
+      .get<{ allowQrScan: boolean }>("/tables/settings")
+      .then((res) => setAllowQrScanState(res.data.allowQrScan))
+      .catch(() => {
+        // Non-critical: the switch just falls back to "on" (current default) if this fails.
+      });
+  }, []);
+
+  async function setAllowQrScan(value: boolean) {
+    setAllowQrScanState(value);
+    setQrScanSaving(true);
+    try {
+      await api.put("/tables/settings", { allowQrScan: value });
+    } catch (err) {
+      setError(extractErrorMessage(err));
+      setAllowQrScanState(!value);
+    } finally {
+      setQrScanSaving(false);
+    }
+  }
 
   // Re-renders every 30s so "occupied since" keeps counting up without a reload.
   useEffect(() => {
@@ -171,7 +214,14 @@ export default function Tables() {
   }
 
   async function remove(table: TableRow) {
-    if (!window.confirm(`Delete table "${table.code}"? This cannot be undone.`)) return;
+    if (
+      !(await confirmDialog({
+        title: `Delete table ${table.code}?`,
+        message: "Its printed QR code stops working. This can't be undone.",
+        confirmLabel: "Delete table",
+      }))
+    )
+      return;
     setError(null);
     try {
       await api.delete(`/tables/${table._id}`);
@@ -222,6 +272,40 @@ export default function Tables() {
     awaiting: seated.filter((t) => t.status === "awaiting_payment").length,
   };
 
+  const tourSteps: TourStep[] = useMemo(
+    () => [
+      {
+        target: "tables-stats",
+        title: "Floor status",
+        description: "How many seated tables are free, occupied, or waiting to pay right now.",
+      },
+      {
+        target: "tables-add",
+        title: "Add a table",
+        description:
+          "Set its code and PIN - this is what guests type to sign in. Mark it a guest table for walk-ins/counters that never need releasing.",
+      },
+      {
+        target: "tables-auto-release",
+        title: "Auto-release",
+        description: "Free a table automatically after it's been seated this long. Each table can override the default below.",
+      },
+      {
+        target: "tables-qr-setting",
+        title: "Table sign-in page",
+        description: "Turn the QR-scan sign-in option on or off for guests, in addition to typing the code and PIN.",
+      },
+      {
+        target: "tables-list",
+        title: "All tables",
+        description:
+          "See each table's status, who's captaining it, its auto-release override, and reset its PIN, release it or delete it.",
+      },
+    ],
+    []
+  );
+  usePageTour(tourSteps);
+
   return (
     <Page>
       <PageHeader
@@ -229,14 +313,14 @@ export default function Tables() {
         description="Table logins for guests scanning the QR code, who looks after each table, and when idle tables free up."
       />
 
-      <div className="grid grid-cols-3 gap-3 sm:gap-4">
+      <div className="grid grid-cols-3 gap-3 sm:gap-4" data-tour="tables-stats">
         <StatCard label="Free" value={counts.available} icon={CircleCheck} tone="green" />
         <StatCard label="Seated" value={counts.occupied} icon={Armchair} tone="amber" />
         <StatCard label="Waiting to pay" value={counts.awaiting} icon={Wallet} tone="red" />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2 lg:gap-6">
-        <Card>
+        <Card data-tour="tables-add">
           <CardHeader
             icon={Plus}
             title="Add a table"
@@ -277,7 +361,7 @@ export default function Tables() {
           </form>
         </Card>
 
-        <Card>
+        <Card data-tour="tables-auto-release">
           <CardHeader
             icon={Timer}
             title="Auto-release"
@@ -302,11 +386,31 @@ export default function Tables() {
           </form>
           <p className="mt-2 text-xs text-slate-500">0 turns auto-release off. Each table can override it below.</p>
         </Card>
+
+        <Card data-tour="tables-qr-setting">
+          <CardHeader
+            icon={KeyRound}
+            title="Table sign-in page"
+            description="Controls what guests see on the QR sign-in page at /order, besides the table code and PIN form."
+          />
+          <div className="rounded-lg border border-slate-200 px-3 py-2.5">
+            <Switch
+              id="allow-qr-scan"
+              checked={allowQrScan}
+              disabled={qrScanSaving}
+              onChange={setAllowQrScan}
+              label="Let guests scan a QR code to sign in"
+              description="Shows an in-page camera-scan button, in addition to typing the table code and PIN."
+            />
+          </div>
+        </Card>
       </div>
+
+      <AreasCard areas={areas} canEdit={canEditTables} />
 
       <ErrorText>{error}</ErrorText>
 
-      <Card>
+      <Card data-tour="tables-list">
         <CardHeader
           title="All tables"
           description={`${tables.length} table${tables.length === 1 ? "" : "s"}`}
@@ -322,6 +426,7 @@ export default function Tables() {
                   <th>Table</th>
                   <th>PIN</th>
                   <th>Status</th>
+                  {areas.length > 0 && <th>Area</th>}
                   <th>Captain</th>
                   <th>Expires after</th>
                   <th className="text-right">Actions</th>
@@ -367,6 +472,27 @@ export default function Tables() {
                         </div>
                       )}
                     </td>
+                    {areas.length > 0 && (
+                      <td>
+                        {table.isGuest ? (
+                          <span className="text-xs text-slate-400">—</span>
+                        ) : (
+                          <Select
+                            aria-label={`Area for ${table.code}`}
+                            className="!w-36"
+                            value={table.areaId ?? ""}
+                            onChange={(e) => assignArea(table, e.target.value)}
+                          >
+                            <option value="">No area</option>
+                            {areas.map((a) => (
+                              <option key={a._id} value={a._id}>
+                                {a.name}
+                              </option>
+                            ))}
+                          </Select>
+                        )}
+                      </td>
+                    )}
                     <td>
                       {table.isGuest ? (
                         <span className="text-xs text-slate-400">—</span>

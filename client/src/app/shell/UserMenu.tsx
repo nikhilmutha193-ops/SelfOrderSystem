@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { useAdmin } from "../../lib/adminAuth";
+import { ThemeChoice } from "../../shared/ui/ThemeToggle";
 
 function initials(name: string): string {
   const parts = name
@@ -59,6 +60,10 @@ export default function UserMenu({ onLogout }: { onLogout: () => void }) {
           <div className="border-b border-slate-100 px-4 py-3">
             <p className="truncate text-sm font-semibold text-slate-900">{name}</p>
             <p className="text-xs text-slate-500">{profile?.isOwner ? "Owner" : "Staff"}</p>
+          </div>
+          <div className="border-b border-slate-100 px-3 py-2.5">
+            <p className="mb-1.5 px-1 text-xs font-medium text-slate-500">Theme</p>
+            <ThemeChoice />
           </div>
           <div className="p-1.5">
             <Link

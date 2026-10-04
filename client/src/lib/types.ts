@@ -14,6 +14,10 @@ export interface QrSettings {
   accentColor: string;
 }
 
+export interface TableLoginSettings {
+  allowQrScan: boolean;
+}
+
 export type PrintPaperSize = "thermal58" | "thermal80" | "a5" | "a4";
 
 export type PrintFontSize = "compact" | "normal" | "large";
@@ -129,6 +133,7 @@ export interface FoodItem {
   isActive: boolean;
   isBestseller: boolean;
   bestsellerEmoji?: string;
+  isTodaySpecial?: boolean;
   foodType?: FoodType;
   rating?: number;
   prepTimeMinutes?: number;
@@ -136,6 +141,10 @@ export interface FoodItem {
   modifierGroups?: ModifierGroup[];
   stationId?: string | null;
   shortCode?: string;
+  pairsWith?: string[];
+  priceRules?: PriceRules;
+  packagingCharge?: number;
+  comboItems?: { foodItemId: string; quantity: number }[];
   reviewSum?: number;
   reviewCount?: number;
 }
@@ -148,12 +157,14 @@ export interface MenuFoodItem {
   imageUrl?: string;
   isBestseller?: boolean;
   bestsellerEmoji?: string;
+  isTodaySpecial?: boolean;
   foodType?: FoodType;
   rating?: number;
   translations?: Translations;
   modifierGroups?: ModifierGroup[];
   guestRating?: number | null;
   reviewCount?: number;
+  components?: ComboComponent[];
 }
 
 export interface MenuSubcategory {
@@ -182,6 +193,24 @@ export interface TableRow {
   occupiedAt?: string;
   autoReleaseMinutes?: number | null;
   captainId?: string | null;
+  areaId?: string | null;
+}
+
+export interface Area {
+  _id: string;
+  name: string;
+}
+
+export interface PriceRules {
+  takeaway?: number | null;
+  delivery?: number | null;
+  areas?: { areaId: string; price: number }[];
+}
+
+export interface ComboComponent {
+  foodItemId?: string;
+  name: string;
+  quantity: number;
 }
 
 export interface ChefRow {
@@ -195,8 +224,8 @@ export type OrderType = "dine-in" | "takeaway" | "delivery";
 
 export type OrderStatus = "open" | "billed" | "closed" | "cancelled";
 
-export type PaymentMethod = "pending" | "cash" | "upi" | "card" | "online" | "wallet" | "split";
-export type TenderMethod = "cash" | "upi" | "card" | "online" | "wallet";
+export type PaymentMethod = "pending" | "cash" | "upi" | "card" | "online" | "wallet" | "credit" | "split";
+export type TenderMethod = "cash" | "upi" | "card" | "online" | "wallet" | "credit";
 export type TableStatus = "available" | "occupied" | "awaiting_payment";
 
 export const TENDER_LABELS: Record<TenderMethod, string> = {
@@ -205,6 +234,7 @@ export const TENDER_LABELS: Record<TenderMethod, string> = {
   card: "Card",
   online: "Online",
   wallet: "Wallet",
+  credit: "Pay later",
 };
 
 export interface Payment {
@@ -240,6 +270,8 @@ export interface Order {
   deliveryProvider?: DeliveryProvider;
   customerName: string;
   customerPhone: string;
+  customerBirthday?: string;
+  customerMarketingConsent?: boolean;
   members: number;
   checkinTime: string;
   checkoutTime?: string;
@@ -266,6 +298,14 @@ export interface Order {
   loyaltyRedeem?: { points: number; amount: number } | null;
   mergedInto?: string | null;
   splitFrom?: string | null;
+  offline?: {
+    clientId: string;
+    createdAt: string;
+    clientTotal: number;
+    syncedAt: string;
+    mismatch: boolean;
+    note?: string;
+  } | null;
 }
 
 export interface BillSnapshot extends InvoiceTotals {
@@ -298,6 +338,8 @@ export interface InvoiceRegisterRow {
   status: InvoiceRegisterStatus;
   paymentMethod: PaymentMethod;
   grandTotal: number | null;
+  taxableAmount?: number | null;
+  taxLines?: { name: string; percent: number; amount: number }[];
   reason: string;
 }
 
@@ -332,6 +374,8 @@ export interface OrderItem {
   complimentary?: boolean;
   complimentaryReason?: string;
   stationId?: string | null;
+  packagingCharge?: number;
+  components?: ComboComponent[];
 }
 
 export interface InvoiceTaxLine {
@@ -349,6 +393,7 @@ export interface InvoiceTotals {
   discount: number;
   serviceChargePercent?: number;
   serviceCharge?: number;
+  packagingCharge?: number;
   taxableAmount: number;
   taxLines: InvoiceTaxLine[];
   roundOff: number;
@@ -443,6 +488,8 @@ export interface Coupon {
   maxDiscountAmount?: number;
   usageLimit?: number;
   usedCount: number;
+  /** Max times one mobile number may use this coupon. Blank means no per-customer cap. */
+  perCustomerLimit?: number;
   expiresAt?: string;
   isActive: boolean;
 }
@@ -455,6 +502,18 @@ export interface Award {
   year?: number;
   imageUrl?: string;
   description?: string;
+  sortOrder: number;
+  isActive: boolean;
+}
+
+export interface PromoBanner {
+  _id: string;
+  restaurantId: string;
+  title?: string;
+  desktopImageUrl: string;
+  /** Falls back to desktopImageUrl on the public page if blank. */
+  mobileImageUrl?: string;
+  linkUrl?: string;
   sortOrder: number;
   isActive: boolean;
 }
@@ -497,11 +556,25 @@ export interface LandingBestseller {
   bestsellerEmoji?: string;
 }
 
+export interface LandingTodaySpecialGroup {
+  categoryId: string;
+  categoryName: string;
+  items: {
+    _id: string;
+    name: string;
+    price: number;
+    description?: string;
+    imageUrl?: string;
+  }[];
+}
+
 export interface LandingData {
   restaurant: LandingRestaurant;
   content?: LandingContent;
   team: TeamMember[];
   bestsellers: LandingBestseller[];
+  todaySpecials: LandingTodaySpecialGroup[];
+  banners: PromoBanner[];
   reviews: Review[];
   awards: Award[];
   googleReviews: GoogleReview[];
@@ -550,6 +623,7 @@ export interface LandingContent {
     items: { title: string; text: string; imageUrl: string }[];
   };
   menu: { enabled: boolean; eyebrow: string; title: string; lead: string; ctaLabel: string };
+  todaySpecial: { enabled: boolean; eyebrow: string; title: string; lead: string };
   story: {
     enabled: boolean;
     eyebrow: string;
@@ -633,6 +707,7 @@ export interface DayReport {
     gross: number;
     discounts: number;
     serviceCharge: number;
+    packagingCharge?: number;
     taxable: number;
     tax: number;
     roundOff: number;
@@ -748,9 +823,22 @@ export interface PosMenuItem {
   isBestseller?: boolean;
   modifierGroups: ModifierGroup[];
   stationId: string | null;
+  prices?: { takeaway: number | null; delivery: number | null; areas: Record<string, number> };
+  packagingCharge?: number;
+  components?: { name: string; quantity: number }[];
+}
+
+export interface PosBilling {
+  restaurantName: string;
+  address: string;
+  gstin: string;
+  taxRates: { name: string; percent: number }[];
+  serviceChargePercent: number;
+  footerNote: string;
 }
 
 export interface PosMenu {
+  billing?: PosBilling;
   categories: { _id: string; name: string }[];
   items: PosMenuItem[];
 }
@@ -776,12 +864,14 @@ export interface PosTable {
   occupiedAt: string | null;
   captainId: string | null;
   captainName: string | null;
+  areaId?: string | null;
   orders: PosOrderSummary[];
 }
 
 export interface PosFloor {
   tables: PosTable[];
   takeaways: PosOrderSummary[];
+  areas?: Area[];
 }
 
 export type StockUnit = "g" | "ml" | "pcs";
@@ -928,10 +1018,61 @@ export interface LoyaltySettings {
   expiryDays: number;
 }
 
+export interface BirthdaySmsSettings {
+  enabled: boolean;
+  /** Placeholders {name} and {restaurant} are substituted server-side before sending. */
+  template: string;
+}
+
+export interface SmsTemplate {
+  _id: string;
+  name: string;
+  message: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SmsCampaign {
+  _id: string;
+  message: string;
+  recipientCount: number;
+  sentCount: number;
+  sentBy: string;
+  createdAt: string;
+}
+
 export interface OrderCustomer {
   customer: CustomerSummary | null;
   redeem: { points: number; amount: number } | null;
   loyalty: Pick<LoyaltySettings, "enabled" | "pointValue" | "minRedeem">;
+  credit?: { balance: number; creditLimit: number | null } | null;
+}
+
+export interface CreditEntry {
+  _id: string;
+  type: "charge" | "payment" | "reverse";
+  amount: number;
+  invoiceNumber?: string;
+  method?: "cash" | "upi" | "card" | "online";
+  reference?: string;
+  note?: string;
+  byName?: string;
+  createdAt: string;
+}
+
+export interface CustomerCredit {
+  balance: number;
+  creditLimit: number | null;
+  entries: CreditEntry[];
+}
+
+export interface CustomerDue {
+  customerId: string;
+  name: string;
+  phone: string;
+  creditLimit: number | null;
+  balance: number;
+  lastAt: string;
 }
 
 export interface LoyaltyEntry {
@@ -1021,4 +1162,38 @@ export interface BookingAvailabilitySlot {
 export interface BookingsForDate {
   date: string;
   bookings: Booking[];
+}
+
+export type DishClass = "star" | "workhorse" | "puzzle" | "dog" | "unknown";
+
+export interface DishInsight {
+  foodItemId: string;
+  name: string;
+  category: string;
+  isActive: boolean;
+  quantity: number;
+  revenue: number;
+  avgPrice: number;
+  cost: number | null;
+  margin: number | null;
+  marginPercent: number | null;
+  totalMargin: number | null;
+  mixPercent: number;
+  popular: boolean;
+  profitable: boolean | null;
+  class: DishClass;
+}
+
+export interface MenuEngineeringReport {
+  days: number;
+  since: string;
+  totals: { quantity: number; revenue: number; margin: number; dishesWithoutRecipe: number };
+  thresholds: { popularityMixPercent: number; avgMargin: number | null };
+  counts: Record<DishClass, number>;
+  dishes: DishInsight[];
+}
+
+export interface MenuRecommendations {
+  popular: string[];
+  pairs: Record<string, string[]>;
 }

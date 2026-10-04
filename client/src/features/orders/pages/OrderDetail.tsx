@@ -6,6 +6,7 @@ import {
   Gift,
   LockOpen,
   Minus,
+  Pencil,
   Plus,
   Printer,
   ReceiptText,
@@ -22,6 +23,7 @@ import { useAdmin } from "../../../lib/adminAuth";
 import { renderPrepMessage } from "../../../lib/prepTime";
 import { TENDER_LABELS, type MenuCategory, type MenuFoodItem } from "../../../lib/types";
 import { extractErrorMessage } from "../../../shared/api/client";
+import { confirmDialog } from "../../../shared/ui/confirm";
 import ReasonDialog from "../../../shared/ui/ReasonDialog";
 import {
   Alert,
@@ -32,6 +34,7 @@ import {
   EmptyState,
   ErrorText,
   Field,
+  IconButton,
   Input,
   Page,
   PageHeader,
@@ -45,6 +48,7 @@ import { usePrintKot } from "../../kitchen/queries";
 import { usePrintingStatus } from "../../printing/queries";
 import { ordersApi } from "../api";
 import BillActions from "../components/BillActions";
+import { EditOrderCustomerDialog } from "../components/EditOrderCustomerDialog";
 import SettleDialog from "../components/SettleDialog";
 import {
   useAddOrderItems,
@@ -82,7 +86,11 @@ export default function OrderDetail({
   const [activeCat, setActiveCat] = useState("all");
   const [cart, setCart] = useState<Record<string, number>>({});
   const [settleOpen, setSettleOpen] = useState(false);
-  const [complimentaryItem, setComplimentaryItem] = useState<{ id: string; name: string } | null>(null);
+  const [editCustomerOpen, setEditCustomerOpen] = useState(false);
+  const [complimentaryItem, setComplimentaryItem] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
   const [customerGstin, setCustomerGstin] = useState("");
   const [billDialog, setBillDialog] = useState<BillDialog>(null);
   const { profile } = useAdmin();
@@ -149,7 +157,10 @@ export default function OrderDetail({
     try {
       await addItems.mutateAsync({
         orderId,
-        items: Object.entries(cart).map(([foodItemId, quantity]) => ({ foodItemId, quantity })),
+        items: Object.entries(cart).map(([foodItemId, quantity]) => ({
+          foodItemId,
+          quantity,
+        })),
       });
       setCart({});
     } catch (err) {
@@ -214,7 +225,15 @@ export default function OrderDetail({
       setBillDialog("cancelBill");
       return;
     }
-    if (!confirm("Cancel this entire order?")) return;
+    if (
+      !(await confirmDialog({
+        title: "Cancel this entire order?",
+        message: "Every item on it is cancelled. This can't be undone.",
+        confirmLabel: "Cancel order",
+        cancelLabel: "Keep order",
+      }))
+    )
+      return;
     setActionError(null);
     try {
       await cancelOrder.mutateAsync({ orderId });
@@ -227,7 +246,10 @@ export default function OrderDetail({
     if (!orderId) return;
     setActionError(null);
     try {
-      await generateBill.mutateAsync({ orderId, customerGstin: customerGstin.trim() || undefined });
+      await generateBill.mutateAsync({
+        orderId,
+        customerGstin: customerGstin.trim() || undefined,
+      });
       setCustomerGstin("");
     } catch (err) {
       setActionError(extractErrorMessage(err));
@@ -305,7 +327,11 @@ export default function OrderDetail({
       .filter((i) => i.kotRound != null)
       .reduce((map, i) => {
         const r = i.kotRound as number;
-        const entry = map.get(r) ?? { round: r, token: i.tokenNumber, count: 0 };
+        const entry = map.get(r) ?? {
+          round: r,
+          token: i.tokenNumber,
+          count: 0,
+        };
         entry.count += i.quantity;
         map.set(r, entry);
         return map;
@@ -360,6 +386,12 @@ export default function OrderDetail({
                     {item.complimentary && <Badge tone="green">On the house</Badge>}
                   </p>
                   {extras && <p className="truncate text-xs text-slate-500">{extras}</p>}
+                  {(item.components ?? []).length > 0 && (
+                    <p className="text-xs text-slate-500">
+                      Includes{" "}
+                      {item.components!.map((p) => (p.quantity > 1 ? `${p.quantity}× ${p.name}` : p.name)).join(", ")}
+                    </p>
+                  )}
                   <div className="mt-1 flex flex-wrap items-center gap-2">
                     <Badge tone={STATUS_TONE[item.status]} dot>
                       {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
@@ -377,7 +409,12 @@ export default function OrderDetail({
                       variant="ghost"
                       icon={Gift}
                       className="!text-emerald-700 hover:!bg-emerald-50"
-                      onClick={() => setComplimentaryItem({ id: item._id, name: item.foodName })}
+                      onClick={() =>
+                        setComplimentaryItem({
+                          id: item._id,
+                          name: item.foodName,
+                        })
+                      }
                     >
                       Comp
                     </Button>
@@ -527,14 +564,18 @@ export default function OrderDetail({
         {(totals.manualDiscount ?? 0) > 0 && (
           <div className="flex justify-between gap-2 text-emerald-700">
             <dt className="min-w-0 truncate">
-              Discount{order.manualDiscount?.reason ? ` (${order.manualDiscount.reason})` : ""}
+              Discount
+              {order.manualDiscount?.reason ? ` (${order.manualDiscount.reason})` : ""}
             </dt>
             <dd className="tabular-nums">-₹{(totals.manualDiscount ?? 0).toFixed(2)}</dd>
           </div>
         )}
         {(totals.loyaltyDiscount ?? 0) > 0 && (
           <div className="flex justify-between text-emerald-700">
-            <dt>Loyalty points{order.loyaltyRedeem ? ` (${order.loyaltyRedeem.points})` : ""}</dt>
+            <dt>
+              Loyalty points
+              {order.loyaltyRedeem ? ` (${order.loyaltyRedeem.points})` : ""}
+            </dt>
             <dd className="tabular-nums">-₹{(totals.loyaltyDiscount ?? 0).toFixed(2)}</dd>
           </div>
         )}
@@ -542,6 +583,12 @@ export default function OrderDetail({
           <div className="flex justify-between text-slate-600">
             <dt>Service charge ({totals.serviceChargePercent}%)</dt>
             <dd className="tabular-nums">₹{(totals.serviceCharge ?? 0).toFixed(2)}</dd>
+          </div>
+        )}
+        {(totals.packagingCharge ?? 0) > 0 && (
+          <div className="flex justify-between text-slate-600">
+            <dt>Packaging</dt>
+            <dd className="tabular-nums">₹{(totals.packagingCharge ?? 0).toFixed(2)}</dd>
           </div>
         )}
         <div className="flex justify-between text-slate-600">
@@ -674,6 +721,14 @@ export default function OrderDetail({
               <Badge tone={statusBadge.tone} dot>
                 {statusBadge.label}
               </Badge>
+              {order.status === "open" && (
+                <IconButton
+                  size="sm"
+                  icon={Pencil}
+                  label="Edit guest details"
+                  onClick={() => setEditCustomerOpen(true)}
+                />
+              )}
             </span>
           }
           description={facts.join(" · ")}
@@ -691,9 +746,14 @@ export default function OrderDetail({
       )}
       {embedded && (
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <p className="font-semibold text-slate-900">{order.customerName || "Guest"}</p>
-            <p className="text-sm text-slate-500">{facts.join(" · ")}</p>
+          <div className="flex items-center gap-2">
+            <div>
+              <p className="font-semibold text-slate-900">{order.customerName || "Guest"}</p>
+              <p className="text-sm text-slate-500">{facts.join(" · ")}</p>
+            </div>
+            {order.status === "open" && (
+              <IconButton size="sm" icon={Pencil} label="Edit guest details" onClick={() => setEditCustomerOpen(true)} />
+            )}
           </div>
           <Badge tone={statusBadge.tone} dot>
             {statusBadge.label}
@@ -704,6 +764,14 @@ export default function OrderDetail({
       {(order.voidReason || order.cancelReason) && (
         <Alert tone="error" title={order.voidedAt ? "Voided" : "Cancelled"}>
           Reason: {order.voidReason || order.cancelReason}
+        </Alert>
+      )}
+      {order.offline && (
+        <Alert tone={order.offline.mismatch && order.status !== "closed" ? "warning" : "info"} title="Billed offline">
+          Taken on the POS while offline on{" "}
+          {new Date(order.offline.createdAt).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })} and synced
+          later. Provisional total ₹{order.offline.clientTotal.toFixed(2)}.
+          {order.offline.note && order.status !== "closed" && <> {order.offline.note}</>}
         </Alert>
       )}
       {notice && <Alert tone="success">{notice}</Alert>}
@@ -737,6 +805,8 @@ export default function OrderDetail({
         onClose={() => setSettleOpen(false)}
       />
 
+      <EditOrderCustomerDialog order={order} open={editCustomerOpen} onClose={() => setEditCustomerOpen(false)} />
+
       <ReasonDialog
         open={complimentaryItem !== null}
         title={`Make ${complimentaryItem?.name ?? "this item"} complimentary?`}
@@ -744,7 +814,10 @@ export default function OrderDetail({
         confirmLabel="Make complimentary"
         onCancel={() => setComplimentaryItem(null)}
         onConfirm={async ({ note }) => {
-          await complimentary.mutateAsync({ itemId: complimentaryItem!.id, reason: note });
+          await complimentary.mutateAsync({
+            itemId: complimentaryItem!.id,
+            reason: note,
+          });
           setComplimentaryItem(null);
         }}
       />

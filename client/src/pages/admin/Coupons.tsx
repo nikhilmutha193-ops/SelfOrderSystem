@@ -1,7 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import type { Coupon, CouponType } from "../../lib/types";
 import { api, extractErrorMessage } from "../../shared/api/client";
+import { confirmDialog } from "../../shared/ui/confirm";
+import { usePageTour, type TourStep } from "../../shared/ui/PageTour";
 import { Badge, Button, Card, ErrorText, Input, PageHeader, Select, TableWrap } from "../../shared/ui/ui";
 
 export default function Coupons() {
@@ -12,6 +14,7 @@ export default function Coupons() {
   const [minOrderValue, setMinOrderValue] = useState<number>(0);
   const [maxDiscountAmount, setMaxDiscountAmount] = useState<string>("");
   const [usageLimit, setUsageLimit] = useState<string>("");
+  const [perCustomerLimit, setPerCustomerLimit] = useState<string>("");
   const [expiresAt, setExpiresAt] = useState<string>("");
   const [editing, setEditing] = useState<Coupon | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -33,6 +36,7 @@ export default function Coupons() {
     setMinOrderValue(0);
     setMaxDiscountAmount("");
     setUsageLimit("");
+    setPerCustomerLimit("");
     setExpiresAt("");
   }
 
@@ -44,6 +48,7 @@ export default function Coupons() {
     setMinOrderValue(coupon.minOrderValue);
     setMaxDiscountAmount(coupon.maxDiscountAmount !== undefined ? String(coupon.maxDiscountAmount) : "");
     setUsageLimit(coupon.usageLimit !== undefined ? String(coupon.usageLimit) : "");
+    setPerCustomerLimit(coupon.perCustomerLimit !== undefined ? String(coupon.perCustomerLimit) : "");
     setExpiresAt(coupon.expiresAt ? coupon.expiresAt.slice(0, 10) : "");
   }
 
@@ -58,6 +63,7 @@ export default function Coupons() {
         minOrderValue,
         maxDiscountAmount: maxDiscountAmount === "" ? null : Number(maxDiscountAmount),
         usageLimit: usageLimit === "" ? null : Number(usageLimit),
+        perCustomerLimit: perCustomerLimit === "" ? null : Number(perCustomerLimit),
         expiresAt: expiresAt === "" ? null : expiresAt,
       };
       if (editing) {
@@ -82,7 +88,14 @@ export default function Coupons() {
   }
 
   async function remove(coupon: Coupon) {
-    if (!confirm(`Delete coupon "${coupon.code}"?`)) return;
+    if (
+      !(await confirmDialog({
+        title: `Delete coupon ${coupon.code}?`,
+        message: "Guests can no longer apply it. Bills that already used it keep their discount.",
+        confirmLabel: "Delete coupon",
+      }))
+    )
+      return;
     try {
       await api.delete(`/coupons/${coupon._id}`);
       load();
@@ -104,6 +117,24 @@ export default function Coupons() {
     return !!coupon.expiresAt && new Date(coupon.expiresAt).getTime() < Date.now();
   }
 
+  const tourSteps: TourStep[] = useMemo(
+    () => [
+      {
+        target: "coupon-form",
+        title: "Add or edit a coupon",
+        description:
+          "Set the discount, a minimum order value, an optional cap on the discount, an overall usage limit, a per-customer limit and an expiry date.",
+      },
+      {
+        target: "coupon-list",
+        title: "All coupons",
+        description: "See how much each coupon has been used, activate/deactivate one, or delete it.",
+      },
+    ],
+    []
+  );
+  usePageTour(tourSteps);
+
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 sm:gap-6">
       <PageHeader
@@ -111,12 +142,12 @@ export default function Coupons() {
         description={
           <>
             Customers can apply a coupon code on their order/invoice screen; staff can also apply one from an order's
-            detail page at billing time.
+            detail page at billing time. A coupon needs a mobile number on the order before it can be applied.
           </>
         }
       />
 
-      <Card>
+      <Card data-tour="coupon-form">
         <form onSubmit={submit} className="flex flex-col gap-4">
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <label className="flex flex-col text-sm font-medium text-slate-700">
@@ -189,6 +220,17 @@ export default function Coupons() {
               />
             </label>
             <label className="flex flex-col text-sm font-medium text-slate-700">
+              Max uses per customer (optional)
+              <Input
+                className="mt-1.5"
+                type="number"
+                min={1}
+                placeholder="Unlimited"
+                value={perCustomerLimit}
+                onChange={(e) => setPerCustomerLimit(e.target.value)}
+              />
+            </label>
+            <label className="flex flex-col text-sm font-medium text-slate-700">
               Expires on (optional)
               <Input className="mt-1.5" type="date" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} />
             </label>
@@ -207,7 +249,7 @@ export default function Coupons() {
 
       <ErrorText>{error}</ErrorText>
 
-      <Card>
+      <Card data-tour="coupon-list">
         <TableWrap>
           <table className="w-full min-w-[34rem] text-sm">
             <thead>
@@ -228,6 +270,11 @@ export default function Coupons() {
                   <td>
                     {coupon.usedCount}
                     {coupon.usageLimit ? ` / ${coupon.usageLimit}` : ""}
+                    {coupon.perCustomerLimit && (
+                      <span className="block text-xs text-slate-500">
+                        Max {coupon.perCustomerLimit}/customer
+                      </span>
+                    )}
                   </td>
                   <td>{coupon.expiresAt ? new Date(coupon.expiresAt).toLocaleDateString() : "-"}</td>
                   <td>

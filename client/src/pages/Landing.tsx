@@ -43,6 +43,7 @@ export default function Landing() {
   const [navOpen, setNavOpen] = useState(false);
   const [flipped, setFlipped] = useState<string | null>(null);
   const [slide, setSlide] = useState(0);
+  const [bannerDismissed, setBannerDismissed] = useState(false);
 
   useEffect(() => {
     api
@@ -50,6 +51,23 @@ export default function Landing() {
       .then((res) => setData(res.data))
       .catch((err) => setLoadError(extractErrorMessage(err)));
   }, []);
+
+  function dismissBanner() {
+    setBannerDismissed(true);
+    try {
+      localStorage.setItem("selforder_banner_dismissed_on", new Date().toDateString());
+    } catch {
+      /* ignore */
+    }
+  }
+
+  function wasDismissedToday(): boolean {
+    try {
+      return localStorage.getItem("selforder_banner_dismissed_on") === new Date().toDateString();
+    } catch {
+      return false;
+    }
+  }
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 40);
@@ -62,6 +80,12 @@ export default function Landing() {
     document.body.classList.toggle("no-scroll", navOpen);
     return () => document.body.classList.remove("no-scroll");
   }, [navOpen]);
+
+  const showBanner = !bannerDismissed && !wasDismissedToday() && !!data?.banners?.[0];
+  useEffect(() => {
+    document.body.classList.toggle("no-scroll", showBanner);
+    return () => document.body.classList.remove("no-scroll");
+  }, [showBanner]);
 
   const editorSlides = data?.content?.hero?.slides?.filter((s) => s.desktopUrl) ?? [];
   const heroSlides = editorSlides.length
@@ -89,7 +113,8 @@ export default function Landing() {
     return <div className="flex min-h-screen items-center justify-center text-slate-400">Loading...</div>;
   }
 
-  const { restaurant, team, bestsellers, reviews, awards } = data;
+  const { restaurant, team, bestsellers, todaySpecials, banners, reviews, awards } = data;
+  const activeBanner = showBanner ? banners[0] : undefined;
   const c = data.content as LandingContent | undefined;
   const founder = team.find((m) => m.role === "owner");
   const logo = restaurant.logoUrl || `${ASSET}/logo.jpeg`;
@@ -289,6 +314,39 @@ export default function Landing() {
                 <Link className="btn btn--primary btn--lg" to="/order">
                   {c?.menu.ctaLabel || "See the full menu"}
                 </Link>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {c?.todaySpecial.enabled !== false && todaySpecials.length > 0 && (
+          <section className="section menu" id="today-special" aria-labelledby="today-special-title">
+            <div className="container">
+              <header className="section__header">
+                {c?.todaySpecial.eyebrow && <p className="section__eyebrow">{c.todaySpecial.eyebrow}</p>}
+                <h2 className="section__title" id="today-special-title">
+                  {c?.todaySpecial.title || "Today's Specials"}
+                </h2>
+                {c?.todaySpecial.lead && <p className="section__lead">{c.todaySpecial.lead}</p>}
+              </header>
+
+              <div className="menu__grid">
+                {todaySpecials.map((group) => (
+                  <div className="menu__category" key={group.categoryId}>
+                    <h3 className="menu__category-title">{group.categoryName}</h3>
+                    <ul role="list">
+                      {group.items.map((item) => (
+                        <li className="menu-item" key={item._id}>
+                          <div className="menu-item__info">
+                            <p className="menu-item__name">{item.name}</p>
+                            {item.description && <p className="menu-item__desc">{item.description}</p>}
+                          </div>
+                          <p className="menu-item__price">₹{item.price.toFixed(2)}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
               </div>
             </div>
           </section>
@@ -581,6 +639,41 @@ export default function Landing() {
           </div>
         </div>
       </footer>
+
+      {activeBanner && (
+        <div className="popup-banner" role="dialog" aria-modal="true" aria-label={activeBanner.title || "Offer"}>
+          <div className="popup-banner__inner">
+            <button type="button" className="popup-banner__close" onClick={dismissBanner} aria-label="Close">
+              ✕
+            </button>
+            {activeBanner.linkUrl ? (
+              <a href={activeBanner.linkUrl} target="_blank" rel="noopener">
+                <picture>
+                  {activeBanner.mobileImageUrl && (
+                    <source media="(max-width: 767px)" srcSet={activeBanner.mobileImageUrl} />
+                  )}
+                  <img
+                    className="popup-banner__image"
+                    src={activeBanner.desktopImageUrl}
+                    alt={activeBanner.title || ""}
+                  />
+                </picture>
+              </a>
+            ) : (
+              <picture>
+                {activeBanner.mobileImageUrl && (
+                  <source media="(max-width: 767px)" srcSet={activeBanner.mobileImageUrl} />
+                )}
+                <img
+                  className="popup-banner__image"
+                  src={activeBanner.desktopImageUrl}
+                  alt={activeBanner.title || ""}
+                />
+              </picture>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

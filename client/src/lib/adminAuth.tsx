@@ -1,7 +1,8 @@
+import axios from "axios";
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { Navigate } from "react-router-dom";
 
-import { activateStoredAuth, api } from "../shared/api/client";
+import { activateStoredAuth, api, getStoredToken } from "../shared/api/client";
 
 export type ModuleKey = keyof typeof MODULES;
 
@@ -48,6 +49,24 @@ const AdminContext = createContext<{ profile: AdminProfile | null; loading: bool
   loading: true,
 });
 
+const PROFILE_CACHE = "selforder_admin_profile";
+
+function cachedProfile(): AdminProfile | null {
+  try {
+    if (!getStoredToken("admin")) return null;
+    const raw = localStorage.getItem(PROFILE_CACHE);
+    return raw ? (JSON.parse(raw) as AdminProfile) : null;
+  } catch {
+    return null;
+  }
+}
+
+function unreachable(err: unknown) {
+  if (!axios.isAxiosError(err)) return false;
+  const status = err.response?.status;
+  return status === undefined || status === 429 || status >= 500;
+}
+
 export function AdminProfileProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<AdminProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -56,8 +75,15 @@ export function AdminProfileProvider({ children }: { children: ReactNode }) {
     activateStoredAuth("admin");
     api
       .get<AdminProfile>("/auth/admin/me")
-      .then((res) => setProfile(res.data))
-      .catch(() => setProfile(null))
+      .then((res) => {
+        setProfile(res.data);
+        try {
+          localStorage.setItem(PROFILE_CACHE, JSON.stringify(res.data));
+        } catch {
+          return;
+        }
+      })
+      .catch((err) => setProfile(unreachable(err) ? cachedProfile() : null))
       .finally(() => setLoading(false));
   }, []);
 

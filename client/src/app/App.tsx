@@ -43,6 +43,7 @@ const RestaurantSettings = lazy(() => import("../pages/admin/RestaurantSettings"
 const ChangePassword = lazy(() => import("../pages/admin/ChangePassword"));
 const Team = lazy(() => import("../pages/admin/Team"));
 const Awards = lazy(() => import("../pages/admin/Awards"));
+const Banners = lazy(() => import("../pages/admin/Banners"));
 const Coupons = lazy(() => import("../pages/admin/Coupons"));
 const Reviews = lazy(() => import("../pages/admin/Reviews"));
 const Messages = lazy(() => import("../features/chat/pages/Messages"));
@@ -294,6 +295,14 @@ export default function App() {
                   element={
                     <RequireModule module="awards">
                       <Awards />
+                    </RequireModule>
+                  }
+                />
+                <Route
+                  path="banners"
+                  element={
+                    <RequireModule module="landing">
+                      <Banners />
                     </RequireModule>
                   }
                 />

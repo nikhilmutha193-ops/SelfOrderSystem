@@ -1,37 +1,47 @@
-import { Check, ChefHat, CookingPot, Flame, HandPlatter, Printer, RotateCcw, X } from "lucide-react";
-import { useState } from "react";
+import { ChefHat, ChevronsDownUp, ChevronsUpDown, SearchX } from "lucide-react";
+import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
-import { ITEM_CANCEL_REASON_LABELS, type ItemCancelReason, type OrderItem } from "../../../lib/types";
-import { extractErrorMessage } from "../../../shared/api/client";
-import ReasonDialog from "../../../shared/ui/ReasonDialog";
 import {
-  Alert,
-  Badge,
-  Button,
-  Card,
-  EmptyState,
-  ErrorText,
-  IconButton,
-  Tabs,
-  type BadgeTone,
-} from "../../../shared/ui/ui";
+  ITEM_CANCEL_REASON_LABELS,
+  type ItemCancelReason,
+  type KotQueueGroup,
+  type OrderItem,
+} from "../../../lib/types";
+import { extractErrorMessage } from "../../../shared/api/client";
+import { confirmDialog } from "../../../shared/ui/confirm";
+import { usePageTour, type TourStep } from "../../../shared/ui/PageTour";
+import ReasonDialog from "../../../shared/ui/ReasonDialog";
+import { Alert, Card, EmptyState, ErrorText, IconButton, Tabs } from "../../../shared/ui/ui";
 import { useCancelOrderItem } from "../../orders/queries";
 import { useMyStation, usePrintingStatus } from "../../printing/queries";
 import { kitchenApi, openPdfInTab } from "../api";
+import {
+  balanceColumns,
+  itemFilter,
+  loadCollapsed,
+  saveCollapsed,
+  ticketCounts,
+  useColumnCount,
+  type QueueFilter,
+} from "../kds";
 import { useKotQueue, useMarkReady, usePrintKot, useServeItem, useStartPreparing } from "../queries";
+import { KotTicket, type TicketActions } from "./KotTicket";
 
 const CANCEL_OPTIONS = (Object.keys(ITEM_CANCEL_REASON_LABELS) as ItemCancelReason[]).map((value) => ({
   value,
   label: ITEM_CANCEL_REASON_LABELS[value],
 }));
 
-function statusBadge(item: OrderItem): { tone: BadgeTone; label: string } {
-  if (item.status === "preparing") return { tone: "blue", label: "Preparing" };
-  if (item.status === "ready") return { tone: "green", label: "Ready to serve" };
-  if (item.kotRound) return { tone: "amber", label: "Sent to kitchen" };
-  return { tone: "gray", label: "New" };
-}
+const NO_GROUPS: KotQueueGroup[] = [];
+
+const FILTER_EMPTY: Record<QueueFilter, string> = {
+  all: "",
+  waiting: "No tickets are waiting to be started.",
+  cooking: "Nothing is cooking right now.",
+  ready: "No dishes are waiting to be served.",
+  unsent: "Every order has been sent to the kitchen.",
+};
 
 export default function KotQueueView({ canCancel }: { canCancel: boolean }) {
   const [searchParams] = useSearchParams();
@@ -43,10 +53,13 @@ export default function KotQueueView({ canCancel }: { canCancel: boolean }) {
   const [chosenStation, setChosenStation] = useState<string | null>(null);
   const stationId = (chosenStation ?? myStation.data?.stationId ?? "") || undefined;
   const queue = useKotQueue(tableId, stationId);
+  const groups = queue.data ?? NO_GROUPS;
+  const [filter, setFilter] = useState<QueueFilter>("all");
   const [notice, setNotice] = useState<string | null>(null);
-  const groups = queue.data ?? [];
   const [actionError, setActionError] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState<OrderItem | null>(null);
+  const [collapsed, setCollapsed] = useState<Record<string, true>>(loadCollapsed);
+  const { ref: boardRef, columns } = useColumnCount(330, 5);
   const error = actionError ?? (queue.error ? extractErrorMessage(queue.error) : null);
 
   const startPreparingItem = useStartPreparing();
@@ -54,6 +67,18 @@ export default function KotQueueView({ canCancel }: { canCancel: boolean }) {
   const serveItem = useServeItem();
   const cancelItem = useCancelOrderItem();
   const printTicket = usePrintKot();
+
+  function updateCollapsed(next: Record<string, true>) {
+    setCollapsed(next);
+    saveCollapsed(next);
+  }
+
+  function toggleTicket(orderId: string) {
+    const next = { ...collapsed };
+    if (next[orderId]) delete next[orderId];
+    else next[orderId] = true;
+    updateCollapsed(next);
+  }
 
   async function run(action: () => Promise<unknown>) {
     setActionError(null);
@@ -65,15 +90,20 @@ export default function KotQueueView({ canCancel }: { canCancel: boolean }) {
     }
   }
 
-  const startPreparing = (itemId: string) => run(() => startPreparingItem.mutateAsync(itemId));
-  const markReady = (itemId: string) => run(() => markItemReady.mutateAsync(itemId));
-  const serve = (itemId: string) => run(() => serveItem.mutateAsync(itemId));
-  function cancelLine(item: OrderItem) {
+  async function cancelLine(item: OrderItem) {
     if (item.kotRound != null) {
       setCancelling(item);
       return;
     }
-    if (!window.confirm(`Remove ${item.foodName} x${item.quantity} from this order?`)) return;
+    if (
+      !(await confirmDialog({
+        title: `Remove ${item.foodName} ×${item.quantity}?`,
+        message: "It hasn't been sent to the kitchen, so it is simply taken off the order.",
+        confirmLabel: "Remove item",
+        cancelLabel: "Keep item",
+      }))
+    )
+      return;
     run(() => cancelItem.mutateAsync({ itemId: item._id }));
   }
 
@@ -111,35 +141,140 @@ export default function KotQueueView({ canCancel }: { canCancel: boolean }) {
     return run(() => openPdfInTab(pdfTab, () => kitchenApi.kotPdf(orderId, round)));
   }
 
-  function printedRounds(items: OrderItem[]): { round: number; token: number | null }[] {
-    const map = new Map<number, number | null>();
-    for (const i of items) if (i.kotRound != null && !map.has(i.kotRound)) map.set(i.kotRound, i.tokenNumber);
-    return Array.from(map, ([round, token]) => ({ round, token })).sort((a, b) => b.round - a.round);
+  const actions: TicketActions = {
+    start: (item) => run(() => startPreparingItem.mutateAsync(item._id)),
+    ready: (item) => run(() => markItemReady.mutateAsync(item._id)),
+    serve: (item) => run(() => serveItem.mutateAsync(item._id)),
+    cancel: (item) => void cancelLine(item),
+    bulk: (kind, items) =>
+      run(async () => {
+        const mutate =
+          kind === "start"
+            ? startPreparingItem.mutateAsync
+            : kind === "ready"
+              ? markItemReady.mutateAsync
+              : serveItem.mutateAsync;
+        for (const item of items) await mutate(item._id);
+      }),
+    send: (orderId) => printKot(orderId),
+    reprint: (orderId, round) => void reprintKot(orderId, round),
+  };
+
+  const totals = { waiting: 0, cooking: 0, ready: 0, unsent: 0 };
+  for (const group of groups) {
+    const c = ticketCounts(group.items);
+    totals.waiting += c.waiting;
+    totals.cooking += c.cooking;
+    totals.ready += c.ready;
+    totals.unsent += c.unsent;
   }
 
-  function orderTitle(order: (typeof groups)[number]["order"]) {
-    if (order.orderType === "dine-in") {
-      return typeof order.tableId === "object" && order.tableId?.code ? `Table ${order.tableId.code}` : "Counter";
-    }
-    return order.orderType === "takeaway" ? "Take away" : `Delivery · ${order.deliveryProvider}`;
+  const shown = filter === "all" ? groups : groups.filter((g) => g.items.some((i) => itemFilter(i) === filter));
+  const laidOut = balanceColumns(shown, columns, (g) =>
+    collapsed[g.order._id]
+      ? 2
+      : 3 + (filter === "all" ? g.items.length : g.items.filter((i) => itemFilter(i) === filter).length)
+  );
+
+  const filterItems: { value: QueueFilter; label: string; count?: number }[] = [
+    { value: "all", label: "All tickets", count: groups.length },
+    { value: "waiting", label: "Waiting", count: totals.waiting },
+    { value: "cooking", label: "Cooking", count: totals.cooking },
+    { value: "ready", label: "Ready", count: totals.ready },
+  ];
+  if (totals.unsent > 0 || filter === "unsent") {
+    filterItems.push({ value: "unsent", label: "Not sent", count: totals.unsent });
   }
+
+  const updated = queue.dataUpdatedAt
+    ? new Date(queue.dataUpdatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })
+    : null;
+
+  const tourSteps: TourStep[] = useMemo(
+    () => [
+      ...(stations.length > 0
+        ? [
+            {
+              target: "kot-stations",
+              title: "Filter by station",
+              description: "Show tickets for one kitchen station only, or all of them.",
+            },
+          ]
+        : []),
+      {
+        target: "kot-grid",
+        title: "Tickets",
+        description:
+          "Each card is one order's kitchen ticket. Move an item from Start → Ready → Served as it cooks, reprint a round, or cancel an item. Collapse-all/expand-all is above, or click a ticket's header to toggle it on its own.",
+      },
+    ],
+    [stations.length]
+  );
+  usePageTour(tourSteps);
 
   return (
     <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-2 shadow-card sm:p-3 lg:flex-row lg:items-center">
+        <Tabs className="min-w-0 lg:flex-1" value={filter} onChange={setFilter} items={filterItems} />
+        <div className="flex items-center justify-between gap-2 px-1 lg:justify-end">
+          <span className="inline-flex items-center gap-2 text-xs font-medium text-slate-500" aria-live="polite">
+            <span className="relative flex h-2.5 w-2.5" aria-hidden="true">
+              {!queue.error && (
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
+              )}
+              <span
+                className={`relative inline-flex h-2.5 w-2.5 rounded-full ${queue.error ? "bg-red-500" : "bg-emerald-500"}`}
+              />
+            </span>
+            {queue.error ? "Offline" : "Live"}
+            {updated && <span className="hidden text-slate-400 sm:inline">· {updated}</span>}
+          </span>
+          {groups.length > 1 && (
+            <div className="flex items-center gap-1 border-l border-slate-200 pl-2">
+              <IconButton
+                size="sm"
+                icon={ChevronsDownUp}
+                label="Collapse all tickets"
+                onClick={() => {
+                  const next = { ...collapsed };
+                  for (const g of groups) next[g.order._id] = true;
+                  updateCollapsed(next);
+                }}
+              />
+              <IconButton
+                size="sm"
+                icon={ChevronsUpDown}
+                label="Expand all tickets"
+                onClick={() => {
+                  const next = { ...collapsed };
+                  for (const g of groups) delete next[g.order._id];
+                  updateCollapsed(next);
+                }}
+              />
+            </div>
+          )}
+        </div>
+      </div>
+
       {stations.length > 0 && (
-        <Tabs
-          value={stationId ?? "all"}
-          onChange={(v) => setChosenStation(v === "all" ? "" : v)}
-          items={[{ value: "all", label: "All stations" }, ...stations.map((s) => ({ value: s._id, label: s.name }))]}
-        />
+        <div data-tour="kot-stations">
+          <Tabs
+            size="sm"
+            value={stationId ?? "all"}
+            onChange={(v) => setChosenStation(v === "all" ? "" : v)}
+            items={[{ value: "all", label: "All stations" }, ...stations.map((s) => ({ value: s._id, label: s.name }))]}
+          />
+        </div>
       )}
+
       {notice && (
         <Alert tone="success" onClose={() => setNotice(null)}>
           {notice}
         </Alert>
       )}
       <ErrorText>{error}</ErrorText>
-      {groups.length === 0 && (
+
+      {groups.length === 0 && !queue.isLoading && (
         <Card>
           <EmptyState
             icon={ChefHat}
@@ -148,116 +283,35 @@ export default function KotQueueView({ canCancel }: { canCancel: boolean }) {
           />
         </Card>
       )}
-      <div className="grid items-start gap-4 md:grid-cols-2 2xl:grid-cols-3">
-        {groups.map(({ order, items, tokenNumber }) => {
-          const rounds = printedRounds(items);
-          const packed = order.orderType !== "dine-in";
-          return (
-            <Card key={order._id} padding="none" className="overflow-hidden">
-              <div className="flex items-center gap-3 border-b border-slate-100 px-4 py-3">
-                {tokenNumber ? (
-                  <span className="flex h-12 w-12 shrink-0 flex-col items-center justify-center rounded-xl bg-orange-600 leading-none font-bold text-white">
-                    <span className="text-[9px] font-semibold opacity-80">TOKEN</span>
-                    <span className="text-lg">{tokenNumber}</span>
-                  </span>
-                ) : (
-                  <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border-2 border-dashed border-slate-300 text-[10px] font-bold text-slate-400">
-                    NEW
-                  </span>
-                )}
-                <div className="min-w-0 flex-1">
-                  <p className="flex flex-wrap items-center gap-2 font-semibold text-slate-900">
-                    {orderTitle(order)}
-                    {packed && <Badge tone="amber">Pack</Badge>}
-                  </p>
-                  <p className="truncate text-xs text-slate-500">{order.customerName}</p>
-                </div>
-                <Button size="sm" icon={Printer} onClick={() => printKot(order._id)}>
-                  Print KOT
-                </Button>
-              </div>
+      {groups.length > 0 && shown.length === 0 && (
+        <Card>
+          <EmptyState icon={SearchX} title="Nothing here" description={FILTER_EMPTY[filter]} />
+        </Card>
+      )}
 
-              <ul className="divide-y divide-slate-100">
-                {items.map((item) => {
-                  const badge = statusBadge(item);
-                  const extras = [...(item.modifiers?.map((m) => m.label) ?? []), item.note].filter(Boolean).join(", ");
-                  return (
-                    <li key={item._id} className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center">
-                      <div className="flex min-w-0 flex-1 items-start gap-3">
-                        <span className="flex h-8 min-w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 px-1.5 text-sm font-bold text-slate-800 tabular-nums">
-                          {item.quantity}×
-                        </span>
-                        <div className="min-w-0">
-                          <p className="font-medium text-slate-900">
-                            {item.foodName}
-                            {item.isJain && <span className="ml-1 text-xs font-semibold text-emerald-700">Jain</span>}
-                          </p>
-                          {extras && <p className="text-xs font-semibold text-orange-700">→ {extras}</p>}
-                          <div className="mt-1">
-                            <Badge tone={badge.tone} dot>
-                              {badge.label}
-                            </Badge>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex shrink-0 items-center gap-1.5 pl-11 sm:pl-0">
-                        {item.status === "pending" && item.kotRound && (
-                          <Button size="sm" variant="secondary" icon={Flame} onClick={() => startPreparing(item._id)}>
-                            Start
-                          </Button>
-                        )}
-                        {item.status === "preparing" && (
-                          <Button size="sm" variant="success" icon={Check} onClick={() => markReady(item._id)}>
-                            Ready
-                          </Button>
-                        )}
-                        <Button
-                          size="sm"
-                          variant={item.status === "ready" ? "success" : "ghost"}
-                          icon={HandPlatter}
-                          onClick={() => serve(item._id)}
-                        >
-                          Served
-                        </Button>
-                        {canCancel && (
-                          <IconButton
-                            size="sm"
-                            icon={X}
-                            label={`Cancel ${item.foodName}`}
-                            className="!text-red-600 hover:!bg-red-50"
-                            onClick={() => cancelLine(item)}
-                          />
-                        )}
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-
-              {rounds.length > 0 && (
-                <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 bg-slate-50/70 px-4 py-2.5">
-                  <span className="inline-flex items-center gap-1 text-xs font-medium text-slate-500">
-                    <CookingPot size={14} aria-hidden="true" />
-                    Reprint
-                  </span>
-                  {rounds.map((r) => (
-                    <Button
-                      key={r.round}
-                      size="sm"
-                      variant="secondary"
-                      icon={RotateCcw}
-                      onClick={() => reprintKot(order._id, r.round)}
-                      title="Reprint this ticket - keeps the same token"
-                    >
-                      {r.token != null ? `T${r.token}` : `Round ${r.round}`}
-                    </Button>
-                  ))}
-                </div>
-              )}
-            </Card>
-          );
-        })}
+      <div
+        ref={boardRef}
+        className="grid items-start gap-4"
+        style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
+        data-tour="kot-grid"
+      >
+        {laidOut.map((column, index) => (
+          <div key={index} className="flex min-w-0 flex-col gap-4">
+            {column.map((group) => (
+              <KotTicket
+                key={group.order._id}
+                group={group}
+                filter={filter}
+                collapsed={Boolean(collapsed[group.order._id])}
+                onToggle={() => toggleTicket(group.order._id)}
+                canCancel={canCancel}
+                actions={actions}
+              />
+            ))}
+          </div>
+        ))}
       </div>
+
       <ReasonDialog
         open={cancelling !== null}
         title={cancelling ? `Cancel ${cancelling.foodName} x${cancelling.quantity}?` : ""}

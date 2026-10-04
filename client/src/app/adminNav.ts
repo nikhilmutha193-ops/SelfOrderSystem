@@ -14,6 +14,7 @@ import {
   Layers,
   LayoutDashboard,
   ListTree,
+  Megaphone,
   MessagesSquare,
   MonitorSmartphone,
   Printer,
@@ -130,6 +131,7 @@ export const ADMIN_NAV: AdminNavGroup[] = [
     label: "Website",
     items: [
       { to: "/admin/landing", label: "Landing Page", module: "landing", icon: Globe },
+      { to: "/admin/banners", label: "Offer Banners", module: "landing", icon: Megaphone, keywords: "ads popup promo" },
       { to: "/admin/team", label: "Team", module: "team", icon: Users },
       { to: "/admin/awards", label: "Awards", module: "awards", icon: Award },
     ],

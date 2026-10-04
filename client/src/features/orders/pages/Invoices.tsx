@@ -1,10 +1,53 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
+import type { InvoiceRegisterRow } from "../../../lib/types";
 import { extractErrorMessage } from "../../../shared/api/client";
+import { DATE_TIME, MONEY, sheet, type ExcelColumn } from "../../../shared/export/excel";
+import { ExcelButton } from "../../../shared/ui/ExcelButton";
+import { usePageTour, type TourStep } from "../../../shared/ui/PageTour";
 import { Badge, Card, ErrorText, Input, PageHeader, TableWrap } from "../../../shared/ui/ui";
 import { useInvoiceRegister } from "../queries";
 import { INVOICE_STATUS_BADGE, orderTypeLabel } from "../status";
+
+function registerSheet(rows: InvoiceRegisterRow[]) {
+  const taxNames = [...new Set(rows.flatMap((r) => (r.taxLines ?? []).map((t) => t.name)))];
+  const columns: ExcelColumn<InvoiceRegisterRow>[] = [
+    {
+      header: "Invoice",
+      value: (r) => r.invoiceNumber ?? "Legacy bill",
+      width: 22,
+    },
+    {
+      header: "Billed",
+      value: (r) => (r.billedAt ? new Date(r.billedAt) : null),
+      format: DATE_TIME,
+      width: 18,
+    },
+    { header: "Customer", value: (r) => r.customerName, width: 22 },
+    { header: "GSTIN", value: (r) => r.customerGstin, width: 18 },
+    { header: "Type", value: (r) => orderTypeLabel(r) },
+    { header: "Status", value: (r) => INVOICE_STATUS_BADGE[r.status].label },
+    {
+      header: "Payment",
+      value: (r) => (r.status === "paid" ? r.paymentMethod : ""),
+    },
+    {
+      header: "Taxable value",
+      value: (r) => r.taxableAmount ?? null,
+      format: MONEY,
+      width: 14,
+    },
+    ...taxNames.map((name): ExcelColumn<InvoiceRegisterRow> => ({
+      header: name,
+      value: (r) => r.taxLines?.find((t) => t.name === name)?.amount ?? null,
+      format: MONEY,
+    })),
+    { header: "Total", value: (r) => r.grandTotal, format: MONEY, width: 12 },
+    { header: "Reason", value: (r) => r.reason, width: 30 },
+  ];
+  return [sheet({ name: "Invoices", columns, rows })];
+}
 
 function today(): string {
   return new Date().toLocaleDateString("en-CA");
@@ -25,14 +68,39 @@ export default function Invoices() {
   const paidTotal = rows.filter((r) => r.status === "paid").reduce((sum, r) => sum + (r.grandTotal ?? 0), 0);
   const numbers = rows.map((r) => r.invoiceNumber).filter((n): n is string => !!n);
 
+  const tourSteps: TourStep[] = useMemo(
+    () => [
+      {
+        target: "invoices-filters",
+        title: "Search the register",
+        description: "Filter by date range, an invoice number, or an exact bill amount.",
+      },
+      {
+        target: "invoices-list",
+        title: "Every bill number",
+        description:
+          "Every invoice number ever issued, including cancelled and voided bills - numbers are never reused or skipped. Click a row to open that order.",
+      },
+    ],
+    []
+  );
+  usePageTour(tourSteps);
+
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 sm:gap-6">
       <PageHeader
         title="Invoice register"
         description={<>Every bill number issued, including cancelled and voided bills. Numbers are never reused.</>}
+        actions={
+          <ExcelButton
+            fileName={`invoices-${from || "start"}-to-${to || "today"}`}
+            disabled={rows.length === 0}
+            sheets={() => registerSheet(rows)}
+          />
+        }
       />
 
-      <Card>
+      <Card data-tour="invoices-filters">
         <div className="flex flex-wrap items-end gap-3">
           <label className="text-sm font-medium text-slate-700">
             From
@@ -82,7 +150,7 @@ export default function Invoices() {
 
       <ErrorText>{register.error ? extractErrorMessage(register.error) : null}</ErrorText>
 
-      <Card>
+      <Card data-tour="invoices-list">
         <TableWrap>
           <table className="w-full min-w-[46rem] text-sm">
             <thead>

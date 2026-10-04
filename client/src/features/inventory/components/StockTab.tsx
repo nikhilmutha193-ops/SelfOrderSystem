@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import type { StockItem, StockItemInput, StockUnit } from "../../../lib/types";
 import { extractErrorMessage } from "../../../shared/api/client";
+import { confirmDialog } from "../../../shared/ui/confirm";
 import { Badge, Button, Card, ErrorText, Input, Select, Switch, TableWrap } from "../../../shared/ui/ui";
 import { inPurchaseUnits, MOVEMENT_LABEL, qty, rupees } from "../format";
 import {
@@ -46,7 +47,8 @@ function ItemForm({
   // Most items fit the g→kg / ml→L presets fine, so the purchase-unit conversion stays tucked
   // away unless someone actually needs to change it - one less thing to fill in for every dish.
   const [advanced, setAdvanced] = useState(
-    () => initial.purchaseUnit !== UNIT_PRESETS[initial.unit].purchaseUnit ||
+    () =>
+      initial.purchaseUnit !== UNIT_PRESETS[initial.unit].purchaseUnit ||
       initial.purchaseFactor !== UNIT_PRESETS[initial.unit].purchaseFactor
   );
   const set = (patch: Partial<StockItemInput>) => setForm((f) => ({ ...f, ...patch }));
@@ -116,7 +118,11 @@ function ItemForm({
       ) : (
         <p className="self-end pb-2 text-xs text-slate-500 sm:col-span-1">
           Bought in {form.purchaseUnit || "unit"} ({form.purchaseFactor} {form.unit} each) ·{" "}
-          <button type="button" className="font-medium text-orange-600 hover:underline" onClick={() => setAdvanced(true)}>
+          <button
+            type="button"
+            className="font-medium text-orange-600 hover:underline"
+            onClick={() => setAdvanced(true)}
+          >
             Change
           </button>
         </p>
@@ -249,7 +255,10 @@ function Ledger({ item }: { item: StockItem }) {
           {(ledger.data?.movements ?? []).map((m) => (
             <tr key={m._id} className="border-t border-slate-200">
               <td className="whitespace-nowrap">
-                {new Date(m.createdAt).toLocaleString([], { dateStyle: "short", timeStyle: "short" })}
+                {new Date(m.createdAt).toLocaleString([], {
+                  dateStyle: "short",
+                  timeStyle: "short",
+                })}
               </td>
               <td>{MOVEMENT_LABEL[m.type]}</td>
               <td className={`py-1 text-right tabular-nums ${m.quantity < 0 ? "text-red-700" : "text-green-700"}`}>
@@ -278,7 +287,10 @@ export function StockTab({ canEdit }: { canEdit: boolean }) {
   const remove = useDeleteStockItem();
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
-  const [open, setOpen] = useState<{ id: string; panel: "update" | "history" } | null>(null);
+  const [open, setOpen] = useState<{
+    id: string;
+    panel: "update" | "history";
+  } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showInactive, setShowInactive] = useState(false);
   const allItems = items.data ?? NO_ITEMS;
@@ -325,7 +337,8 @@ export function StockTab({ canEdit }: { canEdit: boolean }) {
             {inactiveCount > 0 && (
               <label className="mt-2 flex items-center gap-2 text-sm text-slate-700">
                 <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} />
-                Show {inactiveCount} inactive item{inactiveCount === 1 ? "" : "s"}
+                Show {inactiveCount} inactive item
+                {inactiveCount === 1 ? "" : "s"}
               </label>
             )}
           </div>
@@ -380,8 +393,13 @@ export function StockTab({ canEdit }: { canEdit: boolean }) {
                     )
                   }
                   saving={update.isPending}
-                  onDelete={() => {
-                    if (!window.confirm(`Delete ${item.name}? This can't be undone.`)) return;
+                  onDelete={async () => {
+                    const ok = await confirmDialog({
+                      title: `Delete ${item.name}?`,
+                      message: "This can't be undone.",
+                      confirmLabel: "Delete",
+                    });
+                    if (!ok) return;
                     run(
                       () => remove.mutateAsync(item._id),
                       () => {}

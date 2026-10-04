@@ -1,9 +1,11 @@
 import { ChefHat, KeyRound, Plus, Trash2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { useSetChefStation, useStationList } from "../../features/printing/queries";
 import type { ChefRow } from "../../lib/types";
 import { api, extractErrorMessage } from "../../shared/api/client";
+import { confirmDialog } from "../../shared/ui/confirm";
+import { usePageTour, type TourStep } from "../../shared/ui/PageTour";
 import {
   Button,
   Card,
@@ -62,7 +64,14 @@ export default function Chefs() {
   }
 
   async function remove(chef: ChefRow) {
-    if (!confirm(`Remove chef "${chef.username}"?`)) return;
+    if (
+      !(await confirmDialog({
+        title: `Remove chef ${chef.username}?`,
+        message: "They are signed out of the kitchen display straight away.",
+        confirmLabel: "Remove chef",
+      }))
+    )
+      return;
     try {
       await api.delete(`/chefs/${chef._id}`);
       load();
@@ -99,13 +108,31 @@ export default function Chefs() {
     }
   }
 
+  const tourSteps: TourStep[] = useMemo(
+    () => [
+      {
+        target: "chef-add",
+        title: "Add a chef",
+        description: "Create a login for the kitchen display screen.",
+      },
+      {
+        target: "chef-list",
+        title: "Kitchen staff",
+        description:
+          "Reset a chef's password, remove an account, or assign a chef to a station so their kitchen display shows that station's tickets first.",
+      },
+    ],
+    []
+  );
+  usePageTour(tourSteps);
+
   return (
     <Page>
       <PageHeader
         title="Chef Accounts"
         description="Logins for the kitchen display. A chef with a station sees that station's tickets first."
       />
-      <Card>
+      <Card data-tour="chef-add">
         <CardHeader icon={Plus} title="Add a chef" />
         <form onSubmit={submit} className="grid gap-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
           <Field label="Username" htmlFor="chef-username">
@@ -135,7 +162,7 @@ export default function Chefs() {
 
       <ErrorText>{error}</ErrorText>
 
-      <Card>
+      <Card data-tour="chef-list">
         <CardHeader
           title="Kitchen staff"
           description={`${chefs.length} account${chefs.length === 1 ? "" : "s"}`}

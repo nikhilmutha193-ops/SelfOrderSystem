@@ -13,7 +13,7 @@ export const getLandingContent = asyncHandler(async (req: Request, res: Response
   res.json(await getOrCreateLandingContent(req.restaurantId!));
 });
 
-const SECTIONS = ["hero", "serve", "menu", "story", "outlets", "reels", "partnership", "footer"] as const;
+const SECTIONS = ["hero", "serve", "menu", "todaySpecial", "story", "outlets", "reels", "partnership", "footer"] as const;
 
 export const updateLandingContent = asyncHandler(async (req: Request, res: Response) => {
   const doc = await getOrCreateLandingContent(req.restaurantId!);

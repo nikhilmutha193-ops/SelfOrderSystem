@@ -24,9 +24,12 @@ beforeAll(async () => {
 async function takeaway(
   lines: { foodItemId: string; quantity: number }[],
   name = "Walk-in",
-  { sendToKitchen = true } = {}
+  { sendToKitchen = true, phone = "9876543210" }: { sendToKitchen?: boolean; phone?: string } = {}
 ) {
-  const order = await api().post("/api/orders/takeaway").set(bearer(owner)).send({ customerName: name });
+  const order = await api()
+    .post("/api/orders/takeaway")
+    .set(bearer(owner))
+    .send({ customerName: name, customerPhone: phone });
   await api().post(`/api/orders/${order.body._id}/items`).set(bearer(owner)).send({ items: lines });
   if (sendToKitchen) await api().post(`/api/orders/${order.body._id}/kot/print`).set(bearer(owner));
   return order.body._id as string;
@@ -296,6 +299,77 @@ describe("coupons", () => {
     await api().post(`/api/orders/${first}/reopen`).set(bearer(owner)).send({ reason: "Wrong coupon" });
     expect((await Coupon.findOne({ code: "ONCE" }))!.usedCount).toBe(0);
     expect((await bill(second)).status).toBe(200);
+  });
+
+  it("requires a mobile number on the order before any coupon can be applied", async () => {
+    await Coupon.create({
+      restaurantId: world.restaurantId,
+      code: "PHONE1",
+      type: "flat",
+      value: 10,
+      minOrderValue: 0,
+      isActive: true,
+    });
+    const order = await api().post("/api/orders/takeaway").set(bearer(owner)).send({ customerName: "No Phone" });
+    await api()
+      .post(`/api/orders/${order.body._id}/items`)
+      .set(bearer(owner))
+      .send({ items: [{ foodItemId: world.food.vada, quantity: 1 }] });
+    const rejected = await api()
+      .post(`/api/orders/${order.body._id}/coupon`)
+      .set(bearer(owner))
+      .send({ code: "PHONE1" });
+    expect(rejected.status).toBe(400);
+    expect(rejected.body.message).toMatch(/mobile number/i);
+  });
+
+  it("limits a coupon to N uses per mobile number, independently of other numbers, and gives it back on reopen", async () => {
+    await Coupon.create({
+      restaurantId: world.restaurantId,
+      code: "PERCUST",
+      type: "flat",
+      value: 15,
+      minOrderValue: 0,
+      perCustomerLimit: 1,
+      isActive: true,
+    });
+    const orderFor = async (phone: string) => {
+      const order = await api()
+        .post("/api/orders/takeaway")
+        .set(bearer(owner))
+        .send({ customerName: "Guest", customerPhone: phone });
+      await api()
+        .post(`/api/orders/${order.body._id}/items`)
+        .set(bearer(owner))
+        .send({ items: [{ foodItemId: world.food.vada, quantity: 1 }] });
+      await api().post(`/api/orders/${order.body._id}/kot/print`).set(bearer(owner));
+      return order.body._id as string;
+    };
+
+    const first = await orderFor("+91 90000 11111");
+    expect((await api().post(`/api/orders/${first}/coupon`).set(bearer(owner)).send({ code: "PERCUST" })).status).toBe(
+      200
+    );
+    expect((await bill(first)).status).toBe(200);
+
+    // Same number again - blocked, even though the coupon's overall usageLimit isn't set at all.
+    const second = await orderFor("+91 90000 11111");
+    const blocked = await api().post(`/api/orders/${second}/coupon`).set(bearer(owner)).send({ code: "PERCUST" });
+    expect(blocked.status).toBe(400);
+    expect(blocked.body.message).toMatch(/maximum number of times/i);
+
+    // A different number is unaffected.
+    const third = await orderFor("+91 90000 22222");
+    expect((await api().post(`/api/orders/${third}/coupon`).set(bearer(owner)).send({ code: "PERCUST" })).status).toBe(
+      200
+    );
+    expect((await bill(third)).status).toBe(200);
+
+    // Reopening the first bill frees up that number to use the coupon again.
+    await api().post(`/api/orders/${first}/reopen`).set(bearer(owner)).send({ reason: "testing" });
+    expect(
+      (await api().post(`/api/orders/${second}/coupon`).set(bearer(owner)).send({ code: "PERCUST" })).status
+    ).toBe(200);
   });
 });
 

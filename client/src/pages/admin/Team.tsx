@@ -1,7 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import type { TeamMember, TeamMemberRole } from "../../lib/types";
 import { api, extractErrorMessage, uploadImage } from "../../shared/api/client";
+import { confirmDialog } from "../../shared/ui/confirm";
+import { usePageTour, type TourStep } from "../../shared/ui/PageTour";
 import { Badge, Button, Card, ErrorText, Input, PageHeader, Select, Textarea } from "../../shared/ui/ui";
 
 export default function Team() {
@@ -88,7 +90,14 @@ export default function Team() {
   }
 
   async function remove(member: TeamMember) {
-    if (!confirm(`Remove "${member.name}" from the team?`)) return;
+    if (
+      !(await confirmDialog({
+        title: `Remove ${member.name}?`,
+        message: "They disappear from the team section of your landing page.",
+        confirmLabel: "Remove",
+      }))
+    )
+      return;
     try {
       await api.delete(`/team/${member._id}`);
       load();
@@ -97,6 +106,23 @@ export default function Team() {
     }
   }
 
+  const tourSteps: TourStep[] = useMemo(
+    () => [
+      {
+        target: "team-form",
+        title: "Add a profile",
+        description: "Owner or chef, name, title, a photo and a short bio.",
+      },
+      {
+        target: "team-list",
+        title: "All profiles",
+        description: "These show in the \"Meet the team\" section on the landing page. Hide, edit or remove one.",
+      },
+    ],
+    []
+  );
+  usePageTour(tourSteps);
+
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 sm:gap-6">
       <PageHeader
@@ -104,7 +130,7 @@ export default function Team() {
         description={<>These profiles appear in the "Meet the team" section of your public landing page.</>}
       />
 
-      <Card>
+      <Card data-tour="team-form">
         <form onSubmit={submit} className="flex flex-col gap-4">
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <label className="flex flex-col text-sm font-medium text-slate-700">
@@ -182,7 +208,7 @@ export default function Team() {
 
       <ErrorText>{error}</ErrorText>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3" data-tour="team-list">
         {team.map((member) => (
           <Card key={member._id} className="flex flex-col gap-3">
             <div className="flex items-center gap-3">

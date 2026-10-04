@@ -17,6 +17,7 @@ export interface InvoiceTotals {
   discount: number;
   serviceChargePercent: number;
   serviceCharge: number;
+  packagingCharge: number;
   taxableAmount: number;
   taxLines: InvoiceTaxLine[];
   roundOff: number;
@@ -39,8 +40,19 @@ export function manualDiscountAmount(
   return round2(Math.min(raw, base));
 }
 
+export type InvoiceItem = Pick<IOrderItem, "status" | "total"> &
+  Partial<Pick<IOrderItem, "quantity" | "packagingCharge" | "complimentary">>;
+
+export function packagingTotal(items: InvoiceItem[]): number {
+  return round2(
+    items
+      .filter((i) => i.status !== "cancelled" && !i.complimentary)
+      .reduce((sum, i) => sum + (i.packagingCharge ?? 0) * (i.quantity ?? 0), 0)
+  );
+}
+
 export function computeInvoiceTotals(
-  items: Pick<IOrderItem, "status" | "total">[],
+  items: InvoiceItem[],
   taxRates: ITaxRate[],
   pricing: number | PricingInput = 0
 ): InvoiceTotals {
@@ -56,7 +68,8 @@ export function computeInvoiceTotals(
 
   const serviceChargePercent = Math.max(input.serviceChargePercent ?? 0, 0);
   const serviceCharge = round2(((rawSubtotal - discount) * serviceChargePercent) / 100);
-  const taxableAmount = round2(rawSubtotal - discount + serviceCharge);
+  const packagingCharge = packagingTotal(items);
+  const taxableAmount = round2(rawSubtotal - discount + serviceCharge + packagingCharge);
 
   const taxLines: InvoiceTaxLine[] = taxRates.map((rate) => ({
     name: rate.name,
@@ -76,6 +89,7 @@ export function computeInvoiceTotals(
     discount,
     serviceChargePercent,
     serviceCharge,
+    packagingCharge,
     taxableAmount,
     taxLines,
     roundOff: round2(grandTotal - exactTotal),

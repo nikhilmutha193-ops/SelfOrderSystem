@@ -1,5 +1,5 @@
 import { on } from "../../core/events";
-import { linkOrder, onCancelled, onSettled } from "./customers.service";
+import { applyCustomerUpdate, linkOrder, onCancelled, onSettled } from "./customers.service";
 
 let registered = false;
 
@@ -8,7 +8,11 @@ export function registerCustomerHandlers(): void {
   registered = true;
 
   on("order.created", async (event) => {
-    await linkOrder(event.restaurantId, event.orderId);
+    await linkOrder(event.restaurantId, event.orderId, event.customerBirthday);
+  });
+
+  on("order.customerUpdated", async (event) => {
+    await applyCustomerUpdate(event.restaurantId, event.orderId, event.customerBirthday);
   });
 
   on("order.settled", async (event) => {

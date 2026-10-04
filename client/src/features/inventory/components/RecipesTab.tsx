@@ -161,7 +161,11 @@ function RecipeEditor({ row, items, onDone }: { row: RecipeRow; items: StockItem
           onClick={async () => {
             setError(null);
             try {
-              await save.mutateAsync({ foodItemId: row.foodItemId, lines, modifierLines: extras });
+              await save.mutateAsync({
+                foodItemId: row.foodItemId,
+                lines,
+                modifierLines: extras,
+              });
               onDone();
             } catch (err) {
               setError(extractErrorMessage(err));

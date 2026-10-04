@@ -1,6 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { api, extractErrorMessage } from "../../shared/api/client";
+import { confirmDialog } from "../../shared/ui/confirm";
+import { usePageTour, type TourStep } from "../../shared/ui/PageTour";
 import { Button, Card, ErrorText, Input, PageHeader, Switch } from "../../shared/ui/ui";
 
 interface RestoreSummary {
@@ -137,9 +139,11 @@ export default function Backup() {
 
   async function restoreRecord(record: BackupRecordDto) {
     if (
-      !confirm(
-        `Restore "${record.filename}"? This replaces this restaurant's current menu, tables, chefs, team, awards, coupons, reviews, orders and chat history with what's in the backup.`
-      )
+      !(await confirmDialog({
+        title: "Restore this backup?",
+        message: `${record.filename} replaces this restaurant's current menu, tables, orders, customers, bookings, inventory, staff and website content.`,
+        confirmLabel: "Restore backup",
+      }))
     )
       return;
     setRowError(null);
@@ -156,7 +160,14 @@ export default function Backup() {
   }
 
   async function removeRecord(record: BackupRecordDto) {
-    if (!confirm(`Delete "${record.filename}"? This cannot be undone.`)) return;
+    if (
+      !(await confirmDialog({
+        title: "Delete this backup?",
+        message: `${record.filename} is removed from the server. This can't be undone.`,
+        confirmLabel: "Delete backup",
+      }))
+    )
+      return;
     setRowError(null);
     setBusyId(record._id);
     try {
@@ -194,9 +205,12 @@ export default function Backup() {
   async function restoreFromUpload() {
     if (!file || !confirmed) return;
     if (
-      !confirm(
-        "This replaces this restaurant's current menu, tables, chefs, team, awards, coupons, reviews, orders and chat history with what's in the file. Continue?"
-      )
+      !(await confirmDialog({
+        title: "Restore from this file?",
+        message:
+          "This replaces this restaurant's current menu, tables, orders, customers, bookings, inventory, staff and website content with what's in the file.",
+        confirmLabel: "Restore",
+      }))
     )
       return;
 
@@ -222,21 +236,52 @@ export default function Backup() {
     }
   }
 
+  const tourSteps: TourStep[] = useMemo(
+    () => [
+      {
+        target: "backup-generate",
+        title: "Generate a backup",
+        description: "Download a snapshot straight to your device, or (where supported) keep a copy on the server too.",
+      },
+      ...(serverStorage
+        ? [
+            {
+              target: "backup-schedule",
+              title: "Automatic daily backup",
+              description: "Turn on a daily automatic backup at a time you choose.",
+            },
+            {
+              target: "backup-list",
+              title: "Backups on this server",
+              description: "Download, restore or delete a past backup. Restoring replaces this restaurant's current data.",
+            },
+          ]
+        : []),
+      {
+        target: "backup-upload",
+        title: "Restore from an uploaded file",
+        description: "For migrating servers: upload a backup JSON file downloaded elsewhere to restore it here.",
+      },
+    ],
+    [serverStorage]
+  );
+  usePageTour(tourSteps);
+
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 sm:gap-6">
       <PageHeader
         title="Backup & Restore"
         description={
           <>
-            Generate snapshots of this restaurant's data (menu, tables, chefs, team, awards, coupons, reviews, orders
-            and chat history), stored on the server so they can be downloaded or restored later - into this same
+            Generate snapshots of this restaurant's data (menu, tables, orders, customers, bookings, inventory, staff
+            and website content), stored on the server so they can be downloaded or restored later - into this same
             database, or a fresh one after migrating servers. Admin logins are not included; you always sign in with
             your current admin account.
           </>
         }
       />
 
-      <Card>
+      <Card data-tour="backup-generate">
         <h2 className="mb-3 text-base font-semibold text-slate-900">Generate a backup</h2>
         <p className="mb-3 text-sm text-slate-500">
           <strong>Download backup</strong> saves the snapshot straight to your device and works on any host.
@@ -258,7 +303,7 @@ export default function Backup() {
       </Card>
 
       {serverStorage && (
-        <Card>
+        <Card data-tour="backup-schedule">
           <h2 className="mb-3 text-base font-semibold text-slate-900">Automatic daily backup</h2>
           <p className="mb-3 text-sm text-slate-500">
             When enabled, a backup is generated automatically every day at the chosen time.
@@ -304,7 +349,7 @@ export default function Backup() {
       )}
 
       {serverStorage && (
-        <Card>
+        <Card data-tour="backup-list">
           <h2 className="mb-3 text-base font-semibold text-slate-900">Backups on this server</h2>
           <ErrorText>{listError}</ErrorText>
           <ErrorText>{rowError}</ErrorText>
@@ -377,12 +422,12 @@ export default function Backup() {
         </Card>
       )}
 
-      <Card>
+      <Card data-tour="backup-upload">
         <h2 className="mb-3 text-base font-semibold text-slate-900">Restore from an uploaded file</h2>
         <p className="mb-3 text-sm text-slate-500">
           For migrating from a different server: upload a backup JSON file downloaded from there. This replaces this
-          restaurant's current menu, tables, chefs, team, awards, coupons, reviews, orders and chat history with what's
-          in the file.
+          restaurant's current menu, tables, orders, customers, bookings, inventory, staff and website content with
+          what's in the file.
         </p>
         <div className="flex flex-col gap-3">
           <input type="file" accept="application/json,.json" onChange={handleFile} className="text-sm text-slate-600" />

@@ -1,8 +1,12 @@
+import { useQuery } from "@tanstack/react-query";
+import { Flame } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import DishDialog, { type DishAddPayload } from "../../components/DishDialog";
+import { EditDetailsDialog } from "../../components/EditDetailsDialog";
 import { BestsellerTag, FoodTypeIcon, RatingChip } from "../../components/FoodBadges";
+import { PairingRow, PopularStrip } from "../../components/MenuSuggestions";
 import { ReviewDialog, StarPicker } from "../../components/ReviewFab";
 import ChatFab from "../../features/chat/components/ChatFab";
 import QuickRequests from "../../features/chat/components/QuickRequests";
@@ -10,7 +14,8 @@ import { ordersApi } from "../../features/orders/api";
 import { useAddOrderItems, useOrder } from "../../features/orders/queries";
 import { LANGS, loadLang, saveLang, tr, type Lang } from "../../lib/i18n";
 import { newId } from "../../lib/id";
-import type { CartLine, MenuCategory, MenuFoodItem } from "../../lib/types";
+import { suggestionsFor } from "../../lib/recommendations";
+import type { CartLine, MenuCategory, MenuFoodItem, MenuRecommendations } from "../../lib/types";
 import { useTableSession } from "../../lib/useTableSession";
 import { api, clearStoredToken, extractErrorMessage, setActiveAuth } from "../../shared/api/client";
 import { POLL } from "../../shared/api/queryClient";
@@ -33,6 +38,24 @@ function LeaveIcon({ className }: { className?: string }) {
       <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
       <path d="M16 17l5-5-5-5" />
       <path d="M21 12H9" />
+    </svg>
+  );
+}
+
+function UserIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden
+    >
+      <path d="M20 21a8 8 0 1 0-16 0" />
+      <circle cx="12" cy="7.5" r="4.5" />
     </svg>
   );
 }
@@ -94,6 +117,7 @@ export default function Menu() {
   const [confirming, setConfirming] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false);
   const [activeItemCount, setActiveItemCount] = useState<number | null>(null);
   const [leavingTable, setLeavingTable] = useState(false);
@@ -126,6 +150,34 @@ export default function Menu() {
       .catch((err) => setError(extractErrorMessage(err)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orderId]);
+
+  const recsQuery = useQuery({
+    queryKey: ["menu", "recommendations"],
+    queryFn: () => api.get<MenuRecommendations>("/menu/recommendations").then((r) => r.data),
+    enabled: !!orderId,
+    staleTime: 5 * 60 * 1000,
+  });
+  const recs = recsQuery.data;
+  const foodById = useMemo(() => {
+    const map = new Map<string, MenuFoodItem>();
+    for (const c of menu) for (const sub of c.subcategories) for (const food of sub.foodItems) map.set(food._id, food);
+    return map;
+  }, [menu]);
+  const popularFoods = useMemo(
+    () => (recs?.popular ?? []).map((id) => foodById.get(id)).filter((f): f is MenuFoodItem => Boolean(f)),
+    [recs, foodById]
+  );
+  const popularRank = useMemo(() => new Map(popularFoods.slice(0, 3).map((f, i) => [f._id, i + 1])), [popularFoods]);
+  const pairingFoods = useMemo(
+    () =>
+      suggestionsFor(
+        recs,
+        cart.map((l) => l.foodItemId)
+      )
+        .map((id) => foodById.get(id))
+        .filter((f): f is MenuFoodItem => Boolean(f)),
+    [recs, cart, foodById]
+  );
 
   const cartTotal = useMemo(() => cart.reduce((sum, l) => sum + l.price * l.quantity, 0), [cart]);
   const cartCount = useMemo(() => cart.reduce((sum, l) => sum + l.quantity, 0), [cart]);
@@ -365,6 +417,15 @@ export default function Menu() {
             </Button>
             <button
               type="button"
+              onClick={() => setDetailsOpen(true)}
+              aria-label="Add your details"
+              title="Add your details"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-300 text-slate-500 hover:bg-slate-50 hover:text-orange-500"
+            >
+              <UserIcon className="h-[18px] w-[18px]" />
+            </button>
+            <button
+              type="button"
               onClick={() => setFeedbackOpen(true)}
               aria-label="Rate us"
               title="Rate us"
@@ -478,6 +539,16 @@ export default function Menu() {
 
       <QuickRequests />
 
+      {!isFiltering && (
+        <PopularStrip
+          foods={popularFoods}
+          lang={lang}
+          cartQty={(id) => cart.filter((l) => l.foodItemId === id).reduce((n, l) => n + l.quantity, 0)}
+          onAdd={quickAddOrOpen}
+          onOpen={setDetailFood}
+        />
+      )}
+
       <div className="px-4 pt-2">
         <ErrorText>{error}</ErrorText>
       </div>
@@ -499,6 +570,7 @@ export default function Menu() {
                   onAdd={quickAddOrOpen}
                   onDecrement={decrementCart}
                   onOpen={setDetailFood}
+                  popularRank={popularRank.get(food._id)}
                 />
               ))}
             </div>
@@ -531,6 +603,7 @@ export default function Menu() {
                         onAdd={quickAddOrOpen}
                         onDecrement={decrementCart}
                         onOpen={setDetailFood}
+                        popularRank={popularRank.get(food._id)}
                       />
                     ))}
                   </div>
@@ -572,6 +645,17 @@ export default function Menu() {
       <DishDialog food={detailFood} lang={lang} onAdd={addCustomized} onClose={() => setDetailFood(null)} />
 
       <ReviewDialog open={feedbackOpen} onClose={() => setFeedbackOpen(false)} />
+
+      {orderId && (
+        <EditDetailsDialog
+          open={detailsOpen}
+          onClose={() => setDetailsOpen(false)}
+          orderId={orderId}
+          defaultPhone={(orderQuery.data?.order.customerPhone ?? "").replace(/\D/g, "").slice(-10)}
+          defaultBirthday={orderQuery.data?.order.customerBirthday ?? ""}
+          defaultMarketingConsent={orderQuery.data?.order.customerMarketingConsent ?? false}
+        />
+      )}
 
       {leaveConfirmOpen && (
         <div
@@ -669,6 +753,11 @@ export default function Menu() {
                 ))}
               </div>
             )}
+            {showCart && pairingFoods.length > 0 && (
+              <div className="mb-3">
+                <PairingRow foods={pairingFoods} lang={lang} onAdd={quickAddOrOpen} />
+              </div>
+            )}
             <div className="flex items-center gap-3">
               <button
                 className="flex min-w-0 flex-1 items-center gap-3 text-left"
@@ -747,6 +836,17 @@ export default function Menu() {
               {cart.length === 0 && <p className="py-6 text-center text-sm text-slate-400">Your cart is empty.</p>}
             </div>
 
+            {pairingFoods.length > 0 && (
+              <div className="mt-3">
+                <PairingRow
+                  foods={pairingFoods}
+                  lang={lang}
+                  onAdd={quickAddOrOpen}
+                  title="Add something to go with it?"
+                />
+              </div>
+            )}
+
             <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-3 text-sm font-bold text-slate-900">
               <span>Total</span>
               <span className="tabular-nums">₹{cartTotal.toFixed(2)}</span>
@@ -776,6 +876,7 @@ function FoodCard({
   onAdd,
   onDecrement,
   onOpen,
+  popularRank,
 }: {
   food: MenuFoodItem;
   lang: Lang;
@@ -783,6 +884,7 @@ function FoodCard({
   onAdd: (food: MenuFoodItem) => void;
   onDecrement: (foodItemId: string) => void;
   onOpen: (food: MenuFoodItem) => void;
+  popularRank?: number;
 }) {
   const qty = cartQty;
   const name = tr(food, lang, "name");
@@ -808,11 +910,22 @@ function FoodCard({
           <RatingChip rating={displayRating} />
           {food.reviewCount ? <span className="text-[10px] text-slate-400">({food.reviewCount})</span> : null}
           {food.isBestseller && <BestsellerTag emoji={food.bestsellerEmoji} />}
+          {popularRank && (
+            <span className="inline-flex items-center gap-0.5 rounded-md bg-orange-100 px-1.5 py-0.5 text-[10px] font-bold text-orange-700">
+              <Flame size={11} aria-hidden="true" />
+              Most ordered
+            </span>
+          )}
         </div>
 
         <p className="mt-1 text-[15px] font-semibold leading-snug text-slate-900">{name}</p>
         <p className="mt-0.5 text-sm font-bold text-slate-800">₹{food.price.toFixed(2)}</p>
 
+        {(food.components ?? []).length > 0 && (
+          <p className="mt-1 text-xs font-medium text-orange-700">
+            Combo: {food.components!.map((p) => (p.quantity > 1 ? `${p.quantity}× ${p.name}` : p.name)).join(" + ")}
+          </p>
+        )}
         {description && <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-slate-500">{description}</p>}
         <span className="mt-1 inline-block text-[11px] font-semibold text-orange-600">More details</span>
       </button>

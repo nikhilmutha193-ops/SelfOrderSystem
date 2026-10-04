@@ -7,10 +7,28 @@ import { api, clearStoredToken, extractErrorMessage, setActiveAuth, storeToken }
 
 import "../../styles/order.css";
 
+const MONTHS = [
+  { value: "01", label: "January" },
+  { value: "02", label: "February" },
+  { value: "03", label: "March" },
+  { value: "04", label: "April" },
+  { value: "05", label: "May" },
+  { value: "06", label: "June" },
+  { value: "07", label: "July" },
+  { value: "08", label: "August" },
+  { value: "09", label: "September" },
+  { value: "10", label: "October" },
+  { value: "11", label: "November" },
+  { value: "12", label: "December" },
+];
+
 export default function CustomerDetails() {
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
+  const [marketingConsent, setMarketingConsent] = useState(false);
   const [members, setMembers] = useState(2);
+  const [birthDay, setBirthDay] = useState("");
+  const [birthMonth, setBirthMonth] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [leaving, setLeaving] = useState(false);
@@ -30,6 +48,30 @@ export default function CustomerDetails() {
     else if (!session.tableId) navigate("/order", { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // A returning guest shouldn't have to retype their name/birthday - once the phone number looks
+  // complete, check if we already know this guest and fill in whatever they haven't typed yet.
+  useEffect(() => {
+    if (customerPhone.length !== 10) return;
+    const timer = setTimeout(() => {
+      api
+        .get<{ name: string; birthday: string } | null>("/customers/guest-lookup", { params: { phone: customerPhone } })
+        .then((res) => {
+          const found = res.data;
+          if (!found) return;
+          if (found.name) setCustomerName((prev) => prev || found.name);
+          if (found.birthday) {
+            const [month, day] = found.birthday.split("-");
+            setBirthMonth((prev) => prev || month);
+            setBirthDay((prev) => prev || day);
+          }
+        })
+        .catch(() => {
+          /* best effort - a failed lookup just means the guest types their details as normal */
+        });
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [customerPhone]);
 
   async function backToTableLogin() {
     if (leavingRef.current) return;
@@ -56,6 +98,8 @@ export default function CustomerDetails() {
         customerName,
         customerPhone: phone ? `+91 ${phone}` : "",
         members,
+        ...(birthDay && birthMonth && { customerBirthday: `${birthMonth}-${birthDay}` }),
+        customerMarketingConsent: marketingConsent,
       });
       storeToken("table", started.token);
       setActiveAuth({ role: "table", token: started.token });
@@ -136,10 +180,63 @@ export default function CustomerDetails() {
                     maxLength={10}
                     placeholder="98765 43210"
                     value={customerPhone}
-                    onChange={(e) => setCustomerPhone(e.target.value.replace(/[^\d]/g, ""))}
+                    onChange={(e) => {
+                      const next = e.target.value.replace(/[^\d]/g, "");
+                      setCustomerPhone(next);
+                      if (!next) setMarketingConsent(false);
+                    }}
                   />
                 </div>
                 <p className="field__hint">We'll only use this to reach you about your order.</p>
+                <label
+                  className={`mt-2 flex items-start gap-2 text-sm ${customerPhone ? "text-slate-600" : "text-slate-400"}`}
+                >
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 h-4 w-4 shrink-0"
+                    checked={marketingConsent}
+                    disabled={!customerPhone}
+                    onChange={(e) => setMarketingConsent(e.target.checked)}
+                  />
+                  Agreed to receive new offers and marketing messages on this number
+                </label>
+              </div>
+
+              <div className="field">
+                <span className="field__label">
+                  Date of birth <span className="field__optional">(optional)</span>
+                </span>
+                <div className="flex gap-2">
+                  <select
+                    className="field__input"
+                    id="birth-day"
+                    aria-label="Day"
+                    value={birthDay}
+                    onChange={(e) => setBirthDay(e.target.value)}
+                  >
+                    <option value="">Day</option>
+                    {Array.from({ length: 31 }, (_, i) => String(i + 1).padStart(2, "0")).map((day) => (
+                      <option key={day} value={day}>
+                        {Number(day)}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    className="field__input"
+                    id="birth-month"
+                    aria-label="Month"
+                    value={birthMonth}
+                    onChange={(e) => setBirthMonth(e.target.value)}
+                  >
+                    <option value="">Month</option>
+                    {MONTHS.map((m) => (
+                      <option key={m.value} value={m.value}>
+                        {m.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <p className="field__hint">Tell us and we'll send you a birthday treat.</p>
               </div>
 
               <div className="field">

@@ -7,15 +7,16 @@ import { describeError, logger } from "./logger";
  * Silently no-ops (with a log line) when FAST2SMS_API_KEY isn't configured, so callers never need
  * to check whether SMS is turned on, and never throws, so a failed or unconfigured send never
  * breaks the request that triggered it - same "best effort" contract as writeAudit and the event
- * handlers in core/events.ts.
+ * handlers in core/events.ts. Returns whether the message was actually sent, for callers (like a
+ * bulk campaign) that want to report how many of N recipients were reached.
  */
-export async function sendSms(phone: string, message: string): Promise<void> {
+export async function sendSms(phone: string, message: string): Promise<boolean> {
   const apiKey = process.env.FAST2SMS_API_KEY;
   if (!apiKey) {
     // "info", not "debug" - production runs at "info" by default, and a silent skip here looks
     // identical to a silent success unless this is visible in the normal log output.
     logger.info("sms not sent - FAST2SMS_API_KEY is not configured");
-    return;
+    return false;
   }
   const numbers = phone.length === 12 && phone.startsWith("91") ? phone.slice(2) : phone;
   try {
@@ -27,10 +28,12 @@ export async function sendSms(phone: string, message: string): Promise<void> {
     const body = (await res.json().catch(() => null)) as { return?: boolean } | null;
     if (!res.ok || body?.return === false) {
       logger.error("sms send failed", { numbers, status: res.status, body });
-    } else {
-      logger.info("sms sent", { numbers });
+      return false;
     }
+    logger.info("sms sent", { numbers });
+    return true;
   } catch (err) {
     logger.error("sms send threw", describeError(err));
+    return false;
   }
 }

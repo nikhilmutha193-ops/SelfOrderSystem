@@ -31,6 +31,7 @@ import {
   startDineInOrder,
   startTakeawayOrder,
   transferOrder,
+  updateOrderCustomer,
   voidBill,
 } from "./orders.controller";
 
@@ -56,6 +57,7 @@ router.post("/:orderId/reopen", requireAuth("admin"), requireModule("orders"), r
 router.post("/:orderId/void", requireAuth("admin"), requireModule("orders"), voidBill);
 router.patch("/:orderId/pay", requireAuth("admin"), requireModule("orders"), payOrder);
 router.patch("/:orderId/cancel", requireAuth("admin"), requireModule("orders"), cancelOrder);
+router.patch("/:orderId/customer", requireAuth("table", "admin"), requireModule("orders"), updateOrderCustomer);
 
 router.post("/:orderId/split", requireAuth("admin"), requireModule("orders"), splitOrder);
 router.post("/:orderId/merge", requireAuth("admin"), requireModule("orders"), mergeOrder);

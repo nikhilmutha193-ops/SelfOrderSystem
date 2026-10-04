@@ -7,6 +7,7 @@ import { extractErrorMessage } from "../../../shared/api/client";
 import { Dialog } from "../../../shared/ui/Dialog";
 import { Button, ErrorText, Field, IconButton, Input } from "../../../shared/ui/ui";
 import UpiQr from "../../../shared/ui/UpiQr";
+import { useOrderCustomer } from "../../customers/queries";
 import { useSettleOrder } from "../queries";
 
 interface Line {
@@ -46,10 +47,15 @@ function SettleForm({ orderId, total, invoiceNumber, upi, onClose }: SettleDialo
   const [splitCount, setSplitCount] = useState("2");
   const [error, setError] = useState<string | null>(null);
   const settle = useSettleOrder();
+  const orderCustomer = useOrderCustomer(orderId).data;
 
   const paid = lines.reduce((sum, l) => sum + toNumber(l.amount), 0);
   const remaining = Math.round((total - paid) * 100) / 100;
   const upiAmount = lines.filter((l) => l.method === "upi").reduce((sum, l) => sum + toNumber(l.amount), 0);
+  const creditAmount = lines.filter((l) => l.method === "credit").reduce((sum, l) => sum + toNumber(l.amount), 0);
+  const creditGuest = orderCustomer?.customer ?? null;
+  const creditInfo = orderCustomer?.credit ?? null;
+  const creditRoom = creditInfo?.creditLimit != null ? Math.max(0, creditInfo.creditLimit - creditInfo.balance) : null;
 
   function update(index: number, patch: Partial<Line>) {
     setLines((prev) => prev.map((line, i) => (i === index ? { ...line, ...patch } : line)));
@@ -58,7 +64,12 @@ function SettleForm({ orderId, total, invoiceNumber, upi, onClose }: SettleDialo
   function addLine() {
     setLines((prev) => [
       ...prev,
-      { method: "upi", amount: money(Math.max(remaining, 0)), reference: "", tendered: "" },
+      {
+        method: "upi",
+        amount: money(Math.max(remaining, 0)),
+        reference: "",
+        tendered: "",
+      },
     ]);
   }
 
@@ -263,6 +274,26 @@ function SettleForm({ orderId, total, invoiceNumber, upi, onClose }: SettleDialo
               ? `₹${money(remaining)} left to collect`
               : `₹${money(-remaining)} over the bill`}
         </p>
+
+        {creditAmount > 0 &&
+          (creditGuest ? (
+            <p
+              className={`rounded-lg px-3 py-2 text-sm ${
+                creditRoom !== null && creditAmount > creditRoom + 0.001
+                  ? "bg-red-50 text-red-700"
+                  : "bg-blue-50 text-blue-900"
+              }`}
+              data-testid="credit-hint"
+            >
+              ₹{money(creditAmount)} goes on {creditGuest.name || "the guest"}'s account
+              {creditInfo && creditInfo.balance > 0 && `, who already owes ₹${money(creditInfo.balance)}`}.
+              {creditRoom !== null && ` Their limit leaves room for ₹${money(creditRoom)}.`}
+            </p>
+          ) : (
+            <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900" data-testid="credit-hint">
+              Attach the guest's phone number to this order before putting the bill on their account.
+            </p>
+          ))}
 
         {upi?.upiVpa && upiAmount > 0 && (
           <UpiQr vpa={upi.upiVpa} payee={upi.upiPayeeName} amount={upiAmount} note={invoiceNumber ?? "Bill"} />

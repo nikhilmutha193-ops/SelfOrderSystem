@@ -4,6 +4,7 @@ import Admin from "../../models/Admin";
 import Category from "../../models/Category";
 import ChatMessage from "../../models/ChatMessage";
 import Coupon from "../../models/Coupon";
+import CouponRedemption from "../../models/CouponRedemption";
 import FoodItem from "../../models/FoodItem";
 import Order, { IOrder } from "../../models/Order";
 import OrderItem, { IOrderItem } from "../../models/OrderItem";
@@ -143,6 +144,12 @@ export class OrdersRepository {
     return FoodItem.find(this.scoped({ _id: { $in: foodItemIds }, isActive: true }));
   }
 
+  findFoodNames(foodItemIds: Types.ObjectId[]) {
+    return FoodItem.find(this.scoped({ _id: { $in: foodItemIds } }))
+      .select("name")
+      .lean();
+  }
+
   findCategoryStations(categoryIds: Types.ObjectId[]) {
     return Category.find(this.scoped({ _id: { $in: categoryIds } }))
       .select("defaultStationId")
@@ -204,5 +211,21 @@ export class OrdersRepository {
 
   releaseCouponUse(code: string, session?: ClientSession) {
     return Coupon.updateOne(this.scoped({ code, usedCount: { $gt: 0 } }), { $inc: { usedCount: -1 } }, { session });
+  }
+
+  countCouponRedemptionsByPhone(couponId: Types.ObjectId, phone: string) {
+    return CouponRedemption.countDocuments(this.scoped({ couponId, phone }));
+  }
+
+  /** No-ops quietly if phone is empty - nothing meaningful to track per-customer without one. */
+  recordCouponRedemption(couponId: Types.ObjectId, orderId: Types.ObjectId, phone: string, session: ClientSession) {
+    if (!phone) return Promise.resolve();
+    return CouponRedemption.create([{ restaurantId: this.restaurantId, couponId, orderId, phone }], { session }).then(
+      () => undefined
+    );
+  }
+
+  releaseCouponRedemption(orderId: Types.ObjectId, session?: ClientSession) {
+    return CouponRedemption.deleteOne(this.scoped({ orderId }), { session });
   }
 }

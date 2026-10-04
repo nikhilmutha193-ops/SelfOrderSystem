@@ -130,6 +130,11 @@ export default function DishDialog({
 
           <h2 className="mt-2 text-lg font-bold leading-snug text-slate-900">{name}</h2>
           <p className="mt-1 text-base font-bold text-slate-800">₹{food.price.toFixed(2)}</p>
+          {(food.components ?? []).length > 0 && (
+            <p className="mt-2 rounded-lg bg-orange-50 px-3 py-2 text-sm font-medium text-orange-800">
+              Includes {food.components!.map((p) => (p.quantity > 1 ? `${p.quantity}× ${p.name}` : p.name)).join(", ")}
+            </p>
+          )}
           {description ? (
             <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-slate-600">{description}</p>
           ) : null}

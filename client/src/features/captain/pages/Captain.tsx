@@ -6,6 +6,8 @@ import { can, useAdmin } from "../../../lib/adminAuth";
 import type { ChatConversation, KotQueueGroup, PosMenu, PosMenuItem, PosTable } from "../../../lib/types";
 import { extractErrorMessage } from "../../../shared/api/client";
 import { POLL } from "../../../shared/api/queryClient";
+import { useStaffTheme } from "../../../shared/theme";
+import { ThemeToggleButton } from "../../../shared/ui/ThemeToggle";
 import { useConversations } from "../../chat/queries";
 import { useKotQueue } from "../../kitchen/queries";
 import { ordersApi } from "../../orders/api";
@@ -14,7 +16,7 @@ import { MenuGrid } from "../../pos/components/MenuGrid";
 import { OrderPanel } from "../../pos/components/OrderPanel";
 import { TableMap } from "../../pos/components/TableMap";
 import { usePosFloor, usePosMenu } from "../../pos/queries";
-import { filterMenu, hasOptions, usePosCart } from "../../pos/usePosCart";
+import { filterMenu, hasOptions, pricedMenu, usePosCart } from "../../pos/usePosCart";
 import { usePrintingStatus } from "../../printing/queries";
 import { ReadyList } from "../components/ReadyList";
 import { RequestFeed } from "../components/RequestFeed";
@@ -81,10 +83,12 @@ function TabButton({
 }
 
 export default function Captain() {
+  useStaffTheme();
   useCaptainManifest();
   const { profile } = useAdmin();
-  const menu = usePosMenu().data ?? NO_MENU;
-  const tables = usePosFloor().data?.tables ?? NO_TABLES;
+  const rawMenu = usePosMenu().data ?? NO_MENU;
+  const floor = usePosFloor().data;
+  const tables = floor?.tables ?? NO_TABLES;
   const printing = usePrintingStatus().data;
   const canKitchen = can(profile, "kot");
   const canMessages = can(profile, "messages");
@@ -104,7 +108,10 @@ export default function Captain() {
   const [category, setCategory] = useState("all");
   const [dishFor, setDishFor] = useState<PosMenuItem | null>(null);
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
+  const [message, setMessage] = useState<{
+    tone: "ok" | "error";
+    text: string;
+  } | null>(null);
 
   const hasAssigned = tables.some((t) => t.captainId === profile?.id);
   const myTables = hasAssigned && mineOnly ? tables.filter((t) => t.captainId === profile?.id) : tables;
@@ -113,6 +120,8 @@ export default function Captain() {
   const readyCount = myGroups.reduce((sum, g) => sum + g.items.filter((i) => i.status === "ready").length, 0);
   const unread = conversations.reduce((sum, c) => sum + c.unreadCount, 0);
   const table = tables.find((t) => t._id === tableId) ?? null;
+  const areaId = table?.areaId ?? null;
+  const menu = useMemo(() => pricedMenu(rawMenu, { orderType: "dine-in", areaId }), [rawMenu, areaId]);
   const items = useMemo(() => filterMenu(menu, search, category), [menu, search, category]);
   const draftCount = cart.draft.reduce((sum, l) => sum + l.quantity, 0);
   const draftTotal = cart.draft.reduce((sum, l) => sum + draftUnitPrice(l) * l.quantity, 0);
@@ -155,13 +164,20 @@ export default function Captain() {
     }
   }
 
-  const target = () => ({ orderType: "dine-in" as const, tableId: tableId ?? undefined, members: guests });
+  const target = () => ({
+    orderType: "dine-in" as const,
+    tableId: tableId ?? undefined,
+    members: guests,
+  });
 
   function sendKot() {
     const code = table?.code;
     void run(async () => {
       const { kot } = await cart.save(true, target());
-      setMessage({ tone: "ok", text: kot ? `Table ${code}: KOT T${kot.tokenNumber ?? ""} sent` : "Order saved" });
+      setMessage({
+        tone: "ok",
+        text: kot ? `Table ${code}: KOT T${kot.tokenNumber ?? ""} sent` : "Order saved",
+      });
       backToTables();
     });
   }
@@ -213,6 +229,7 @@ export default function Captain() {
             {mineOnly ? "My tables" : "All tables"}
           </button>
         )}
+        <ThemeToggleButton />
       </header>
 
       {message && (
@@ -227,7 +244,7 @@ export default function Captain() {
       )}
 
       <main className="min-h-0 flex-1 overflow-y-auto">
-        {tab === "tables" && !tableId && <TableMap tables={myTables} onSelect={openTable} />}
+        {tab === "tables" && !tableId && <TableMap tables={myTables} areas={floor?.areas} onSelect={openTable} />}
         {tab === "tables" && tableId && (
           <div className="flex h-full flex-col">
             <div className="shrink-0 bg-white px-3 pt-2">

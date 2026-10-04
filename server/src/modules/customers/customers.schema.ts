@@ -62,5 +62,38 @@ export const loyaltySettingsSchema = z.object({
   expiryDays: z.number().int().min(0, { error: "Expiry can't be negative" }),
 });
 
+export const birthdaySmsSettingsSchema = z.object({
+  enabled: z.boolean(),
+  template: z
+    .string({ error: "Write a message template" })
+    .trim()
+    .min(1, { error: "Write a message template" })
+    .max(300, { error: "Keep the template under 300 characters" }),
+});
+
+export const smsTemplateSchema = z.object({
+  name: z
+    .string({ error: "Name the template" })
+    .trim()
+    .min(1, { error: "Name the template" })
+    .max(60, { error: "Keep the name under 60 characters" }),
+  message: z
+    .string({ error: "Write a message" })
+    .trim()
+    .min(1, { error: "Write a message" })
+    .max(300, { error: "Keep the message under 300 characters" }),
+});
+
+export const sendCampaignSchema = z.object({
+  message: z
+    .string({ error: "Write a message" })
+    .trim()
+    .min(1, { error: "Write a message" })
+    .max(300, { error: "Keep the message under 300 characters" }),
+});
+
 export type UpdateCustomerInput = z.output<typeof updateCustomerSchema>;
 export type LoyaltySettingsInput = z.output<typeof loyaltySettingsSchema>;
+export type BirthdaySmsSettingsInput = z.output<typeof birthdaySmsSettingsSchema>;
+export type SmsTemplateInput = z.output<typeof smsTemplateSchema>;
+export type SendCampaignInput = z.output<typeof sendCampaignSchema>;

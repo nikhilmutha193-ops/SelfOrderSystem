@@ -1,8 +1,9 @@
 import { Check, Eye, EyeOff, ListTree, Pencil, Plus } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import type { Category, Subcategory } from "../../lib/types";
 import { api, extractErrorMessage } from "../../shared/api/client";
+import { usePageTour, type TourStep } from "../../shared/ui/PageTour";
 import {
   Badge,
   Button,
@@ -77,13 +78,30 @@ export default function Subcategories() {
     }
   }
 
+  const tourSteps: TourStep[] = useMemo(
+    () => [
+      {
+        target: "subcategory-form",
+        title: "Add or edit a subcategory",
+        description: "Pick which category it belongs to, then name it - guests see it as a heading inside that category.",
+      },
+      {
+        target: "subcategory-list",
+        title: "All subcategories",
+        description: "Edit one or hide it - hiding a subcategory hides every dish inside it from the menu.",
+      },
+    ],
+    []
+  );
+  usePageTour(tourSteps);
+
   return (
     <Page>
       <PageHeader
         title="Subcategories"
         description="Sections inside a category, like Soups under Starters. Guests see them as headings on the menu."
       />
-      <Card>
+      <Card data-tour="subcategory-form">
         <CardHeader icon={editing ? Pencil : Plus} title={editing ? `Edit “${editing.name}”` : "Add a subcategory"} />
         <form onSubmit={submit} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1.4fr_auto] lg:items-end">
           <Field label="Category" htmlFor="sub-category">
@@ -124,7 +142,7 @@ export default function Subcategories() {
 
       <ErrorText>{error}</ErrorText>
 
-      <Card>
+      <Card data-tour="subcategory-list">
         <CardHeader title="All subcategories" description={`${subcategories.length} in your menu`} className="mb-3" />
         {subcategories.length === 0 ? (
           <EmptyState

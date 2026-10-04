@@ -15,7 +15,7 @@ describe("sendSms", () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
 
-    await sendSms("919845000000", "Hello");
+    await expect(sendSms("919845000000", "Hello")).resolves.toBe(false);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -24,7 +24,7 @@ describe("sendSms", () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ return: true }) });
     vi.stubGlobal("fetch", fetchMock);
 
-    await sendSms("919845000000", "Your table is confirmed");
+    await expect(sendSms("919845000000", "Your table is confirmed")).resolves.toBe(true);
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, options] = fetchMock.mock.calls[0];
@@ -53,12 +53,12 @@ describe("sendSms", () => {
       "fetch",
       vi.fn().mockResolvedValue({ ok: false, status: 500, json: async () => ({ return: false }) })
     );
-    await expect(sendSms("919845000000", "Hi")).resolves.toBeUndefined();
+    await expect(sendSms("919845000000", "Hi")).resolves.toBe(false);
 
     vi.stubGlobal(
       "fetch",
       vi.fn().mockRejectedValue(new Error("network down"))
     );
-    await expect(sendSms("919845000000", "Hi")).resolves.toBeUndefined();
+    await expect(sendSms("919845000000", "Hi")).resolves.toBe(false);
   });
 });

@@ -1,8 +1,10 @@
 import { Plus } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import type { DeliveryProvider } from "../../../lib/types";
 import { extractErrorMessage } from "../../../shared/api/client";
+import { BirthdayFields } from "../../../shared/ui/BirthdayFields";
+import { usePageTour, type TourStep } from "../../../shared/ui/PageTour";
 import { Button, Card, ErrorText, Input, PageHeader, Select } from "../../../shared/ui/ui";
 import { useStartStaffOrder } from "../queries";
 import OrderDetail from "./OrderDetail";
@@ -16,6 +18,8 @@ export default function NewOrder() {
   const [provider, setProvider] = useState<DeliveryProvider>("Swiggy");
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
+  const [birthDay, setBirthDay] = useState("");
+  const [birthMonth, setBirthMonth] = useState("");
   const [members, setMembers] = useState(1);
   const [error, setError] = useState<string | null>(null);
   const startOrder = useStartStaffOrder();
@@ -28,7 +32,12 @@ export default function NewOrder() {
     e.preventDefault();
     setError(null);
     try {
-      const customer = { customerName, customerPhone, members };
+      const customer = {
+        customerName,
+        customerPhone,
+        members,
+        ...(birthDay && birthMonth && { customerBirthday: `${birthMonth}-${birthDay}` }),
+      };
       const order = await startOrder.mutateAsync(
         kind === "delivery" ? { kind, provider, ...customer } : { kind, ...customer }
       );
@@ -38,6 +47,8 @@ export default function NewOrder() {
       // the created one, and "New order" below brings the form back when it's actually needed.
       setCustomerName("");
       setCustomerPhone("");
+      setBirthDay("");
+      setBirthMonth("");
       setMembers(1);
       setKind("dine-in");
       setCollapsed(true);
@@ -50,7 +61,7 @@ export default function NewOrder() {
     <Card>
       <h2 className="mb-4 text-base font-semibold text-slate-900">Start an order</h2>
       <form onSubmit={submit} className="flex flex-col gap-3">
-        <div className="flex gap-2">
+        <div className="flex gap-2" data-tour="neworder-kind">
           {(["dine-in", "takeaway", "delivery"] as OrderKind[]).map((k) => (
             <button
               key={k}
@@ -86,7 +97,7 @@ export default function NewOrder() {
             : "Taken at the counter, so no table is assigned. Create the order, then add items on the right."}
         </p>
 
-        <label className="text-sm font-medium text-slate-700">
+        <label className="text-sm font-medium text-slate-700" data-tour="neworder-customer">
           Customer name
           <Input className="mt-1" value={customerName} onChange={(e) => setCustomerName(e.target.value)} required />
         </label>
@@ -94,6 +105,14 @@ export default function NewOrder() {
           Customer phone <span className="font-normal text-slate-400">(optional)</span>
           <Input className="mt-1" type="tel" value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} />
         </label>
+        <div>
+          <span className="text-sm font-medium text-slate-700">
+            Date of birth <span className="font-normal text-slate-400">(optional)</span>
+          </span>
+          <div className="mt-1">
+            <BirthdayFields day={birthDay} month={birthMonth} onDayChange={setBirthDay} onMonthChange={setBirthMonth} />
+          </div>
+        </div>
         <label className="text-sm font-medium text-slate-700">
           Members / items count
           <Input
@@ -106,15 +125,42 @@ export default function NewOrder() {
         </label>
 
         <ErrorText>{error}</ErrorText>
-        <Button type="submit" disabled={loading}>
+        <Button type="submit" disabled={loading} data-tour="neworder-submit">
           {loading ? "Creating..." : activeOrderId ? "Create another order" : "Create order & add items"}
         </Button>
       </form>
     </Card>
   );
 
+  const tourSteps: TourStep[] = useMemo(
+    () => [
+      {
+        target: "neworder-kind",
+        title: "Order type",
+        description: "Dine-in (no table assigned here), take-away, or a Swiggy/Zomato delivery keyed in by hand.",
+      },
+      {
+        target: "neworder-customer",
+        title: "Customer details",
+        description: "Name, phone, birthday and the member/item count - all optional except name.",
+      },
+      {
+        target: "neworder-submit",
+        title: "Create the order",
+        description: "Creates it and opens its menu on the right so you can add items.",
+      },
+      {
+        target: "neworder-panel",
+        title: "Add items and take payment",
+        description: "Once created, the order's menu, kitchen tickets and billing appear here.",
+      },
+    ],
+    []
+  );
+  usePageTour(tourSteps);
+
   const orderPanel = (
-    <div className="min-w-0">
+    <div className="min-w-0" data-tour="neworder-panel">
       {activeOrderId ? (
         <>
           <p className="mb-3 rounded-xl bg-green-50 px-3 py-2 text-sm font-medium text-green-800">

@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { useCanEdit } from "../../lib/adminAuth";
 import type { LandingContent } from "../../lib/types";
 import { api, extractErrorMessage, uploadImage } from "../../shared/api/client";
+import { usePageTour, type TourStep } from "../../shared/ui/PageTour";
 import { Button, Card, ErrorText, Input, PageHeader, Textarea } from "../../shared/ui/ui";
 
 type Section = keyof LandingContent;
@@ -207,6 +208,47 @@ export default function LandingPageEditor() {
   const [saving, setSaving] = useState(false);
   const canEdit = useCanEdit("landing");
 
+  const tourSteps: TourStep[] = useMemo(
+    () => [
+      { target: "landing-hero", title: "Hero banner", description: "The main banner slides at the top of the page." },
+      {
+        target: "landing-serve",
+        title: "What We Serve",
+        description: "The cuisine/category highlights band under the hero.",
+      },
+      {
+        target: "landing-menu",
+        title: "Menu highlights",
+        description: "Shows dishes marked Bestseller under Food Items, with the wording you set here.",
+      },
+      {
+        target: "landing-today-special",
+        title: "Today's Specials",
+        description: "Shows dishes marked Today's Special under Food Items, grouped by category.",
+      },
+      { target: "landing-story", title: "Our Story", description: "Your restaurant's story section." },
+      { target: "landing-outlets", title: "Outlets", description: "Your locations, each with an address and map link." },
+      { target: "landing-reels", title: "Reels", description: "Embedded Instagram/video reels." },
+      {
+        target: "landing-cta",
+        title: "Call-to-action band",
+        description: "A banner inviting guests to order, book or follow you.",
+      },
+      { target: "landing-footer", title: "Footer", description: "Tagline and contact/social links shown in the footer." },
+      ...(canEdit
+        ? [
+            {
+              target: "landing-save",
+              title: "Save",
+              description: "Nothing here goes live until you save.",
+            },
+          ]
+        : []),
+    ],
+    [canEdit]
+  );
+  usePageTour(tourSteps);
+
   useEffect(() => {
     api
       .get<LandingContent>("/restaurant/landing-content")
@@ -237,7 +279,7 @@ export default function LandingPageEditor() {
   if (error && !content) return <ErrorText>{error}</ErrorText>;
   if (!content) return <p className="text-sm text-slate-500">Loading...</p>;
 
-  const { hero, serve, menu, story, outlets, reels, partnership, footer } = content;
+  const { hero, serve, menu, todaySpecial, story, outlets, reels, partnership, footer } = content;
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 sm:gap-6">
@@ -255,7 +297,7 @@ export default function LandingPageEditor() {
       {message && <p className="text-sm font-medium text-emerald-700">{message}</p>}
 
       <div className="gap-6 xl:columns-2 [&>*]:mb-6 [&>*]:break-inside-avoid">
-        <Card>
+        <Card data-tour="landing-hero">
           <h2 className="mb-4 text-base font-semibold text-slate-900">Hero banner</h2>
           <p className="mb-3 text-xs text-slate-500">
             Add a portrait version of each banner for phones - a wide image has to be cropped to fill a tall screen.
@@ -410,7 +452,7 @@ export default function LandingPageEditor() {
           </div>
         </Card>
 
-        <Card>
+        <Card data-tour="landing-serve">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-base font-semibold text-slate-900">What We Serve</h2>
             <Toggle label="Show" value={serve.enabled} onChange={(v) => patch("serve", { enabled: v })} />
@@ -460,7 +502,7 @@ export default function LandingPageEditor() {
           </div>
         </Card>
 
-        <Card>
+        <Card data-tour="landing-menu">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-base font-semibold text-slate-900">Menu highlights</h2>
             <Toggle label="Show" value={menu.enabled} onChange={(v) => patch("menu", { enabled: v })} />
@@ -476,7 +518,23 @@ export default function LandingPageEditor() {
           </div>
         </Card>
 
-        <Card>
+        <Card data-tour="landing-today-special">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-base font-semibold text-slate-900">Today's Specials</h2>
+            <Toggle label="Show" value={todaySpecial.enabled} onChange={(v) => patch("todaySpecial", { enabled: v })} />
+          </div>
+          <p className="mb-3 text-xs text-slate-500">
+            The dishes listed here are the ones marked <strong>Today's Special</strong> under Food Items, grouped by
+            their menu category.
+          </p>
+          <div className="flex flex-col gap-3">
+            <Field label="Eyebrow" value={todaySpecial.eyebrow} onChange={(v) => patch("todaySpecial", { eyebrow: v })} />
+            <Field label="Title" value={todaySpecial.title} onChange={(v) => patch("todaySpecial", { title: v })} />
+            <Field label="Intro" multiline value={todaySpecial.lead} onChange={(v) => patch("todaySpecial", { lead: v })} />
+          </div>
+        </Card>
+
+        <Card data-tour="landing-story">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-base font-semibold text-slate-900">Our Story</h2>
             <Toggle label="Show" value={story.enabled} onChange={(v) => patch("story", { enabled: v })} />
@@ -501,7 +559,7 @@ export default function LandingPageEditor() {
           </div>
         </Card>
 
-        <Card>
+        <Card data-tour="landing-outlets">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-base font-semibold text-slate-900">Outlets</h2>
             <Toggle label="Show" value={outlets.enabled} onChange={(v) => patch("outlets", { enabled: v })} />
@@ -556,7 +614,7 @@ export default function LandingPageEditor() {
           </div>
         </Card>
 
-        <Card>
+        <Card data-tour="landing-reels">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-base font-semibold text-slate-900">Reels</h2>
             <Toggle label="Show" value={reels.enabled} onChange={(v) => patch("reels", { enabled: v })} />
@@ -606,7 +664,7 @@ export default function LandingPageEditor() {
           </div>
         </Card>
 
-        <Card>
+        <Card data-tour="landing-cta">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-base font-semibold text-slate-900">Call-to-action band</h2>
             <Toggle label="Show" value={partnership.enabled} onChange={(v) => patch("partnership", { enabled: v })} />
@@ -635,7 +693,7 @@ export default function LandingPageEditor() {
           </div>
         </Card>
 
-        <Card>
+        <Card data-tour="landing-footer">
           <h2 className="mb-4 text-base font-semibold text-slate-900">Footer</h2>
           <div className="flex flex-col gap-3">
             <Field label="Tagline" multiline value={footer.tagline} onChange={(v) => patch("footer", { tagline: v })} />
@@ -701,7 +759,10 @@ export default function LandingPageEditor() {
       </div>
 
       {canEdit && (
-        <div className="sticky bottom-0 -mx-3 border-t border-slate-200 bg-white/95 px-3 py-3 backdrop-blur sm:mx-0">
+        <div
+          className="sticky bottom-0 -mx-3 border-t border-slate-200 bg-white/95 px-3 py-3 backdrop-blur sm:mx-0"
+          data-tour="landing-save"
+        >
           <Button onClick={save} disabled={saving} className="w-full sm:w-auto">
             {saving ? "Saving..." : "Save landing page"}
           </Button>

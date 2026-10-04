@@ -1,7 +1,14 @@
 import Coupon, { ICoupon } from "../models/Coupon";
+import CouponRedemption from "../models/CouponRedemption";
 import { HttpError } from "./httpError";
+import { normalizePhone } from "./phone";
 
-export async function findValidCoupon(restaurantId: string, code: string, subtotal: number): Promise<ICoupon> {
+export async function findValidCoupon(
+  restaurantId: string,
+  code: string,
+  subtotal: number,
+  customerPhone?: string
+): Promise<ICoupon> {
   const normalized = code.trim().toUpperCase();
   if (!normalized) throw new HttpError(400, "A coupon code is required");
 
@@ -16,6 +23,16 @@ export async function findValidCoupon(restaurantId: string, code: string, subtot
   }
   if (subtotal < coupon.minOrderValue) {
     throw new HttpError(400, `This coupon requires a minimum order of ${coupon.minOrderValue.toFixed(2)}`);
+  }
+  const phone = normalizePhone(customerPhone);
+  if (!phone) {
+    throw new HttpError(400, "Add a mobile number to this order before applying this coupon");
+  }
+  if (coupon.perCustomerLimit !== undefined && coupon.perCustomerLimit !== null) {
+    const used = await CouponRedemption.countDocuments({ restaurantId, couponId: coupon._id, phone });
+    if (used >= coupon.perCustomerLimit) {
+      throw new HttpError(400, "This mobile number has already used this coupon the maximum number of times");
+    }
   }
   return coupon;
 }

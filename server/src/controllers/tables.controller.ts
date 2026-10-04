@@ -4,6 +4,7 @@ import { Types } from "mongoose";
 import { asyncHandler } from "../middleware/errorHandler";
 import Admin from "../models/Admin";
 import Order from "../models/Order";
+import Restaurant from "../models/Restaurant";
 import TableModel from "../models/Table";
 import { HttpError } from "../utils/httpError";
 import { hashPassword } from "../utils/password";
@@ -53,6 +54,21 @@ export const setTableCaptain = asyncHandler(async (req: Request, res: Response) 
   ).select("-passwordHash");
   if (!table) throw new HttpError(404, "Table not found");
   res.json(table);
+});
+
+export const getTableLoginSettings = asyncHandler(async (req: Request, res: Response) => {
+  const restaurant = await Restaurant.findById(req.restaurantId).select("tableLoginSettings");
+  if (!restaurant) throw new HttpError(404, "Restaurant not found");
+  res.json(restaurant.tableLoginSettings);
+});
+
+export const updateTableLoginSettings = asyncHandler(async (req: Request, res: Response) => {
+  const { allowQrScan } = req.body as { allowQrScan?: boolean };
+  const restaurant = await Restaurant.findById(req.restaurantId);
+  if (!restaurant) throw new HttpError(404, "Restaurant not found");
+  if (allowQrScan !== undefined) restaurant.tableLoginSettings.allowQrScan = !!allowQrScan;
+  await restaurant.save();
+  res.json(restaurant.tableLoginSettings);
 });
 
 export const listAvailableTables = asyncHandler(async (req: Request, res: Response) => {

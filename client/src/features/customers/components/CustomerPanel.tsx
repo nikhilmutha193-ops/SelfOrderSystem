@@ -64,6 +64,7 @@ export function CustomerPanel({
   const customer = data?.customer ?? null;
   const loyalty = data?.loyalty;
   const redeemed = data?.redeem ?? null;
+  const due = data?.credit?.balance ?? 0;
   const isOpen = order.status === "open";
   const billed = !!order.invoiceNumber && (order.status === "billed" || order.status === "closed");
 
@@ -104,6 +105,11 @@ export function CustomerPanel({
                 </>
               )}
             </p>
+            {due > 0 && (
+              <p className="mt-1 text-xs font-semibold text-red-700" data-testid="customer-due">
+                ₹{due.toFixed(2)} due on their account
+              </p>
+            )}
           </div>
           {canAttach && !redeemed && (
             <Button type="button" size="sm" variant="ghost" onClick={() => setChanging(true)}>
@@ -117,7 +123,12 @@ export function CustomerPanel({
           onSubmit={(e) => {
             e.preventDefault();
             void run(
-              () => attach.mutateAsync({ orderId: order._id, phone, name: name.trim() || undefined }),
+              () =>
+                attach.mutateAsync({
+                  orderId: order._id,
+                  phone,
+                  name: name.trim() || undefined,
+                }),
               () => {
                 setPhone("");
                 setName("");
@@ -182,7 +193,11 @@ export function CustomerPanel({
               onSubmit={(e) => {
                 e.preventDefault();
                 void run(
-                  () => redeem.mutateAsync({ orderId: order._id, points: Number(points) }),
+                  () =>
+                    redeem.mutateAsync({
+                      orderId: order._id,
+                      points: Number(points),
+                    }),
                   () => setPoints("")
                 );
               }}

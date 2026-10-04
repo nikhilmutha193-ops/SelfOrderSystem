@@ -1,7 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import type { Award } from "../../lib/types";
 import { api, extractErrorMessage, uploadImage } from "../../shared/api/client";
+import { confirmDialog } from "../../shared/ui/confirm";
+import { usePageTour, type TourStep } from "../../shared/ui/PageTour";
 import { Badge, Button, Card, ErrorText, Input, PageHeader, Textarea } from "../../shared/ui/ui";
 
 export default function Awards() {
@@ -95,7 +97,14 @@ export default function Awards() {
   }
 
   async function remove(award: Award) {
-    if (!confirm(`Remove award "${award.title}"?`)) return;
+    if (
+      !(await confirmDialog({
+        title: "Remove this award?",
+        message: `${award.title} disappears from your landing page.`,
+        confirmLabel: "Remove award",
+      }))
+    )
+      return;
     try {
       await api.delete(`/awards/${award._id}`);
       load();
@@ -104,6 +113,23 @@ export default function Awards() {
     }
   }
 
+  const tourSteps: TourStep[] = useMemo(
+    () => [
+      {
+        target: "award-form",
+        title: "Add an award",
+        description: "Title, who issued it, the year and an optional badge image or logo.",
+      },
+      {
+        target: "award-list",
+        title: "All awards",
+        description: "These show on the public landing page in sort order. Hide one, edit it, or remove it.",
+      },
+    ],
+    []
+  );
+  usePageTour(tourSteps);
+
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 sm:gap-6">
       <PageHeader
@@ -111,7 +137,7 @@ export default function Awards() {
         description={<>These appear in the "Awards & Recognition" section of your public landing page.</>}
       />
 
-      <Card>
+      <Card data-tour="award-form">
         <form onSubmit={submit} className="flex flex-col gap-4">
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <label className="flex flex-col text-sm font-medium text-slate-700">
@@ -191,7 +217,7 @@ export default function Awards() {
 
       <ErrorText>{error}</ErrorText>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3" data-tour="award-list">
         {awards.map((award) => (
           <Card key={award._id} className="flex flex-col gap-3">
             <div className="flex items-center gap-3">

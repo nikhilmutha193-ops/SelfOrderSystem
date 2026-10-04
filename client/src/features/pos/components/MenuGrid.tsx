@@ -66,6 +66,11 @@ export function MenuGrid({
                   {item.shortCode && <span className="font-mono text-slate-400">{item.shortCode}</span>}
                 </span>
                 {item.modifierGroups.length > 0 && <span className="text-[10px] text-orange-600">Options</span>}
+                {(item.components ?? []).length > 0 && (
+                  <span className="truncate text-[10px] text-slate-500">
+                    Combo: {item.components!.map((p) => p.name).join(", ")}
+                  </span>
+                )}
               </button>
             ))}
           </div>

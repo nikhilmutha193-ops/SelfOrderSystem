@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import QrScanner from "qr-scanner";
 
 import { todayIst } from "../../lib/istDate";
-import type { BookingAvailabilitySlot, BookingSettings, TableRow } from "../../lib/types";
+import type { BookingAvailabilitySlot, BookingSettings, TableLoginSettings, TableRow } from "../../lib/types";
 import { useTableSession } from "../../lib/useTableSession";
 import {
   activateStoredAuth,
@@ -81,11 +81,16 @@ export default function TableLogin() {
   const [bkError, setBkError] = useState<string | null>(null);
   const [bkSubmitting, setBkSubmitting] = useState(false);
   const [bkDone, setBkDone] = useState(false);
+  // Defaults to true so the button doesn't flash away then back while this loads.
+  const [allowQrScan, setAllowQrScan] = useState(true);
 
   useEffect(() => {
     api
-      .get<{ name?: string; logoUrl?: string }>("/restaurant/public")
-      .then((res) => setBrand({ name: res.data.name || "Benne Kaffi", logoUrl: res.data.logoUrl || "" }))
+      .get<{ name?: string; logoUrl?: string; tableLoginSettings?: TableLoginSettings }>("/restaurant/public")
+      .then((res) => {
+        setBrand({ name: res.data.name || "Benne Kaffi", logoUrl: res.data.logoUrl || "" });
+        setAllowQrScan(res.data.tableLoginSettings?.allowQrScan ?? true);
+      })
       .catch(() => {});
   }, []);
 
@@ -402,7 +407,7 @@ export default function TableLogin() {
 
               {!qrToken && !needsOrderChoice && (
                 <>
-                  {cameraAvailable && (
+                  {allowQrScan && cameraAvailable && (
                     <>
                       <button type="button" className="btn btn--primary btn--lg btn--block" onClick={openScanner}>
                         <svg
@@ -423,7 +428,7 @@ export default function TableLogin() {
                       <p className="field__divider">or enter your table code and PIN</p>
                     </>
                   )}
-                  {insecureContext && (
+                  {allowQrScan && insecureContext && (
                     <p className="order-note order-note--warn">
                       Camera scanning needs a secure (https) connection, so it isn't available here - enter your
                       table code and PIN below instead.

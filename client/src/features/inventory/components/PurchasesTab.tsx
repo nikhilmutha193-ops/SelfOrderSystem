@@ -2,6 +2,8 @@ import { useState } from "react";
 
 import type { StockItem, Vendor } from "../../../lib/types";
 import { extractErrorMessage } from "../../../shared/api/client";
+import { DATE, MONEY, sheet } from "../../../shared/export/excel";
+import { ExcelButton } from "../../../shared/ui/ExcelButton";
 import { Button, Card, ErrorText, Input, Select, TableWrap } from "../../../shared/ui/ui";
 import { daysAgo, isoDate, rupees } from "../format";
 import { useCreatePurchase, useCreateVendor, usePurchases, useStockItems, useVendors } from "../queries";
@@ -91,7 +93,11 @@ export function PurchasesTab({ canEdit }: { canEdit: boolean }) {
         purchasedOn,
         lines: lines
           .filter((l) => l.stockItemId)
-          .map((l) => ({ stockItemId: l.stockItemId, quantity: Number(l.quantity), unitPrice: Number(l.unitPrice) })),
+          .map((l) => ({
+            stockItemId: l.stockItemId,
+            quantity: Number(l.quantity),
+            unitPrice: Number(l.unitPrice),
+          })),
       });
       setSaved(`Purchase saved: ${rupees(created.total)}`);
       setLines([{ stockItemId: "", quantity: "", unitPrice: "" }]);
@@ -235,7 +241,58 @@ export function PurchasesTab({ canEdit }: { canEdit: boolean }) {
       <Card>
         <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
           <h2 className="text-base font-semibold text-slate-900">Purchase register</h2>
-          <div className="flex items-end gap-2">
+          <div className="flex flex-wrap items-end gap-2">
+            <ExcelButton
+              fileName={`purchases-${from}-to-${to}`}
+              disabled={!register.data?.purchases.length}
+              sheets={() => [
+                sheet({
+                  name: "Purchases",
+                  rows: (register.data?.purchases ?? []).flatMap((p) => p.lines.map((line) => ({ p, line }))),
+                  columns: [
+                    {
+                      header: "Date",
+                      value: ({ p }) => new Date(p.purchasedAt),
+                      format: DATE,
+                      width: 12,
+                    },
+                    {
+                      header: "Vendor",
+                      value: ({ p }) => p.vendorName,
+                      width: 22,
+                    },
+                    {
+                      header: "Invoice",
+                      value: ({ p }) => p.invoiceRef,
+                      width: 16,
+                    },
+                    {
+                      header: "Item",
+                      value: ({ line }) => line.name,
+                      width: 24,
+                    },
+                    { header: "Quantity", value: ({ line }) => line.quantity },
+                    { header: "Unit", value: ({ line }) => line.purchaseUnit },
+                    {
+                      header: "Rate",
+                      value: ({ line }) => line.unitPrice,
+                      format: MONEY,
+                    },
+                    {
+                      header: "Amount",
+                      value: ({ line }) => line.amount,
+                      format: MONEY,
+                    },
+                    {
+                      header: "Bill total",
+                      value: ({ p }) => p.total,
+                      format: MONEY,
+                      width: 12,
+                    },
+                  ],
+                }),
+              ]}
+            />
             <Input
               aria-label="From"
               type="date"

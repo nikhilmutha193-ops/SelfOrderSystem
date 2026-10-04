@@ -5,10 +5,10 @@ export type OrderStatus = "open" | "billed" | "closed" | "cancelled";
 
 export const ORDER_STATUSES: OrderStatus[] = ["open", "billed", "closed", "cancelled"];
 export type OrderSource = "guest" | "counter" | "swiggy" | "zomato";
-export type PaymentMethod = "pending" | "cash" | "upi" | "card" | "online" | "wallet" | "split";
-export type TenderMethod = "cash" | "upi" | "card" | "online" | "wallet";
+export type PaymentMethod = "pending" | "cash" | "upi" | "card" | "online" | "wallet" | "credit" | "split";
+export type TenderMethod = "cash" | "upi" | "card" | "online" | "wallet" | "credit";
 
-export const TENDER_METHODS: TenderMethod[] = ["cash", "upi", "card", "online", "wallet"];
+export const TENDER_METHODS: TenderMethod[] = ["cash", "upi", "card", "online", "wallet", "credit"];
 
 export interface IPayment {
   method: TenderMethod;
@@ -44,6 +44,7 @@ export interface IBillSnapshot {
   discount: number;
   serviceChargePercent?: number;
   serviceCharge?: number;
+  packagingCharge?: number;
   couponCode?: string;
   taxableAmount: number;
   taxLines: IBillTaxLine[];
@@ -62,6 +63,13 @@ export interface IOrder {
   deliveryProvider?: DeliveryProvider;
   customerName: string;
   customerPhone?: string;
+  /** "MM-DD", from the dine-in sign-in form. Kept on the order even with no phone yet, since a
+   *  Customer record (where birthday normally lives) needs a phone to exist at all - this is the
+   *  only place the birthday survives until one is added. See customers.service.ts's linkOrder. */
+  customerBirthday?: string;
+  /** Guest opted in to offers/marketing SMS at sign-in. Kept here the same way as
+   *  customerBirthday, so it survives until a phone exists to carry it over to a Customer. */
+  customerMarketingConsent?: boolean;
   members: number;
   checkinTime: Date;
   checkoutTime?: Date;
@@ -91,8 +99,18 @@ export interface IOrder {
   serviceChargeWaived?: boolean;
   mergedInto?: Types.ObjectId | null;
   splitFrom?: Types.ObjectId | null;
+  offline?: IOfflineSync | null;
   createdAt: Date;
   updatedAt: Date;
+}
+
+export interface IOfflineSync {
+  clientId: string;
+  createdAt: Date;
+  clientTotal: number;
+  syncedAt: Date;
+  mismatch: boolean;
+  note?: string;
 }
 
 const paymentSchema = new Schema<IPayment>(
@@ -128,6 +146,7 @@ const billSnapshotSchema = new Schema<IBillSnapshot>(
     discount: { type: Number, required: true },
     serviceChargePercent: { type: Number, default: 0 },
     serviceCharge: { type: Number, default: 0 },
+    packagingCharge: { type: Number, default: 0 },
     couponCode: { type: String },
     taxableAmount: { type: Number, required: true },
     taxLines: {
@@ -151,6 +170,8 @@ const orderSchema = new Schema<IOrder>(
     deliveryProvider: { type: String, enum: ["Swiggy", "Zomato", "Uber-Eats", "Other"] },
     customerName: { type: String, required: true, trim: true },
     customerPhone: { type: String, default: "", trim: true },
+    customerBirthday: { type: String, default: "", trim: true },
+    customerMarketingConsent: { type: Boolean, default: false },
     members: { type: Number, default: 1, min: 1 },
     checkinTime: { type: Date, default: Date.now },
     checkoutTime: { type: Date },
@@ -159,7 +180,7 @@ const orderSchema = new Schema<IOrder>(
     externalOrderId: { type: String, trim: true, index: true },
     paymentMethod: {
       type: String,
-      enum: ["pending", "cash", "upi", "card", "online", "wallet", "split"],
+      enum: ["pending", "cash", "upi", "card", "online", "wallet", "credit", "split"],
       default: "pending",
     },
     couponCode: { type: String, trim: true, uppercase: true },
@@ -190,6 +211,20 @@ const orderSchema = new Schema<IOrder>(
     serviceChargeWaived: { type: Boolean, default: false },
     mergedInto: { type: Schema.Types.ObjectId, ref: "Order", default: null },
     splitFrom: { type: Schema.Types.ObjectId, ref: "Order", default: null },
+    offline: {
+      type: new Schema<IOfflineSync>(
+        {
+          clientId: { type: String, required: true },
+          createdAt: { type: Date, required: true },
+          clientTotal: { type: Number, required: true },
+          syncedAt: { type: Date, required: true },
+          mismatch: { type: Boolean, default: false },
+          note: { type: String },
+        },
+        { _id: false }
+      ),
+      default: null,
+    },
   },
   { timestamps: true }
 );
@@ -199,5 +234,9 @@ orderSchema.index(
   { unique: true, partialFilterExpression: { invoiceNumber: { $type: "string" } } }
 );
 orderSchema.index({ restaurantId: 1, tableId: 1, sessionId: 1, status: 1 });
+orderSchema.index(
+  { restaurantId: 1, "offline.clientId": 1 },
+  { unique: true, partialFilterExpression: { "offline.clientId": { $type: "string" } } }
+);
 
 export default model<IOrder>("Order", orderSchema);

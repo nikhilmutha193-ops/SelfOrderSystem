@@ -268,6 +268,12 @@ export default function CustomerInvoice() {
             <span>₹{(totals.serviceCharge ?? 0).toFixed(2)}</span>
           </div>
         )}
+        {(totals.packagingCharge ?? 0) > 0 && (
+          <div className="flex justify-between text-sm text-slate-600">
+            <span>Packaging</span>
+            <span>₹{(totals.packagingCharge ?? 0).toFixed(2)}</span>
+          </div>
+        )}
         {totals.taxLines.map((t) => (
           <div key={t.name} className="flex justify-between text-sm text-slate-600">
             <span>

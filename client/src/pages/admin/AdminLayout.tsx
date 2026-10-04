@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   Check,
   Ellipsis,
+  HelpCircle,
   Menu,
   MonitorSmartphone,
   PanelLeftClose,
@@ -30,6 +31,8 @@ import NotificationCenter from "../../features/dashboard/components/Notification
 import ActiveOrders from "../../features/orders/components/ActiveOrders";
 import { AdminProfileProvider, can, useAdmin } from "../../lib/adminAuth";
 import { activateStoredAuth, api, clearStoredToken, setActiveAuth } from "../../shared/api/client";
+import { useStaffTheme } from "../../shared/theme";
+import { TourProvider, useTour } from "../../shared/ui/PageTour";
 import { buttonClass } from "../../shared/ui/styles";
 import { IconButton } from "../../shared/ui/ui";
 
@@ -249,6 +252,7 @@ function MobileTabs({ items, onMore }: { items: AdminNavItem[]; onMore: () => vo
 }
 
 function Shell() {
+  useStaffTheme();
   const navigate = useNavigate();
   const location = useLocation();
   const { profile } = useAdmin();
@@ -257,6 +261,7 @@ function Shell() {
   const [editing, setEditing] = useState(false);
   const [collapsed, setCollapsed] = useState(() => readStorage(COLLAPSE_KEY, (raw) => raw === "1", false));
   const [pins, setPins] = useState<string[]>(() => readStorage(PINS_KEY, parsePins, []));
+  const tour = useTour();
 
   const groups = useMemo(() => visibleNav(profile), [profile]);
   const allItems = useMemo(() => groups.flatMap((g) => g.items), [groups]);
@@ -407,7 +412,7 @@ function Shell() {
           <div className="md:hidden">
             <IconButton icon={Menu} label="Open menu" onClick={() => setDrawerOpen(true)} aria-expanded={drawerOpen} />
           </div>
-          <div className="min-w-0 flex-1">
+          <div className="flex min-w-0 flex-1 items-center gap-1.5">
             {current ? (
               <div className="min-w-0">
                 <p className="hidden text-xs font-medium text-slate-400 sm:block">{current.group}</p>
@@ -415,6 +420,9 @@ function Shell() {
               </div>
             ) : (
               <p className="truncate text-sm font-semibold text-slate-900">Admin</p>
+            )}
+            {tour.hasSteps && (
+              <IconButton icon={HelpCircle} label="Guide this page" onClick={tour.start} className="shrink-0" />
             )}
           </div>
           <button
@@ -462,7 +470,9 @@ function Shell() {
 export default function AdminLayout() {
   return (
     <AdminProfileProvider>
-      <Shell />
+      <TourProvider>
+        <Shell />
+      </TourProvider>
     </AdminProfileProvider>
   );
 }

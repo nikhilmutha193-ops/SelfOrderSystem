@@ -6,10 +6,15 @@ interface OrderRef {
 }
 
 export interface DomainEvents {
-  "order.created": OrderRef;
+  // customerBirthday ("MM-DD") is only ever set by the dine-in guest flow - optional, and only
+  // used to fill in a new customer's birthday on first link (see customers.handlers.ts).
+  "order.created": OrderRef & { customerBirthday?: string };
+  // Fired when a guest fills in (or completes) their name/phone/birthday from the menu page after
+  // skipping it initially - lets a still-unlinked order get linked to a customer after the fact.
+  "order.customerUpdated": OrderRef & { customerBirthday?: string };
   "order.itemsAdded": OrderRef & { itemIds: string[]; addedByRole: "admin" | "chef" | "table" };
   "order.itemCancelled": OrderRef & { itemId: string; previousStatus: string };
-  "order.kotSent": OrderRef & { round: number; tokenNumber: number; itemIds: string[] };
+  "order.kotSent": OrderRef & { round: number; tokenNumber: number; itemIds: string[]; silent?: boolean };
   "order.billed": OrderRef;
   "order.settled": OrderRef;
   "order.cancelled": OrderRef & { voided: boolean };

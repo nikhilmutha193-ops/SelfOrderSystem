@@ -14,6 +14,7 @@ export interface ITable {
   isGuest: boolean;
   autoReleaseMinutes?: number | null;
   captainId?: Types.ObjectId | null;
+  areaId?: Types.ObjectId | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -30,6 +31,7 @@ const tableSchema = new Schema<ITable>(
     isGuest: { type: Boolean, default: false },
     autoReleaseMinutes: { type: Number, default: null, min: 0 },
     captainId: { type: Schema.Types.ObjectId, ref: "Admin", default: null },
+    areaId: { type: Schema.Types.ObjectId, default: null },
   },
   { timestamps: true }
 );

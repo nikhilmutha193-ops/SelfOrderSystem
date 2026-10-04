@@ -179,6 +179,7 @@ export async function buildDayReport(ctx: RequestContext, date: string | undefin
       gross: sum((b) => b.subtotal),
       discounts: sum((b) => b.discount),
       serviceCharge: sum((b) => b.serviceCharge ?? 0),
+      packagingCharge: sum((b) => b.packagingCharge ?? 0),
       taxable: sum((b) => b.taxableAmount),
       tax: sum((b) => b.taxLines.reduce((s, t) => s + t.amount, 0)),
       roundOff: sum((b) => b.roundOff),

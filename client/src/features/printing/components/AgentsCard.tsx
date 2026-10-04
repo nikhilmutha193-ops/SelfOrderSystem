@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import type { PairingCode, PrintAgent } from "../../../lib/types";
 import { extractErrorMessage } from "../../../shared/api/client";
+import { confirmDialog } from "../../../shared/ui/confirm";
 import { Badge, Button, Card, ErrorText, Input } from "../../../shared/ui/ui";
 import { useCreateAgent, useRenewPairingCode, useRevokeAgent } from "../queries";
 
@@ -100,10 +101,14 @@ export function AgentsCard({ agents, canEdit }: { agents: PrintAgent[]; canEdit:
                     variant="ghost"
                     className="!text-red-600 hover:!bg-red-50"
                     disabled={revoke.isPending}
-                    onClick={() =>
-                      window.confirm(`Remove ${agent.name}? Its printers stop printing until it is paired again.`) &&
-                      run(() => revoke.mutateAsync(agent._id))
-                    }
+                    onClick={async () => {
+                      const ok = await confirmDialog({
+                        title: `Remove ${agent.name}?`,
+                        message: "Its printers stop printing until a computer is paired again.",
+                        confirmLabel: "Remove computer",
+                      });
+                      if (ok) run(() => revoke.mutateAsync(agent._id));
+                    }}
                   >
                     Remove
                   </Button>

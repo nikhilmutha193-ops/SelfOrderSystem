@@ -10,10 +10,12 @@ import { writeAudit } from "../../utils/audit";
 import { computeDiscountAmount, findValidCoupon } from "../../utils/coupon";
 import { assertDayOpen } from "../../utils/dayLock";
 import { HttpError } from "../../utils/httpError";
-import { computeInvoiceTotals, InvoiceTotals, PricingInput, round2 } from "../../utils/invoice";
+import { computeInvoiceTotals, InvoiceItem, InvoiceTotals, PricingInput, round2 } from "../../utils/invoice";
 import { DEFAULT_SAC, financialYearLabel, nextInvoiceNumber } from "../../utils/invoiceNumber";
+import { normalizePhone } from "../../utils/phone";
 import { syncTableState } from "../../utils/tableState";
 import { getOwnedOrder, requireOwner } from "./orders.access";
+import { assertCreditAllowed, assertCreditCustomer } from "../credit/credit.service";
 import { OrdersRepository } from "./orders.repository";
 import { GenerateBillInput, SettleInput } from "./orders.schema";
 
@@ -36,7 +38,7 @@ export function pricingFor(
 
 export function totalsForOrder(
   order: Pick<IOrder, "bill" | "discountAmount" | "manualDiscount" | "serviceChargeWaived" | "loyaltyRedeem">,
-  items: Pick<IOrderItem, "status" | "total">[],
+  items: InvoiceItem[],
   restaurant: PricingRestaurant
 ): InvoiceTotals {
   if (order.bill) {
@@ -49,6 +51,7 @@ export function totalsForOrder(
       discount: bill.discount,
       serviceChargePercent: bill.serviceChargePercent ?? 0,
       serviceCharge: bill.serviceCharge ?? 0,
+      packagingCharge: bill.packagingCharge ?? 0,
       taxableAmount: bill.taxableAmount,
       taxLines: bill.taxLines.map(({ name, percent, base, amount }) => ({ name, percent, base, amount })),
       roundOff: bill.roundOff,
@@ -72,6 +75,7 @@ export function snapshotFromTotals(
     discount: totals.discount,
     serviceChargePercent: totals.serviceChargePercent,
     serviceCharge: totals.serviceCharge,
+    packagingCharge: totals.packagingCharge,
     couponCode,
     taxableAmount: totals.taxableAmount,
     taxLines: totals.taxLines,
@@ -141,7 +145,7 @@ async function billOpenOrder(ctx: RequestContext, repo: OrdersRepository, order:
   let couponId: IOrder["_id"] | null = null;
   if (order.couponCode) {
     try {
-      const coupon = await findValidCoupon(ctx.restaurantId, order.couponCode, subtotal);
+      const coupon = await findValidCoupon(ctx.restaurantId, order.couponCode, subtotal, order.customerPhone);
       couponDiscount = computeDiscountAmount(coupon, subtotal);
       couponId = coupon._id;
     } catch (err) {
@@ -160,6 +164,9 @@ async function billOpenOrder(ctx: RequestContext, repo: OrdersRepository, order:
   const changes = await withTransaction(async (session) => {
     if (couponId && !(await repo.claimCouponUse(couponId, session))) {
       throw new HttpError(409, `Coupon ${order.couponCode} has reached its usage limit. Remove it and try again.`);
+    }
+    if (couponId) {
+      await repo.recordCouponRedemption(couponId, order._id, normalizePhone(order.customerPhone) ?? "", session);
     }
     const invoiceNumber =
       order.invoiceNumber ?? (await nextInvoiceNumber(ctx.restaurantId, prefix, financialYear, session));
@@ -197,7 +204,10 @@ export async function reopenBill(ctx: RequestContext, orderId: string, reason: s
   const changes: Partial<IOrder> = { status: "open", bill: null, billedAt: null };
   await withTransaction(async (session) => {
     await transition(repo, order, "billed", changes, session);
-    if (order.couponCode) await repo.releaseCouponUse(order.couponCode, session);
+    if (order.couponCode) {
+      await repo.releaseCouponUse(order.couponCode, session);
+      await repo.releaseCouponRedemption(order._id, session);
+    }
   });
   order.set(changes);
   await syncOrderTable(order);
@@ -241,10 +251,14 @@ function summarizeMethod(payments: IPayment[]): PaymentMethod {
 export async function settleOrder(ctx: RequestContext, orderId: string, input: SettleInput) {
   const order = await getOwnedOrder(ctx, orderId);
   const repo = new OrdersRepository(ctx.restaurantId);
+  const wantsCredit = input.paymentMethod === "credit" || (input.payments ?? []).some((p) => p.method === "credit");
+  if (wantsCredit) assertCreditCustomer(order);
   if (order.status === "open") await billOpenOrder(ctx, repo, order, {});
   if (order.status !== "billed" || !order.bill) throw new HttpError(409, "This order is not open");
 
   const payments = buildPayments(ctx, input, order.bill.grandTotal);
+  const onAccount = payments.filter((p) => p.method === "credit").reduce((sum, p) => sum + p.amount, 0);
+  if (onAccount > 0) await assertCreditAllowed(ctx.restaurantId, order, onAccount);
   const changes: Partial<IOrder> = {
     status: "closed",
     payments,
@@ -281,7 +295,10 @@ export async function cancelOrder(ctx: RequestContext, orderId: string, reason: 
   };
   await withTransaction(async (session) => {
     await transition(repo, order, from, changes, session);
-    if (from === "billed" && order.couponCode) await repo.releaseCouponUse(order.couponCode, session);
+    if (from === "billed" && order.couponCode) {
+      await repo.releaseCouponUse(order.couponCode, session);
+      await repo.releaseCouponRedemption(order._id, session);
+    }
   });
   order.set(changes);
   await repo.cancelPendingItems(order._id);
@@ -302,7 +319,10 @@ export async function voidBill(ctx: RequestContext, orderId: string, reason: str
   const changes: Partial<IOrder> = { status: "cancelled", voidedAt: new Date(), voidReason: reason };
   await withTransaction(async (session) => {
     await transition(repo, order, "closed", changes, session);
-    if (order.couponCode) await repo.releaseCouponUse(order.couponCode, session);
+    if (order.couponCode) {
+      await repo.releaseCouponUse(order.couponCode, session);
+      await repo.releaseCouponRedemption(order._id, session);
+    }
   });
   order.set(changes);
 

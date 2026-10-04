@@ -3,6 +3,7 @@ import { useState } from "react";
 
 import type { PrintAgent, Printer, PrinterInput, Station } from "../../../lib/types";
 import { extractErrorMessage } from "../../../shared/api/client";
+import { confirmDialog } from "../../../shared/ui/confirm";
 import { Badge, Button, Card, ErrorText, Input, Select } from "../../../shared/ui/ui";
 import { useCreatePrinter, useDeletePrinter, useTestPrinter, useUpdatePrinter } from "../queries";
 
@@ -333,9 +334,14 @@ export function PrintersCard({
                     icon={Trash2}
                     className="!text-red-600 hover:!bg-red-50"
                     disabled={remove.isPending}
-                    onClick={() =>
-                      window.confirm(`Remove ${printer.name}?`) && run(() => remove.mutateAsync(printer._id))
-                    }
+                    onClick={async () => {
+                      const ok = await confirmDialog({
+                        title: `Remove ${printer.name}?`,
+                        message: "Tickets for it go to the fallback printer, or open as PDFs if there is none.",
+                        confirmLabel: "Remove printer",
+                      });
+                      if (ok) run(() => remove.mutateAsync(printer._id));
+                    }}
                   >
                     Remove
                   </Button>

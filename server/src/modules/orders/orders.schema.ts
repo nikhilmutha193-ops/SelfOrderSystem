@@ -21,21 +21,56 @@ const members = z
 
 const customer = { customerName, customerPhone, members };
 
+// "MM-DD" - day and month only, no year, matching Customer.birthday (loyalty birthday offers).
+const customerBirthday = blankToUndefined(
+  z
+    .string()
+    .trim()
+    .regex(/^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/, { error: "Birthday must be in MM-DD format" })
+);
+
+// Only ever "true" or absent - an unchecked box on a later update must never downgrade consent
+// already given (see updateOrderCustomer / linkOrder / applyCustomerUpdate).
+const customerMarketingConsent = z
+  .boolean()
+  .nullish()
+  .transform((v) => (v ? true : undefined));
+
 export const orderIdParams = z.object({ orderId: objectId() });
 
 export const itemIdParams = z.object({ itemId: objectId() });
 
-export const startDineInSchema = z.object(customer);
+export const startDineInSchema = z.object({ ...customer, customerBirthday, customerMarketingConsent });
 
-export const startTakeawaySchema = z.object(customer);
+// A guest filling in (or completing) their details later, from the menu page - every field is
+// optional here since they might only be adding the one thing they skipped before.
+export const updateOrderCustomerSchema = z
+  .object({
+    customerName: blankToUndefined(z.string().trim().min(1)),
+    customerPhone: blankToUndefined(z.string().trim()),
+    customerBirthday,
+    customerMarketingConsent,
+  })
+  .refine(
+    (v) =>
+      v.customerName !== undefined ||
+      v.customerPhone !== undefined ||
+      v.customerBirthday !== undefined ||
+      v.customerMarketingConsent !== undefined,
+    { error: "Nothing to update" }
+  );
+
+export const startTakeawaySchema = z.object({ ...customer, customerBirthday });
 
 export const startDeliverySchema = z.object({
   provider: z.enum(["Swiggy", "Zomato", "Uber-Eats", "Other"], { error: "A valid provider is required" }),
   ...customer,
+  customerBirthday,
 });
 
 export const startCounterSchema = z.object({
   ...customer,
+  customerBirthday,
   tableId: blankToUndefined(objectId()),
   allowOccupied: z.boolean().nullish(),
 });
@@ -72,8 +107,8 @@ export const orderFilterQuery = z.object({
   to: blankToUndefined(businessDate),
 });
 
-const tenderMethod = z.enum(["cash", "upi", "card", "online", "wallet"], {
-  error: "A valid paymentMethod (cash, upi, card, online, wallet) is required",
+const tenderMethod = z.enum(["cash", "upi", "card", "online", "wallet", "credit"], {
+  error: "A valid paymentMethod (cash, upi, card, online, wallet, credit) is required",
 });
 
 const money = z
@@ -81,7 +116,7 @@ const money = z
   .positive({ error: "Payment amounts must be more than zero" })
   .max(10_000_000, { error: "That amount is too large" });
 
-const paymentLine = z.object({
+export const paymentLine = z.object({
   method: tenderMethod,
   amount: money,
   reference: blankToUndefined(z.string().trim().max(60, { error: "Keep the reference under 60 characters" })),
@@ -94,7 +129,7 @@ export const settleSchema = z
     payments: z.array(paymentLine).min(1, { error: "Add at least one payment" }).max(10).optional(),
   })
   .refine((body) => body.paymentMethod || body.payments, {
-    error: "A valid paymentMethod (cash, upi, card, online, wallet) is required",
+    error: "A valid paymentMethod (cash, upi, card, online, wallet, credit) is required",
   });
 
 export const applyCouponSchema = z.object({
@@ -143,6 +178,7 @@ export const invoiceRegisterQuery = z.object({
 });
 
 export type StartDineInInput = z.output<typeof startDineInSchema>;
+export type UpdateOrderCustomerInput = z.output<typeof updateOrderCustomerSchema>;
 export type StartTakeawayInput = z.output<typeof startTakeawaySchema>;
 export type StartDeliveryInput = z.output<typeof startDeliverySchema>;
 export type StartCounterInput = z.output<typeof startCounterSchema>;

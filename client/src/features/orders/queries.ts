@@ -85,6 +85,12 @@ export function useCancelOrderItem() {
   );
 }
 
+export function useUpdateOrderCustomer() {
+  return useOrderMutation(({ orderId, input }: { orderId: string; input: Partial<CustomerInput> }) =>
+    ordersApi.updateCustomer(orderId, input)
+  );
+}
+
 export function useGenerateBill() {
   return useOrderMutation(({ orderId, customerGstin }: { orderId: string; customerGstin?: string }) =>
     ordersApi.generateBill(orderId, customerGstin)

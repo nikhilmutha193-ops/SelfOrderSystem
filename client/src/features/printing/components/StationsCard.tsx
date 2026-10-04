@@ -3,6 +3,7 @@ import { useState } from "react";
 
 import type { Station } from "../../../lib/types";
 import { extractErrorMessage } from "../../../shared/api/client";
+import { confirmDialog } from "../../../shared/ui/confirm";
 import { Button, Card, ErrorText, Input } from "../../../shared/ui/ui";
 import { useCreateStation, useDeleteStation, useRenameStation } from "../queries";
 
@@ -24,7 +25,14 @@ function StationRow({ station, canEdit }: { station: Station; canEdit: boolean }
   }
 
   async function del() {
-    if (!window.confirm(`Remove ${station.name}? Items sent to it will print on the fallback printer.`)) return;
+    if (
+      !(await confirmDialog({
+        title: `Remove ${station.name}?`,
+        message: "Its dishes will print on the fallback printer instead.",
+        confirmLabel: "Remove station",
+      }))
+    )
+      return;
     setError(null);
     try {
       await remove.mutateAsync(station._id);

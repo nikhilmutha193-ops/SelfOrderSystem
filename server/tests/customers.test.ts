@@ -44,6 +44,123 @@ describe("recognising guests", () => {
     expect((await Order.findById(seat.orderId))!.customerId!.toString()).toBe(customer!._id.toString());
   });
 
+  it("fills in a new customer's birthday from the dine-in guest form, but never overwrites one already set", async () => {
+    const login = await api()
+      .post("/api/auth/table/login")
+      .send({ code: "tbl1", password: "pass1", startNewOrder: true });
+    expect(login.status).toBe(200);
+    const order = await api()
+      .post("/api/orders/dine-in")
+      .set(bearer(login.body.token))
+      .send({ customerName: "Deepa", customerPhone: "+91 99887 66554", members: 1, customerBirthday: "08-15" });
+    expect(order.status).toBe(201);
+
+    const customer = await Customer.findOne({ phone: "919988766554" });
+    expect(customer).toMatchObject({ name: "Deepa", birthday: "08-15" });
+
+    // A second dine-in order for the same phone, with a different birthday, must not overwrite it.
+    const login2 = await api()
+      .post("/api/auth/table/login")
+      .send({ code: "tbl1", password: "pass1", startNewOrder: true });
+    await api()
+      .post("/api/orders/dine-in")
+      .set(bearer(login2.body.token))
+      .send({ customerName: "Deepa", customerPhone: "+91 99887 66554", members: 1, customerBirthday: "01-01" });
+    expect((await Customer.findOne({ phone: "919988766554" }))!.birthday).toBe("08-15");
+  });
+
+  it("keeps a birthday given with no phone number on the order itself, and carries it over once a phone is added", async () => {
+    const login = await api()
+      .post("/api/auth/table/login")
+      .send({ code: "tbl1", password: "pass1", startNewOrder: true });
+    const order = await api()
+      .post("/api/orders/dine-in")
+      .set(bearer(login.body.token))
+      .send({ customerName: "NoPhone", members: 1, customerBirthday: "04-20" });
+    expect(order.status).toBe(201);
+    expect((await Order.findById(order.body.order._id))!.customerId).toBeFalsy();
+    expect((await Order.findById(order.body.order._id))!.customerBirthday).toBe("04-20");
+
+    // Adding just a phone later (no birthday re-typed) still carries the birthday over.
+    const updated = await api()
+      .patch(`/api/orders/${order.body.order._id}/customer`)
+      .set(bearer(order.body.token))
+      .send({ customerPhone: "+91 99111 22334" });
+    expect(updated.status).toBe(200);
+    expect((await Customer.findOne({ phone: "919911122334" }))!.birthday).toBe("04-20");
+  });
+
+  it("sets marketing consent from the sign-in checkbox, and never turns it back off on a later visit", async () => {
+    const login = await api()
+      .post("/api/auth/table/login")
+      .send({ code: "tbl1", password: "pass1", startNewOrder: true });
+    await api()
+      .post("/api/orders/dine-in")
+      .set(bearer(login.body.token))
+      .send({ customerName: "Consents", customerPhone: "+91 98111 22333", customerMarketingConsent: true });
+    expect((await Customer.findOne({ phone: "919811122333" }))!.marketingConsent).toBe(true);
+
+    // A later visit where the box isn't checked again doesn't withdraw consent.
+    const login2 = await api()
+      .post("/api/auth/table/login")
+      .send({ code: "tbl1", password: "pass1", startNewOrder: true });
+    await api()
+      .post("/api/orders/dine-in")
+      .set(bearer(login2.body.token))
+      .send({ customerName: "Consents", customerPhone: "+91 98111 22333" });
+    expect((await Customer.findOne({ phone: "919811122333" }))!.marketingConsent).toBe(true);
+  });
+
+  it("defaults marketing consent to false when the checkbox isn't ticked", async () => {
+    const login = await api()
+      .post("/api/auth/table/login")
+      .send({ code: "tbl1", password: "pass1", startNewOrder: true });
+    await api()
+      .post("/api/orders/dine-in")
+      .set(bearer(login.body.token))
+      .send({ customerName: "No Consent", customerPhone: "+91 98222 33444" });
+    expect((await Customer.findOne({ phone: "919822233444" }))!.marketingConsent).toBe(false);
+  });
+
+  it("keeps consent given with no phone number on the order, and carries it over once a phone is added", async () => {
+    const login = await api()
+      .post("/api/auth/table/login")
+      .send({ code: "tbl1", password: "pass1", startNewOrder: true });
+    const order = await api()
+      .post("/api/orders/dine-in")
+      .set(bearer(login.body.token))
+      .send({ customerName: "LateConsent", members: 1, customerMarketingConsent: true });
+    expect((await Order.findById(order.body.order._id))!.customerId).toBeFalsy();
+
+    const updated = await api()
+      .patch(`/api/orders/${order.body.order._id}/customer`)
+      .set(bearer(order.body.token))
+      .send({ customerPhone: "+91 98333 44555" });
+    expect(updated.status).toBe(200);
+    expect((await Customer.findOne({ phone: "919833344555" }))!.marketingConsent).toBe(true);
+  });
+
+  it("sets a new customer's birthday from a staff-created order too (POS/New Order), not just the guest form", async () => {
+    const res = await api()
+      .post("/api/orders/takeaway")
+      .set(bearer(owner))
+      .send({ customerName: "Staff Walk-in", customerPhone: "98001 55667", customerBirthday: "07-04" });
+    expect(res.status).toBe(201);
+    const customer = await Customer.findOne({ phone: "919800155667" });
+    expect(customer).toMatchObject({ name: "Staff Walk-in", birthday: "07-04" });
+  });
+
+  it("rejects a birthday that isn't in MM-DD format", async () => {
+    const login = await api()
+      .post("/api/auth/table/login")
+      .send({ code: "tbl1", password: "pass1", startNewOrder: true });
+    const order = await api()
+      .post("/api/orders/dine-in")
+      .set(bearer(login.body.token))
+      .send({ customerName: "Bad Date", members: 1, customerBirthday: "15-08" });
+    expect(order.status).toBe(400);
+  });
+
   it("counts a visit and spend when the bill is paid, with no points while loyalty is off", async () => {
     const orderId = await takeaway([{ foodItemId: world.food.vada, quantity: 1 }]);
     await pay(orderId);
@@ -54,6 +171,191 @@ describe("recognising guests", () => {
       totalSpend: 63,
       points: 0,
     });
+  });
+});
+
+describe("guest self-service", () => {
+  it("looks up a guest's own saved name/birthday by phone, without exposing visit history", async () => {
+    const login = await api()
+      .post("/api/auth/table/login")
+      .send({ code: "tbl1", password: "pass1", startNewOrder: true });
+    const token = login.body.token;
+
+    const notFound = await api().get("/api/customers/guest-lookup?phone=9000000000").set(bearer(token));
+    expect(notFound.status).toBe(200);
+    expect(notFound.body).toBeNull();
+
+    // "Deepa" was created earlier in "recognising guests" with birthday 08-15.
+    const found = await api().get("/api/customers/guest-lookup?phone=9988766554").set(bearer(token));
+    expect(found.status).toBe(200);
+    expect(found.body).toEqual({ name: "Deepa", birthday: "08-15" });
+  });
+
+  it("rejects a guest-lookup attempt from an admin token (table-only route)", async () => {
+    expect((await api().get("/api/customers/guest-lookup?phone=9988766554").set(bearer(owner))).status).toBe(403);
+  });
+
+  it("lets a guest fill in missing phone/birthday later, linking the order to a customer", async () => {
+    const login = await api()
+      .post("/api/auth/table/login")
+      .send({ code: "tbl1", password: "pass1", startNewOrder: true });
+    const token = login.body.token;
+    const order = await api().post("/api/orders/dine-in").set(bearer(token)).send({ customerName: "Rahul", members: 1 });
+    expect(order.status).toBe(201);
+    expect((await Order.findById(order.body.order._id))!.customerId).toBeFalsy();
+
+    const updated = await api()
+      .patch(`/api/orders/${order.body.order._id}/customer`)
+      .set(bearer(order.body.token))
+      .send({ customerPhone: "+91 97001 23456", customerBirthday: "03-10" });
+    expect(updated.status).toBe(200);
+
+    const customer = await Customer.findOne({ phone: "919700123456" });
+    expect(customer).toMatchObject({ name: "Rahul", birthday: "03-10" });
+    expect((await Order.findById(order.body.order._id))!.customerId!.toString()).toBe(customer!._id.toString());
+  });
+
+  it("fills in the birthday on an already-linked customer later, without needing a new phone", async () => {
+    const login = await api()
+      .post("/api/auth/table/login")
+      .send({ code: "tbl1", password: "pass1", startNewOrder: true });
+    const order = await api()
+      .post("/api/orders/dine-in")
+      .set(bearer(login.body.token))
+      .send({ customerName: "Priya", customerPhone: "+91 98001 11223", members: 1 });
+    const customerId = (await Order.findById(order.body.order._id))!.customerId;
+    expect(customerId).toBeTruthy();
+    expect((await Customer.findById(customerId))!.birthday).toBeFalsy();
+
+    const patched = await api()
+      .patch(`/api/orders/${order.body.order._id}/customer`)
+      .set(bearer(order.body.token))
+      .send({ customerBirthday: "12-25" });
+    expect(patched.status).toBe(200);
+    expect((await Customer.findById(customerId))!.birthday).toBe("12-25");
+  });
+
+  it("gives marketing consent on an already-linked customer from the menu page's details dialog, never un-consenting", async () => {
+    const login = await api()
+      .post("/api/auth/table/login")
+      .send({ code: "tbl1", password: "pass1", startNewOrder: true });
+    const order = await api()
+      .post("/api/orders/dine-in")
+      .set(bearer(login.body.token))
+      .send({ customerName: "Vikram", customerPhone: "+91 98001 99887", members: 1 });
+    const customerId = (await Order.findById(order.body.order._id))!.customerId;
+    expect((await Customer.findById(customerId))!.marketingConsent).toBe(false);
+
+    const patched = await api()
+      .patch(`/api/orders/${order.body.order._id}/customer`)
+      .set(bearer(order.body.token))
+      .send({ customerMarketingConsent: true });
+    expect(patched.status).toBe(200);
+    expect((await Customer.findById(customerId))!.marketingConsent).toBe(true);
+
+    // Sending the box unchecked (false) afterwards never withdraws it.
+    await api()
+      .patch(`/api/orders/${order.body.order._id}/customer`)
+      .set(bearer(order.body.token))
+      .send({ customerBirthday: "05-05", customerMarketingConsent: false });
+    expect((await Customer.findById(customerId))!.marketingConsent).toBe(true);
+  });
+
+  it("refuses to update a different table's order", async () => {
+    const seat = await seatTable(2, "Tbl2Guest");
+    const login3 = await api()
+      .post("/api/auth/table/login")
+      .send({ code: "tbl3", password: "pass3", startNewOrder: true });
+    const other = await api()
+      .patch(`/api/orders/${seat.orderId}/customer`)
+      .set(bearer(login3.body.token))
+      .send({ customerBirthday: "06-06" });
+    expect(other.status).toBe(403);
+  });
+
+  it("lets staff fix or complete guest details from the order page (New Order), and links a customer", async () => {
+    const created = await api()
+      .post("/api/orders/takeaway")
+      .set(bearer(owner))
+      .send({ customerName: "Typo Nmae" });
+    const orderId = created.body._id as string;
+    expect((await Order.findById(orderId))!.customerId).toBeFalsy();
+
+    const fixed = await api()
+      .patch(`/api/orders/${orderId}/customer`)
+      .set(bearer(owner))
+      .send({ customerName: "Fixed Name", customerPhone: "+91 98444 55666", customerBirthday: "11-11" });
+    expect(fixed.status).toBe(200);
+    expect(fixed.body).toMatchObject({ customerName: "Fixed Name" });
+
+    const customer = await Customer.findOne({ phone: "919844455666" });
+    expect(customer).toMatchObject({ name: "Fixed Name", birthday: "11-11" });
+    expect((await Order.findById(orderId))!.customerId!.toString()).toBe(customer!._id.toString());
+  });
+});
+
+describe("birthday SMS settings", () => {
+  it("defaults to off with a sensible template, and validates/saves changes", async () => {
+    const defaults = await api().get("/api/customers/birthday-sms-settings").set(bearer(owner));
+    expect(defaults.status).toBe(200);
+    expect(defaults.body.enabled).toBe(false);
+    expect(defaults.body.template).toMatch(/\{name\}/);
+
+    const empty = await api()
+      .put("/api/customers/birthday-sms-settings")
+      .set(bearer(owner))
+      .send({ enabled: true, template: "" });
+    expect(empty.status).toBe(400);
+
+    const saved = await api()
+      .put("/api/customers/birthday-sms-settings")
+      .set(bearer(owner))
+      .send({ enabled: true, template: "Hi {name}! Happy birthday from {restaurant}." });
+    expect(saved.status).toBe(200);
+    expect(saved.body).toEqual({ enabled: true, template: "Hi {name}! Happy birthday from {restaurant}." });
+
+    const refetched = await api().get("/api/customers/birthday-sms-settings").set(bearer(owner));
+    expect(refetched.body).toEqual({ enabled: true, template: "Hi {name}! Happy birthday from {restaurant}." });
+
+    // Restore, so this doesn't leak into other tests.
+    await api()
+      .put("/api/customers/birthday-sms-settings")
+      .set(bearer(owner))
+      .send({ enabled: false, template: "Happy Birthday {name}! See you soon!" });
+  });
+
+  it("keeps birthday SMS settings to staff with the Customers permission", async () => {
+    const manager = await loginAdmin("manager", "Manager@123");
+    expect((await api().get("/api/customers/birthday-sms-settings").set(bearer(manager))).status).toBe(403);
+  });
+
+  it("lets staff send today's birthday texts on demand, once per guest per year", async () => {
+    const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata", month: "2-digit", day: "2-digit" })
+      .formatToParts(new Date())
+      .reduce<Record<string, string>>((acc, p) => ({ ...acc, [p.type]: p.value }), {});
+    const birthday = `${today.month}-${today.day}`;
+
+    await api()
+      .post("/api/orders/takeaway")
+      .set(bearer(owner))
+      .send({ customerName: "Birthday Guest", customerPhone: "+91 98555 11223", customerBirthday: birthday });
+
+    const sent = await api().post("/api/customers/birthday-sms-settings/send").set(bearer(owner));
+    expect(sent.status).toBe(200);
+    expect(sent.body.sentCount).toBe(1);
+
+    // Already greeted this year - a second click sends nothing new.
+    const again = await api().post("/api/customers/birthday-sms-settings/send").set(bearer(owner));
+    expect(again.body.sentCount).toBe(0);
+
+    // Clean up - this guest's birthday falls "today", which would otherwise leak into other
+    // tests' "birthdays this week" segment checks.
+    await Customer.deleteOne({ phone: "919855511223" });
+  });
+
+  it("keeps the manual send to staff with the Customers permission", async () => {
+    const manager = await loginAdmin("manager", "Manager@123");
+    expect((await api().post("/api/customers/birthday-sms-settings/send").set(bearer(manager))).status).toBe(403);
   });
 });
 
@@ -251,5 +553,72 @@ describe("bill links for WhatsApp", () => {
     const res = await api().get(`/api/bills/public/${expired}`);
     expect(res.status).toBe(410);
     expect(res.body.message).toBe("This bill link has expired. Ask the restaurant for a new one.");
+  });
+});
+
+describe("sms templates and campaigns", () => {
+  it("validates and saves reusable templates, and lists them newest first", async () => {
+    const bad = await api().post("/api/customers/sms/templates").set(bearer(owner)).send({ name: "", message: "" });
+    expect(bad.status).toBe(400);
+
+    const diwali = await api()
+      .post("/api/customers/sms/templates")
+      .set(bearer(owner))
+      .send({ name: "Diwali Offer", message: "20% off this Diwali! Visit us today." });
+    expect(diwali.status).toBe(201);
+    expect(diwali.body).toMatchObject({ name: "Diwali Offer", message: "20% off this Diwali! Visit us today." });
+
+    const liveMusic = await api()
+      .post("/api/customers/sms/templates")
+      .set(bearer(owner))
+      .send({ name: "Live Music", message: "Live music tonight from 7pm!" });
+    expect(liveMusic.status).toBe(201);
+
+    const list = await api().get("/api/customers/sms/templates").set(bearer(owner));
+    expect(list.body.map((t: { name: string }) => t.name)).toEqual(["Live Music", "Diwali Offer"]);
+
+    const updated = await api()
+      .put(`/api/customers/sms/templates/${diwali.body._id}`)
+      .set(bearer(owner))
+      .send({ name: "Diwali Offer", message: "25% off this Diwali! Visit us today." });
+    expect(updated.body.message).toBe("25% off this Diwali! Visit us today.");
+
+    await api().delete(`/api/customers/sms/templates/${liveMusic.body._id}`).set(bearer(owner));
+    const afterDelete = await api().get("/api/customers/sms/templates").set(bearer(owner));
+    expect(afterDelete.body.map((t: { name: string }) => t.name)).toEqual(["Diwali Offer"]);
+  });
+
+  it("keeps templates to staff with the Customers permission", async () => {
+    const manager = await loginAdmin("manager", "Manager@123");
+    expect((await api().get("/api/customers/sms/templates").set(bearer(manager))).status).toBe(403);
+  });
+
+  it("only sends a campaign to customers who agreed to receive offers, and records it", async () => {
+    await Customer.deleteMany({ restaurantId: world.restaurantId });
+
+    const noOne = await api()
+      .post("/api/customers/sms/campaigns")
+      .set(bearer(owner))
+      .send({ message: "New menu launching this weekend!" });
+    expect(noOne.status).toBe(400);
+    expect(noOne.body.message).toMatch(/agreed to receive offers/i);
+
+    const orderId = await takeaway([{ foodItemId: world.food.dosa, quantity: 1 }], "98450 22222", "Consented Guest");
+    const customer = await lookup("98450 22222");
+    await api()
+      .put(`/api/customers/${customer._id}`)
+      .set(bearer(owner))
+      .send({ name: "Consented Guest", birthday: "", anniversary: "", tags: [], marketingConsent: true });
+    await pay(orderId);
+
+    const sent = await api()
+      .post("/api/customers/sms/campaigns")
+      .set(bearer(owner))
+      .send({ message: "New menu launching this weekend!" });
+    expect(sent.status).toBe(201);
+    expect(sent.body).toMatchObject({ message: "New menu launching this weekend!", recipientCount: 1, sentCount: 0 });
+
+    const history = await api().get("/api/customers/sms/campaigns").set(bearer(owner));
+    expect(history.body[0]).toMatchObject({ message: "New menu launching this weekend!", recipientCount: 1 });
   });
 });

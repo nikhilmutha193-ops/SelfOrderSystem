@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { buildTableQrFrame } from "../../lib/qrFrame";
 import type { QrSettings, Restaurant, TableRow } from "../../lib/types";
 import { api, extractErrorMessage } from "../../shared/api/client";
+import { usePageTour, type TourStep } from "../../shared/ui/PageTour";
 import { Button, Card, ErrorText, Input, PageHeader } from "../../shared/ui/ui";
 
 interface FrameState {
@@ -116,6 +117,23 @@ export default function QrCodes() {
     link.click();
   }
 
+  const tourSteps: TourStep[] = useMemo(
+    () => [
+      {
+        target: "qr-customize",
+        title: "Customize the QR card",
+        description: "Choose what prints on each card - logo, restaurant name, address, instruction text and an accent color.",
+      },
+      {
+        target: "qr-grid",
+        title: "Each table's QR code",
+        description: "Download a PNG per table to print for table stands. Each one is specific to that table.",
+      },
+    ],
+    []
+  );
+  usePageTour(tourSteps);
+
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 sm:gap-6">
       <PageHeader
@@ -142,7 +160,7 @@ export default function QrCodes() {
         </div>
       )}
 
-      <Card>
+      <Card data-tour="qr-customize">
         <h2 className="mb-4 text-base font-semibold text-slate-900">Customize QR card</h2>
         <form onSubmit={saveQrSettings} className="flex flex-col gap-4">
           <div className="flex flex-wrap gap-4">
@@ -203,7 +221,7 @@ export default function QrCodes() {
         <p className="text-sm text-slate-400">No tables yet. Add one on the Tables page.</p>
       )}
 
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3" data-tour="qr-grid">
         {tables.map((table) => {
           const frame = frames[table._id];
           return (
