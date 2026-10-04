@@ -14,12 +14,13 @@ import {
   Wallet,
   type LucideIcon,
 } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { can, useAdmin } from "../../../lib/adminAuth";
 import type { Order } from "../../../lib/types";
 import { extractErrorMessage } from "../../../shared/api/client";
+import { usePageTour, type TourStep } from "../../../shared/ui/PageTour";
 import { buttonClass } from "../../../shared/ui/styles";
 import {
   Badge,
@@ -125,6 +126,46 @@ export default function Dashboard() {
     }
   }
 
+  const tourSteps: TourStep[] = useMemo(
+    () => [
+      {
+        target: "dashboard-stats",
+        title: "Today at a glance",
+        description: "Sales, open orders, paid orders and how many items are still in the kitchen - all for today.",
+      },
+      ...(attention.length > 0
+        ? [
+            {
+              target: "dashboard-attention",
+              title: "Needs attention",
+              description: "Shortcuts to things that usually need a quick look: unpaid tables, unread guest messages, low stock.",
+            },
+          ]
+        : []),
+      {
+        target: "dashboard-open-orders",
+        title: "Open orders",
+        description: "Every order still open today, grouped by dine-in/take-away/other. Click one to open its details.",
+      },
+      ...(canOrders
+        ? [
+            {
+              target: "dashboard-pos",
+              title: "Open POS",
+              description: "Jump to the full-screen counter billing screen.",
+            },
+            {
+              target: "dashboard-new-order",
+              title: "New order",
+              description: "Start a dine-in, take-away or delivery order from here.",
+            },
+          ]
+        : []),
+    ],
+    [attention.length, canOrders]
+  );
+  usePageTour(tourSteps);
+
   return (
     <Page>
       <PageHeader
@@ -133,11 +174,11 @@ export default function Dashboard() {
         actions={
           canOrders && (
             <>
-              <Link to="/pos" className={buttonClass("secondary")}>
+              <Link data-tour="dashboard-pos" to="/pos" className={buttonClass("secondary")}>
                 <MonitorSmartphone size={16} aria-hidden="true" />
                 Open POS
               </Link>
-              <Link to="/admin/delivery/new" className={buttonClass("primary")}>
+              <Link data-tour="dashboard-new-order" to="/admin/delivery/new" className={buttonClass("primary")}>
                 <Plus size={16} aria-hidden="true" />
                 New order
               </Link>
@@ -147,7 +188,7 @@ export default function Dashboard() {
       />
       <ErrorText>{error}</ErrorText>
 
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4" data-tour="dashboard-stats">
         {summary ? (
           <>
             <StatCard label="Sales today" value={`₹${summary.salesToday.toFixed(2)}`} icon={IndianRupee} tone="green" />
@@ -161,14 +202,14 @@ export default function Dashboard() {
       </div>
 
       {attention.length > 0 && (
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3" data-tour="dashboard-attention">
           {attention.map((a) => (
             <Attention key={a.to} {...a} />
           ))}
         </div>
       )}
 
-      <section className="flex flex-col gap-3">
+      <section className="flex flex-col gap-3" data-tour="dashboard-open-orders">
         <div className="flex items-center justify-between">
           <h2 className="text-base font-semibold text-slate-900">Open orders</h2>
           {todayOrders.length > 0 && <Badge tone="orange">{todayOrders.length} open</Badge>}

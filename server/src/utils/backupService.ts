@@ -8,6 +8,7 @@ import Category from "../models/Category";
 import ChatMessage from "../models/ChatMessage";
 import Chef from "../models/Chef";
 import Coupon from "../models/Coupon";
+import CouponRedemption from "../models/CouponRedemption";
 import CreditEntry from "../models/CreditEntry";
 import Customer from "../models/Customer";
 import DayClose from "../models/DayClose";
@@ -19,11 +20,14 @@ import LoyaltyEntry from "../models/LoyaltyEntry";
 import Order from "../models/Order";
 import OrderItem from "../models/OrderItem";
 import Printer from "../models/Printer";
+import PromoBanner from "../models/PromoBanner";
 import Purchase from "../models/Purchase";
 import Recipe from "../models/Recipe";
 import Restaurant from "../models/Restaurant";
 import Review from "../models/Review";
 import Shift from "../models/Shift";
+import SmsCampaign from "../models/SmsCampaign";
+import SmsTemplate from "../models/SmsTemplate";
 import Station from "../models/Station";
 import StockCount from "../models/StockCount";
 import StockItem from "../models/StockItem";
@@ -46,6 +50,7 @@ const TENANT_MODELS: { key: string; model: Model<any> }[] = [
   { key: "team", model: TeamMember },
   { key: "awards", model: Award },
   { key: "coupons", model: Coupon },
+  { key: "couponRedemptions", model: CouponRedemption },
   { key: "reviews", model: Review },
   { key: "orders", model: Order },
   { key: "orderItems", model: OrderItem },
@@ -67,6 +72,9 @@ const TENANT_MODELS: { key: string; model: Model<any> }[] = [
   { key: "foodReviews", model: FoodReview },
   { key: "landingContent", model: LandingContent },
   { key: "creditEntries", model: CreditEntry },
+  { key: "promoBanners", model: PromoBanner },
+  { key: "smsTemplates", model: SmsTemplate },
+  { key: "smsCampaigns", model: SmsCampaign },
 ];
 
 async function buildBackupPayload(restaurantId: Types.ObjectId | string) {

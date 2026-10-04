@@ -6,6 +6,9 @@ export interface ICustomer {
   phone: string;
   name: string;
   birthday?: string;
+  /** Calendar year the birthday SMS was last sent, so the scheduler never texts them twice in
+   *  the same year even if it ticks more than once on the day. */
+  birthdayGreetedYear?: number;
   anniversary?: string;
   visitCount: number;
   totalSpend: number;
@@ -25,6 +28,7 @@ const customerSchema = new Schema<ICustomer>(
     phone: { type: String, required: true },
     name: { type: String, trim: true, default: "" },
     birthday: { type: String },
+    birthdayGreetedYear: { type: Number },
     anniversary: { type: String },
     visitCount: { type: Number, default: 0 },
     totalSpend: { type: Number, default: 0 },

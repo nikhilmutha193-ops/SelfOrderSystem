@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { useCanEdit } from "../../../lib/adminAuth";
 import { TENDER_LABELS, type NamedAmount, type TenderMethod } from "../../../lib/types";
 import { extractErrorMessage } from "../../../shared/api/client";
 import { ExcelButton } from "../../../shared/ui/ExcelButton";
+import { usePageTour, type TourStep } from "../../../shared/ui/PageTour";
 import { Badge, Button, Card, ErrorText, Input, TableWrap } from "../../../shared/ui/ui";
 import { dayReportSheets } from "../dayReportExcel";
 import { useCloseDay, useDayHistory, useDayReport } from "../queries";
@@ -60,6 +61,38 @@ export default function DayClose() {
     }
   }
 
+  const tourSteps: TourStep[] = useMemo(
+    () => [
+      {
+        target: "day-close-date",
+        title: "Pick a business day",
+        description: "Defaults to today. Business days follow your day-end time, not midnight.",
+      },
+      {
+        target: "day-close-summary",
+        title: "Day summary",
+        description: "Bills, sales, discounts, service charge, tax and round-off for the day.",
+      },
+      ...(report.data && !report.data.closed
+        ? [
+            {
+              target: "day-close-action",
+              title: "Close the day",
+              description:
+                "Closing locks the day's bills to everyone but the owner. If anything's still unpaid, you can carry it into the next day and close anyway.",
+            },
+          ]
+        : []),
+      {
+        target: "day-close-history",
+        title: "Closed days",
+        description: "Click a past day to see its report again.",
+      },
+    ],
+    [report.data]
+  );
+  usePageTour(tourSteps);
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -75,6 +108,7 @@ export default function DayClose() {
             Business day
             <Input
               id="day-close-date"
+              data-tour="day-close-date"
               className="mt-1"
               type="date"
               value={date}
@@ -88,7 +122,7 @@ export default function DayClose() {
 
       {r && (
         <>
-          <Card>
+          <Card data-tour="day-close-summary">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <h2 className="text-base font-semibold text-slate-900">{r.businessDate}</h2>
@@ -190,7 +224,7 @@ export default function DayClose() {
           </div>
 
           {!r.closed && (
-            <Card>
+            <Card data-tour="day-close-action">
               {r.unsettled.length > 0 && (
                 <div className="mb-4">
                   <h3 className="mb-2 text-sm font-semibold text-red-700">
@@ -237,7 +271,7 @@ export default function DayClose() {
         </>
       )}
 
-      <Card>
+      <Card data-tour="day-close-history">
         <h2 className="mb-4 text-base font-semibold text-slate-900">Closed days</h2>
         <TableWrap>
           <table className="w-full min-w-[30rem] text-sm">

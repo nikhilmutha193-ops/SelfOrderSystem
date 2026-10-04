@@ -21,21 +21,56 @@ const members = z
 
 const customer = { customerName, customerPhone, members };
 
+// "MM-DD" - day and month only, no year, matching Customer.birthday (loyalty birthday offers).
+const customerBirthday = blankToUndefined(
+  z
+    .string()
+    .trim()
+    .regex(/^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/, { error: "Birthday must be in MM-DD format" })
+);
+
+// Only ever "true" or absent - an unchecked box on a later update must never downgrade consent
+// already given (see updateOrderCustomer / linkOrder / applyCustomerUpdate).
+const customerMarketingConsent = z
+  .boolean()
+  .nullish()
+  .transform((v) => (v ? true : undefined));
+
 export const orderIdParams = z.object({ orderId: objectId() });
 
 export const itemIdParams = z.object({ itemId: objectId() });
 
-export const startDineInSchema = z.object(customer);
+export const startDineInSchema = z.object({ ...customer, customerBirthday, customerMarketingConsent });
 
-export const startTakeawaySchema = z.object(customer);
+// A guest filling in (or completing) their details later, from the menu page - every field is
+// optional here since they might only be adding the one thing they skipped before.
+export const updateOrderCustomerSchema = z
+  .object({
+    customerName: blankToUndefined(z.string().trim().min(1)),
+    customerPhone: blankToUndefined(z.string().trim()),
+    customerBirthday,
+    customerMarketingConsent,
+  })
+  .refine(
+    (v) =>
+      v.customerName !== undefined ||
+      v.customerPhone !== undefined ||
+      v.customerBirthday !== undefined ||
+      v.customerMarketingConsent !== undefined,
+    { error: "Nothing to update" }
+  );
+
+export const startTakeawaySchema = z.object({ ...customer, customerBirthday });
 
 export const startDeliverySchema = z.object({
   provider: z.enum(["Swiggy", "Zomato", "Uber-Eats", "Other"], { error: "A valid provider is required" }),
   ...customer,
+  customerBirthday,
 });
 
 export const startCounterSchema = z.object({
   ...customer,
+  customerBirthday,
   tableId: blankToUndefined(objectId()),
   allowOccupied: z.boolean().nullish(),
 });
@@ -143,6 +178,7 @@ export const invoiceRegisterQuery = z.object({
 });
 
 export type StartDineInInput = z.output<typeof startDineInSchema>;
+export type UpdateOrderCustomerInput = z.output<typeof updateOrderCustomerSchema>;
 export type StartTakeawayInput = z.output<typeof startTakeawaySchema>;
 export type StartDeliveryInput = z.output<typeof startDeliverySchema>;
 export type StartCounterInput = z.output<typeof startCounterSchema>;

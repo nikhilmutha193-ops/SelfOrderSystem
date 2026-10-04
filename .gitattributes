@@ -1,0 +1,4 @@
+# Shell scripts run inside Linux containers and need LF line endings - a CRLF shebang line
+# (common after editing on Windows) makes the interpreter unresolvable ("not found") and the
+# container crash-loops. Force LF regardless of how it's checked out.
+*.sh text eol=lf

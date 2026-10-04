@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import DishDialog, { type DishAddPayload } from "../../components/DishDialog";
+import { EditDetailsDialog } from "../../components/EditDetailsDialog";
 import { BestsellerTag, FoodTypeIcon, RatingChip } from "../../components/FoodBadges";
 import { PairingRow, PopularStrip } from "../../components/MenuSuggestions";
 import { ReviewDialog, StarPicker } from "../../components/ReviewFab";
@@ -37,6 +38,24 @@ function LeaveIcon({ className }: { className?: string }) {
       <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
       <path d="M16 17l5-5-5-5" />
       <path d="M21 12H9" />
+    </svg>
+  );
+}
+
+function UserIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden
+    >
+      <path d="M20 21a8 8 0 1 0-16 0" />
+      <circle cx="12" cy="7.5" r="4.5" />
     </svg>
   );
 }
@@ -98,6 +117,7 @@ export default function Menu() {
   const [confirming, setConfirming] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false);
   const [activeItemCount, setActiveItemCount] = useState<number | null>(null);
   const [leavingTable, setLeavingTable] = useState(false);
@@ -397,6 +417,15 @@ export default function Menu() {
             </Button>
             <button
               type="button"
+              onClick={() => setDetailsOpen(true)}
+              aria-label="Add your details"
+              title="Add your details"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-300 text-slate-500 hover:bg-slate-50 hover:text-orange-500"
+            >
+              <UserIcon className="h-[18px] w-[18px]" />
+            </button>
+            <button
+              type="button"
               onClick={() => setFeedbackOpen(true)}
               aria-label="Rate us"
               title="Rate us"
@@ -616,6 +645,17 @@ export default function Menu() {
       <DishDialog food={detailFood} lang={lang} onAdd={addCustomized} onClose={() => setDetailFood(null)} />
 
       <ReviewDialog open={feedbackOpen} onClose={() => setFeedbackOpen(false)} />
+
+      {orderId && (
+        <EditDetailsDialog
+          open={detailsOpen}
+          onClose={() => setDetailsOpen(false)}
+          orderId={orderId}
+          defaultPhone={(orderQuery.data?.order.customerPhone ?? "").replace(/\D/g, "").slice(-10)}
+          defaultBirthday={orderQuery.data?.order.customerBirthday ?? ""}
+          defaultMarketingConsent={orderQuery.data?.order.customerMarketingConsent ?? false}
+        />
+      )}
 
       {leaveConfirmOpen && (
         <div

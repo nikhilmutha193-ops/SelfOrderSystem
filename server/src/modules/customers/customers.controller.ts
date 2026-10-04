@@ -6,12 +6,15 @@ import { asyncHandler } from "../../middleware/errorHandler";
 import { streamInvoicePdf } from "../../utils/pdf";
 import {
   attachSchema,
+  birthdaySmsSettingsSchema,
   idParams,
   listQuery,
   lookupQuery,
   loyaltySettingsSchema,
   orderParams,
   redeemSchema,
+  sendCampaignSchema,
+  smsTemplateSchema,
   tokenParams,
   updateCustomerSchema,
 } from "./customers.schema";
@@ -25,6 +28,11 @@ export const listCustomers = asyncHandler(async (req: Request, res: Response) =>
 export const lookup = asyncHandler(async (req: Request, res: Response) => {
   const { phone } = parse(lookupQuery, req.query);
   res.json(await customers.lookup(getContext(req), phone));
+});
+
+export const guestLookup = asyncHandler(async (req: Request, res: Response) => {
+  const { phone } = parse(lookupQuery, req.query);
+  res.json(await customers.guestLookup(getContext(req).restaurantId, phone));
 });
 
 export const profile = asyncHandler(async (req: Request, res: Response) => {
@@ -45,6 +53,19 @@ export const getSettings = asyncHandler(async (req: Request, res: Response) => {
 export const saveSettings = asyncHandler(async (req: Request, res: Response) => {
   const input = parse(loyaltySettingsSchema, req.body);
   res.json(await customers.saveLoyaltySettings(getContext(req), input));
+});
+
+export const getBirthdaySmsSettings = asyncHandler(async (req: Request, res: Response) => {
+  res.json(await customers.getBirthdaySmsSettings(getContext(req)));
+});
+
+export const saveBirthdaySmsSettings = asyncHandler(async (req: Request, res: Response) => {
+  const input = parse(birthdaySmsSettingsSchema, req.body);
+  res.json(await customers.saveBirthdaySmsSettings(getContext(req), input));
+});
+
+export const sendBirthdaySmsNow = asyncHandler(async (req: Request, res: Response) => {
+  res.json(await customers.sendBirthdayGreetingsNow(getContext(req)));
 });
 
 export const orderCustomer = asyncHandler(async (req: Request, res: Response) => {
@@ -83,4 +104,34 @@ export const publicBill = asyncHandler(async (req: Request, res: Response) => {
 export const publicBillPdf = asyncHandler(async (req: Request, res: Response) => {
   const { token } = parse(tokenParams, req.params);
   await streamInvoicePdf(res, await customers.publicBillPdfData(req.restaurantId!, token));
+});
+
+export const listSmsTemplates = asyncHandler(async (req: Request, res: Response) => {
+  res.json(await customers.listSmsTemplates(getContext(req)));
+});
+
+export const createSmsTemplate = asyncHandler(async (req: Request, res: Response) => {
+  const input = parse(smsTemplateSchema, req.body);
+  res.status(201).json(await customers.createSmsTemplate(getContext(req), input));
+});
+
+export const updateSmsTemplate = asyncHandler(async (req: Request, res: Response) => {
+  const { id } = parse(idParams, req.params);
+  const input = parse(smsTemplateSchema, req.body);
+  res.json(await customers.updateSmsTemplate(getContext(req), id, input));
+});
+
+export const deleteSmsTemplate = asyncHandler(async (req: Request, res: Response) => {
+  const { id } = parse(idParams, req.params);
+  await customers.deleteSmsTemplate(getContext(req), id);
+  res.status(204).send();
+});
+
+export const sendSmsCampaign = asyncHandler(async (req: Request, res: Response) => {
+  const input = parse(sendCampaignSchema, req.body);
+  res.status(201).json(await customers.sendSmsCampaign(getContext(req), input));
+});
+
+export const listSmsCampaigns = asyncHandler(async (req: Request, res: Response) => {
+  res.json(await customers.listSmsCampaigns(getContext(req)));
 });

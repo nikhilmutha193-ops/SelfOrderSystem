@@ -6,6 +6,7 @@ import { StationSelect } from "../../features/printing/components/StationSelect"
 import type { Category, FoodItem, FoodType, ModifierGroup, Subcategory, Translations } from "../../lib/types";
 import { api, extractErrorMessage, uploadImage } from "../../shared/api/client";
 import { Dialog } from "../../shared/ui/Dialog";
+import { usePageTour, type TourStep } from "../../shared/ui/PageTour";
 import {
   Badge,
   Button,
@@ -43,6 +44,7 @@ export default function FoodItems() {
   const [uploading, setUploading] = useState(false);
   const [isBestseller, setIsBestseller] = useState(false);
   const [bestsellerEmoji, setBestsellerEmoji] = useState("⭐");
+  const [isTodaySpecial, setIsTodaySpecial] = useState(false);
   const [foodType, setFoodType] = useState<FoodType>("veg");
   const [rating, setRating] = useState<number>(0);
   const [prepTimeMinutes, setPrepTimeMinutes] = useState<number>(10);
@@ -223,6 +225,7 @@ export default function FoodItems() {
       imageUrl,
       isBestseller,
       bestsellerEmoji,
+      isTodaySpecial,
       foodType,
       rating,
       prepTimeMinutes,
@@ -254,6 +257,7 @@ export default function FoodItems() {
       setImageUrl("");
       setIsBestseller(false);
       setBestsellerEmoji("⭐");
+      setIsTodaySpecial(false);
       setFoodType("veg");
       setRating(0);
       setPrepTimeMinutes(10);
@@ -286,6 +290,7 @@ export default function FoodItems() {
     setImageUrl("");
     setIsBestseller(false);
     setBestsellerEmoji("⭐");
+    setIsTodaySpecial(false);
     setFoodType("veg");
     setRating(0);
     setPrepTimeMinutes(10);
@@ -327,6 +332,7 @@ export default function FoodItems() {
     setImageUrl(food.imageUrl || "");
     setIsBestseller(food.isBestseller);
     setBestsellerEmoji(food.bestsellerEmoji || "⭐");
+    setIsTodaySpecial(food.isTodaySpecial ?? false);
     setFoodType(food.foodType || "veg");
     setRating(food.rating || 0);
     setPrepTimeMinutes(food.prepTimeMinutes ?? 10);
@@ -381,13 +387,45 @@ export default function FoodItems() {
     return (food.reviewSum! / food.reviewCount).toFixed(1);
   }
 
+  const tourSteps: TourStep[] = useMemo(
+    () => [
+      {
+        target: "food-add",
+        title: "Add a dish",
+        description: "Opens a form for the dish's name, price, photo, kitchen routing, customization options and translations.",
+      },
+      {
+        target: "food-search",
+        title: "Search",
+        description: "Search by dish name or its POS short code.",
+      },
+      {
+        target: "food-filter-category",
+        title: "Filter by category",
+        description: "Narrow the list to one category.",
+      },
+      {
+        target: "food-filter-status",
+        title: "Filter by status",
+        description: "Show only dishes that are on the menu, or only the hidden ones.",
+      },
+      {
+        target: "food-list",
+        title: "Your dishes",
+        description: "Edit a dish or hide it from the guest menu. Bestseller and Today's Special badges show here too.",
+      },
+    ],
+    []
+  );
+  usePageTour(tourSteps);
+
   return (
     <Page>
       <PageHeader
         title="Food Items"
         description="Every dish on your menu, with prices, photos, options and kitchen routing."
         actions={
-          <Button icon={Plus} onClick={startNew}>
+          <Button data-tour="food-add" icon={Plus} onClick={startNew}>
             Add dish
           </Button>
         }
@@ -395,9 +433,10 @@ export default function FoodItems() {
 
       {!formOpen && <ErrorText>{error}</ErrorText>}
 
-      <Card>
+      <Card data-tour="food-list">
         <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-[1fr_auto_auto]">
           <SearchInput
+            data-tour="food-search"
             className="col-span-2 sm:col-span-1"
             placeholder="Search by name or short code"
             aria-label="Search dishes"
@@ -405,6 +444,7 @@ export default function FoodItems() {
             onChange={(e) => setQuery(e.target.value)}
           />
           <Select
+            data-tour="food-filter-category"
             aria-label="Filter by category"
             value={filterCategory}
             onChange={(e) => setFilterCategory(e.target.value)}
@@ -417,6 +457,7 @@ export default function FoodItems() {
             ))}
           </Select>
           <Select
+            data-tour="food-filter-status"
             aria-label="Filter by status"
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value as "" | "active" | "hidden")}
@@ -530,6 +571,7 @@ export default function FoodItems() {
                               {food.isActive ? "On menu" : "Hidden"}
                             </Badge>
                             {food.isBestseller && <Badge tone="amber">Bestseller</Badge>}
+                            {food.isTodaySpecial && <Badge tone="orange">Today's Special</Badge>}
                           </div>
                         </td>
                         <td className="text-right whitespace-nowrap">
@@ -890,6 +932,13 @@ export default function FoodItems() {
                 ))}
               </div>
             )}
+            <Switch
+              id="food-today-special"
+              checked={isTodaySpecial}
+              onChange={setIsTodaySpecial}
+              label="Today's Special"
+              description="Features this dish in the Today's Specials section on the landing page."
+            />
           </section>
 
           <section className="flex flex-col gap-3">

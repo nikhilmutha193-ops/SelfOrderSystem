@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { useCanEdit } from "../../../lib/adminAuth";
 import { cashSuggestions } from "../../../lib/cash";
 import { extractErrorMessage } from "../../../shared/api/client";
+import { usePageTour, type TourStep } from "../../../shared/ui/PageTour";
 import { Badge, Button, Card, ErrorText, Input, PageHeader, Select, TableWrap } from "../../../shared/ui/ui";
 import { useCashMovement, useCloseShift, useCurrentShift, useOpenShift, useShiftHistory } from "../queries";
 
@@ -71,6 +72,47 @@ export default function Shifts() {
   const expectedRounded = shift ? Math.round(shift.expectedCash ?? 0) : null;
   const closeChipValues = expectedRounded !== null ? [expectedRounded, ...cashSuggestions(expectedRounded)] : [];
 
+  const tourSteps: TourStep[] = useMemo(
+    () => [
+      ...(!shift
+        ? [
+            {
+              target: "shift-open-form",
+              title: "Open a shift",
+              description: "Enter how much cash is in the drawer right now to start tracking it for this shift.",
+            },
+          ]
+        : [
+            {
+              target: "shift-summary",
+              title: "Shift summary",
+              description: "Expected cash in the drawer right now: opening float plus cash sales and cash movements.",
+            },
+            ...(canEdit
+              ? [
+                  {
+                    target: "shift-cash-move",
+                    title: "Cash in or out",
+                    description: "Record cash taken from or added to the drawer, with a reason - a paid-out for supplies, for example.",
+                  },
+                  {
+                    target: "shift-close",
+                    title: "Close shift",
+                    description: "Count the drawer and close the shift - the difference from the expected amount is recorded as the variance.",
+                  },
+                ]
+              : []),
+          ]),
+      {
+        target: "shift-history",
+        title: "Recent shifts",
+        description: "Every past shift, with its float, expected and counted cash, and the variance.",
+      },
+    ],
+    [shift, canEdit]
+  );
+  usePageTour(tourSteps);
+
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 sm:gap-6">
       <PageHeader
@@ -85,7 +127,7 @@ export default function Shifts() {
       <ErrorText>{error ?? (current.error ? extractErrorMessage(current.error) : null)}</ErrorText>
 
       {!shift ? (
-        <Card>
+        <Card data-tour="shift-open-form">
           <h2 className="mb-4 text-base font-semibold text-slate-900">No shift is open</h2>
           {canEdit ? (
             <form
@@ -120,7 +162,7 @@ export default function Shifts() {
         </Card>
       ) : (
         <>
-          <Card>
+          <Card data-tour="shift-summary">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <h2 className="text-base font-semibold text-slate-900">Shift open</h2>
@@ -172,7 +214,7 @@ export default function Shifts() {
 
           {canEdit && (
             <div className="grid gap-6 lg:grid-cols-2">
-              <Card>
+              <Card data-tour="shift-cash-move">
                 <h2 className="mb-4 text-base font-semibold text-slate-900">Cash in or out</h2>
                 <form
                   className="flex flex-col gap-3"
@@ -228,7 +270,7 @@ export default function Shifts() {
                 </form>
               </Card>
 
-              <Card>
+              <Card data-tour="shift-close">
                 <h2 className="mb-4 text-base font-semibold text-slate-900">Close shift</h2>
                 <form
                   className="flex flex-col gap-3"
@@ -298,7 +340,7 @@ export default function Shifts() {
         </>
       )}
 
-      <Card>
+      <Card data-tour="shift-history">
         <h2 className="mb-4 text-base font-semibold text-slate-900">Recent shifts</h2>
         <TableWrap>
           <table className="w-full min-w-[40rem] text-sm">

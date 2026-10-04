@@ -6,6 +6,7 @@ import {
   Gift,
   LockOpen,
   Minus,
+  Pencil,
   Plus,
   Printer,
   ReceiptText,
@@ -33,6 +34,7 @@ import {
   EmptyState,
   ErrorText,
   Field,
+  IconButton,
   Input,
   Page,
   PageHeader,
@@ -46,6 +48,7 @@ import { usePrintKot } from "../../kitchen/queries";
 import { usePrintingStatus } from "../../printing/queries";
 import { ordersApi } from "../api";
 import BillActions from "../components/BillActions";
+import { EditOrderCustomerDialog } from "../components/EditOrderCustomerDialog";
 import SettleDialog from "../components/SettleDialog";
 import {
   useAddOrderItems,
@@ -83,6 +86,7 @@ export default function OrderDetail({
   const [activeCat, setActiveCat] = useState("all");
   const [cart, setCart] = useState<Record<string, number>>({});
   const [settleOpen, setSettleOpen] = useState(false);
+  const [editCustomerOpen, setEditCustomerOpen] = useState(false);
   const [complimentaryItem, setComplimentaryItem] = useState<{
     id: string;
     name: string;
@@ -717,6 +721,14 @@ export default function OrderDetail({
               <Badge tone={statusBadge.tone} dot>
                 {statusBadge.label}
               </Badge>
+              {order.status === "open" && (
+                <IconButton
+                  size="sm"
+                  icon={Pencil}
+                  label="Edit guest details"
+                  onClick={() => setEditCustomerOpen(true)}
+                />
+              )}
             </span>
           }
           description={facts.join(" · ")}
@@ -734,9 +746,14 @@ export default function OrderDetail({
       )}
       {embedded && (
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <p className="font-semibold text-slate-900">{order.customerName || "Guest"}</p>
-            <p className="text-sm text-slate-500">{facts.join(" · ")}</p>
+          <div className="flex items-center gap-2">
+            <div>
+              <p className="font-semibold text-slate-900">{order.customerName || "Guest"}</p>
+              <p className="text-sm text-slate-500">{facts.join(" · ")}</p>
+            </div>
+            {order.status === "open" && (
+              <IconButton size="sm" icon={Pencil} label="Edit guest details" onClick={() => setEditCustomerOpen(true)} />
+            )}
           </div>
           <Badge tone={statusBadge.tone} dot>
             {statusBadge.label}
@@ -787,6 +804,8 @@ export default function OrderDetail({
         upi={data.payment}
         onClose={() => setSettleOpen(false)}
       />
+
+      <EditOrderCustomerDialog order={order} open={editCustomerOpen} onClose={() => setEditCustomerOpen(false)} />
 
       <ReasonDialog
         open={complimentaryItem !== null}

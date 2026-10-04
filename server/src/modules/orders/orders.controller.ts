@@ -31,6 +31,7 @@ import {
   startDineInSchema,
   startTakeawaySchema,
   transferSchema,
+  updateOrderCustomerSchema,
 } from "./orders.schema";
 import * as ordersService from "./orders.service";
 
@@ -59,6 +60,12 @@ export const startTakeawayOrder = asyncHandler(async (req: Request, res: Respons
 export const startCounterOrder = asyncHandler(async (req: Request, res: Response) => {
   const input = parse(startCounterSchema, req.body);
   await created(req, res, "orders.counter", () => ordersService.startCounterOrder(getContext(req), input));
+});
+
+export const updateOrderCustomer = asyncHandler(async (req: Request, res: Response) => {
+  const { orderId } = parse(orderIdParams, req.params);
+  const input = parse(updateOrderCustomerSchema, req.body);
+  res.json(await ordersService.updateOrderCustomer(getContext(req), orderId, input));
 });
 
 export const addOrderItems = asyncHandler(async (req: Request, res: Response) => {

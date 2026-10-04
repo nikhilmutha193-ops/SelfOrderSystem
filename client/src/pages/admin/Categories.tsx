@@ -1,10 +1,11 @@
 import { Check, Eye, EyeOff, Layers, Pencil, Plus } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { StationSelect } from "../../features/printing/components/StationSelect";
 import { useStationList } from "../../features/printing/queries";
 import type { Category } from "../../lib/types";
 import { api, extractErrorMessage } from "../../shared/api/client";
+import { usePageTour, type TourStep } from "../../shared/ui/PageTour";
 import {
   Badge,
   Button,
@@ -73,13 +74,31 @@ export default function Categories() {
     }
   }
 
+  const tourSteps: TourStep[] = useMemo(
+    () => [
+      {
+        target: "category-form",
+        title: "Add or edit a category",
+        description:
+          "Name it, optionally add a description, and set a default kitchen station so KOTs for dishes in this category print at the right printer.",
+      },
+      {
+        target: "category-list",
+        title: "All categories",
+        description: "Edit a category or hide it - hiding a category hides every dish inside it from the menu.",
+      },
+    ],
+    []
+  );
+  usePageTour(tourSteps);
+
   return (
     <Page>
       <PageHeader
         title="Categories"
         description="The top level of your menu. Turning a category off hides every dish inside it."
       />
-      <Card>
+      <Card data-tour="category-form">
         <CardHeader
           icon={editing ? Pencil : Plus}
           title={editing ? `Edit “${editing.name}”` : "Add a category"}
@@ -123,7 +142,7 @@ export default function Categories() {
 
       <ErrorText>{error}</ErrorText>
 
-      <Card>
+      <Card data-tour="category-list">
         <CardHeader title="All categories" description={`${categories.length} in your menu`} className="mb-3" />
         {categories.length === 0 ? (
           <EmptyState icon={Layers} title="No categories yet" description="Add your first category above." />

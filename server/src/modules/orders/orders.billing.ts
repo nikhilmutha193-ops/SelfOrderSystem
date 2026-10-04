@@ -12,6 +12,7 @@ import { assertDayOpen } from "../../utils/dayLock";
 import { HttpError } from "../../utils/httpError";
 import { computeInvoiceTotals, InvoiceItem, InvoiceTotals, PricingInput, round2 } from "../../utils/invoice";
 import { DEFAULT_SAC, financialYearLabel, nextInvoiceNumber } from "../../utils/invoiceNumber";
+import { normalizePhone } from "../../utils/phone";
 import { syncTableState } from "../../utils/tableState";
 import { getOwnedOrder, requireOwner } from "./orders.access";
 import { assertCreditAllowed, assertCreditCustomer } from "../credit/credit.service";
@@ -144,7 +145,7 @@ async function billOpenOrder(ctx: RequestContext, repo: OrdersRepository, order:
   let couponId: IOrder["_id"] | null = null;
   if (order.couponCode) {
     try {
-      const coupon = await findValidCoupon(ctx.restaurantId, order.couponCode, subtotal);
+      const coupon = await findValidCoupon(ctx.restaurantId, order.couponCode, subtotal, order.customerPhone);
       couponDiscount = computeDiscountAmount(coupon, subtotal);
       couponId = coupon._id;
     } catch (err) {
@@ -163,6 +164,9 @@ async function billOpenOrder(ctx: RequestContext, repo: OrdersRepository, order:
   const changes = await withTransaction(async (session) => {
     if (couponId && !(await repo.claimCouponUse(couponId, session))) {
       throw new HttpError(409, `Coupon ${order.couponCode} has reached its usage limit. Remove it and try again.`);
+    }
+    if (couponId) {
+      await repo.recordCouponRedemption(couponId, order._id, normalizePhone(order.customerPhone) ?? "", session);
     }
     const invoiceNumber =
       order.invoiceNumber ?? (await nextInvoiceNumber(ctx.restaurantId, prefix, financialYear, session));
@@ -200,7 +204,10 @@ export async function reopenBill(ctx: RequestContext, orderId: string, reason: s
   const changes: Partial<IOrder> = { status: "open", bill: null, billedAt: null };
   await withTransaction(async (session) => {
     await transition(repo, order, "billed", changes, session);
-    if (order.couponCode) await repo.releaseCouponUse(order.couponCode, session);
+    if (order.couponCode) {
+      await repo.releaseCouponUse(order.couponCode, session);
+      await repo.releaseCouponRedemption(order._id, session);
+    }
   });
   order.set(changes);
   await syncOrderTable(order);
@@ -288,7 +295,10 @@ export async function cancelOrder(ctx: RequestContext, orderId: string, reason: 
   };
   await withTransaction(async (session) => {
     await transition(repo, order, from, changes, session);
-    if (from === "billed" && order.couponCode) await repo.releaseCouponUse(order.couponCode, session);
+    if (from === "billed" && order.couponCode) {
+      await repo.releaseCouponUse(order.couponCode, session);
+      await repo.releaseCouponRedemption(order._id, session);
+    }
   });
   order.set(changes);
   await repo.cancelPendingItems(order._id);
@@ -309,7 +319,10 @@ export async function voidBill(ctx: RequestContext, orderId: string, reason: str
   const changes: Partial<IOrder> = { status: "cancelled", voidedAt: new Date(), voidReason: reason };
   await withTransaction(async (session) => {
     await transition(repo, order, "closed", changes, session);
-    if (order.couponCode) await repo.releaseCouponUse(order.couponCode, session);
+    if (order.couponCode) {
+      await repo.releaseCouponUse(order.couponCode, session);
+      await repo.releaseCouponRedemption(order._id, session);
+    }
   });
   order.set(changes);
 

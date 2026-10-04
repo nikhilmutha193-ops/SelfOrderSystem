@@ -14,6 +14,10 @@ export interface QrSettings {
   accentColor: string;
 }
 
+export interface TableLoginSettings {
+  allowQrScan: boolean;
+}
+
 export type PrintPaperSize = "thermal58" | "thermal80" | "a5" | "a4";
 
 export type PrintFontSize = "compact" | "normal" | "large";
@@ -129,6 +133,7 @@ export interface FoodItem {
   isActive: boolean;
   isBestseller: boolean;
   bestsellerEmoji?: string;
+  isTodaySpecial?: boolean;
   foodType?: FoodType;
   rating?: number;
   prepTimeMinutes?: number;
@@ -152,6 +157,7 @@ export interface MenuFoodItem {
   imageUrl?: string;
   isBestseller?: boolean;
   bestsellerEmoji?: string;
+  isTodaySpecial?: boolean;
   foodType?: FoodType;
   rating?: number;
   translations?: Translations;
@@ -264,6 +270,8 @@ export interface Order {
   deliveryProvider?: DeliveryProvider;
   customerName: string;
   customerPhone: string;
+  customerBirthday?: string;
+  customerMarketingConsent?: boolean;
   members: number;
   checkinTime: string;
   checkoutTime?: string;
@@ -480,6 +488,8 @@ export interface Coupon {
   maxDiscountAmount?: number;
   usageLimit?: number;
   usedCount: number;
+  /** Max times one mobile number may use this coupon. Blank means no per-customer cap. */
+  perCustomerLimit?: number;
   expiresAt?: string;
   isActive: boolean;
 }
@@ -492,6 +502,18 @@ export interface Award {
   year?: number;
   imageUrl?: string;
   description?: string;
+  sortOrder: number;
+  isActive: boolean;
+}
+
+export interface PromoBanner {
+  _id: string;
+  restaurantId: string;
+  title?: string;
+  desktopImageUrl: string;
+  /** Falls back to desktopImageUrl on the public page if blank. */
+  mobileImageUrl?: string;
+  linkUrl?: string;
   sortOrder: number;
   isActive: boolean;
 }
@@ -534,11 +556,25 @@ export interface LandingBestseller {
   bestsellerEmoji?: string;
 }
 
+export interface LandingTodaySpecialGroup {
+  categoryId: string;
+  categoryName: string;
+  items: {
+    _id: string;
+    name: string;
+    price: number;
+    description?: string;
+    imageUrl?: string;
+  }[];
+}
+
 export interface LandingData {
   restaurant: LandingRestaurant;
   content?: LandingContent;
   team: TeamMember[];
   bestsellers: LandingBestseller[];
+  todaySpecials: LandingTodaySpecialGroup[];
+  banners: PromoBanner[];
   reviews: Review[];
   awards: Award[];
   googleReviews: GoogleReview[];
@@ -587,6 +623,7 @@ export interface LandingContent {
     items: { title: string; text: string; imageUrl: string }[];
   };
   menu: { enabled: boolean; eyebrow: string; title: string; lead: string; ctaLabel: string };
+  todaySpecial: { enabled: boolean; eyebrow: string; title: string; lead: string };
   story: {
     enabled: boolean;
     eyebrow: string;
@@ -979,6 +1016,29 @@ export interface LoyaltySettings {
   pointValue: number;
   minRedeem: number;
   expiryDays: number;
+}
+
+export interface BirthdaySmsSettings {
+  enabled: boolean;
+  /** Placeholders {name} and {restaurant} are substituted server-side before sending. */
+  template: string;
+}
+
+export interface SmsTemplate {
+  _id: string;
+  name: string;
+  message: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SmsCampaign {
+  _id: string;
+  message: string;
+  recipientCount: number;
+  sentCount: number;
+  sentBy: string;
+  createdAt: string;
 }
 
 export interface OrderCustomer {

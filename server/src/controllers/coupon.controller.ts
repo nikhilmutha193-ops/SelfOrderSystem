@@ -12,6 +12,7 @@ interface CouponBody {
   minOrderValue?: number;
   maxDiscountAmount?: number | null;
   usageLimit?: number | null;
+  perCustomerLimit?: number | null;
   expiresAt?: string | null;
 }
 
@@ -47,6 +48,13 @@ function validateCouponBody(body: CouponBody, requireCore: boolean) {
   ) {
     throw new HttpError(400, "usageLimit must be at least 1");
   }
+  if (
+    body.perCustomerLimit !== undefined &&
+    body.perCustomerLimit !== null &&
+    (typeof body.perCustomerLimit !== "number" || body.perCustomerLimit < 1)
+  ) {
+    throw new HttpError(400, "perCustomerLimit must be at least 1");
+  }
 }
 
 export const listCoupons = asyncHandler(async (req: Request, res: Response) => {
@@ -69,6 +77,7 @@ export const createCoupon = asyncHandler(async (req: Request, res: Response) => 
     minOrderValue: body.minOrderValue ?? 0,
     maxDiscountAmount: body.maxDiscountAmount ?? undefined,
     usageLimit: body.usageLimit ?? undefined,
+    perCustomerLimit: body.perCustomerLimit ?? undefined,
     expiresAt: body.expiresAt ? new Date(body.expiresAt) : undefined,
     isActive: true,
   });
@@ -103,6 +112,9 @@ export const updateCoupon = asyncHandler(async (req: Request, res: Response) => 
 
   if (body.usageLimit === null) unset.usageLimit = "";
   else if (body.usageLimit !== undefined) set.usageLimit = body.usageLimit;
+
+  if (body.perCustomerLimit === null) unset.perCustomerLimit = "";
+  else if (body.perCustomerLimit !== undefined) set.perCustomerLimit = body.perCustomerLimit;
 
   if (body.expiresAt === null) unset.expiresAt = "";
   else if (body.expiresAt !== undefined) set.expiresAt = new Date(body.expiresAt);

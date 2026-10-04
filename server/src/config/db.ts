@@ -12,6 +12,10 @@ export function connectDb(): Promise<void> {
     return Promise.reject(new Error("MONGO_URI is not set"));
   }
 
+  // Password redacted - this is for confirming which cluster/user/db the container is actually
+  // using (e.g. after rotating a credential), not for sharing the full connection string.
+  logger.info("Connecting to MongoDB", { uri: uri.replace(/:\/\/([^:/@]+):[^@]*@/, "://$1:***@") });
+
   connection = mongoose
     .connect(uri, { serverSelectionTimeoutMS: 8000 })
     .then(async () => {

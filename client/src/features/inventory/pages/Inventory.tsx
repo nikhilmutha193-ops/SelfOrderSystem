@@ -1,8 +1,9 @@
 import { ChartColumn, ClipboardCheck, Package, ReceiptText, ScrollText } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
 import { useCanEdit } from "../../../lib/adminAuth";
+import { usePageTour, type TourStep } from "../../../shared/ui/PageTour";
 import { Alert, Page, PageHeader, Tabs } from "../../../shared/ui/ui";
 import { CountsTab } from "../components/CountsTab";
 import { PurchasesTab } from "../components/PurchasesTab";
@@ -74,6 +75,19 @@ export default function Inventory() {
     }
   }
 
+  const tourSteps: TourStep[] = useMemo(
+    () => [
+      {
+        target: "inventory-tabs",
+        title: "Five tabs",
+        description:
+          "Stock: your ingredients and updating what's on the shelf. Recipes: give each dish its ingredients. Purchases: record what you bought and at what price. Stock count: a full physical count at once. Reports: usage, purchases and food cost.",
+      },
+    ],
+    []
+  );
+  usePageTour(tourSteps);
+
   return (
     <Page>
       <PageHeader
@@ -81,11 +95,13 @@ export default function Inventory() {
         description="Ingredients, recipes and purchases. Stock goes down when a KOT is sent and comes back if an item is cancelled before cooking."
       />
       {!guideDismissed && <GuideCard onDismiss={dismissGuide} />}
-      <Tabs<TabKey>
-        value={tab}
-        onChange={(key) => setParams({ tab: key }, { replace: true })}
-        items={TABS.map((t) => ({ ...t }))}
-      />
+      <div data-tour="inventory-tabs">
+        <Tabs<TabKey>
+          value={tab}
+          onChange={(key) => setParams({ tab: key }, { replace: true })}
+          items={TABS.map((t) => ({ ...t }))}
+        />
+      </div>
       {tab === "stock" && <StockTab canEdit={canEdit} />}
       {tab === "recipes" && <RecipesTab canEdit={canEdit} />}
       {tab === "purchases" && <PurchasesTab canEdit={canEdit} />}

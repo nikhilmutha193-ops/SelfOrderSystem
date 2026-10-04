@@ -15,6 +15,11 @@ export interface IQrSettings {
   accentColor: string;
 }
 
+/** Controls what the public table sign-in page (/order) offers, besides the code+PIN form. */
+export interface ITableLoginSettings {
+  allowQrScan: boolean;
+}
+
 export type PrintPaperSize = "thermal58" | "thermal80" | "a5" | "a4";
 
 export type PrintFontSize = "compact" | "normal" | "large";
@@ -94,6 +99,12 @@ export interface IArea {
   name: string;
 }
 
+export interface IBirthdaySmsSettings {
+  enabled: boolean;
+  /** {name} and {restaurant} are substituted in; see utils/birthdaySmsScheduler.ts. */
+  template: string;
+}
+
 export interface IRestaurant {
   _id: Types.ObjectId;
   name: string;
@@ -117,6 +128,7 @@ export interface IRestaurant {
   aggregatorWebhookSecret?: string;
   taxRates: ITaxRate[];
   qrSettings: IQrSettings;
+  tableLoginSettings: ITableLoginSettings;
   kotSettings: IKotSettings;
   invoiceSettings: IInvoiceSettings;
   billingSettings: IBillingSettings;
@@ -124,6 +136,7 @@ export interface IRestaurant {
   loyaltySettings: ILoyaltySettings;
   bookingSettings: IBookingSettings;
   areas: IArea[];
+  birthdaySmsSettings: IBirthdaySmsSettings;
   backupSchedule: IBackupSchedule;
   createdAt: Date;
   updatedAt: Date;
@@ -149,6 +162,11 @@ const qrSettingsSchema = new Schema<IQrSettings>(
     instructionText: { type: String, default: "Scan to view menu & order" },
     accentColor: { type: String, default: "#ea580c" },
   },
+  { _id: false }
+);
+
+const tableLoginSettingsSchema = new Schema<ITableLoginSettings>(
+  { allowQrScan: { type: Boolean, default: true } },
   { _id: false }
 );
 
@@ -237,6 +255,7 @@ const restaurantSchema = new Schema<IRestaurant>(
     },
     taxRates: { type: [taxRateSchema], default: [] },
     qrSettings: { type: qrSettingsSchema, default: () => ({}) },
+    tableLoginSettings: { type: tableLoginSettingsSchema, default: () => ({}) },
     kotSettings: { type: kotSettingsSchema, default: () => ({}) },
     invoiceSettings: { type: invoiceSettingsSchema, default: () => ({}) },
     billingSettings: { type: billingSettingsSchema, default: () => ({}) },
@@ -272,6 +291,19 @@ const restaurantSchema = new Schema<IRestaurant>(
     areas: {
       type: [new Schema<IArea>({ name: { type: String, required: true, trim: true } })],
       default: [],
+    },
+    birthdaySmsSettings: {
+      type: new Schema<IBirthdaySmsSettings>(
+        {
+          enabled: { type: Boolean, default: false },
+          template: {
+            type: String,
+            default: "Happy Birthday {name}! From all of us at {restaurant}, have a wonderful day. See you soon!",
+          },
+        },
+        { _id: false }
+      ),
+      default: () => ({}),
     },
     backupSchedule: { type: backupScheduleSchema, default: () => ({}) },
     chatModeration: { type: chatModerationSchema, default: () => ({}) },

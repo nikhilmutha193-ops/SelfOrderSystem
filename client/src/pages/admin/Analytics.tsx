@@ -1,9 +1,10 @@
 import { ChartColumn, ClipboardList, IndianRupee, Lightbulb, ReceiptText } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
 import MenuEngineering from "../../features/analytics/components/MenuEngineering";
 import { api, extractErrorMessage } from "../../shared/api/client";
+import { usePageTour, type TourStep } from "../../shared/ui/PageTour";
 import { Card, ErrorText, Page, PageHeader, Skeleton, StatCard, TableWrap, Tabs } from "../../shared/ui/ui";
 
 interface SalesData {
@@ -74,33 +75,88 @@ export default function Analytics() {
       .catch((err) => setError(extractErrorMessage(err)));
   }, [days]);
 
+  const tourSteps: TourStep[] = useMemo(
+    () => [
+      {
+        target: "analytics-view",
+        title: "Sales or menu engineering",
+        description: "Switch between day-to-day sales/kitchen figures and the menu engineering breakdown.",
+      },
+      {
+        target: "analytics-period",
+        title: "Pick a period",
+        description: "Every chart and figure on this page covers this many days back.",
+      },
+      ...(view === "sales" && sales
+        ? [
+            {
+              target: "analytics-stats",
+              title: "Totals",
+              description: "Revenue, order count and average order value for the period.",
+            },
+            {
+              target: "analytics-by-day",
+              title: "Revenue by day",
+              description: "Spot slow or busy days at a glance.",
+            },
+            {
+              target: "analytics-by-hour",
+              title: "Peak hours",
+              description: "When orders actually come in, across the whole period.",
+            },
+            {
+              target: "analytics-mix",
+              title: "Order type mix and top dishes",
+              description: "How dine-in/take-away/delivery split, and your best-selling dishes by quantity and revenue.",
+            },
+          ]
+        : []),
+      ...(view === "sales"
+        ? [
+            {
+              target: "analytics-prep",
+              title: "Prep time: actual vs. estimated",
+              description:
+                "Measured from KOT print to \"ready\". If a dish is consistently off, update its prep time estimate under Food Items.",
+            },
+          ]
+        : []),
+    ],
+    [view, sales]
+  );
+  usePageTour(tourSteps);
+
   return (
     <Page>
       <PageHeader
         title="Analytics"
         description="Sales, peak hours and kitchen speed for the period you pick."
         actions={
-          <Tabs
-            value={String(days)}
-            onChange={(v) => setDays(Number(v))}
-            items={[
-              { value: "7", label: "7 days" },
-              { value: "14", label: "14 days" },
-              { value: "30", label: "30 days" },
-              { value: "90", label: "90 days" },
-            ]}
-          />
+          <div data-tour="analytics-period">
+            <Tabs
+              value={String(days)}
+              onChange={(v) => setDays(Number(v))}
+              items={[
+                { value: "7", label: "7 days" },
+                { value: "14", label: "14 days" },
+                { value: "30", label: "30 days" },
+                { value: "90", label: "90 days" },
+              ]}
+            />
+          </div>
         }
       />
 
-      <Tabs
-        value={view}
-        onChange={(v) => setParams(v === "menu" ? { view: "menu" } : {}, { replace: true })}
-        items={[
-          { value: "sales", label: "Sales & kitchen", icon: ChartColumn },
-          { value: "menu", label: "Menu engineering", icon: Lightbulb },
-        ]}
-      />
+      <div data-tour="analytics-view">
+        <Tabs
+          value={view}
+          onChange={(v) => setParams(v === "menu" ? { view: "menu" } : {}, { replace: true })}
+          items={[
+            { value: "sales", label: "Sales & kitchen", icon: ChartColumn },
+            { value: "menu", label: "Menu engineering", icon: Lightbulb },
+          ]}
+        />
+      </div>
 
       {view === "menu" ? (
         <MenuEngineering days={days} />
@@ -118,7 +174,7 @@ export default function Analytics() {
 
           {sales && (
             <>
-              <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3">
+              <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3" data-tour="analytics-stats">
                 <StatCard
                   label={`Revenue (${sales.days}d)`}
                   value={rupee(sales.totalRevenue)}
@@ -139,7 +195,7 @@ export default function Analytics() {
                 />
               </div>
 
-              <Card>
+              <Card data-tour="analytics-by-day">
                 <h2 className="mb-4 text-base font-semibold text-slate-900">Revenue by day</h2>
                 <BarChart
                   data={sales.byDay.map((d) => ({ label: d.date.slice(5), value: d.revenue }))}
@@ -147,7 +203,7 @@ export default function Analytics() {
                 />
               </Card>
 
-              <Card>
+              <Card data-tour="analytics-by-hour">
                 <h2 className="mb-1 text-base font-semibold text-slate-900">Orders by hour (peak times)</h2>
                 <p className="mb-3 text-xs text-slate-500">When orders come in, across the period.</p>
                 <BarChart
@@ -156,7 +212,7 @@ export default function Analytics() {
                 />
               </Card>
 
-              <div className="grid gap-6 lg:grid-cols-2">
+              <div className="grid gap-6 lg:grid-cols-2" data-tour="analytics-mix">
                 <Card>
                   <h2 className="mb-4 text-base font-semibold text-slate-900">Order type mix</h2>
                   {sales.byType.length === 0 ? (
@@ -212,7 +268,7 @@ export default function Analytics() {
             </>
           )}
 
-          <Card>
+          <Card data-tour="analytics-prep">
             <h2 className="mb-1 text-base font-semibold text-slate-900">Preparation time — actual vs estimated</h2>
             <p className="mb-3 text-xs text-slate-500">
               Actual is measured from KOT print to "ready". Use it to tune each dish's prep time under Food Items.

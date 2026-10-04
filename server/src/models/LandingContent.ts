@@ -44,6 +44,13 @@ export interface ILandingContent {
     ctaLabel: string;
   };
 
+  todaySpecial: {
+    enabled: boolean;
+    eyebrow: string;
+    title: string;
+    lead: string;
+  };
+
   story: {
     enabled: boolean;
     eyebrow: string;
@@ -141,6 +148,13 @@ const landingContentSchema = new Schema<ILandingContent>(
       title: { type: String, default: "Crowd favourites" },
       lead: { type: String, default: "A taste of what keeps our regulars coming back." },
       ctaLabel: { type: String, default: "See the full menu" },
+    },
+
+    todaySpecial: {
+      enabled: { type: Boolean, default: true },
+      eyebrow: { type: String, default: "Fresh Today" },
+      title: { type: String, default: "Today's Specials" },
+      lead: { type: String, default: "Chef's picks, made fresh for today." },
     },
 
     story: {

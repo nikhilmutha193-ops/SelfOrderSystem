@@ -63,6 +63,13 @@ export interface IOrder {
   deliveryProvider?: DeliveryProvider;
   customerName: string;
   customerPhone?: string;
+  /** "MM-DD", from the dine-in sign-in form. Kept on the order even with no phone yet, since a
+   *  Customer record (where birthday normally lives) needs a phone to exist at all - this is the
+   *  only place the birthday survives until one is added. See customers.service.ts's linkOrder. */
+  customerBirthday?: string;
+  /** Guest opted in to offers/marketing SMS at sign-in. Kept here the same way as
+   *  customerBirthday, so it survives until a phone exists to carry it over to a Customer. */
+  customerMarketingConsent?: boolean;
   members: number;
   checkinTime: Date;
   checkoutTime?: Date;
@@ -163,6 +170,8 @@ const orderSchema = new Schema<IOrder>(
     deliveryProvider: { type: String, enum: ["Swiggy", "Zomato", "Uber-Eats", "Other"] },
     customerName: { type: String, required: true, trim: true },
     customerPhone: { type: String, default: "", trim: true },
+    customerBirthday: { type: String, default: "", trim: true },
+    customerMarketingConsent: { type: Boolean, default: false },
     members: { type: Number, default: 1, min: 1 },
     checkinTime: { type: Date, default: Date.now },
     checkoutTime: { type: Date },

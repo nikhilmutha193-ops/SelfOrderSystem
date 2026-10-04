@@ -26,6 +26,7 @@ export interface IFoodItem {
   isActive: boolean;
   isBestseller: boolean;
   bestsellerEmoji?: string;
+  isTodaySpecial: boolean;
   foodType: FoodType;
   rating: number;
   prepTimeMinutes: number;
@@ -112,6 +113,7 @@ const foodItemSchema = new Schema<IFoodItem>(
     isActive: { type: Boolean, default: true },
     isBestseller: { type: Boolean, default: false },
     bestsellerEmoji: { type: String, default: "⭐" },
+    isTodaySpecial: { type: Boolean, default: false },
     foodType: { type: String, enum: ["veg", "non-veg", "egg"], default: "veg" },
     rating: { type: Number, default: 0, min: 0, max: 5 },
     prepTimeMinutes: { type: Number, default: 10, min: 0 },

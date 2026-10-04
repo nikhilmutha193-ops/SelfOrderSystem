@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import type { Review } from "../../lib/types";
 import { api, extractErrorMessage } from "../../shared/api/client";
 import { confirmDialog } from "../../shared/ui/confirm";
+import { usePageTour, type TourStep } from "../../shared/ui/PageTour";
 import { Badge, Card, ErrorText, PageHeader } from "../../shared/ui/ui";
 
 function Stars({ rating }: { rating: number }) {
@@ -100,6 +101,23 @@ export default function Reviews() {
     );
   }
 
+  const tourSteps: TourStep[] = useMemo(
+    () => [
+      {
+        target: "reviews-pending",
+        title: "Pending reviews",
+        description: "New reviews from the landing page wait here until you approve them for public display.",
+      },
+      {
+        target: "reviews-approved",
+        title: "Approved reviews",
+        description: "Shown publicly on the landing page. Unapprove one to pull it down, or delete it.",
+      },
+    ],
+    []
+  );
+  usePageTour(tourSteps);
+
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 sm:gap-6">
       <PageHeader
@@ -113,7 +131,7 @@ export default function Reviews() {
 
       <ErrorText>{error}</ErrorText>
 
-      <div>
+      <div data-tour="reviews-pending">
         <h2 className="mb-2 text-sm font-semibold text-slate-700">Pending ({pending.length})</h2>
         {pending.length === 0 ? (
           <p className="text-sm text-slate-400">Nothing to review right now.</p>
@@ -122,7 +140,7 @@ export default function Reviews() {
         )}
       </div>
 
-      <div>
+      <div data-tour="reviews-approved">
         <h2 className="mb-2 text-sm font-semibold text-slate-700">Approved ({approved.length})</h2>
         {approved.length === 0 ? (
           <p className="text-sm text-slate-400">No approved reviews yet.</p>

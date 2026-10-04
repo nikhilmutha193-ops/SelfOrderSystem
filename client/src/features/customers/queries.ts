@@ -12,6 +12,9 @@ export const customerKeys = {
   settings: ["customers", "settings"] as const,
   credit: (id: string) => ["customers", "credit", id] as const,
   dues: ["customers", "dues"] as const,
+  birthdaySmsSettings: ["customers", "birthdaySmsSettings"] as const,
+  smsTemplates: ["customers", "smsTemplates"] as const,
+  smsCampaigns: ["customers", "smsCampaigns"] as const,
 };
 
 export const useCustomerCredit = (id: string | null) =>
@@ -50,6 +53,9 @@ export const useOrderCustomer = (orderId: string | null | undefined) =>
 
 export const useLoyaltySettings = () => useQuery({ queryKey: customerKeys.settings, queryFn: customersApi.settings });
 
+export const useBirthdaySmsSettings = () =>
+  useQuery({ queryKey: customerKeys.birthdaySmsSettings, queryFn: customersApi.birthdaySmsSettings });
+
 function useCustomerMutation<TInput, TResult>(mutationFn: (input: TInput) => Promise<TResult>) {
   const queryClient = useQueryClient();
   return useMutation({
@@ -78,3 +84,32 @@ export function useRecordCreditPayment() {
       ]),
   });
 }
+
+export const useSaveBirthdaySmsSettings = () => useCustomerMutation(customersApi.saveBirthdaySmsSettings);
+export const useSendBirthdaySmsNow = () => useMutation({ mutationFn: customersApi.sendBirthdaySmsNow });
+
+export const useSmsTemplates = () =>
+  useQuery({ queryKey: customerKeys.smsTemplates, queryFn: customersApi.smsTemplates });
+
+export const useSmsCampaigns = () =>
+  useQuery({ queryKey: customerKeys.smsCampaigns, queryFn: customersApi.smsCampaigns });
+
+function useSmsTemplateMutation<TInput, TResult>(mutationFn: (input: TInput) => Promise<TResult>) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: customerKeys.smsTemplates }),
+  });
+}
+
+export const useCreateSmsTemplate = () => useSmsTemplateMutation(customersApi.createSmsTemplate);
+export const useUpdateSmsTemplate = () => useSmsTemplateMutation(customersApi.updateSmsTemplate);
+export const useDeleteSmsTemplate = () => useSmsTemplateMutation(customersApi.deleteSmsTemplate);
+
+export const useSendSmsCampaign = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: customersApi.sendSmsCampaign,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: customerKeys.smsCampaigns }),
+  });
+};

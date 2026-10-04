@@ -24,6 +24,10 @@ export interface CustomerInput {
   customerName: string;
   customerPhone?: string;
   members?: number;
+  /** "MM-DD" - optional, only used by the dine-in guest form for birthday offers. */
+  customerBirthday?: string;
+  /** Guest opted in to offers/marketing SMS - only used by the dine-in guest sign-in form. */
+  customerMarketingConsent?: boolean;
 }
 
 export interface NewOrderLine {
@@ -73,6 +77,8 @@ export const ordersApi = {
 
   startDineIn: (input: CustomerInput) =>
     api.post<{ token: string; order: Order }>("/orders/dine-in", input, once()).then((res) => res.data),
+  updateCustomer: (orderId: string, input: Partial<CustomerInput>) =>
+    api.patch<Order>(`/orders/${orderId}/customer`, input).then((res) => res.data),
   startCounter: (input: CustomerInput & { tableId?: string }) =>
     api.post<Order>("/orders/counter", input, once()).then((res) => res.data),
   startTakeaway: (input: CustomerInput) => api.post<Order>("/orders/takeaway", input, once()).then((res) => res.data),

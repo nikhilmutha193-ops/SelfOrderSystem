@@ -5,6 +5,8 @@ import LoyaltyEntry, { ILoyaltyEntry } from "../../models/LoyaltyEntry";
 import Order, { IOrder } from "../../models/Order";
 import OrderItem, { IOrderItem } from "../../models/OrderItem";
 import Restaurant from "../../models/Restaurant";
+import SmsCampaign, { ISmsCampaign } from "../../models/SmsCampaign";
+import SmsTemplate, { ISmsTemplate } from "../../models/SmsTemplate";
 
 export class CustomersRepository {
   constructor(private readonly restaurantId: string) {}
@@ -23,6 +25,14 @@ export class CustomersRepository {
       { $set: { loyaltySettings: settings } },
       { new: true }
     ).select("loyaltySettings");
+  }
+
+  updateBirthdaySmsSettings(settings: object) {
+    return Restaurant.findByIdAndUpdate(
+      this.restaurantId,
+      { $set: { birthdaySmsSettings: settings } },
+      { new: true }
+    ).select("birthdaySmsSettings");
   }
 
   findByPhone(phone: string) {
@@ -111,5 +121,35 @@ export class CustomersRepository {
 
   findItems(orderId: Types.ObjectId) {
     return OrderItem.find(this.scoped<IOrderItem>({ orderId })).lean();
+  }
+
+  listConsented() {
+    return Customer.find(this.scoped<ICustomer>({ marketingConsent: true, phone: { $ne: "" } }))
+      .select("phone name")
+      .lean();
+  }
+
+  listSmsTemplates() {
+    return SmsTemplate.find(this.scoped<ISmsTemplate>({})).sort({ createdAt: -1 }).lean();
+  }
+
+  createSmsTemplate(data: { name: string; message: string }) {
+    return SmsTemplate.create({ ...data, restaurantId: this.restaurantId });
+  }
+
+  updateSmsTemplate(id: string, data: { name: string; message: string }) {
+    return SmsTemplate.findOneAndUpdate(this.scoped<ISmsTemplate>({ _id: id }), { $set: data }, { new: true });
+  }
+
+  deleteSmsTemplate(id: string) {
+    return SmsTemplate.findOneAndDelete(this.scoped<ISmsTemplate>({ _id: id }));
+  }
+
+  createSmsCampaign(data: { message: string; recipientCount: number; sentCount: number; sentBy: string }) {
+    return SmsCampaign.create({ ...data, restaurantId: this.restaurantId });
+  }
+
+  listSmsCampaigns(limit: number) {
+    return SmsCampaign.find(this.scoped<ISmsCampaign>({})).sort({ createdAt: -1 }).limit(limit).lean();
   }
 }

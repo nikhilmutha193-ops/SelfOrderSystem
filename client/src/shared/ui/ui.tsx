@@ -2,6 +2,7 @@ import { CircleAlert, CircleCheck, Info, LoaderCircle, Search, TriangleAlert, X,
 import {
   forwardRef,
   type ButtonHTMLAttributes,
+  type HTMLAttributes,
   type InputHTMLAttributes,
   type ReactNode,
   type SelectHTMLAttributes,
@@ -185,14 +186,15 @@ export function Card({
   children,
   className = "",
   padding = "md",
-}: {
+  ...rest
+}: HTMLAttributes<HTMLDivElement> & {
   children: ReactNode;
   className?: string;
   padding?: "none" | "sm" | "md";
 }) {
   const pad = padding === "none" ? "" : padding === "sm" ? "p-3" : "p-4 sm:p-5";
   return (
-    <div className={`min-w-0 rounded-xl border border-slate-200/80 bg-white shadow-card ${pad} ${className}`}>
+    <div className={`min-w-0 rounded-xl border border-slate-200/80 bg-white shadow-card ${pad} ${className}`} {...rest}>
       {children}
     </div>
   );

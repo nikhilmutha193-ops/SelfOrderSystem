@@ -1,5 +1,6 @@
 import type {
   BillShare,
+  BirthdaySmsSettings,
   CreditEntry,
   CustomerCredit,
   CustomerDue,
@@ -8,6 +9,8 @@ import type {
   LoyaltySettings,
   OrderCustomer,
   PublicBill,
+  SmsCampaign,
+  SmsTemplate,
 } from "../../lib/types";
 import { api } from "../../shared/api/client";
 
@@ -65,6 +68,21 @@ export const customersApi = {
   settings: () => api.get<LoyaltySettings>("/customers/settings").then((res) => res.data),
   saveSettings: (input: LoyaltySettings) =>
     api.put<LoyaltySettings>("/customers/settings", input).then((res) => res.data),
+  birthdaySmsSettings: () =>
+    api.get<BirthdaySmsSettings>("/customers/birthday-sms-settings").then((res) => res.data),
+  saveBirthdaySmsSettings: (input: BirthdaySmsSettings) =>
+    api.put<BirthdaySmsSettings>("/customers/birthday-sms-settings", input).then((res) => res.data),
+  sendBirthdaySmsNow: () =>
+    api.post<{ sentCount: number }>("/customers/birthday-sms-settings/send").then((res) => res.data),
   shareBill: (orderId: string) => api.post<BillShare>(`/bills/${orderId}/share`).then((res) => res.data),
   publicBill: (token: string) => api.get<PublicBill>(`/bills/public/${token}`).then((res) => res.data),
+  smsTemplates: () => api.get<SmsTemplate[]>("/customers/sms/templates").then((res) => res.data),
+  createSmsTemplate: (input: { name: string; message: string }) =>
+    api.post<SmsTemplate>("/customers/sms/templates", input).then((res) => res.data),
+  updateSmsTemplate: ({ id, input }: { id: string; input: { name: string; message: string } }) =>
+    api.put<SmsTemplate>(`/customers/sms/templates/${id}`, input).then((res) => res.data),
+  deleteSmsTemplate: (id: string) => api.delete(`/customers/sms/templates/${id}`).then(() => undefined),
+  smsCampaigns: () => api.get<SmsCampaign[]>("/customers/sms/campaigns").then((res) => res.data),
+  sendSmsCampaign: (message: string) =>
+    api.post<SmsCampaign>("/customers/sms/campaigns", { message }).then((res) => res.data),
 };

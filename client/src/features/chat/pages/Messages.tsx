@@ -1,12 +1,13 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, MessagesSquare, SendHorizontal, TriangleAlert, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useCanEdit } from "../../../lib/adminAuth";
 import type { ChatConversation, ChatMessage } from "../../../lib/types";
 import { extractErrorMessage } from "../../../shared/api/client";
 import { POLL } from "../../../shared/api/queryClient";
 import { confirmDialog } from "../../../shared/ui/confirm";
+import { usePageTour, type TourStep } from "../../../shared/ui/PageTour";
 import { Button, Card, EmptyState, ErrorText, IconButton, Input, Page, PageHeader } from "../../../shared/ui/ui";
 import {
   markConversationRead,
@@ -89,6 +90,19 @@ export default function Messages() {
 
   const selected = conversations.find((c) => c.orderId === selectedOrderId) || null;
 
+  const tourSteps: TourStep[] = useMemo(
+    () => [
+      {
+        target: "messages-panel",
+        title: "Guest conversations",
+        description:
+          "One thread per order. Pick a conversation on the left to read and reply; a flagged message means the guest's text was filtered for language.",
+      },
+    ],
+    []
+  );
+  usePageTour(tourSteps);
+
   return (
     <Page>
       <PageHeader title="Messages" description="Chat with guests at their table, one conversation per order." />
@@ -96,6 +110,7 @@ export default function Messages() {
       <ErrorText>{error}</ErrorText>
 
       <Card
+        data-tour="messages-panel"
         padding="none"
         className="grid h-[calc(100dvh-15rem)] min-h-[28rem] overflow-hidden lg:grid-cols-[20rem_1fr]"
       >

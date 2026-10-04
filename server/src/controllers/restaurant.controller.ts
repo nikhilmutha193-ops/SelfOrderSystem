@@ -64,7 +64,9 @@ async function buildPreviewRestaurant(req: Request, overrides: Record<string, un
 }
 
 export const getRestaurantPublic = asyncHandler(async (req: Request, res: Response) => {
-  const restaurant = await Restaurant.findById(req.restaurantId).select("name logoUrl address siteTitle faviconUrl");
+  const restaurant = await Restaurant.findById(req.restaurantId).select(
+    "name logoUrl address siteTitle faviconUrl tableLoginSettings"
+  );
   if (!restaurant) throw new HttpError(404, "Restaurant not found");
   res.json(restaurant);
 });

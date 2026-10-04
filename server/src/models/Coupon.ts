@@ -12,6 +12,10 @@ export interface ICoupon {
   maxDiscountAmount?: number;
   usageLimit?: number;
   usedCount: number;
+  /** Max times one mobile number may use this coupon. Unset means no per-customer cap - only
+   *  usageLimit (the overall cap) applies. Every coupon already requires a phone number on the
+   *  order to apply at all (see findValidCoupon), which this limit checks against. */
+  perCustomerLimit?: number;
   expiresAt?: Date;
   isActive: boolean;
   createdAt: Date;
@@ -28,6 +32,7 @@ const couponSchema = new Schema<ICoupon>(
     maxDiscountAmount: { type: Number, min: 0 },
     usageLimit: { type: Number, min: 1 },
     usedCount: { type: Number, default: 0 },
+    perCustomerLimit: { type: Number, min: 1 },
     expiresAt: { type: Date },
     isActive: { type: Boolean, default: true },
   },

@@ -1,5 +1,5 @@
 import { Pencil, ShieldCheck, Trash2, UserPlus, Wand2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import {
   MODULE_KEYS,
@@ -11,6 +11,7 @@ import {
 } from "../../lib/adminAuth";
 import { api, extractErrorMessage } from "../../shared/api/client";
 import { confirmDialog } from "../../shared/ui/confirm";
+import { usePageTour, type TourStep } from "../../shared/ui/PageTour";
 import { Alert, Badge, Button, Card, CardHeader, ErrorText, Field, Input, Page, PageHeader } from "../../shared/ui/ui";
 
 type Permissions = Partial<Record<ModuleKey, PermissionLevel>>;
@@ -182,6 +183,24 @@ export default function Admins() {
     }
   }
 
+  const tourSteps: TourStep[] = useMemo(
+    () => [
+      {
+        target: "admin-form",
+        title: "Add a staff login",
+        description:
+          "Set a username and password, then pick page access - use a preset for common roles (Captain, Cashier) or set each page to None/View/Edit yourself.",
+      },
+      {
+        target: "admin-list",
+        title: "Staff logins",
+        description: "Edit an account's page access or delete it. The owner account always has full access and can't be edited here.",
+      },
+    ],
+    []
+  );
+  usePageTour(tourSteps);
+
   return (
     <Page>
       <PageHeader
@@ -191,7 +210,7 @@ export default function Admins() {
       <ErrorText>{error}</ErrorText>
       {message && <Alert tone="success">{message}</Alert>}
 
-      <Card>
+      <Card data-tour="admin-form">
         <CardHeader icon={UserPlus} title="Add a staff login" />
         <form onSubmit={createAdmin} className="flex flex-col gap-5">
           <div className="grid gap-4 sm:grid-cols-2">
@@ -227,7 +246,7 @@ export default function Admins() {
         </form>
       </Card>
 
-      <Card>
+      <Card data-tour="admin-list">
         <CardHeader title="Staff logins" description={`${admins.length} account${admins.length === 1 ? "" : "s"}`} />
         <div className="flex flex-col gap-3">
           {admins.map((admin) => {

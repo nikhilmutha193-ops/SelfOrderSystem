@@ -9,6 +9,7 @@ import { computeDiscountAmount, findValidCoupon } from "../../utils/coupon";
 import { HttpError } from "../../utils/httpError";
 import { computeInvoiceTotals } from "../../utils/invoice";
 import { signToken } from "../../utils/jwt";
+import { normalizePhone } from "../../utils/phone";
 import { getOwnedOrder, requireOwner } from "./orders.access";
 import { refreshCouponDiscount, totalsForOrder } from "./orders.billing";
 import { OrdersRepository } from "./orders.repository";
@@ -20,6 +21,7 @@ import {
   StartDeliveryInput,
   StartDineInInput,
   StartTakeawayInput,
+  UpdateOrderCustomerInput,
 } from "./orders.schema";
 import { basePriceFor, packagingFor } from "../pricing/pricing";
 
@@ -36,8 +38,12 @@ function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
-async function announceCreated<T extends { _id: Types.ObjectId }>(ctx: RequestContext, order: T): Promise<T> {
-  await emit("order.created", { restaurantId: ctx.restaurantId, orderId: order._id.toString() });
+async function announceCreated<T extends { _id: Types.ObjectId }>(
+  ctx: RequestContext,
+  order: T,
+  extra: { customerBirthday?: string } = {}
+): Promise<T> {
+  await emit("order.created", { restaurantId: ctx.restaurantId, orderId: order._id.toString(), ...extra });
   return order;
 }
 
@@ -103,12 +109,46 @@ export async function startDineInOrder(ctx: RequestContext, input: StartDineInIn
     sessionId: ctx.auth.sessionId,
     customerName: input.customerName,
     customerPhone: input.customerPhone,
+    customerBirthday: input.customerBirthday,
+    customerMarketingConsent: input.customerMarketingConsent,
     members: input.members,
     status: "open",
   });
 
-  await announceCreated(ctx, order);
+  await announceCreated(ctx, order, { customerBirthday: input.customerBirthday });
   return { token: sessionToken(order._id.toString()), order };
+}
+
+/**
+ * Lets a guest who skipped their phone/birthday on the sign-in form fill it in later from the
+ * menu page - or staff fix/complete it from the order page (e.g. New Order) - fill it in. Re-
+ * announces the order so customers.handlers.ts can link it to a Customer record (and set the
+ * birthday) now that there's something to link with - linkOrder() is a no-op if the order was
+ * already linked.
+ */
+export async function updateOrderCustomer(ctx: RequestContext, orderId: string, input: UpdateOrderCustomerInput) {
+  const order = await getOwnedOrder(ctx, orderId);
+  if (order.status !== "open") throw new HttpError(409, "This order is no longer open");
+
+  if (input.customerName !== undefined) order.customerName = input.customerName;
+  if (input.customerPhone !== undefined) order.customerPhone = input.customerPhone;
+  if (input.customerBirthday !== undefined) order.customerBirthday = input.customerBirthday;
+  // Only ever "true" here (see the schema) - this can opt a guest in, never un-consent them.
+  if (input.customerMarketingConsent !== undefined) order.customerMarketingConsent = input.customerMarketingConsent;
+  await new OrdersRepository(ctx.restaurantId).saveOrder(order);
+
+  if (ctx.auth.role === "admin") {
+    await writeAudit(ctx, "order.updateCustomer", `Updated guest details for ${order.customerName || "Guest"}`);
+  }
+
+  await emit("order.customerUpdated", {
+    restaurantId: ctx.restaurantId,
+    orderId: order._id.toString(),
+    // Falls back to what's already on the order (e.g. a birthday given without a phone at
+    // sign-in) so adding just a phone here still carries it over to the new Customer record.
+    customerBirthday: input.customerBirthday ?? order.customerBirthday,
+  });
+  return order;
 }
 
 export async function startDeliveryOrder(ctx: RequestContext, input: StartDeliveryInput) {
@@ -118,10 +158,11 @@ export async function startDeliveryOrder(ctx: RequestContext, input: StartDelive
     source: "counter",
     customerName: input.customerName,
     customerPhone: input.customerPhone,
+    customerBirthday: input.customerBirthday,
     members: input.members,
     status: "open",
   });
-  return announceCreated(ctx, order);
+  return announceCreated(ctx, order, { customerBirthday: input.customerBirthday });
 }
 
 export async function startTakeawayOrder(ctx: RequestContext, input: StartTakeawayInput) {
@@ -130,10 +171,11 @@ export async function startTakeawayOrder(ctx: RequestContext, input: StartTakeaw
     source: "counter",
     customerName: input.customerName,
     customerPhone: input.customerPhone,
+    customerBirthday: input.customerBirthday,
     members: input.members,
     status: "open",
   });
-  return announceCreated(ctx, order);
+  return announceCreated(ctx, order, { customerBirthday: input.customerBirthday });
 }
 
 export async function startCounterOrder(ctx: RequestContext, input: StartCounterInput) {
@@ -151,13 +193,14 @@ export async function startCounterOrder(ctx: RequestContext, input: StartCounter
     source: "counter",
     customerName: input.customerName,
     customerPhone: input.customerPhone,
+    customerBirthday: input.customerBirthday,
     members: input.members,
     status: "open",
   });
 
   if (table && !table.isGuest) await repo.occupyTable(table._id);
 
-  return announceCreated(ctx, order);
+  return announceCreated(ctx, order, { customerBirthday: input.customerBirthday });
 }
 
 export async function addOrderItems(ctx: RequestContext, orderId: string, input: AddItemsInput) {
@@ -353,24 +396,44 @@ export async function listOrderCoupons(ctx: RequestContext, orderId: string) {
 
   const coupons = await repo.findActiveCoupons();
   const now = Date.now();
+  const phone = normalizePhone(order.customerPhone);
 
-  const usable = coupons
-    .filter((c) => !(c.expiresAt && c.expiresAt.getTime() < now))
-    .filter((c) => !(c.usageLimit !== undefined && c.usageLimit !== null && c.usedCount >= c.usageLimit))
-    .map((c) => {
-      const meetsMinimum = subtotal >= c.minOrderValue;
-      return {
-        code: c.code,
-        type: c.type,
-        value: c.value,
-        minOrderValue: c.minOrderValue,
-        maxDiscountAmount: c.maxDiscountAmount,
-        eligible: meetsMinimum,
-        discount: meetsMinimum ? computeDiscountAmount(c, subtotal) : 0,
-        reason: meetsMinimum ? null : `Needs a minimum order of ${c.minOrderValue.toFixed(2)}`,
-      };
-    })
-    .sort((a, b) => Number(b.eligible) - Number(a.eligible) || b.discount - a.discount);
+  const usable = await Promise.all(
+    coupons
+      .filter((c) => !(c.expiresAt && c.expiresAt.getTime() < now))
+      .filter((c) => !(c.usageLimit !== undefined && c.usageLimit !== null && c.usedCount >= c.usageLimit))
+      .map(async (c) => {
+        const meetsMinimum = subtotal >= c.minOrderValue;
+        const hasPhone = !!phone;
+        let perCustomerOk = true;
+        let perCustomerReason: string | null = null;
+        if (hasPhone && c.perCustomerLimit !== undefined && c.perCustomerLimit !== null) {
+          const used = await repo.countCouponRedemptionsByPhone(c._id, phone!);
+          if (used >= c.perCustomerLimit) {
+            perCustomerOk = false;
+            perCustomerReason = "Already used the maximum number of times on this number";
+          }
+        }
+        const eligible = meetsMinimum && hasPhone && perCustomerOk;
+        return {
+          code: c.code,
+          type: c.type,
+          value: c.value,
+          minOrderValue: c.minOrderValue,
+          maxDiscountAmount: c.maxDiscountAmount,
+          eligible,
+          discount: eligible ? computeDiscountAmount(c, subtotal) : 0,
+          reason: !meetsMinimum
+            ? `Needs a minimum order of ${c.minOrderValue.toFixed(2)}`
+            : !hasPhone
+              ? "Add a mobile number to this order first"
+              : !perCustomerOk
+                ? perCustomerReason
+                : null,
+        };
+      })
+  );
+  usable.sort((a, b) => Number(b.eligible) - Number(a.eligible) || b.discount - a.discount);
 
   return { subtotal, coupons: usable };
 }
@@ -383,7 +446,7 @@ export async function applyCoupon(ctx: RequestContext, orderId: string, code: st
   const items = await repo.findItems(order._id);
   const subtotal = items.filter((i) => i.status !== "cancelled").reduce((sum, i) => sum + i.total, 0);
 
-  const coupon = await findValidCoupon(ctx.restaurantId, code.toUpperCase(), subtotal);
+  const coupon = await findValidCoupon(ctx.restaurantId, code.toUpperCase(), subtotal, order.customerPhone);
   const discountAmount = computeDiscountAmount(coupon, subtotal);
 
   order.couponCode = coupon.code;

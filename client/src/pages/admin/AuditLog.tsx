@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { api, extractErrorMessage } from "../../shared/api/client";
+import { usePageTour, type TourStep } from "../../shared/ui/PageTour";
 import { Badge, Card, ErrorText, PageHeader, TableWrap } from "../../shared/ui/ui";
 
 interface AuditEntry {
@@ -31,6 +32,18 @@ export default function AuditLog() {
       .finally(() => setLoading(false));
   }, []);
 
+  const tourSteps: TourStep[] = useMemo(
+    () => [
+      {
+        target: "audit-log",
+        title: "Sensitive staff actions",
+        description: "Payments, cancellations and bulk clears, newest first, with who did it and when.",
+      },
+    ],
+    []
+  );
+  usePageTour(tourSteps);
+
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 sm:gap-6">
       <PageHeader
@@ -39,7 +52,7 @@ export default function AuditLog() {
       />
       <ErrorText>{error}</ErrorText>
 
-      <Card>
+      <Card data-tour="audit-log">
         {loading ? (
           <p className="text-sm text-slate-500">Loading...</p>
         ) : entries.length === 0 ? (

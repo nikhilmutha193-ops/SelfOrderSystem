@@ -1,12 +1,37 @@
 services:
-  # MONGO_URI must point at an external MongoDB (e.g. Atlas) - set it in a .env file at the repo root.
+  # A single-node replica set (transactions need a replica set, even with one member - see
+  # CLAUDE.md). The healthcheck initiates it once on first boot: rs.status() fails until then,
+  # the catch calls rs.initiate(), and later checks just see rs.status().ok. Published on 27017
+  # so `npm run dev` (outside Docker) and Compass can reach it too.
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    hostname: mongo
+    command: ["--replSet", "rs0", "--bind_ip_all"]
+    volumes:
+      - mongo_data:/data/db
+    ports:
+      - "27017:27017"
+    healthcheck:
+      test: >
+        mongosh --quiet --eval "try { rs.status().ok } catch (e) { rs.initiate().ok }"
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  # MONGO_URI defaults to the bundled mongo service above; set it in a .env file at the repo
+  # root to point at an external MongoDB (e.g. Atlas) instead - see .env.example.
   server:
     build:
       context: ./server
     restart: unless-stopped
+    depends_on:
+      mongo:
+        condition: service_healthy
     environment:
       PORT: 5000
-      MONGO_URI: ${MONGO_URI:?Set MONGO_URI in a .env file at the repo root - see .env.example}
+      MONGO_URI: ${MONGO_URI:-mongodb://mongo:27017/selforder?replicaSet=rs0}
       RESTAURANT_KEY: ${RESTAURANT_KEY:-resto_demo}
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in a .env file at the repo root - see .env.example}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-8h}
@@ -40,8 +65,11 @@ services:
     build:
       context: ./server
     profiles: ["seed"]
+    depends_on:
+      mongo:
+        condition: service_healthy
     environment:
-      MONGO_URI: ${MONGO_URI:?Set MONGO_URI in a .env file at the repo root - see .env.example}
+      MONGO_URI: ${MONGO_URI:-mongodb://mongo:27017/selforder?replicaSet=rs0}
       RESTAURANT_KEY: ${RESTAURANT_KEY:-resto_demo}
     command: ["node", "dist/utils/seed.js"]
 
@@ -68,6 +96,7 @@ services:
       - client_tls:/etc/nginx/tls
 
 volumes:
+  mongo_data:
   uploads_data:
   backups_data:
   client_tls:

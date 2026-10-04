@@ -344,6 +344,7 @@ export const createFoodItem = asyncHandler(async (req: Request, res: Response) =
     imageUrl,
     isBestseller,
     bestsellerEmoji,
+    isTodaySpecial,
     foodType,
     rating,
     prepTimeMinutes,
@@ -364,6 +365,7 @@ export const createFoodItem = asyncHandler(async (req: Request, res: Response) =
     imageUrl?: string;
     isBestseller?: boolean;
     bestsellerEmoji?: string;
+    isTodaySpecial?: boolean;
     foodType?: string;
     rating?: number;
     prepTimeMinutes?: number;
@@ -408,6 +410,7 @@ export const createFoodItem = asyncHandler(async (req: Request, res: Response) =
     isActive: true,
     isBestseller: !!isBestseller,
     ...(bestsellerEmoji !== undefined && { bestsellerEmoji }),
+    isTodaySpecial: !!isTodaySpecial,
     foodType: normalizeFoodType(foodType),
     rating: normalizeRating(rating),
     ...(prepTimeMinutes !== undefined && { prepTimeMinutes: normalizePrepTime(prepTimeMinutes) }),
@@ -435,6 +438,7 @@ export const updateFoodItem = asyncHandler(async (req: Request, res: Response) =
     imageUrl,
     isBestseller,
     bestsellerEmoji,
+    isTodaySpecial,
     foodType,
     rating,
     prepTimeMinutes,
@@ -455,6 +459,7 @@ export const updateFoodItem = asyncHandler(async (req: Request, res: Response) =
     imageUrl?: string;
     isBestseller?: boolean;
     bestsellerEmoji?: string;
+    isTodaySpecial?: boolean;
     foodType?: string;
     rating?: number;
     prepTimeMinutes?: number;
@@ -492,6 +497,7 @@ export const updateFoodItem = asyncHandler(async (req: Request, res: Response) =
         ...(imageUrl !== undefined && { imageUrl }),
         ...(isBestseller !== undefined && { isBestseller: !!isBestseller }),
         ...(bestsellerEmoji !== undefined && { bestsellerEmoji }),
+        ...(isTodaySpecial !== undefined && { isTodaySpecial: !!isTodaySpecial }),
         ...(foodType !== undefined && { foodType: normalizeFoodType(foodType) }),
         ...(rating !== undefined && { rating: normalizeRating(rating) }),
         ...(prepTimeMinutes !== undefined && { prepTimeMinutes: normalizePrepTime(prepTimeMinutes) }),
@@ -588,6 +594,7 @@ export const getPublicMenu = asyncHandler(async (req: Request, res: Response) =>
               .map((c) => ({ name: componentName.get(c.foodItemId.toString())!, quantity: c.quantity })),
             isBestseller: f.isBestseller,
             bestsellerEmoji: f.bestsellerEmoji,
+            isTodaySpecial: f.isTodaySpecial,
             foodType: f.foodType,
             rating: f.rating,
             translations: f.translations || {},

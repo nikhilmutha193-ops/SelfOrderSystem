@@ -68,3 +68,29 @@ describe("tables stay blocked until the bill is paid", () => {
     expect(relogin.status).toBe(409);
   });
 });
+
+describe("table login settings", () => {
+  it("defaults to allowing QR scan, and the public endpoint reflects changes", async () => {
+    const defaults = await api().get("/api/tables/settings").set(bearer(owner));
+    expect(defaults.status).toBe(200);
+    expect(defaults.body).toEqual({ allowQrScan: true });
+
+    const publicBefore = await api().get("/api/restaurant/public");
+    expect(publicBefore.body.tableLoginSettings).toEqual({ allowQrScan: true });
+
+    const updated = await api().put("/api/tables/settings").set(bearer(owner)).send({ allowQrScan: false });
+    expect(updated.status).toBe(200);
+    expect(updated.body).toEqual({ allowQrScan: false });
+
+    const publicAfter = await api().get("/api/restaurant/public");
+    expect(publicAfter.body.tableLoginSettings).toEqual({ allowQrScan: false });
+
+    // Restore, so this doesn't leak into other tests in this file.
+    await api().put("/api/tables/settings").set(bearer(owner)).send({ allowQrScan: true });
+  });
+
+  it("keeps table settings to staff with the Tables permission", async () => {
+    const manager = await loginAdmin("manager", "Manager@123");
+    expect((await api().get("/api/tables/settings").set(bearer(manager))).status).toBe(403);
+  });
+});

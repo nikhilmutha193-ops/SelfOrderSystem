@@ -32,6 +32,7 @@ import {
   type TaxRate,
 } from "../../lib/types";
 import { api, extractErrorMessage, uploadImage } from "../../shared/api/client";
+import { usePageTour, type TourStep } from "../../shared/ui/PageTour";
 import {
   Alert,
   Button,
@@ -205,6 +206,19 @@ export default function RestaurantSettings() {
     setParams({ section: next }, { replace: true });
     setMessage(null);
   }
+
+  const tourSteps: TourStep[] = useMemo(
+    () => [
+      {
+        target: "settings-sections",
+        title: "Eight sections",
+        description:
+          "General (name, address, logo, GSTIN), Business day (day-end time, timezone), Taxes, Kitchen tickets, Billing, Invoice, Guest chat and Online delivery. Switch sections here - each has its own Save.",
+      },
+    ],
+    []
+  );
+  usePageTour(tourSteps);
 
   useEffect(() => {
     api
@@ -407,12 +421,16 @@ export default function RestaurantSettings() {
         description="Your restaurant's details, business day, taxes, tickets and bills. Changes apply as soon as you save."
       />
 
-      <div className="lg:hidden">
+      <div className="lg:hidden" data-tour="settings-sections">
         <Tabs value={section} onChange={openSection} items={SECTIONS} />
       </div>
 
       <div className="grid items-start gap-6 lg:grid-cols-[14rem_1fr]">
-        <nav aria-label="Settings sections" className="sticky top-24 hidden flex-col gap-1 lg:flex">
+        <nav
+          aria-label="Settings sections"
+          data-tour="settings-sections"
+          className="sticky top-24 hidden flex-col gap-1 lg:flex"
+        >
           {SECTIONS.map((s) => {
             const Icon = s.icon;
             const active = s.value === section;

@@ -1,5 +1,5 @@
 import { ChefHat, ChevronsDownUp, ChevronsUpDown, SearchX } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
 import {
@@ -10,6 +10,7 @@ import {
 } from "../../../lib/types";
 import { extractErrorMessage } from "../../../shared/api/client";
 import { confirmDialog } from "../../../shared/ui/confirm";
+import { usePageTour, type TourStep } from "../../../shared/ui/PageTour";
 import ReasonDialog from "../../../shared/ui/ReasonDialog";
 import { Alert, Card, EmptyState, ErrorText, IconButton, Tabs } from "../../../shared/ui/ui";
 import { useCancelOrderItem } from "../../orders/queries";
@@ -189,6 +190,28 @@ export default function KotQueueView({ canCancel }: { canCancel: boolean }) {
     ? new Date(queue.dataUpdatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })
     : null;
 
+  const tourSteps: TourStep[] = useMemo(
+    () => [
+      ...(stations.length > 0
+        ? [
+            {
+              target: "kot-stations",
+              title: "Filter by station",
+              description: "Show tickets for one kitchen station only, or all of them.",
+            },
+          ]
+        : []),
+      {
+        target: "kot-grid",
+        title: "Tickets",
+        description:
+          "Each card is one order's kitchen ticket. Move an item from Start → Ready → Served as it cooks, reprint a round, or cancel an item. Collapse-all/expand-all is above, or click a ticket's header to toggle it on its own.",
+      },
+    ],
+    [stations.length]
+  );
+  usePageTour(tourSteps);
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-2 shadow-card sm:p-3 lg:flex-row lg:items-center">
@@ -234,12 +257,14 @@ export default function KotQueueView({ canCancel }: { canCancel: boolean }) {
       </div>
 
       {stations.length > 0 && (
-        <Tabs
-          size="sm"
-          value={stationId ?? "all"}
-          onChange={(v) => setChosenStation(v === "all" ? "" : v)}
-          items={[{ value: "all", label: "All stations" }, ...stations.map((s) => ({ value: s._id, label: s.name }))]}
-        />
+        <div data-tour="kot-stations">
+          <Tabs
+            size="sm"
+            value={stationId ?? "all"}
+            onChange={(v) => setChosenStation(v === "all" ? "" : v)}
+            items={[{ value: "all", label: "All stations" }, ...stations.map((s) => ({ value: s._id, label: s.name }))]}
+          />
+        </div>
       )}
 
       {notice && (
@@ -268,6 +293,7 @@ export default function KotQueueView({ canCancel }: { canCancel: boolean }) {
         ref={boardRef}
         className="grid items-start gap-4"
         style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
+        data-tour="kot-grid"
       >
         {laidOut.map((column, index) => (
           <div key={index} className="flex min-w-0 flex-col gap-4">
