@@ -73,17 +73,17 @@ describe("table login settings", () => {
   it("defaults to allowing QR scan, and the public endpoint reflects changes", async () => {
     const defaults = await api().get("/api/tables/settings").set(bearer(owner));
     expect(defaults.status).toBe(200);
-    expect(defaults.body).toEqual({ allowQrScan: true });
+    expect(defaults.body).toMatchObject({ allowQrScan: true });
 
     const publicBefore = await api().get("/api/restaurant/public");
-    expect(publicBefore.body.tableLoginSettings).toEqual({ allowQrScan: true });
+    expect(publicBefore.body.tableLoginSettings).toMatchObject({ allowQrScan: true });
 
     const updated = await api().put("/api/tables/settings").set(bearer(owner)).send({ allowQrScan: false });
     expect(updated.status).toBe(200);
-    expect(updated.body).toEqual({ allowQrScan: false });
+    expect(updated.body).toMatchObject({ allowQrScan: false });
 
     const publicAfter = await api().get("/api/restaurant/public");
-    expect(publicAfter.body.tableLoginSettings).toEqual({ allowQrScan: false });
+    expect(publicAfter.body.tableLoginSettings).toMatchObject({ allowQrScan: false });
 
     // Restore, so this doesn't leak into other tests in this file.
     await api().put("/api/tables/settings").set(bearer(owner)).send({ allowQrScan: true });

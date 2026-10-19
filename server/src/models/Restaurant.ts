@@ -16,8 +16,28 @@ export interface IQrSettings {
 }
 
 /** Controls what the public table sign-in page (/order) offers, besides the code+PIN form. */
+/** What a guest may do, depending on how they signed in to the table. */
+export interface IGuestAccess {
+  placeOrder: boolean;
+  showMenu: boolean;
+  showFeedback: boolean;
+}
+
+/** Which guest details a table guest must give before their first order. Anything unticked is not asked. */
+export interface IRequiredDetails {
+  name: boolean;
+  phone: boolean;
+  members: boolean;
+  birthday: boolean;
+}
+
 export interface ITableLoginSettings {
   allowQrScan: boolean;
+  requiredDetails: IRequiredDetails;
+  /** Guests who scanned the table's QR code. */
+  qr: IGuestAccess;
+  /** Guests who typed the table code and PIN. */
+  manual: IGuestAccess;
 }
 
 export type PrintPaperSize = "thermal58" | "thermal80" | "a5" | "a4";
@@ -37,6 +57,10 @@ export interface IKotSettings {
   showLogo: boolean;
   showPrices: boolean;
   showJainTag: boolean;
+  /** One ticket per menu category (sharing the round's token) instead of one per station. */
+  splitByCategory: boolean;
+  /** First token number of each business day. */
+  tokenStart: number;
 }
 
 export interface IInvoiceSettings {
@@ -165,8 +189,32 @@ const qrSettingsSchema = new Schema<IQrSettings>(
   { _id: false }
 );
 
+const guestAccessSchema = new Schema<IGuestAccess>(
+  {
+    placeOrder: { type: Boolean, default: true },
+    showMenu: { type: Boolean, default: true },
+    showFeedback: { type: Boolean, default: true },
+  },
+  { _id: false }
+);
+
+const requiredDetailsSchema = new Schema<IRequiredDetails>(
+  {
+    name: { type: Boolean, default: true },
+    phone: { type: Boolean, default: false },
+    members: { type: Boolean, default: true },
+    birthday: { type: Boolean, default: false },
+  },
+  { _id: false }
+);
+
 const tableLoginSettingsSchema = new Schema<ITableLoginSettings>(
-  { allowQrScan: { type: Boolean, default: true } },
+  {
+    allowQrScan: { type: Boolean, default: true },
+    requiredDetails: { type: requiredDetailsSchema, default: () => ({}) },
+    qr: { type: guestAccessSchema, default: () => ({}) },
+    manual: { type: guestAccessSchema, default: () => ({}) },
+  },
   { _id: false }
 );
 
@@ -182,6 +230,8 @@ const kotSettingsSchema = new Schema<IKotSettings>(
     showLogo: { type: Boolean, default: false },
     showPrices: { type: Boolean, default: false },
     showJainTag: { type: Boolean, default: true },
+    splitByCategory: { type: Boolean, default: false },
+    tokenStart: { type: Number, default: 1, min: 1, max: 99999 },
   },
   { _id: false }
 );

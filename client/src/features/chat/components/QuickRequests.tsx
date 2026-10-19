@@ -5,17 +5,25 @@ import { useTableSession } from "../../../lib/useTableSession";
 import { extractErrorMessage } from "../../../shared/api/client";
 import { useSendChatMessage } from "../queries";
 
-export default function QuickRequests() {
+/**
+ * `onNeedOrder` is called when the guest has no order yet (chat belongs to an order): the page then
+ * collects the required details, starts the order and sends the request.
+ */
+export default function QuickRequests({ onNeedOrder }: { onNeedOrder?: (message: string) => void }) {
   const { orderId } = useTableSession();
   const [sendingLabel, setSendingLabel] = useState<string | null>(null);
   const [sentLabel, setSentLabel] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const sendChat = useSendChatMessage();
 
-  if (!orderId) return null;
+  if (!orderId && !onNeedOrder) return null;
 
   async function sendRequest(req: (typeof QUICK_REQUESTS)[number]) {
-    if (sendingLabel || !orderId) return;
+    if (sendingLabel) return;
+    if (!orderId) {
+      onNeedOrder?.(req.message);
+      return;
+    }
     setSendingLabel(req.label);
     setError(null);
     try {

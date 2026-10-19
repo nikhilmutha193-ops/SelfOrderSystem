@@ -25,7 +25,7 @@ import {
   useColumnCount,
   type QueueFilter,
 } from "../kds";
-import { useKotQueue, useMarkReady, usePrintKot, useServeItem, useStartPreparing } from "../queries";
+import { useKotQueue, useMarkReady, usePrintKot, useServeItem, useSetPriority, useStartPreparing } from "../queries";
 import { KotTicket, type TicketActions } from "./KotTicket";
 
 const CANCEL_OPTIONS = (Object.keys(ITEM_CANCEL_REASON_LABELS) as ItemCancelReason[]).map((value) => ({
@@ -67,6 +67,7 @@ export default function KotQueueView({ canCancel }: { canCancel: boolean }) {
   const serveItem = useServeItem();
   const cancelItem = useCancelOrderItem();
   const printTicket = usePrintKot();
+  const setPriority = useSetPriority();
 
   function updateCollapsed(next: Record<string, true>) {
     setCollapsed(next);
@@ -158,6 +159,7 @@ export default function KotQueueView({ canCancel }: { canCancel: boolean }) {
       }),
     send: (orderId) => printKot(orderId),
     reprint: (orderId, round) => void reprintKot(orderId, round),
+    setPriority: (orderId, priority) => run(() => setPriority.mutateAsync({ orderId, priority })),
   };
 
   const totals = { waiting: 0, cooking: 0, ready: 0, unsent: 0 };

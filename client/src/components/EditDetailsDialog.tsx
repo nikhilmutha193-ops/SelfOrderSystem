@@ -32,6 +32,7 @@ export function EditDetailsDialog({
   const [birthDay, setBirthDay] = useState("");
   const [birthMonth, setBirthMonth] = useState("");
   const [marketingConsent, setMarketingConsent] = useState(false);
+
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -94,6 +95,7 @@ export function EditDetailsDialog({
     setSaved(false);
     setError(null);
     setMarketingConsent(false);
+
     onClose();
   }
 
@@ -134,6 +136,7 @@ export function EditDetailsDialog({
                 }}
               />
             </label>
+
             {!defaultMarketingConsent && (
               <label className={`flex items-start gap-2 text-sm ${phone ? "text-slate-600" : "text-slate-400"}`}>
                 <input
@@ -149,7 +152,12 @@ export function EditDetailsDialog({
             <div>
               <span className="text-sm font-medium text-slate-700">Date of birth</span>
               <div className="mt-1">
-                <BirthdayFields day={birthDay} month={birthMonth} onDayChange={setBirthDay} onMonthChange={setBirthMonth} />
+                <BirthdayFields
+                  day={birthDay}
+                  month={birthMonth}
+                  onDayChange={setBirthDay}
+                  onMonthChange={setBirthMonth}
+                />
               </div>
             </div>
             <ErrorText>{error}</ErrorText>

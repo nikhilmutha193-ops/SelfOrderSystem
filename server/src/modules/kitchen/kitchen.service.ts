@@ -1,11 +1,13 @@
 import { RequestContext } from "../../core/context";
 import { emit } from "../../core/events";
-import { IOrder } from "../../models/Order";
+import { IOrder, OrderPriority } from "../../models/Order";
 import { HttpError } from "../../utils/httpError";
 import { nextTokenNumber } from "../../utils/kotQueue";
 import { getOwnedOrder } from "../orders/orders.service";
 import { enqueueKot } from "../printing/printing.service";
 import { KitchenRepository } from "./kitchen.repository";
+
+const PRIORITY_RANK: Record<string, number> = { rush: 0, high: 1, normal: 2 };
 
 export async function getKotQueue(ctx: RequestContext, tableId?: string, stationId?: string) {
   const repo = new KitchenRepository(ctx.restaurantId);
@@ -29,7 +31,12 @@ export async function getKotQueue(ctx: RequestContext, tableId?: string, station
       return { order, items: orderItems, tokenNumber: numbers.length ? Math.min(...numbers) : null };
     })
     .filter((group) => group.items.length > 0)
-    .sort((a, b) => (a.tokenNumber ?? Number.MAX_SAFE_INTEGER) - (b.tokenNumber ?? Number.MAX_SAFE_INTEGER));
+    .sort((a, b) => {
+      const pa = PRIORITY_RANK[a.order.priority ?? "normal"] ?? 2;
+      const pb = PRIORITY_RANK[b.order.priority ?? "normal"] ?? 2;
+      if (pa !== pb) return pa - pb;
+      return (a.tokenNumber ?? Number.MAX_SAFE_INTEGER) - (b.tokenNumber ?? Number.MAX_SAFE_INTEGER);
+    });
 }
 
 export async function sendOrderToKitchen(
@@ -46,8 +53,13 @@ export async function sendOrderToKitchen(
   const round = await repo.nextKotRound(order._id);
   if ((await repo.claimUnsentItems(order._id, round)) === 0) return nothingToSend;
 
-  const restaurant = await repo.findRestaurant("dayEndTime timezone prepBufferMinutes");
-  const { tokenNumber } = await nextTokenNumber(restaurantId, restaurant?.dayEndTime, restaurant?.timezone);
+  const restaurant = await repo.findRestaurant("dayEndTime timezone prepBufferMinutes kotSettings");
+  const { tokenNumber } = await nextTokenNumber(
+    restaurantId,
+    restaurant?.dayEndTime,
+    restaurant?.timezone,
+    restaurant?.kotSettings?.tokenStart
+  );
   await repo.setRoundToken(order._id, round, tokenNumber);
 
   const items = await repo.findRoundItems(order._id, round);
@@ -132,4 +144,10 @@ export async function serveOrderItem(ctx: RequestContext, itemId: string) {
   );
   if (!item) throw new HttpError(404, "Order item not found or already served/cancelled");
   return item;
+}
+
+export async function setOrderPriority(ctx: RequestContext, orderId: string, priority: OrderPriority) {
+  const order = await getOwnedOrder(ctx, orderId);
+  await new KitchenRepository(ctx.restaurantId).setPriority(order._id, priority);
+  return { priority };
 }

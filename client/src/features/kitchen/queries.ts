@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import type { OrderPriority } from "../../lib/types";
 import { POLL } from "../../shared/api/queryClient";
 import { refreshOrderData } from "../orders/queries";
 import { kitchenApi } from "./api";
@@ -37,4 +38,10 @@ export function useMarkReady() {
 
 export function useServeItem() {
   return useKitchenMutation((itemId: string) => kitchenApi.serve(itemId));
+}
+
+export function useSetPriority() {
+  return useKitchenMutation(({ orderId, priority }: { orderId: string; priority: OrderPriority }) =>
+    kitchenApi.setPriority(orderId, priority)
+  );
 }

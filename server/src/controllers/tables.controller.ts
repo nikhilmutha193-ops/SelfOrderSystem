@@ -63,10 +63,27 @@ export const getTableLoginSettings = asyncHandler(async (req: Request, res: Resp
 });
 
 export const updateTableLoginSettings = asyncHandler(async (req: Request, res: Response) => {
-  const { allowQrScan } = req.body as { allowQrScan?: boolean };
+  const { allowQrScan, qr, manual, requiredDetails } = req.body as {
+    allowQrScan?: boolean;
+    requiredDetails?: Partial<Record<"name" | "phone" | "members" | "birthday", boolean>>;
+    qr?: Partial<Record<"placeOrder" | "showMenu" | "showFeedback", boolean>>;
+    manual?: Partial<Record<"placeOrder" | "showMenu" | "showFeedback", boolean>>;
+  };
   const restaurant = await Restaurant.findById(req.restaurantId);
   if (!restaurant) throw new HttpError(404, "Restaurant not found");
-  if (allowQrScan !== undefined) restaurant.tableLoginSettings.allowQrScan = !!allowQrScan;
+  const settings = restaurant.tableLoginSettings;
+  if (allowQrScan !== undefined) settings.allowQrScan = !!allowQrScan;
+  for (const field of ["name", "phone", "members", "birthday"] as const) {
+    if (requiredDetails?.[field] !== undefined) settings.requiredDetails[field] = !!requiredDetails[field];
+  }
+  for (const [key, patch] of [["qr", qr], ["manual", manual]] as const) {
+    if (!patch) continue;
+    for (const field of ["placeOrder", "showMenu", "showFeedback"] as const) {
+      if (patch[field] !== undefined) settings[key][field] = !!patch[field];
+    }
+    // Guests can't order from a menu they can't see.
+    if (!settings[key].showMenu) settings[key].placeOrder = false;
+  }
   await restaurant.save();
   res.json(restaurant.tableLoginSettings);
 });

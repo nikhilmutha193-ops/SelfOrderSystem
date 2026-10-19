@@ -152,7 +152,7 @@ export class OrdersRepository {
 
   findCategoryStations(categoryIds: Types.ObjectId[]) {
     return Category.find(this.scoped({ _id: { $in: categoryIds } }))
-      .select("defaultStationId")
+      .select("defaultStationId name")
       .lean();
   }
 

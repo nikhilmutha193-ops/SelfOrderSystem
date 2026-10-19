@@ -44,7 +44,7 @@ export function PopularStrip({
           return (
             <div
               key={food._id}
-              className="relative flex w-36 shrink-0 snap-start flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
+              className="relative flex w-36 shrink-0 snap-start flex-col justify-between overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
             >
               <button type="button" onClick={() => onOpen(food)} className="text-left" aria-label={`View ${name}`}>
                 <div className="relative p-1.5 pb-0">
@@ -56,9 +56,11 @@ export function PopularStrip({
                   )}
                 </div>
                 <div className="px-2.5 pt-2">
-                  <p className="flex items-center gap-1 text-[13px] leading-snug font-semibold text-slate-900">
-                    <FoodTypeIcon type={food.foodType} size={10} />
-                    <span className="line-clamp-1">{name}</span>
+                  <p className="flex items-start gap-1 text-[13px] leading-snug font-semibold text-slate-900">
+                    <span className="mt-1 shrink-0">
+                      <FoodTypeIcon type={food.foodType} size={10} />
+                    </span>
+                    <span className="min-w-0 break-words">{name}</span>
                   </p>
                   <p className="text-sm font-bold text-slate-800">₹{food.price.toFixed(0)}</p>
                 </div>

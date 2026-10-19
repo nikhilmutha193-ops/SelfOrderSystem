@@ -7,6 +7,10 @@ export const kotQueueQuery = z.object({
   stationId: blankToUndefined(objectId("Invalid station")),
 });
 
+export const setPriorityBody = z.object({
+  priority: z.enum(["normal", "high", "rush"]),
+});
+
 export const kotPdfParams = z.object({
   orderId: objectId(),
   round: z.coerce

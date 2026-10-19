@@ -22,6 +22,66 @@ export function StarPicker({ value, onChange }: { value: number; onChange: (v: n
   );
 }
 
+/** The feedback form shown in the page itself (not a pop-up): star rating, optional comment, submit. */
+export function FeedbackPanel({ defaultName = "" }: { defaultName?: string }) {
+  const [name, setName] = useState(defaultName);
+  const [rating, setRating] = useState(0);
+  const [comment, setComment] = useState("");
+  const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (rating === 0) return setError("Please tap a star to rate your visit");
+    if (!name.trim()) return setError("Please enter your name");
+    setError(null);
+    setSubmitting(true);
+    try {
+      await api.post("/reviews", { customerName: name.trim(), rating, comment });
+      setSubmitted(true);
+    } catch (err) {
+      setError(extractErrorMessage(err));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  if (submitted) {
+    return (
+      <div className="rounded-xl border border-green-200 bg-green-50 p-5 text-center">
+        <p className="text-2xl text-amber-500">{"★".repeat(rating)}</p>
+        <p className="mt-2 text-sm font-medium text-green-800">Thank you for your feedback!</p>
+      </div>
+    );
+  }
+
+  return (
+    <form onSubmit={submit} noValidate className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-5">
+      <h2 className="text-base font-semibold text-slate-800">How was your experience?</h2>
+      <StarPicker value={rating} onChange={setRating} />
+      <label className="text-sm font-medium text-slate-700">
+        Your name
+        <Input className="mt-1" value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" />
+      </label>
+      <label className="text-sm font-medium text-slate-700">
+        Your feedback <span className="font-normal text-slate-400">(optional)</span>
+        <Textarea
+          className="mt-1"
+          rows={3}
+          value={comment}
+          onChange={(e) => setComment(e.target.value)}
+          placeholder="Tell us what you enjoyed, or what we could do better"
+        />
+      </label>
+      <ErrorText>{error}</ErrorText>
+      <Button type="submit" disabled={submitting}>
+        {submitting ? "Submitting..." : "Submit feedback"}
+      </Button>
+    </form>
+  );
+}
+
 export function ReviewDialog({
   open,
   onClose,

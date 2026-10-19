@@ -7,6 +7,7 @@ import { useSendChatMessage } from "../../features/chat/queries";
 import { ordersApi } from "../../features/orders/api";
 import { useApplyCoupon, useOrderInvoice, useRemoveCoupon } from "../../features/orders/queries";
 import { renderPrepMessage } from "../../lib/prepTime";
+import { useGuestAccess } from "../../lib/useGuestAccess";
 import { useTableSession } from "../../lib/useTableSession";
 import { api, clearStoredToken, extractErrorMessage, setActiveAuth } from "../../shared/api/client";
 import { POLL } from "../../shared/api/queryClient";
@@ -23,6 +24,7 @@ const STATUS_TONE = {
 
 export default function CustomerInvoice() {
   const { orderId } = useTableSession();
+  const access = useGuestAccess();
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [checkingOut, setCheckingOut] = useState(false);
   const [checkoutRequested, setCheckoutRequested] = useState(false);
@@ -354,9 +356,11 @@ export default function CustomerInvoice() {
         <Button variant="secondary" onClick={downloadInvoice} disabled={!orderComplete || downloading}>
           {downloading ? "Preparing..." : "Download invoice"}
         </Button>
-        <Button variant="secondary" onClick={() => setFeedbackOpen(true)}>
-          ★ Leave feedback
-        </Button>
+        {access.showFeedback && (
+          <Button variant="secondary" onClick={() => setFeedbackOpen(true)}>
+            ★ Leave feedback
+          </Button>
+        )}
       </div>
 
       <ReviewDialog open={feedbackOpen} onClose={() => setFeedbackOpen(false)} defaultName={order.customerName} />

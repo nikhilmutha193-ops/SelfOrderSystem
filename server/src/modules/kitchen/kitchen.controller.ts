@@ -5,12 +5,18 @@ import { parse } from "../../core/validate";
 import { asyncHandler } from "../../middleware/errorHandler";
 import { streamKotPdf } from "../../utils/pdf";
 import { itemIdParams, orderIdParams } from "../orders/orders.schema";
-import { kotPdfParams, kotQueueQuery } from "./kitchen.schema";
+import { kotPdfParams, kotQueueQuery, setPriorityBody } from "./kitchen.schema";
 import * as kitchenService from "./kitchen.service";
 
 export const getKotQueue = asyncHandler(async (req: Request, res: Response) => {
   const { tableId, stationId } = parse(kotQueueQuery, req.query);
   res.json(await kitchenService.getKotQueue(getContext(req), tableId, stationId));
+});
+
+export const setOrderPriority = asyncHandler(async (req: Request, res: Response) => {
+  const { orderId } = parse(orderIdParams, req.params);
+  const { priority } = parse(setPriorityBody, req.body);
+  res.json(await kitchenService.setOrderPriority(getContext(req), orderId, priority));
 });
 
 export const printKot = asyncHandler(async (req: Request, res: Response) => {

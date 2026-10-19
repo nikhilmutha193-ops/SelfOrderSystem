@@ -14,8 +14,24 @@ export interface QrSettings {
   accentColor: string;
 }
 
+export interface GuestAccess {
+  placeOrder: boolean;
+  showMenu: boolean;
+  showFeedback: boolean;
+}
+
+export interface RequiredDetails {
+  name: boolean;
+  phone: boolean;
+  members: boolean;
+  birthday: boolean;
+}
+
 export interface TableLoginSettings {
   allowQrScan: boolean;
+  requiredDetails?: RequiredDetails;
+  qr?: GuestAccess;
+  manual?: GuestAccess;
 }
 
 export type PrintPaperSize = "thermal58" | "thermal80" | "a5" | "a4";
@@ -35,6 +51,8 @@ export interface KotSettings {
   showLogo: boolean;
   showPrices: boolean;
   showJainTag: boolean;
+  splitByCategory: boolean;
+  tokenStart: number;
 }
 
 export interface InvoiceSettings {
@@ -262,6 +280,8 @@ export interface BillingSettings {
 
 export type DeliveryProvider = "Swiggy" | "Zomato" | "Uber-Eats" | "Other";
 
+export type OrderPriority = "normal" | "high" | "rush";
+
 export interface Order {
   _id: string;
   restaurantId: string;
@@ -282,6 +302,7 @@ export interface Order {
   source?: "guest" | "counter" | "swiggy" | "zomato";
   externalOrderId?: string;
   estimatedReadyAt?: string | null;
+  priority?: OrderPriority;
   kitchen?: OrderKitchenSummary;
   invoiceNumber?: string;
   billedAt?: string | null;
@@ -367,6 +388,7 @@ export interface OrderItem {
   kotRound: number | null;
   tokenNumber: number | null;
   kotPrintedAt: string | null;
+  readyAt?: string | null;
   modifiers?: SelectedModifier[];
   note?: string;
   cancelReason?: ItemCancelReason;

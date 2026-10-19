@@ -6,6 +6,7 @@ export type OrderStatus = "open" | "billed" | "closed" | "cancelled";
 export const ORDER_STATUSES: OrderStatus[] = ["open", "billed", "closed", "cancelled"];
 export type OrderSource = "guest" | "counter" | "swiggy" | "zomato";
 export type PaymentMethod = "pending" | "cash" | "upi" | "card" | "online" | "wallet" | "credit" | "split";
+export type OrderPriority = "normal" | "high" | "rush";
 export type TenderMethod = "cash" | "upi" | "card" | "online" | "wallet" | "credit";
 
 export const TENDER_METHODS: TenderMethod[] = ["cash", "upi", "card", "online", "wallet", "credit"];
@@ -97,6 +98,7 @@ export interface IOrder {
   customerId?: Types.ObjectId | null;
   loyaltyRedeem?: { points: number; amount: number } | null;
   serviceChargeWaived?: boolean;
+  priority?: OrderPriority;
   mergedInto?: Types.ObjectId | null;
   splitFrom?: Types.ObjectId | null;
   offline?: IOfflineSync | null;
@@ -209,6 +211,7 @@ const orderSchema = new Schema<IOrder>(
       default: null,
     },
     serviceChargeWaived: { type: Boolean, default: false },
+    priority: { type: String, enum: ["normal", "high", "rush"], default: "normal" },
     mergedInto: { type: Schema.Types.ObjectId, ref: "Order", default: null },
     splitFrom: { type: Schema.Types.ObjectId, ref: "Order", default: null },
     offline: {

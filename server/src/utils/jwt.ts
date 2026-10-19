@@ -9,6 +9,8 @@ export interface AuthTokenPayload {
   tableId?: string;
   sessionId?: string;
   orderId?: string;
+  /** How a table guest signed in: by scanning the QR code or by typing the code and PIN. */
+  via?: "qr" | "code";
   tv?: number;
   dev?: boolean;
   sst?: number;

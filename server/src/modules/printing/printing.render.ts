@@ -33,6 +33,7 @@ export interface KotTicket {
   tokenNumber: number | null;
   round: number;
   stationName?: string;
+  categoryName?: string;
   items: Pick<IOrderItem, "foodName" | "quantity" | "modifiers" | "note" | "isJain" | "components">[];
   printedAt: Date;
   paperWidth: 58 | 80;
@@ -49,6 +50,7 @@ export function renderKot(ticket: KotTicket): Buffer {
   if (ticket.reprint) p.line("*** REPRINT ***");
   if (ticket.tokenNumber != null) p.size(true).bold(true).line(`TOKEN ${ticket.tokenNumber}`).size(false).bold(false);
   if (ticket.stationName) p.bold(true).line(ticket.stationName.toUpperCase()).bold(false);
+  if (ticket.categoryName) p.bold(true).line(ticket.categoryName.toUpperCase()).bold(false);
   p.align("left").divider();
   if (settings?.showTableInfo !== false) p.bold(true).line(ticket.orderLabel).bold(false);
   if (settings?.showCustomerName !== false && ticket.customerName) p.line(`Guest: ${ticket.customerName}`);

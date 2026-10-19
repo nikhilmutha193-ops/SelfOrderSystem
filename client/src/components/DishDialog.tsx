@@ -15,7 +15,10 @@ export default function DishDialog({
   lang = "en",
   onClose,
   onAdd,
+  canOrder = true,
 }: {
+  /** False when the admin has turned ordering off for this guest: the dish is shown for information only. */
+  canOrder?: boolean;
   food: MenuFoodItem | null;
   lang?: Lang;
   onClose: () => void;
@@ -162,6 +165,7 @@ export default function DishDialog({
                           type={g.type === "single" ? "radio" : "checkbox"}
                           name={`grp-${g.name}`}
                           checked={checked}
+                          disabled={!canOrder}
                           onChange={() =>
                             g.type === "single"
                               ? setSingle((p) => ({ ...p, [g.name]: o.label }))
@@ -182,45 +186,51 @@ export default function DishDialog({
             </div>
           ))}
 
-          <label className="mt-4 block text-sm font-semibold text-slate-800">
-            Note for the kitchen <span className="font-normal text-slate-400">(optional)</span>
-            <textarea
-              className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
-              rows={2}
-              maxLength={200}
-              placeholder="e.g. no onions, less spicy"
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-            />
-          </label>
+          {canOrder && (
+            <>
+              <label className="mt-4 block text-sm font-semibold text-slate-800">
+                Note for the kitchen <span className="font-normal text-slate-400">(optional)</span>
+                <textarea
+                  className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                  rows={2}
+                  maxLength={200}
+                  placeholder="e.g. no onions, less spicy"
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                />
+              </label>
 
-          <div className="mt-5 flex items-center gap-3">
-            <div className="flex h-12 items-center justify-between rounded-xl border border-slate-300 px-1">
-              <button
-                onClick={() => setQty((q) => Math.max(1, q - 1))}
-                aria-label="Decrease quantity"
-                className="flex h-full w-9 items-center justify-center text-xl font-bold text-slate-600"
-              >
-                −
-              </button>
-              <span className="w-6 text-center text-base font-bold tabular-nums">{qty}</span>
-              <button
-                onClick={() => setQty((q) => q + 1)}
-                aria-label="Increase quantity"
-                className="flex h-full w-9 items-center justify-center text-xl font-bold text-slate-600"
-              >
-                +
-              </button>
-            </div>
-            <button
-              onClick={add}
-              disabled={missingRequired}
-              className="flex h-12 flex-1 items-center justify-center rounded-xl bg-orange-600 text-base font-bold tracking-wide text-white shadow-sm hover:bg-orange-700 disabled:opacity-50"
-            >
-              Add · ₹{(unitPrice * qty).toFixed(2)}
-            </button>
-          </div>
-          {missingRequired && <p className="mt-2 text-xs text-red-500">Please choose the required options above.</p>}
+              <div className="mt-5 flex items-center gap-3">
+                <div className="flex h-12 items-center justify-between rounded-xl border border-slate-300 px-1">
+                  <button
+                    onClick={() => setQty((q) => Math.max(1, q - 1))}
+                    aria-label="Decrease quantity"
+                    className="flex h-full w-9 items-center justify-center text-xl font-bold text-slate-600"
+                  >
+                    −
+                  </button>
+                  <span className="w-6 text-center text-base font-bold tabular-nums">{qty}</span>
+                  <button
+                    onClick={() => setQty((q) => q + 1)}
+                    aria-label="Increase quantity"
+                    className="flex h-full w-9 items-center justify-center text-xl font-bold text-slate-600"
+                  >
+                    +
+                  </button>
+                </div>
+                <button
+                  onClick={add}
+                  disabled={missingRequired}
+                  className="flex h-12 flex-1 items-center justify-center rounded-xl bg-orange-600 text-base font-bold tracking-wide text-white shadow-sm hover:bg-orange-700 disabled:opacity-50"
+                >
+                  Add · ₹{(unitPrice * qty).toFixed(2)}
+                </button>
+              </div>
+              {missingRequired && (
+                <p className="mt-2 text-xs text-red-500">Please choose the required options above.</p>
+              )}
+            </>
+          )}
         </div>
       </div>
     </div>

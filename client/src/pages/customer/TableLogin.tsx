@@ -136,7 +136,7 @@ export default function TableLogin() {
       } catch {
         /* ignore */
       }
-      navigate("/order/details");
+      navigate("/order/menu");
     } catch (err) {
       const message = extractErrorMessage(err);
       if (message === OWN_TABLE_OCCUPIED_MESSAGE) {
@@ -146,7 +146,7 @@ export default function TableLogin() {
         return;
       }
       if (tokenToUse && session.tableId) {
-        navigate(session.orderId ? "/order/menu" : "/order/details", { replace: true });
+        navigate("/order/menu", { replace: true });
         return;
       }
       setError(message);
@@ -156,7 +156,7 @@ export default function TableLogin() {
 
   function continueExistingOrder() {
     if (session.tableId) {
-      navigate(session.orderId ? "/order/menu" : "/order/details", { replace: true });
+      navigate("/order/menu", { replace: true });
       return;
     }
     attemptLogin({ continueOrder: true });
@@ -220,8 +220,7 @@ export default function TableLogin() {
     }
 
     if (token && !sessionExpired) {
-      if (session.orderId) navigate("/order/menu", { replace: true });
-      else if (session.tableId) navigate("/order/details", { replace: true });
+      if (session.tableId) navigate("/order/menu", { replace: true });
       return;
     }
 

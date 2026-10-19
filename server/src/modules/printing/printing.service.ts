@@ -228,14 +228,18 @@ export async function enqueueKot(
   const stationName = new Map(stations.map((s) => [s._id.toString(), s.name]));
   const fallback = printers.filter((p) => p.printsUnroutedKots);
 
+  // Optionally one ticket per category; every ticket of the round carries the same token number.
+  const splitByCategory = !!restaurant.kotSettings?.splitByCategory;
   const groups = new Map<string, typeof items>();
   for (const item of items) {
-    const key = item.stationId?.toString() ?? "";
+    const key = `${item.stationId?.toString() ?? ""}|${splitByCategory ? (item.categoryName ?? "") : ""}`;
     groups.set(key, [...(groups.get(key) ?? []), item]);
   }
 
   const jobs: Omit<Partial<IPrintJob>, "restaurantId">[] = [];
-  for (const [key, groupItems] of groups) {
+  for (const [groupKey, groupItems] of groups) {
+    const key = groupKey.split("|")[0];
+    const category = splitByCategory ? groupItems[0].categoryName : undefined;
     const routed = key ? printers.filter((p) => p.stationIds.some((s) => s.toString() === key)) : [];
     const targets = routed.length ? routed : fallback;
     const station = key ? stationName.get(key) : undefined;
@@ -247,6 +251,7 @@ export async function enqueueKot(
         tokenNumber: groupItems[0].tokenNumber,
         round,
         stationName: station,
+        categoryName: category,
         items: groupItems,
         printedAt: groupItems[0].kotPrintedAt ?? new Date(),
         paperWidth: printer.paperWidth,
@@ -256,7 +261,7 @@ export async function enqueueKot(
         printerId: printer._id,
         agentId: printer.agentId,
         kind: "kot",
-        title: `KOT ${groupItems[0].tokenNumber != null ? `T${groupItems[0].tokenNumber} ` : ""}· ${station ?? label}`,
+        title: `KOT ${groupItems[0].tokenNumber != null ? `T${groupItems[0].tokenNumber} ` : ""}· ${[station, category].filter(Boolean).join(" / ") || label}`,
         data: data.toString("base64"),
         orderId: order._id,
         round,

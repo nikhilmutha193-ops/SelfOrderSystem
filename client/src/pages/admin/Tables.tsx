@@ -16,7 +16,7 @@ import { Link } from "react-router-dom";
 import { AreasCard } from "../../features/pricing/components/AreasCard";
 import { useAreas, useSetTableArea } from "../../features/pricing/queries";
 import { useCanEdit } from "../../lib/adminAuth";
-import type { TableRow } from "../../lib/types";
+import type { GuestAccess, RequiredDetails, TableLoginSettings, TableRow } from "../../lib/types";
 import { api, extractErrorMessage } from "../../shared/api/client";
 import { confirmDialog } from "../../shared/ui/confirm";
 import { usePageTour, type TourStep } from "../../shared/ui/PageTour";
@@ -55,6 +55,20 @@ function formatMinutes(mins: number): string {
   return minutes === 0 ? `${hours}h` : `${hours}h ${minutes}m`;
 }
 
+interface LoginDraft {
+  allowQrScan: boolean;
+  qr: GuestAccess;
+  manual: GuestAccess;
+  requiredDetails: RequiredDetails;
+}
+
+const DEFAULT_LOGIN_DRAFT: LoginDraft = {
+  allowQrScan: true,
+  qr: { placeOrder: true, showMenu: true, showFeedback: true },
+  manual: { placeOrder: true, showMenu: true, showFeedback: true },
+  requiredDetails: { name: true, phone: false, members: true, birthday: false },
+};
+
 export default function Tables() {
   const [tables, setTables] = useState<TableRow[]>([]);
   const [code, setCode] = useState("");
@@ -70,8 +84,13 @@ export default function Tables() {
   const [expiryDraft, setExpiryDraft] = useState<Record<string, string>>({});
   const [, forceTick] = useState(0);
   const [captains, setCaptains] = useState<{ _id: string; username: string }[]>([]);
-  const [allowQrScan, setAllowQrScanState] = useState(true);
-  const [qrScanSaving, setQrScanSaving] = useState(false);
+  const [loginDraft, setLoginDraft] = useState<LoginDraft>(DEFAULT_LOGIN_DRAFT);
+  const [loginSaved, setLoginSaved] = useState<LoginDraft>(DEFAULT_LOGIN_DRAFT);
+  const [loginSaving, setLoginSaving] = useState(false);
+  const [loginMessage, setLoginMessage] = useState<string | null>(null);
+  const { allowQrScan, requiredDetails } = loginDraft;
+  const guestAccess = { qr: loginDraft.qr, manual: loginDraft.manual };
+  const loginDirty = JSON.stringify(loginDraft) !== JSON.stringify(loginSaved);
 
   const savedDefault = Number(autoReleaseMinutes);
   const defaultExpiryLabel = savedDefault > 0 ? `${savedDefault} (default)` : "never";
@@ -127,23 +146,42 @@ export default function Tables() {
 
   useEffect(() => {
     api
-      .get<{ allowQrScan: boolean }>("/tables/settings")
-      .then((res) => setAllowQrScanState(res.data.allowQrScan))
+      .get<TableLoginSettings>("/tables/settings")
+      .then((res) => {
+        const loaded: LoginDraft = {
+          allowQrScan: res.data.allowQrScan,
+          qr: res.data.qr ?? DEFAULT_LOGIN_DRAFT.qr,
+          manual: res.data.manual ?? DEFAULT_LOGIN_DRAFT.manual,
+          requiredDetails: res.data.requiredDetails ?? DEFAULT_LOGIN_DRAFT.requiredDetails,
+        };
+        setLoginDraft(loaded);
+        setLoginSaved(loaded);
+      })
       .catch(() => {
         // Non-critical: the switch just falls back to "on" (current default) if this fails.
       });
   }, []);
 
-  async function setAllowQrScan(value: boolean) {
-    setAllowQrScanState(value);
-    setQrScanSaving(true);
+  function setAccess(via: "qr" | "manual", field: keyof GuestAccess, value: boolean) {
+    setLoginDraft((d) => {
+      const next = { ...d[via], [field]: value };
+      if (field === "showMenu" && !value) next.placeOrder = false;
+      return { ...d, [via]: next };
+    });
+  }
+
+  async function saveLoginSettings() {
+    setLoginSaving(true);
+    setLoginMessage(null);
+    setError(null);
     try {
-      await api.put("/tables/settings", { allowQrScan: value });
+      await api.put("/tables/settings", loginDraft);
+      setLoginSaved(loginDraft);
+      setLoginMessage("Saved");
     } catch (err) {
       setError(extractErrorMessage(err));
-      setAllowQrScanState(!value);
     } finally {
-      setQrScanSaving(false);
+      setLoginSaving(false);
     }
   }
 
@@ -288,7 +326,8 @@ export default function Tables() {
       {
         target: "tables-auto-release",
         title: "Auto-release",
-        description: "Free a table automatically after it's been seated this long. Each table can override the default below.",
+        description:
+          "Free a table automatically after it's been seated this long. Each table can override the default below.",
       },
       {
         target: "tables-qr-setting",
@@ -302,7 +341,7 @@ export default function Tables() {
           "See each table's status, who's captaining it, its auto-release override, and reset its PIN, release it or delete it.",
       },
     ],
-    []
+    [],
   );
   usePageTour(tourSteps);
 
@@ -386,25 +425,115 @@ export default function Tables() {
           </form>
           <p className="mt-2 text-xs text-slate-500">0 turns auto-release off. Each table can override it below.</p>
         </Card>
-
-        <Card data-tour="tables-qr-setting">
-          <CardHeader
-            icon={KeyRound}
-            title="Table sign-in page"
-            description="Controls what guests see on the QR sign-in page at /order, besides the table code and PIN form."
-          />
-          <div className="rounded-lg border border-slate-200 px-3 py-2.5">
-            <Switch
-              id="allow-qr-scan"
-              checked={allowQrScan}
-              disabled={qrScanSaving}
-              onChange={setAllowQrScan}
-              label="Let guests scan a QR code to sign in"
-              description="Shows an in-page camera-scan button, in addition to typing the table code and PIN."
-            />
-          </div>
-        </Card>
       </div>
+
+      <Card data-tour="tables-qr-setting">
+        <CardHeader
+          icon={KeyRound}
+          title="Table sign-in page"
+          description="What guests can do after they sign in to a table, and what we ask them before their first order."
+        />
+
+        <div className="rounded-lg border border-slate-200 px-3 py-2.5">
+          <Switch
+            id="allow-qr-scan"
+            checked={allowQrScan}
+            disabled={!canEditTables}
+            onChange={(v) => setLoginDraft((d) => ({ ...d, allowQrScan: v }))}
+            label="Let guests scan a QR code on the sign-in page"
+            description="Shows a camera-scan button next to the table code and PIN form."
+          />
+        </div>
+
+        <div className="mt-5">
+          <h3 className="text-sm font-semibold text-slate-900">Guest access</h3>
+          <p className="text-xs text-slate-500">Set separately for how the guest signed in.</p>
+          <div className="mt-2 overflow-hidden rounded-lg border border-slate-200">
+            <div className="grid grid-cols-[1fr_5.5rem_5.5rem] items-center gap-x-2 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-600 sm:grid-cols-[1fr_8rem_8rem]">
+              <span />
+              <span className="text-center">Scanned QR</span>
+              <span className="text-center">Code and PIN</span>
+            </div>
+            {(
+              [
+                ["showMenu", "Show the menu", "Dishes, filters and search."],
+                ["placeOrder", "Allow placing orders", "When off, guests can browse and staff place the order."],
+                ["showFeedback", "Show the feedback form", "Star rating and comment."],
+              ] as const
+            ).map(([field, title, hint]) => (
+              <div
+                key={field}
+                className="grid grid-cols-[1fr_5.5rem_5.5rem] items-center gap-x-2 border-t border-slate-100 px-3 py-3 sm:grid-cols-[1fr_8rem_8rem]"
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-slate-800">{title}</p>
+                  <p className="text-xs text-slate-500">{hint}</p>
+                </div>
+                {(["qr", "manual"] as const).map((via) => (
+                  <div key={via} className="flex justify-center">
+                    <Switch
+                      id={`${via}-${field}`}
+                      checked={guestAccess[via][field]}
+                      disabled={!canEditTables || (field === "placeOrder" && !guestAccess[via].showMenu)}
+                      onChange={(v) => setAccess(via, field, v)}
+                    />
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-5">
+          <h3 className="text-sm font-semibold text-slate-900">Details asked before the first order</h3>
+          <p className="text-xs text-slate-500">Only ticked details are asked. Anything unticked is not shown.</p>
+          <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {(
+              [
+                ["name", "Name"],
+                ["members", "Number of members"],
+                ["phone", "Phone number"],
+                ["birthday", "Date of birth"],
+              ] as const
+            ).map(([field, label]) => (
+              <label
+                key={field}
+                className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2.5 text-sm font-medium ${
+                  requiredDetails[field]
+                    ? "border-orange-300 bg-orange-50 text-orange-900"
+                    : "border-slate-200 text-slate-600"
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  className="h-4 w-4"
+                  checked={requiredDetails[field]}
+                  disabled={!canEditTables}
+                  onChange={(e) =>
+                    setLoginDraft((d) => ({
+                      ...d,
+                      requiredDetails: { ...d.requiredDetails, [field]: e.target.checked },
+                    }))
+                  }
+                />
+                {label}
+              </label>
+            ))}
+          </div>
+        </div>
+
+        {canEditTables && (
+          <div className="mt-5 flex flex-wrap items-center gap-3 border-t border-slate-100 pt-4">
+            <Button type="button" onClick={saveLoginSettings} loading={loginSaving} disabled={!loginDirty}>
+              {loginSaving ? "Saving..." : "Save changes"}
+            </Button>
+            {loginDirty && <span className="text-xs text-amber-700">You have unsaved changes</span>}
+            {!loginDirty && loginMessage && (
+              <span className="text-sm font-medium text-emerald-700">{loginMessage}</span>
+            )}
+          </div>
+        )}
+      </Card>
 
       <AreasCard areas={areas} canEdit={canEditTables} />
 

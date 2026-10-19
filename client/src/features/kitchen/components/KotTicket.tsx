@@ -9,13 +9,14 @@ import {
   RotateCcw,
   Send,
   ShoppingBag,
+  Siren,
   Truck,
   X,
   type LucideIcon,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
-import type { KotQueueGroup, OrderItem } from "../../../lib/types";
+import type { KotQueueGroup, OrderItem, OrderPriority } from "../../../lib/types";
 import { Button, IconButton } from "../../../shared/ui/ui";
 import {
   formatElapsed,
@@ -30,22 +31,55 @@ import {
   type Urgency,
 } from "../kds";
 
-const URGENCY: Record<Urgency, { stripe: string; pill: string; label: string; ring: string }> = {
+const URGENCY: Record<Urgency, { stripe: string; pill: string; label: string; ring: string; card: string }> = {
   new: {
     stripe: "bg-[repeating-linear-gradient(90deg,var(--color-slate-300)_0_8px,transparent_8px_14px)]",
     pill: "bg-slate-100 text-slate-600",
     label: "Not sent",
     ring: "",
+    card: "border-slate-200 bg-white",
   },
-  ontime: { stripe: "bg-emerald-500", pill: "bg-emerald-50 text-emerald-700", label: "On time", ring: "" },
-  soon: { stripe: "bg-amber-400", pill: "bg-amber-50 text-amber-800", label: "Due soon", ring: "" },
-  late: { stripe: "bg-red-500", pill: "bg-red-600 text-white", label: "Late", ring: "ring-2 ring-red-200" },
+  ontime: {
+    stripe: "bg-green-500",
+    pill: "bg-green-100 text-green-800",
+    label: "On time",
+    ring: "",
+    card: "border-green-300 bg-green-50/60",
+  },
+  soon: {
+    stripe: "bg-yellow-400",
+    pill: "bg-yellow-100 text-yellow-900",
+    label: "Due soon",
+    ring: "",
+    card: "border-yellow-300 bg-yellow-50/70",
+  },
+  late: {
+    stripe: "bg-orange-500",
+    pill: "bg-orange-500 text-white",
+    label: "Late",
+    ring: "ring-2 ring-orange-200",
+    card: "border-orange-400 bg-orange-50/70",
+  },
+  overdue: {
+    stripe: "bg-red-600",
+    pill: "bg-red-600 text-white animate-pulse",
+    label: "Overdue",
+    ring: "ring-2 ring-red-300",
+    card: "border-red-500 bg-red-50/70",
+  },
   ready: {
-    stripe: "bg-emerald-600",
-    pill: "bg-emerald-600 text-white",
+    stripe: "bg-green-600",
+    pill: "bg-green-600 text-white",
     label: "Ready",
-    ring: "ring-2 ring-emerald-200",
+    ring: "ring-2 ring-green-200",
+    card: "border-green-500 bg-green-100/60",
   },
+};
+
+const PRIORITY_STYLE: Record<OrderPriority, { badge: string; label: string } | null> = {
+  normal: null,
+  high: { badge: "bg-violet-100 text-violet-700", label: "High" },
+  rush: { badge: "bg-red-600 text-white animate-pulse", label: "RUSH" },
 };
 
 const ITEM_STATE: Record<
@@ -147,6 +181,7 @@ export interface TicketActions {
   bulk: (kind: "start" | "ready" | "serve", items: OrderItem[]) => Promise<unknown>;
   send: (orderId: string) => Promise<unknown> | void;
   reprint: (orderId: string, round: number) => void;
+  setPriority: (orderId: string, priority: OrderPriority) => Promise<unknown>;
 }
 
 export function KotTicket({
@@ -178,6 +213,9 @@ export function KotTicket({
   const hiddenCount = items.length - visible.length;
   const panelId = `kot-ticket-${order._id}`;
   const fresh = since != null && now - since < 2 * 60_000;
+  const priority = (order.priority ?? "normal") as OrderPriority;
+  const priorityStyle = PRIORITY_STYLE[priority];
+  const NEXT_PRIORITY: Record<OrderPriority, OrderPriority> = { normal: "high", high: "rush", rush: "normal" };
 
   async function act(key: string, fn: () => Promise<unknown> | void) {
     setBusy(key);
@@ -195,7 +233,9 @@ export function KotTicket({
   return (
     <article
       aria-label={`${tokenNumber != null ? `Token ${tokenNumber}, ` : ""}${label.place}`}
-      className={`overflow-hidden rounded-xl border border-slate-200 bg-white shadow-card ${style.ring}`}
+      className={`overflow-hidden rounded-xl border shadow-card ${style.card} ${
+        priority === "rush" ? "ring-2 ring-red-500" : priority === "high" ? "ring-2 ring-violet-400" : style.ring
+      }`}
     >
       <div className={`h-1.5 ${style.stripe}`} aria-hidden="true" />
       <div className="flex items-start gap-2 py-2 pr-2 pl-2">
@@ -222,6 +262,11 @@ export function KotTicket({
               {fresh && (
                 <span className="rounded-md bg-orange-100 px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-orange-700">
                   NEW
+                </span>
+              )}
+              {priorityStyle && (
+                <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold tracking-wide ${priorityStyle.badge}`}>
+                  {priorityStyle.label}
                 </span>
               )}
             </span>
@@ -267,6 +312,16 @@ export function KotTicket({
             {rounds.length > 0 && (
               <TicketMenu rounds={rounds} onReprint={(round) => actions.reprint(order._id, round)} />
             )}
+            <IconButton
+              size="sm"
+              icon={Siren}
+              label={`Priority: ${priority} — click to cycle`}
+              className={priority === "rush" ? "!text-red-600" : priority === "high" ? "!text-violet-600" : "!text-slate-400"}
+              disabled={busy === "priority"}
+              onClick={() =>
+                act("priority", () => actions.setPriority(order._id, NEXT_PRIORITY[priority]))
+              }
+            />
             <button
               type="button"
               onClick={onToggle}

@@ -2,12 +2,14 @@ import { useEffect, useRef, useState } from "react";
 
 import type { KotQueueGroup, Order, OrderItem } from "../../lib/types";
 
-export type Urgency = "new" | "ontime" | "soon" | "late" | "ready";
+export type Urgency = "new" | "ontime" | "soon" | "late" | "overdue" | "ready";
 export type QueueFilter = "all" | "waiting" | "cooking" | "ready" | "unsent";
 
 const COLLAPSE_KEY = "selforder_kot_collapsed";
 const LATE_AFTER_MIN = 20;
 const SOON_AFTER_MIN = 10;
+const OVERDUE_AFTER_MIN = 30;
+const OVERDUE_GRACE_MS = 5 * 60_000;
 const SOON_WINDOW_MS = 3 * 60_000;
 
 export function isSent(item: OrderItem) {
@@ -41,11 +43,13 @@ export function ticketUrgency(group: KotQueueGroup, now: number): Urgency {
   if (group.items.every((i) => i.status === "ready")) return "ready";
   const eta = group.order.estimatedReadyAt ? new Date(group.order.estimatedReadyAt).getTime() : NaN;
   if (Number.isFinite(eta)) {
+    if (now > eta + OVERDUE_GRACE_MS) return "overdue";
     if (now > eta) return "late";
     if (eta - now <= SOON_WINDOW_MS) return "soon";
     return "ontime";
   }
   const minutes = (now - sent) / 60_000;
+  if (minutes >= OVERDUE_AFTER_MIN) return "overdue";
   if (minutes >= LATE_AFTER_MIN) return "late";
   if (minutes >= SOON_AFTER_MIN) return "soon";
   return "ontime";

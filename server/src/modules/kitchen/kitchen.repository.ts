@@ -99,4 +99,8 @@ export class KitchenRepository {
   findTableCode(tableId: Types.ObjectId) {
     return TableModel.findOne(this.scoped({ _id: tableId })).select("code");
   }
+
+  setPriority(orderId: Types.ObjectId, priority: string) {
+    return Order.updateOne(this.scoped<IOrder>({ _id: orderId }), { $set: { priority } });
+  }
 }

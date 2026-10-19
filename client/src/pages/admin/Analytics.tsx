@@ -35,21 +35,35 @@ function BarChart({
   valueFormat?: (n: number) => string;
 }) {
   const max = Math.max(1, ...data.map((d) => d.value));
+  // Long ranges (e.g. 90 days) get thin bars that fit the card, and a label only every few bars.
+  const dense = data.length > 31;
+  const labelEvery = dense ? Math.ceil(data.length / 8) : 1;
+  const format = (n: number) => (valueFormat ? valueFormat(n) : String(n));
   return (
-    <div className="flex items-end gap-1 overflow-x-auto" style={{ height: 160 }}>
-      {data.map((d, i) => (
-        <div
-          key={i}
-          className="flex min-w-[24px] flex-1 flex-col items-center justify-end gap-1"
-          title={`${d.label}: ${valueFormat ? valueFormat(d.value) : d.value}`}
-        >
+    <div>
+      <div className={`flex items-end overflow-x-auto ${dense ? "gap-px" : "gap-1"}`} style={{ height: 130 }}>
+        {data.map((d, i) => (
           <div
-            className="w-full rounded-t-md transition-opacity hover:opacity-80"
-            style={{ height: `${(d.value / max) * 120}px`, minHeight: d.value > 0 ? 2 : 0, background: color }}
-          />
-          <span className="whitespace-nowrap text-[10px] text-slate-400 tabular-nums">{d.label}</span>
-        </div>
-      ))}
+            key={i}
+            className={`flex h-full flex-1 items-end ${dense ? "min-w-[2px]" : "min-w-[24px]"}`}
+            title={`${d.label}: ${format(d.value)}`}
+          >
+            <div
+              className="w-full rounded-t-sm transition-opacity hover:opacity-80"
+              style={{ height: `${(d.value / max) * 100}%`, minHeight: d.value > 0 ? 2 : 0, background: color }}
+            />
+          </div>
+        ))}
+      </div>
+      <div className={`mt-1 flex ${dense ? "gap-px" : "gap-1"}`}>
+        {data.map((d, i) => (
+          <div key={i} className={`flex flex-1 justify-center ${dense ? "min-w-[2px]" : "min-w-[24px]"}`}>
+            {i % labelEvery === 0 && (
+              <span className="whitespace-nowrap text-[10px] text-slate-400 tabular-nums">{d.label}</span>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -107,7 +121,8 @@ export default function Analytics() {
             {
               target: "analytics-mix",
               title: "Order type mix and top dishes",
-              description: "How dine-in/take-away/delivery split, and your best-selling dishes by quantity and revenue.",
+              description:
+                "How dine-in/take-away/delivery split, and your best-selling dishes by quantity and revenue.",
             },
           ]
         : []),
@@ -117,12 +132,12 @@ export default function Analytics() {
               target: "analytics-prep",
               title: "Prep time: actual vs. estimated",
               description:
-                "Measured from KOT print to \"ready\". If a dish is consistently off, update its prep time estimate under Food Items.",
+                'Measured from KOT print to "ready". If a dish is consistently off, update its prep time estimate under Food Items.',
             },
           ]
         : []),
     ],
-    [view, sales]
+    [view, sales],
   );
   usePageTour(tourSteps);
 

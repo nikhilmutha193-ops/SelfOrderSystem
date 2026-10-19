@@ -127,6 +127,8 @@ const DEFAULT_KOT_SETTINGS: KotSettings = {
   showLogo: false,
   showPrices: false,
   showJainTag: true,
+  splitByCategory: false,
+  tokenStart: 1,
 };
 
 const DEFAULT_BILLING_SETTINGS: BillingSettings = {
@@ -850,6 +852,32 @@ export default function RestaurantSettings() {
                     onChange={(v) => setKotSettings((prev) => ({ ...prev, showPrices: v }))}
                     label="Show item prices"
                   />
+                  <ToggleRow
+                    id="kot-split-category"
+                    checked={kotSettings.splitByCategory}
+                    onChange={(v) => setKotSettings((prev) => ({ ...prev, splitByCategory: v }))}
+                    label="Print a separate ticket for each category"
+                    description="Starters, mains and drinks print on their own ticket. All tickets of one order share the same token number."
+                  />
+                </div>
+                <div className="mt-4 max-w-xs">
+                  <Field
+                    label="First token number of the day"
+                    htmlFor="kot-token-start"
+                    hint="Tokens count up from this number every business day."
+                  >
+                    <Input
+                      id="kot-token-start"
+                      type="number"
+                      inputMode="numeric"
+                      min={1}
+                      max={99999}
+                      value={kotSettings.tokenStart}
+                      onChange={(e) =>
+                        setKotSettings((prev) => ({ ...prev, tokenStart: Math.max(1, Number(e.target.value) || 1) }))
+                      }
+                    />
+                  </Field>
                 </div>
               </Card>
             </>

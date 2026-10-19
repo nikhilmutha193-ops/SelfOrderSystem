@@ -204,6 +204,13 @@ export const updateRestaurantSettings = asyncHandler(async (req: Request, res: R
     if (kotSettings.guestOrderMode !== undefined && !["auto", "accept"].includes(kotSettings.guestOrderMode)) {
       throw new HttpError(400, "Guest orders must be sent automatically or wait for staff to accept");
     }
+    if (kotSettings.tokenStart !== undefined) {
+      const start = Number(kotSettings.tokenStart);
+      if (!Number.isInteger(start) || start < 1 || start > 99999) {
+        throw new HttpError(400, "The first token number must be a whole number from 1 to 99999");
+      }
+      kotSettings.tokenStart = start;
+    }
     Object.assign(restaurant.kotSettings, kotSettings);
   }
   if (invoiceSettings !== undefined) {

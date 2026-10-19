@@ -1,4 +1,4 @@
-import type { KotQueueGroup, OrderItem } from "../../lib/types";
+import type { KotQueueGroup, OrderItem, OrderPriority } from "../../lib/types";
 import { api } from "../../shared/api/client";
 
 export interface KotPrintResult {
@@ -19,6 +19,8 @@ export const kitchenApi = {
   startPreparing: (itemId: string) => api.patch<OrderItem>(`/orders/items/${itemId}/preparing`).then((res) => res.data),
   markReady: (itemId: string) => api.patch<OrderItem>(`/orders/items/${itemId}/ready`).then((res) => res.data),
   serve: (itemId: string) => api.patch<OrderItem>(`/orders/items/${itemId}/serve`).then((res) => res.data),
+  setPriority: (orderId: string, priority: OrderPriority) =>
+    api.patch<{ priority: OrderPriority }>(`/orders/${orderId}/priority`, { priority }).then((res) => res.data),
 };
 
 export async function openPdfInTab(tab: Window | null, loadPdf: () => Promise<Blob>): Promise<void> {

@@ -244,7 +244,7 @@ export default function Captain() {
       )}
 
       <main className="min-h-0 flex-1 overflow-y-auto">
-        {tab === "tables" && !tableId && <TableMap tables={myTables} areas={floor?.areas} onSelect={openTable} />}
+        {tab === "tables" && !tableId && <TableMap tables={myTables} areas={floor?.areas} onSelect={openTable} showOrderStatus />}
         {tab === "tables" && tableId && (
           <div className="flex h-full flex-col">
             <div className="shrink-0 bg-white px-3 pt-2">

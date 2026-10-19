@@ -11,7 +11,6 @@ import AppProviders from "./providers";
 
 const Landing = lazy(() => import("../pages/Landing"));
 const TableLogin = lazy(() => import("../pages/customer/TableLogin"));
-const CustomerDetails = lazy(() => import("../pages/customer/CustomerDetails"));
 const Menu = lazy(() => import("../pages/customer/Menu"));
 const CustomerInvoice = lazy(() => import("../pages/customer/CustomerInvoice"));
 
@@ -70,14 +69,7 @@ export default function App() {
               <Route path="/" element={<Landing />} />
               <Route path="/order" element={<TableLogin />} />
               <Route path="/bill/:token" element={<PublicBill />} />
-              <Route
-                path="/order/details"
-                element={
-                  <ProtectedRoute role="table" redirectTo="/order">
-                    <CustomerDetails />
-                  </ProtectedRoute>
-                }
-              />
+              <Route path="/order/details" element={<Navigate to="/order/menu" replace />} />
               <Route
                 path="/order/menu"
                 element={

@@ -1,8 +1,31 @@
+# Dependencies and build output
 node_modules/
 dist/
 build/
+coverage/
+*.tsbuildinfo
+
+# Logs
 *.log
+
+# OS and editor files
 .DS_Store
+Thumbs.db
+
+# Environment files (the *.example files and client/.env.production are kept)
 .env
+.env.*
+!.env.example
+!client/.env.production
 .env.vercel
+
+# Vercel
+.vercel/
+
+# Local Claude Code settings
+.claude/settings.local.json
+
+# Runtime data written by the server: never commit tenant data
 server/invoices/
+server/backups/
+server/uploads/

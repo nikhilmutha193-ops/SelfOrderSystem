@@ -190,6 +190,7 @@ export const tableLogin = asyncHandler(async (req: Request, res: Response) => {
         id: table._id.toString(),
         tableId: table._id.toString(),
         sessionId: table.sessionId,
+        via: qrToken ? "qr" : "code",
         ...(openOrder && { orderId: openOrder._id.toString() }),
       });
       res.json({ token, table: { id: table._id, code: table.code } });
@@ -214,6 +215,7 @@ export const tableLogin = asyncHandler(async (req: Request, res: Response) => {
     id: table._id.toString(),
     tableId: table._id.toString(),
     sessionId,
+    via: qrToken ? "qr" : "code",
   });
   res.json({ token, table: { id: table._id, code: table.code } });
 });

@@ -32,6 +32,18 @@ function tableLabel(table: PosTable) {
   return "Free";
 }
 
+/** What is happening with the table's order(s), for the captain: the most urgent thing first. */
+function orderStatus(table: PosTable): { label: string; className: string } | null {
+  if (table.orders.length === 0) return null;
+  const ready = table.orders.reduce((sum, o) => sum + o.ready, 0);
+  const unsent = table.orders.reduce((sum, o) => sum + o.unsent, 0);
+  if (ready > 0) return { label: `${ready} ready to serve`, className: "bg-green-600 text-white" };
+  if (unsent > 0) return { label: `${unsent} not sent to kitchen`, className: "bg-slate-700 text-white" };
+  if (table.orders.some((o) => o.status === "billed"))
+    return { label: "Bill requested", className: "bg-blue-600 text-white" };
+  return { label: "In the kitchen", className: "bg-amber-500 text-white" };
+}
+
 function groupByArea(tables: PosTable[], areas: Area[]) {
   if (areas.length === 0) return [{ key: "all", name: null as string | null, tables }];
   const known = new Set(areas.map((a) => a._id));
@@ -49,15 +61,40 @@ export function TableMap({
   tables,
   areas = [],
   onSelect,
+  showOrderStatus = false,
 }: {
   tables: PosTable[];
   areas?: Area[];
   onSelect: (table: PosTable) => void;
+  /** Captain view: summary counts, order progress and the captain's name on each table. */
+  showOrderStatus?: boolean;
 }) {
   const now = useNow(30_000);
   const groups = groupByArea(tables, areas);
+  const counts = {
+    free: tables.filter((t) => t.status === "available").length,
+    occupied: tables.filter((t) => t.status === "occupied").length,
+    awaiting: tables.filter((t) => t.status === "awaiting_payment").length,
+    ready: tables.filter((t) => t.orders.some((o) => o.ready > 0)).length,
+  };
   return (
     <div className="flex h-full flex-col gap-3 overflow-y-auto p-3">
+      {showOrderStatus && (
+        <div className="grid grid-cols-4 gap-2 text-center text-xs font-medium">
+          <span className="rounded-lg border border-slate-200 bg-white py-1.5 text-slate-700">
+            <b className="block text-base tabular-nums">{counts.free}</b>Free
+          </span>
+          <span className="rounded-lg border border-amber-300 bg-amber-50 py-1.5 text-amber-900">
+            <b className="block text-base tabular-nums">{counts.occupied}</b>Occupied
+          </span>
+          <span className="rounded-lg border border-blue-300 bg-blue-50 py-1.5 text-blue-900">
+            <b className="block text-base tabular-nums">{counts.awaiting}</b>Bill
+          </span>
+          <span className="rounded-lg border border-green-300 bg-green-50 py-1.5 text-green-900">
+            <b className="block text-base tabular-nums">{counts.ready}</b>To serve
+          </span>
+        </div>
+      )}
       <div className="flex flex-wrap gap-3 text-xs text-slate-500">
         <span className="flex items-center gap-1">
           <span className="h-3 w-3 rounded border border-slate-300 bg-white" /> Free
@@ -87,6 +124,7 @@ export function TableMap({
               const minutes = table.status === "available" ? null : minutesSince(table.occupiedAt, now);
               const total = table.orders.reduce((sum, o) => sum + o.total, 0);
               const ready = table.orders.reduce((sum, o) => sum + o.ready, 0);
+              const progress = showOrderStatus ? orderStatus(table) : null;
               return (
                 <button
                   key={table._id}
@@ -104,6 +142,14 @@ export function TableMap({
                     )}
                   </span>
                   <span className="text-xs font-medium">{tableLabel(table)}</span>
+                  {progress && (
+                    <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${progress.className}`}>
+                      {progress.label}
+                    </span>
+                  )}
+                  {showOrderStatus && table.captainName && (
+                    <span className="max-w-full truncate text-[10px] opacity-70">{table.captainName}</span>
+                  )}
                   {table.orders.length > 0 && (
                     <span className="flex w-full justify-between text-xs tabular-nums">
                       <span>{minutes !== null ? `${minutes} min` : ""}</span>

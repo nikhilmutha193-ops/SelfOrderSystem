@@ -7,6 +7,7 @@ export async function nextTokenNumber(
   restaurantId: Types.ObjectId | string,
   dayEndTime: string | undefined,
   timeZone: string | undefined,
+  start = 1,
   now = new Date()
 ): Promise<{ tokenNumber: number; businessDayStart: Date }> {
   const businessDayStart = getBusinessDayStart(now, dayEndTime, timeZone);
@@ -17,5 +18,6 @@ export async function nextTokenNumber(
     { new: true, upsert: true, setDefaultsOnInsert: true }
   );
 
-  return { tokenNumber: counter.seq, businessDayStart };
+  // The counter always counts from 1; the admin's starting number is added on top.
+  return { tokenNumber: counter.seq + Math.max(1, start) - 1, businessDayStart };
 }

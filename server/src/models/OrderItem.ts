@@ -31,6 +31,8 @@ export interface IOrderItem {
   packagingCharge?: number;
   components?: IOrderItemComponent[];
   stationId?: Types.ObjectId | null;
+  categoryId?: Types.ObjectId | null;
+  categoryName?: string;
   complimentaryReason?: string;
   cancelledAt?: Date | null;
   createdAt: Date;
@@ -79,6 +81,8 @@ const orderItemSchema = new Schema<IOrderItem>(
       default: [],
     },
     stationId: { type: Schema.Types.ObjectId, ref: "Station", default: null },
+    categoryId: { type: Schema.Types.ObjectId, ref: "Category", default: null },
+    categoryName: { type: String, trim: true },
     complimentaryReason: { type: String, trim: true },
     cancelNote: { type: String, trim: true },
     cancelledAt: { type: Date, default: null },

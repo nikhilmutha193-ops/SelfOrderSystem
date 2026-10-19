@@ -5,19 +5,22 @@ import { useNavigate } from "react-router-dom";
 
 import DishDialog, { type DishAddPayload } from "../../components/DishDialog";
 import { EditDetailsDialog } from "../../components/EditDetailsDialog";
+import { GuestDetailsDialog, type GuestDetails } from "../../components/GuestDetailsDialog";
 import { BestsellerTag, FoodTypeIcon, RatingChip } from "../../components/FoodBadges";
 import { PairingRow, PopularStrip } from "../../components/MenuSuggestions";
-import { ReviewDialog, StarPicker } from "../../components/ReviewFab";
+import { FeedbackPanel, ReviewDialog, StarPicker } from "../../components/ReviewFab";
 import ChatFab from "../../features/chat/components/ChatFab";
 import QuickRequests from "../../features/chat/components/QuickRequests";
+import { useSendChatMessage } from "../../features/chat/queries";
 import { ordersApi } from "../../features/orders/api";
 import { useAddOrderItems, useOrder } from "../../features/orders/queries";
-import { LANGS, loadLang, saveLang, tr, type Lang } from "../../lib/i18n";
+import { LANGS, loadLang, saveLang, tr, ui, type Lang } from "../../lib/i18n";
 import { newId } from "../../lib/id";
 import { suggestionsFor } from "../../lib/recommendations";
 import type { CartLine, MenuCategory, MenuFoodItem, MenuRecommendations } from "../../lib/types";
+import { useGuestAccess } from "../../lib/useGuestAccess";
 import { useTableSession } from "../../lib/useTableSession";
-import { api, clearStoredToken, extractErrorMessage, setActiveAuth } from "../../shared/api/client";
+import { api, clearStoredToken, extractErrorMessage, setActiveAuth, storeToken } from "../../shared/api/client";
 import { POLL } from "../../shared/api/queryClient";
 import { Button, ErrorText, Input, Select, Textarea } from "../../shared/ui/ui";
 
@@ -104,7 +107,8 @@ const SORT_LABELS: Record<SortOption, string> = {
 };
 
 export default function Menu() {
-  const { orderId } = useTableSession();
+  const { orderId, tableId } = useTableSession();
+  const access = useGuestAccess();
   const addOrderItems = useAddOrderItems();
   const orderQuery = useOrder(orderId, POLL.guestInvoice);
   const billReady = !!orderQuery.data && orderQuery.data.order.status !== "open";
@@ -118,6 +122,9 @@ export default function Menu() {
   const [reviewOpen, setReviewOpen] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [guestOpen, setGuestOpen] = useState(false);
+  const [pendingRequest, setPendingRequest] = useState<string | null>(null);
+  const sendChat = useSendChatMessage();
   const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false);
   const [activeItemCount, setActiveItemCount] = useState<number | null>(null);
   const [leavingTable, setLeavingTable] = useState(false);
@@ -137,8 +144,8 @@ export default function Menu() {
   const navRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    if (!orderId) {
-      navigate("/order/details", { replace: true });
+    if (!tableId) {
+      navigate("/order", { replace: true });
       return;
     }
     api
@@ -149,12 +156,12 @@ export default function Menu() {
       })
       .catch((err) => setError(extractErrorMessage(err)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orderId]);
+  }, [tableId]);
 
   const recsQuery = useQuery({
     queryKey: ["menu", "recommendations"],
     queryFn: () => api.get<MenuRecommendations>("/menu/recommendations").then((r) => r.data),
-    enabled: !!orderId,
+    enabled: !!tableId,
     staleTime: 5 * 60 * 1000,
   });
   const recs = recsQuery.data;
@@ -165,18 +172,18 @@ export default function Menu() {
   }, [menu]);
   const popularFoods = useMemo(
     () => (recs?.popular ?? []).map((id) => foodById.get(id)).filter((f): f is MenuFoodItem => Boolean(f)),
-    [recs, foodById]
+    [recs, foodById],
   );
   const popularRank = useMemo(() => new Map(popularFoods.slice(0, 3).map((f, i) => [f._id, i + 1])), [popularFoods]);
   const pairingFoods = useMemo(
     () =>
       suggestionsFor(
         recs,
-        cart.map((l) => l.foodItemId)
+        cart.map((l) => l.foodItemId),
       )
         .map((id) => foodById.get(id))
         .filter((f): f is MenuFoodItem => Boolean(f)),
-    [recs, cart, foodById]
+    [recs, cart, foodById],
   );
 
   const cartTotal = useMemo(() => cart.reduce((sum, l) => sum + l.price * l.quantity, 0), [cart]);
@@ -184,6 +191,12 @@ export default function Menu() {
 
   // The "plain" line for a dish: no modifiers and no note. Customized picks live on their own lines.
   const isPlain = (l: CartLine) => (!l.modifiers || l.modifiers.length === 0) && !l.note;
+
+  // Cart lines keep the English name; show them in the guest's language when the dish has a translation.
+  function lineName(line: CartLine) {
+    const food = foodById.get(line.foodItemId);
+    return food ? tr(food, lang, "name") : line.name;
+  }
 
   function getCartQty(foodItemId: string) {
     return cart.find((l) => l.foodItemId === foodItemId && isPlain(l))?.quantity ?? 0;
@@ -197,7 +210,16 @@ export default function Menu() {
         next[idx] = { ...next[idx], quantity: next[idx].quantity + 1 };
         return next;
       }
-      return [...prev, { lineId: newId(), foodItemId: food._id, name: food.name, price: food.price, quantity: 1 }];
+      return [
+        ...prev,
+        {
+          lineId: newId(),
+          foodItemId: food._id,
+          name: food.name,
+          price: food.price,
+          quantity: 1,
+        },
+      ];
     });
   }
 
@@ -229,6 +251,7 @@ export default function Menu() {
   }
 
   function quickAddOrOpen(food: MenuFoodItem) {
+    if (!access.placeOrder) return;
     if ((food.modifierGroups?.length ?? 0) > 0) setDetailFood(food);
     else incrementCart(food);
   }
@@ -237,28 +260,88 @@ export default function Menu() {
     setCart((prev) => prev.filter((_, i) => i !== idx));
   }
 
+  async function submitItems(targetOrderId: string) {
+    await addOrderItems.mutateAsync({
+      orderId: targetOrderId,
+      items: cart.map((l) => ({
+        foodItemId: l.foodItemId,
+        quantity: l.quantity,
+        note: l.note,
+        modifiers: l.modifiers?.map((m) => ({
+          groupName: m.groupName,
+          label: m.label,
+        })),
+      })),
+    });
+    setCart([]);
+    setReviewOpen(false);
+    navigate("/order/invoice");
+  }
+
   async function placeOrder() {
-    if (cart.length === 0 || !orderId) return;
+    if (cart.length === 0) return;
+    // The order is only created once the guest has given the required details.
+    if (!orderId) {
+      const needsDetails = Object.values(access.required).some(Boolean);
+      if (needsDetails) {
+        setReviewOpen(false);
+        setGuestOpen(true);
+        return;
+      }
+      setConfirming(true);
+      setError(null);
+      try {
+        await startOrderAndPlace({ customerName: "Guest", members: 1 });
+      } catch (err) {
+        setError(err instanceof Error ? err.message : extractErrorMessage(err));
+      } finally {
+        setConfirming(false);
+      }
+      return;
+    }
     setConfirming(true);
     setError(null);
     try {
-      await addOrderItems.mutateAsync({
-        orderId,
-        items: cart.map((l) => ({
-          foodItemId: l.foodItemId,
-          quantity: l.quantity,
-          note: l.note,
-          modifiers: l.modifiers?.map((m) => ({ groupName: m.groupName, label: m.label })),
-        })),
-      });
-      setCart([]);
-      setReviewOpen(false);
-      navigate("/order/invoice");
+      await submitItems(orderId);
     } catch (err) {
       setError(extractErrorMessage(err));
       orderQuery.refetch();
     } finally {
       setConfirming(false);
+    }
+  }
+
+  async function startOrderAndPlace(details: GuestDetails, request: string | null = pendingRequest) {
+    try {
+      const started = await ordersApi.startDineIn(details);
+      storeToken("table", started.token);
+      setActiveAuth({ role: "table", token: started.token });
+      if (request) {
+        await sendChat.mutateAsync({ orderId: started.order._id, message: request });
+        setPendingRequest(null);
+      } else {
+        await submitItems(started.order._id);
+      }
+      setGuestOpen(false);
+    } catch (err) {
+      throw new Error(extractErrorMessage(err));
+    }
+  }
+
+  // A quick request ("call waiter", ...) before the first order: chat needs an order, so collect the
+  // required details first, exactly as when placing an order.
+  async function requestWithoutOrder(message: string) {
+    setPendingRequest(message);
+    if (Object.values(access.required).some(Boolean)) {
+      setGuestOpen(true);
+      return;
+    }
+    try {
+      await startOrderAndPlace({ customerName: "Guest", members: 1 }, message);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : extractErrorMessage(err));
+    } finally {
+      setPendingRequest(null);
     }
   }
 
@@ -326,7 +409,7 @@ export default function Menu() {
                   if (!hay.includes(query)) return false;
                 }
                 return true;
-              })
+              }),
             ),
           }))
           .filter((sub) => sub.foodItems.length > 0),
@@ -338,9 +421,9 @@ export default function Menu() {
     () =>
       sortItems(
         sortBy,
-        filteredMenu.flatMap((c) => c.subcategories.flatMap((sub) => sub.foodItems))
+        filteredMenu.flatMap((c) => c.subcategories.flatMap((sub) => sub.foodItems)),
       ),
-    [filteredMenu, sortBy]
+    [filteredMenu, sortBy],
   );
 
   useEffect(() => {
@@ -358,7 +441,7 @@ export default function Menu() {
           if (id) setActiveCategoryId(id);
         }
       },
-      { rootMargin: "-120px 0px -70% 0px", threshold: 0 }
+      { rootMargin: "-120px 0px -70% 0px", threshold: 0 },
     );
     sections.forEach(([, el]) => el && observer.observe(el));
     return () => observer.disconnect();
@@ -366,7 +449,10 @@ export default function Menu() {
 
   function scrollToCategory(categoryId: string) {
     setActiveCategoryId(categoryId);
-    sectionRefs.current[categoryId]?.scrollIntoView({ behavior: "smooth", block: "start" });
+    sectionRefs.current[categoryId]?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
   }
 
   function clearFilters() {
@@ -381,8 +467,9 @@ export default function Menu() {
       {billReady && (
         <div className="flex flex-wrap items-center justify-between gap-3 bg-blue-50 px-4 py-3 text-sm text-blue-900">
           <span>
-            Your bill{orderQuery.data?.order.invoiceNumber ? ` ${orderQuery.data.order.invoiceNumber}` : ""} is ready,
-            so ordering is closed. Ask staff if you'd like to add something.
+            Your bill
+            {orderQuery.data?.order.invoiceNumber ? ` ${orderQuery.data.order.invoiceNumber}` : ""} is ready, so
+            ordering is closed. Ask staff if you'd like to add something.
           </span>
           <Button className="rounded-xl" onClick={() => navigate("/order/invoice")}>
             View bill
@@ -392,47 +479,59 @@ export default function Menu() {
       <div className="sticky top-0 z-20 border-b border-slate-200/80 bg-white/95 backdrop-blur">
         <div className="flex items-center justify-between gap-3 px-4 pt-4">
           <div>
-            <h1 className="text-xl font-bold tracking-tight text-slate-900">Menu</h1>
-            <p className="text-xs text-slate-500">Tap a dish for details</p>
+            <h1 className="text-xl font-bold tracking-tight text-slate-900">
+              {access.showMenu ? ui(lang, "menu") : "Feedback"}
+            </h1>
+            <p className="text-xs text-slate-500">
+              {access.showMenu ? ui(lang, "tapDish") : "Tell us how we are doing"}
+            </p>
           </div>
           <div className="flex items-center gap-2">
-            <select
-              value={lang}
-              onChange={(e) => {
-                const l = e.target.value as Lang;
-                setLang(l);
-                saveLang(l);
-              }}
-              aria-label="Menu language"
-              className="min-h-[36px] rounded-xl border border-slate-300 px-2 text-sm"
-            >
-              {LANGS.map((l) => (
-                <option key={l.code} value={l.code}>
-                  {l.label}
-                </option>
-              ))}
-            </select>
-            <Button variant="secondary" className="rounded-xl" onClick={() => navigate("/order/invoice")}>
-              My order
-            </Button>
-            <button
-              type="button"
-              onClick={() => setDetailsOpen(true)}
-              aria-label="Add your details"
-              title="Add your details"
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-300 text-slate-500 hover:bg-slate-50 hover:text-orange-500"
-            >
-              <UserIcon className="h-[18px] w-[18px]" />
-            </button>
-            <button
-              type="button"
-              onClick={() => setFeedbackOpen(true)}
-              aria-label="Rate us"
-              title="Rate us"
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-300 text-slate-500 hover:bg-slate-50 hover:text-amber-500"
-            >
-              <StarOutlineIcon className="h-[18px] w-[18px]" />
-            </button>
+            {access.showMenu && (
+              <select
+                value={lang}
+                onChange={(e) => {
+                  const l = e.target.value as Lang;
+                  setLang(l);
+                  saveLang(l);
+                }}
+                aria-label="Menu language"
+                className="min-h-[36px] rounded-xl border border-slate-300 px-2 text-sm"
+              >
+                {LANGS.map((l) => (
+                  <option key={l.code} value={l.code}>
+                    {l.label}
+                  </option>
+                ))}
+              </select>
+            )}
+            {access.showMenu && (
+              <Button variant="secondary" className="rounded-xl" onClick={() => navigate("/order/invoice")}>
+                {ui(lang, "myOrder")}
+              </Button>
+            )}
+            {orderId && (
+              <button
+                type="button"
+                onClick={() => setDetailsOpen(true)}
+                aria-label="Add your details"
+                title="Add your details"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-300 text-slate-500 hover:bg-slate-50 hover:text-orange-500"
+              >
+                <UserIcon className="h-[18px] w-[18px]" />
+              </button>
+            )}
+            {access.showFeedback && access.showMenu && (
+              <button
+                type="button"
+                onClick={() => setFeedbackOpen(true)}
+                aria-label="Rate us"
+                title="Rate us"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-300 text-slate-500 hover:bg-slate-50 hover:text-amber-500"
+              >
+                <StarOutlineIcon className="h-[18px] w-[18px]" />
+              </button>
+            )}
             <button
               type="button"
               onClick={openLeaveConfirm}
@@ -445,101 +544,108 @@ export default function Menu() {
           </div>
         </div>
 
-        <div className="relative px-4 pt-3">
-          <svg
-            aria-hidden
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            className="pointer-events-none absolute left-7 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
-            style={{ marginTop: "0.375rem" }}
-          >
-            <circle cx="11" cy="11" r="7" />
-            <path d="M20 20l-3.5-3.5" strokeLinecap="round" />
-          </svg>
-          <Input
-            className="!pl-9 rounded-xl"
-            placeholder="Search for dishes..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-          {search && (
-            <button
-              type="button"
-              onClick={() => setSearch("")}
-              aria-label="Clear search"
-              className="absolute right-6 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center text-slate-400 hover:text-slate-600"
-              style={{ marginTop: "0.375rem" }}
-            >
-              ✕
-            </button>
-          )}
-        </div>
+        {access.showMenu && (
+          <>
+            <div className="relative px-4 pt-3">
+              <svg
+                aria-hidden
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                className="pointer-events-none absolute left-7 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+                style={{ marginTop: "0.375rem" }}
+              >
+                <circle cx="11" cy="11" r="7" />
+                <path d="M20 20l-3.5-3.5" strokeLinecap="round" />
+              </svg>
+              <Input
+                className="!pl-9 rounded-xl"
+                placeholder={ui(lang, "search")}
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => setSearch("")}
+                  aria-label="Clear search"
+                  className="absolute right-6 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center text-slate-400 hover:text-slate-600"
+                  style={{ marginTop: "0.375rem" }}
+                >
+                  ✕
+                </button>
+              )}
+            </div>
 
-        {!isFiltering && menu.length > 0 && (
-          <div ref={navRef} className="mt-3 flex gap-2 overflow-x-auto px-4 pb-1">
-            {menu.map((category) => (
+            {!isFiltering && menu.length > 0 && (
+              <div ref={navRef} className="mt-3 flex gap-2 overflow-x-auto px-4 pb-1">
+                {menu.map((category) => (
+                  <button
+                    key={category._id}
+                    onClick={() => scrollToCategory(category._id)}
+                    className={`min-h-[36px] shrink-0 whitespace-nowrap rounded-xl px-3.5 text-sm font-semibold transition-colors ${
+                      activeCategoryId === category._id
+                        ? "bg-orange-600 text-white shadow-sm"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    }`}
+                  >
+                    {tr(category, lang, "name")}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <div className="flex items-center gap-2 overflow-x-auto px-4 py-2">
               <button
-                key={category._id}
-                onClick={() => scrollToCategory(category._id)}
-                className={`min-h-[36px] shrink-0 whitespace-nowrap rounded-xl px-3.5 text-sm font-semibold transition-colors ${
-                  activeCategoryId === category._id
-                    ? "bg-orange-600 text-white shadow-sm"
-                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                onClick={() => setVegOnly((v) => !v)}
+                aria-pressed={vegOnly}
+                className={`inline-flex min-h-[36px] shrink-0 items-center gap-1.5 rounded-xl border px-3 text-sm font-semibold transition-colors ${
+                  vegOnly
+                    ? "border-green-600 bg-green-50 text-green-700"
+                    : "border-slate-300 text-slate-600 hover:bg-slate-50"
                 }`}
               >
-                {tr(category, lang, "name")}
+                <FoodTypeIcon type="veg" size={12} /> {ui(lang, "veg")}
               </button>
-            ))}
-          </div>
+              <button
+                onClick={() => setBestsellerOnly((v) => !v)}
+                aria-pressed={bestsellerOnly}
+                className={`min-h-[36px] shrink-0 whitespace-nowrap rounded-xl border px-3 text-sm font-semibold transition-colors ${
+                  bestsellerOnly
+                    ? "border-amber-500 bg-amber-50 text-amber-700"
+                    : "border-slate-300 text-slate-600 hover:bg-slate-50"
+                }`}
+              >
+                {ui(lang, "bestsellers")}
+              </button>
+              <Select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as SortOption)}
+                className="!w-auto min-h-[36px] shrink-0 rounded-xl !py-1 text-sm"
+              >
+                {(Object.keys(SORT_LABELS) as SortOption[]).map((opt) => (
+                  <option key={opt} value={opt}>
+                    {ui(lang, "sort")}: {ui(lang, opt)}
+                  </option>
+                ))}
+              </Select>
+              {isFiltering && (
+                <button
+                  onClick={clearFilters}
+                  className="shrink-0 px-1 text-sm font-semibold text-orange-700 underline"
+                >
+                  {ui(lang, "clear")}
+                </button>
+              )}
+            </div>
+          </>
         )}
-
-        <div className="flex items-center gap-2 overflow-x-auto px-4 py-2">
-          <button
-            onClick={() => setVegOnly((v) => !v)}
-            aria-pressed={vegOnly}
-            className={`inline-flex min-h-[36px] shrink-0 items-center gap-1.5 rounded-xl border px-3 text-sm font-semibold transition-colors ${
-              vegOnly
-                ? "border-green-600 bg-green-50 text-green-700"
-                : "border-slate-300 text-slate-600 hover:bg-slate-50"
-            }`}
-          >
-            <FoodTypeIcon type="veg" size={12} /> Veg
-          </button>
-          <button
-            onClick={() => setBestsellerOnly((v) => !v)}
-            aria-pressed={bestsellerOnly}
-            className={`min-h-[36px] shrink-0 whitespace-nowrap rounded-xl border px-3 text-sm font-semibold transition-colors ${
-              bestsellerOnly
-                ? "border-amber-500 bg-amber-50 text-amber-700"
-                : "border-slate-300 text-slate-600 hover:bg-slate-50"
-            }`}
-          >
-            ★ Bestsellers
-          </button>
-          <Select
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as SortOption)}
-            className="!w-auto min-h-[36px] shrink-0 rounded-xl !py-1 text-sm"
-          >
-            {(Object.keys(SORT_LABELS) as SortOption[]).map((opt) => (
-              <option key={opt} value={opt}>
-                Sort: {SORT_LABELS[opt]}
-              </option>
-            ))}
-          </Select>
-          {isFiltering && (
-            <button onClick={clearFilters} className="shrink-0 px-1 text-sm font-semibold text-orange-700 underline">
-              Clear
-            </button>
-          )}
-        </div>
       </div>
 
-      <QuickRequests />
+      <QuickRequests onNeedOrder={requestWithoutOrder} />
 
-      {!isFiltering && (
+      {!isFiltering && access.showMenu && access.placeOrder && (
         <PopularStrip
           foods={popularFoods}
           lang={lang}
@@ -553,7 +659,16 @@ export default function Menu() {
         <ErrorText>{error}</ErrorText>
       </div>
 
-      <div className="flex flex-col gap-6 px-4 pt-2">
+      {!access.showMenu && (
+        <div className="mx-4 mt-4 flex flex-col gap-4">
+          <p className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-center text-sm text-slate-600">
+            The menu is not available on this device. Please ask the staff for help.
+          </p>
+          {access.showFeedback && <FeedbackPanel defaultName={orderQuery.data?.order.customerName ?? ""} />}
+        </div>
+      )}
+
+      <div className={`flex flex-col gap-6 px-4 pt-2 ${access.showMenu ? "" : "hidden"}`}>
         {isFiltering ? (
           <div>
             <p className="mb-2 text-sm text-slate-500">
@@ -563,6 +678,7 @@ export default function Menu() {
             <div className="grid gap-3 sm:grid-cols-2">
               {flatResults.map((food) => (
                 <FoodCard
+                  canOrder={access.placeOrder}
                   key={food._id}
                   food={food}
                   lang={lang}
@@ -596,6 +712,7 @@ export default function Menu() {
                   <div className="grid gap-3 sm:grid-cols-2">
                     {sub.foodItems.map((food) => (
                       <FoodCard
+                        canOrder={access.placeOrder}
                         key={food._id}
                         food={food}
                         lang={lang}
@@ -642,7 +759,23 @@ export default function Menu() {
         )}
       </div>
 
-      <DishDialog food={detailFood} lang={lang} onAdd={addCustomized} onClose={() => setDetailFood(null)} />
+      <DishDialog
+        food={detailFood}
+        lang={lang}
+        canOrder={access.placeOrder}
+        onAdd={addCustomized}
+        onClose={() => setDetailFood(null)}
+      />
+
+      <GuestDetailsDialog
+        open={guestOpen}
+        required={access.required}
+        onClose={() => {
+          setGuestOpen(false);
+          setPendingRequest(null);
+        }}
+        onSubmit={startOrderAndPlace}
+      />
 
       <ReviewDialog open={feedbackOpen} onClose={() => setFeedbackOpen(false)} />
 
@@ -675,9 +808,9 @@ export default function Menu() {
               <p className="mt-2 flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
                 <span aria-hidden>⚠️</span>
                 <span>
-                  Active order in progress - {activeItemCount} item{activeItemCount === 1 ? "" : "s"} still on the way
-                  from the kitchen. Anything not yet sent will be cancelled; anything already being prepared stays with
-                  staff to serve.
+                  Active order in progress - {activeItemCount} item
+                  {activeItemCount === 1 ? "" : "s"} still on the way from the kitchen. Anything not yet sent will be
+                  cancelled; anything already being prepared stays with staff to serve.
                 </span>
               </p>
             )}
@@ -686,22 +819,26 @@ export default function Menu() {
               This frees the table for other guests - you can sign back in from this table's QR code or code anytime.
             </p>
 
-            <div className="mt-3 rounded-lg border border-slate-200 p-3">
-              <p className="text-sm font-medium text-slate-700">Rate your visit</p>
-              <p className="mt-0.5 text-xs text-slate-400">Optional - tap a star to leave a quick review as you go.</p>
-              <div className="mt-2">
-                <StarPicker value={leaveRating} onChange={setLeaveRating} />
+            {access.showFeedback && (
+              <div className="mt-3 rounded-lg border border-slate-200 p-3">
+                <p className="text-sm font-medium text-slate-700">Rate your visit</p>
+                <p className="mt-0.5 text-xs text-slate-400">
+                  Optional - tap a star to leave a quick review as you go.
+                </p>
+                <div className="mt-2">
+                  <StarPicker value={leaveRating} onChange={setLeaveRating} />
+                </div>
+                {leaveRating > 0 && (
+                  <Textarea
+                    className="mt-2"
+                    rows={2}
+                    value={leaveComment}
+                    onChange={(e) => setLeaveComment(e.target.value)}
+                    placeholder="Anything you'd like to add? (optional)"
+                  />
+                )}
               </div>
-              {leaveRating > 0 && (
-                <Textarea
-                  className="mt-2"
-                  rows={2}
-                  value={leaveComment}
-                  onChange={(e) => setLeaveComment(e.target.value)}
-                  placeholder="Anything you'd like to add? (optional)"
-                />
-              )}
-            </div>
+            )}
 
             <div className="mt-4 flex gap-2">
               <Button
@@ -731,7 +868,7 @@ export default function Menu() {
                   <div key={line.lineId} className="flex items-center justify-between gap-2 text-sm">
                     <span className="min-w-0 flex-1 text-slate-700">
                       <span className="truncate">
-                        {line.name} <span className="text-slate-400">x {line.quantity}</span>
+                        {lineName(line)} <span className="text-slate-400">x {line.quantity}</span>
                       </span>
                       {(line.modifiers?.length || line.note) && (
                         <span className="block truncate text-xs text-slate-400">
@@ -744,7 +881,7 @@ export default function Menu() {
                     </span>
                     <button
                       className="flex h-9 w-9 items-center justify-center text-red-600"
-                      aria-label={`Remove ${line.name}`}
+                      aria-label={`Remove ${lineName(line)}`}
                       onClick={() => removeLine(idx)}
                     >
                       ✕
@@ -769,7 +906,7 @@ export default function Menu() {
                 <span className="min-w-0">
                   <span className="block text-sm font-bold tabular-nums text-slate-900">₹{cartTotal.toFixed(2)}</span>
                   <span className="block text-xs font-medium text-orange-700 underline">
-                    {showCart ? "Hide items" : "View items"}
+                    {showCart ? ui(lang, "hideItems") : ui(lang, "viewItems")}
                   </span>
                 </span>
               </button>
@@ -791,7 +928,7 @@ export default function Menu() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-1 flex items-center justify-between">
-              <h2 className="text-base font-bold text-slate-800">Confirm your order</h2>
+              <h2 className="text-base font-bold text-slate-800">{ui(lang, "confirmOrder")}</h2>
               <button
                 type="button"
                 className="text-slate-400 hover:text-slate-600"
@@ -802,7 +939,7 @@ export default function Menu() {
                 ✕
               </button>
             </div>
-            <p className="mb-3 text-xs text-slate-500">Check everything below before it goes to the kitchen.</p>
+            <p className="mb-3 text-xs text-slate-500">{ui(lang, "checkBelow")}</p>
 
             <div className="flex max-h-72 flex-col gap-2 overflow-y-auto rounded-xl bg-slate-50 p-2">
               {cart.map((line, idx) => (
@@ -812,7 +949,7 @@ export default function Menu() {
                 >
                   <span className="min-w-0 flex-1 text-slate-700">
                     <span className="block truncate font-medium">
-                      {line.name} <span className="font-normal text-slate-400">x {line.quantity}</span>
+                      {lineName(line)} <span className="font-normal text-slate-400">x {line.quantity}</span>
                     </span>
                     {(line.modifiers?.length || line.note) && (
                       <span className="block truncate text-xs text-slate-400">
@@ -825,7 +962,7 @@ export default function Menu() {
                   </span>
                   <button
                     className="flex h-8 w-8 shrink-0 items-center justify-center text-red-600"
-                    aria-label={`Remove ${line.name}`}
+                    aria-label={`Remove ${lineName(line)}`}
                     onClick={() => removeLine(idx)}
                     disabled={confirming}
                   >
@@ -833,7 +970,7 @@ export default function Menu() {
                   </button>
                 </div>
               ))}
-              {cart.length === 0 && <p className="py-6 text-center text-sm text-slate-400">Your cart is empty.</p>}
+              {cart.length === 0 && <p className="py-6 text-center text-sm text-slate-400">{ui(lang, "cartEmpty")}</p>}
             </div>
 
             {pairingFoods.length > 0 && (
@@ -848,7 +985,7 @@ export default function Menu() {
             )}
 
             <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-3 text-sm font-bold text-slate-900">
-              <span>Total</span>
+              <span>{ui(lang, "total")}</span>
               <span className="tabular-nums">₹{cartTotal.toFixed(2)}</span>
             </div>
 
@@ -856,10 +993,10 @@ export default function Menu() {
 
             <div className="mt-3 flex gap-2">
               <Button variant="secondary" className="flex-1" onClick={() => setReviewOpen(false)} disabled={confirming}>
-                Add more items
+                {ui(lang, "addMore")}
               </Button>
               <Button className="flex-1" onClick={placeOrder} disabled={confirming || cart.length === 0}>
-                {confirming ? "Placing..." : "Confirm & place order"}
+                {confirming ? ui(lang, "placing") : ui(lang, "confirmPlace")}
               </Button>
             </div>
           </div>
@@ -877,7 +1014,9 @@ function FoodCard({
   onDecrement,
   onOpen,
   popularRank,
+  canOrder = true,
 }: {
+  canOrder?: boolean;
   food: MenuFoodItem;
   lang: Lang;
   cartQty: number;
@@ -926,18 +1065,24 @@ function FoodCard({
             Combo: {food.components!.map((p) => (p.quantity > 1 ? `${p.quantity}× ${p.name}` : p.name)).join(" + ")}
           </p>
         )}
-        {description && <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-slate-500">{description}</p>}
-        <span className="mt-1 inline-block text-[11px] font-semibold text-orange-600">More details</span>
+        {description && (
+          <p
+            className={`mt-1 text-xs leading-relaxed text-slate-500 ${canOrder ? "line-clamp-2" : "whitespace-pre-line"}`}
+          >
+            {description}
+          </p>
+        )}
+        <span className="mt-1 inline-block text-[11px] font-semibold text-orange-600">{ui(lang, "moreDetails")}</span>
       </button>
 
-      <div className="w-24 shrink-0">
+      <div className={`w-24 shrink-0 ${canOrder ? "" : "hidden"}`}>
         {qty === 0 || hasOptions ? (
           <button
             onClick={() => onAdd(food)}
             className="flex h-11 w-full flex-col items-center justify-center rounded-xl border border-orange-600 bg-white text-sm font-bold tracking-wide text-orange-600 shadow-sm hover:bg-orange-50"
           >
-            ADD
-            {hasOptions && <span className="text-[9px] font-medium normal-case">customize</span>}
+            {ui(lang, "add")}
+            {hasOptions && <span className="text-[9px] font-medium normal-case">{ui(lang, "customize")}</span>}
           </button>
         ) : (
           <div className="flex h-11 w-full items-center justify-between rounded-xl bg-orange-600 px-0.5 text-white shadow-sm">

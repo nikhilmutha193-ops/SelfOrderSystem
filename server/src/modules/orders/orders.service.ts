@@ -81,8 +81,22 @@ export async function buildOrderFilter(
   return filter;
 }
 
+/** A table guest may only order if the admin allows it for the way they signed in (QR or code). */
+async function assertGuestMayOrder(ctx: RequestContext, input?: StartDineInInput) {
+  if (ctx.auth.role !== "table") return;
+  const restaurant = await new OrdersRepository(ctx.restaurantId).findRestaurant("tableLoginSettings");
+  const required = restaurant?.tableLoginSettings?.requiredDetails;
+  if (input && required?.phone && !input.customerPhone) throw new HttpError(400, "Phone number is required");
+  if (input && required?.birthday && !input.customerBirthday) throw new HttpError(400, "Date of birth is required");
+  const access = ctx.auth.via === "code" ? restaurant?.tableLoginSettings?.manual : restaurant?.tableLoginSettings?.qr;
+  if (access && access.placeOrder === false) {
+    throw new HttpError(403, "Ordering from this device is turned off. Please ask the staff to place your order.");
+  }
+}
+
 export async function startDineInOrder(ctx: RequestContext, input: StartDineInInput) {
   if (!ctx.auth.tableId) throw new HttpError(400, "No table session found");
+  await assertGuestMayOrder(ctx, input);
 
   const repo = new OrdersRepository(ctx.restaurantId);
   const table = await repo.findTable(ctx.auth.tableId);
@@ -96,6 +110,7 @@ export async function startDineInOrder(ctx: RequestContext, input: StartDineInIn
       tableId: table._id.toString(),
       orderId,
       sessionId: ctx.auth.sessionId,
+      via: ctx.auth.via,
     });
 
   if (ctx.auth.sessionId && !table.isGuest) {
@@ -204,6 +219,7 @@ export async function startCounterOrder(ctx: RequestContext, input: StartCounter
 }
 
 export async function addOrderItems(ctx: RequestContext, orderId: string, input: AddItemsInput) {
+  await assertGuestMayOrder(ctx);
   const order = await getOwnedOrder(ctx, orderId);
   if (order.status !== "open") throw new HttpError(409, "This order is no longer open");
 
@@ -215,6 +231,7 @@ export async function addOrderItems(ctx: RequestContext, orderId: string, input:
   if (missing) throw new HttpError(404, `Food item ${missing.foodItemId} is not available`);
   const categories = await repo.findCategoryStations(foods.map((food) => food.categoryId));
   const categoryStation = new Map(categories.map((c) => [c._id.toString(), c.defaultStationId ?? null]));
+  const categoryName = new Map(categories.map((c) => [c._id.toString(), c.name]));
   const table = order.orderType === "dine-in" && order.tableId ? await repo.findTable(order.tableId.toString()) : null;
   const priceContext = { orderType: order.orderType, areaId: table?.areaId?.toString() ?? null };
   const componentIds = foods.flatMap((food) => (food.comboItems ?? []).map((c) => c.foodItemId));
@@ -252,6 +269,8 @@ export async function addOrderItems(ctx: RequestContext, orderId: string, input:
       status: "pending",
       kotRound: null,
       stationId: food.stationId ?? categoryStation.get(food.categoryId.toString()) ?? null,
+      categoryId: food.categoryId,
+      categoryName: categoryName.get(food.categoryId.toString()),
     });
     created.push(orderItem);
   }
