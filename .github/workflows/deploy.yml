@@ -28,10 +28,6 @@ jobs:
           - name: client
           - name: server
     name: Deploy ${{ matrix.name }}
-    env:
-      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-      VERCEL_PROJECT_ID: ${{ matrix.name == 'client' && secrets.VERCEL_CLIENT_PROJECT_ID || secrets.VERCEL_SERVER_PROJECT_ID }}
     steps:
       - name: Check secrets
         run: |
