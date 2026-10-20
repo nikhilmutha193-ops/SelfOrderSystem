@@ -29,9 +29,21 @@ jobs:
           - name: server
     name: Deploy ${{ matrix.name }}
     env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ matrix.name == 'client' && secrets.VERCEL_CLIENT_PROJECT_ID || secrets.VERCEL_SERVER_PROJECT_ID }}
     steps:
+      - name: Check secrets
+        run: |
+          missing=0
+          for name in VERCEL_TOKEN VERCEL_ORG_ID VERCEL_PROJECT_ID; do
+            if [ -z "${!name}" ]; then
+              echo "::error::$name is empty. Add it under Settings -> Secrets and variables -> Actions -> Secrets (repository secrets). For VERCEL_PROJECT_ID add VERCEL_CLIENT_PROJECT_ID and VERCEL_SERVER_PROJECT_ID."
+              missing=1
+            fi
+          done
+          exit $missing
+
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
@@ -42,10 +54,10 @@ jobs:
         run: npm install --global vercel@latest
 
       - name: Pull Vercel settings
-        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+        run: vercel pull --yes --environment=production
 
       - name: Build
-        run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+        run: vercel build --prod
 
       - name: Deploy
-        run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
+        run: vercel deploy --prebuilt --prod
