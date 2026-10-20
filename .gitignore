@@ -25,7 +25,7 @@ Thumbs.db
 # Local Claude Code settings
 .claude/settings.local.json
 
-# Runtime data written by the server: never commit tenant data
+# Runtime data written by the server: never commit tenant data.
+# (server/uploads is not ignored: the deployed server serves the tracked images from there.)
 server/invoices/
 server/backups/
-server/uploads/

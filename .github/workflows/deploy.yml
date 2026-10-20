@@ -1,0 +1,51 @@
+name: Deploy to Vercel
+
+# Deploys without the Vercel GitHub app: the Vercel CLI builds and uploads each project.
+# Needs these repository secrets (Settings -> Secrets and variables -> Actions):
+#   VERCEL_TOKEN              a token from Vercel -> Account Settings -> Tokens
+#   VERCEL_ORG_ID             "orgId" from .vercel/project.json after `npx vercel link`
+#   VERCEL_CLIENT_PROJECT_ID  "projectId" of self-order-system
+#   VERCEL_SERVER_PROJECT_ID  "projectId" of self-order-system-server
+# Each Vercel project keeps its own Root Directory setting (client / server), so the CLI is run
+# from the repository root.
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: client
+          - name: server
+    name: Deploy ${{ matrix.name }}
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ matrix.name == 'client' && secrets.VERCEL_CLIENT_PROJECT_ID || secrets.VERCEL_SERVER_PROJECT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@latest
+
+      - name: Pull Vercel settings
+        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Build
+        run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Deploy
+        run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
