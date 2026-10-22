@@ -11,6 +11,7 @@ import {
   CookingPot,
   DatabaseBackup,
   Globe,
+  Landmark,
   Layers,
   LayoutDashboard,
   ListTree,
@@ -66,8 +67,8 @@ export const ADMIN_NAV: AdminNavGroup[] = [
   {
     label: "Service",
     items: [
-      { to: "/pos", label: "POS Billing", module: "orders", icon: MonitorSmartphone, keywords: "counter billing till" },
-      { to: "/captain", label: "Captain App", module: "orders", icon: Smartphone, keywords: "waiter" },
+      { to: "/pos", label: "POS Billing", module: "pos", icon: MonitorSmartphone, keywords: "counter billing till" },
+      { to: "/captain", label: "Captain App", module: "captain", icon: Smartphone, keywords: "waiter" },
       { to: "/admin/orders?type=dine-in", label: "Dine-in Orders", module: "orders", icon: Armchair },
       {
         to: "/admin/orders?type=takeaway",
@@ -84,7 +85,8 @@ export const ADMIN_NAV: AdminNavGroup[] = [
   {
     label: "Billing & Cash",
     items: [
-      { to: "/admin/invoices", label: "Invoices", module: "orders", icon: ReceiptText, keywords: "bills register" },
+      { to: "/admin/invoices", label: "Invoices", module: "invoices", icon: ReceiptText, keywords: "bills register" },
+      { to: "/admin/gst", label: "GST", module: "gst", icon: Landmark, keywords: "tax cgst sgst return report" },
       { to: "/admin/shifts", label: "Cash Shifts", module: "dayClose", icon: Wallet, keywords: "drawer" },
       { to: "/admin/day-close", label: "Day Close", module: "dayClose", icon: CalendarCheck, keywords: "z report" },
     ],
@@ -101,7 +103,7 @@ export const ADMIN_NAV: AdminNavGroup[] = [
     label: "Floor",
     items: [
       { to: "/admin/tables", label: "Tables", module: "tables", icon: Table2 },
-      { to: "/admin/qr-codes", label: "QR Codes", module: "tables", icon: QrCode },
+      { to: "/admin/qr-codes", label: "QR Codes", module: "qrCodes", icon: QrCode },
       {
         to: "/admin/bookings",
         label: "Table Bookings",
@@ -131,7 +133,7 @@ export const ADMIN_NAV: AdminNavGroup[] = [
     label: "Website",
     items: [
       { to: "/admin/landing", label: "Landing Page", module: "landing", icon: Globe },
-      { to: "/admin/banners", label: "Offer Banners", module: "landing", icon: Megaphone, keywords: "ads popup promo" },
+      { to: "/admin/banners", label: "Offer Banners", module: "banners", icon: Megaphone, keywords: "ads popup promo" },
       { to: "/admin/team", label: "Team", module: "team", icon: Users },
       { to: "/admin/awards", label: "Awards", module: "awards", icon: Award },
     ],

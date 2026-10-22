@@ -26,7 +26,7 @@ const MONTHS = [
   "December",
 ];
 
-/** Asks only for the details the admin marked as required; optional ones are never shown. */
+/** Asks for the details the admin turned on. Name and members are required; phone and birthday never are. */
 export function GuestDetailsDialog({
   open,
   required,
@@ -53,17 +53,16 @@ export function GuestDetailsDialog({
     e.preventDefault();
     const customerName = name.trim() || "Guest";
     if (required.name && !name.trim()) return setError("Please enter your name");
-    if (required.phone && phone.length !== 10) return setError("Please enter a 10-digit phone number");
-    if (required.birthday && (!birthDay || !birthMonth)) return setError("Please choose your date of birth");
     setSaving(true);
     setError(null);
     try {
       await onSubmit({
         customerName,
         members: required.members ? members : 1,
-        ...(required.phone && { customerPhone: `+91 ${phone}` }),
-        ...(required.phone && marketingConsent && { customerMarketingConsent: true }),
-        ...(required.birthday && { customerBirthday: `${birthMonth}-${birthDay}` }),
+        // Phone and birthday are optional: they are only sent when the guest filled them in properly.
+        ...(required.phone && phone.length === 10 && { customerPhone: `+91 ${phone}` }),
+        ...(required.phone && phone.length === 10 && marketingConsent && { customerMarketingConsent: true }),
+        ...(required.birthday && birthDay && birthMonth && { customerBirthday: `${birthMonth}-${birthDay}` }),
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
@@ -102,7 +101,7 @@ export function GuestDetailsDialog({
         {required.phone && (
           <>
             <label className="mt-3 block text-sm font-medium text-slate-700" htmlFor="guest-phone">
-              Phone number
+              Phone number <span className="font-normal text-slate-400">(optional)</span>
             </label>
             <div className="mt-1 flex items-center gap-2">
               <span className="text-sm text-slate-500">+91</span>
@@ -133,7 +132,9 @@ export function GuestDetailsDialog({
 
         {required.birthday && (
           <>
-            <span className="mt-3 block text-sm font-medium text-slate-700">Date of birth</span>
+            <span className="mt-3 block text-sm font-medium text-slate-700">
+              Date of birth <span className="font-normal text-slate-400">(optional)</span>
+            </span>
             <div className="mt-1 flex gap-2">
               <select
                 aria-label="Day"

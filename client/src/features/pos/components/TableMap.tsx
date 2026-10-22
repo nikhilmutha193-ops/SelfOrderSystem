@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import type { Area, PosTable } from "../../../lib/types";
+import { withGuestState } from "../guestTable";
 
 const RUNNING_LONG_MINUTES = 90;
 
@@ -28,8 +29,8 @@ function tableTone(table: PosTable, minutes: number | null) {
 
 function tableLabel(table: PosTable) {
   if (table.status === "awaiting_payment") return "Bill printed";
-  if (table.status === "occupied") return "Occupied";
-  return "Free";
+  if (table.status === "occupied") return table.isGuest ? "Open" : "Occupied";
+  return table.isGuest ? "Walk-in" : "Free";
 }
 
 /** What is happening with the table's order(s), for the captain: the most urgent thing first. */
@@ -44,8 +45,12 @@ function orderStatus(table: PosTable): { label: string; className: string } | nu
   return { label: "In the kitchen", className: "bg-amber-500 text-white" };
 }
 
-function groupByArea(tables: PosTable[], areas: Area[]) {
-  if (areas.length === 0) return [{ key: "all", name: null as string | null, tables }];
+function groupByArea(all: PosTable[], areas: Area[]) {
+  const guests = all.filter((t) => t.isGuest);
+  const tables = all.filter((t) => !t.isGuest);
+  const walkIn = guests.length > 0 ? [{ key: "walk-in", name: "Walk-in tables" as string | null, tables: guests }] : [];
+  if (areas.length === 0)
+    return [...walkIn, { key: "all", name: walkIn.length ? ("Tables" as string | null) : null, tables }];
   const known = new Set(areas.map((a) => a._id));
   const groups = areas.map((a) => ({
     key: a._id,
@@ -54,11 +59,11 @@ function groupByArea(tables: PosTable[], areas: Area[]) {
   }));
   const rest = tables.filter((t) => !t.areaId || !known.has(t.areaId));
   if (rest.length > 0) groups.push({ key: "none", name: "Other tables", tables: rest });
-  return groups.filter((g) => g.tables.length > 0);
+  return [...walkIn, ...groups].filter((g) => g.tables.length > 0);
 }
 
 export function TableMap({
-  tables,
+  tables: rawTables,
   areas = [],
   onSelect,
   showOrderStatus = false,
@@ -70,6 +75,7 @@ export function TableMap({
   showOrderStatus?: boolean;
 }) {
   const now = useNow(30_000);
+  const tables = rawTables.map(withGuestState);
   const groups = groupByArea(tables, areas);
   const counts = {
     free: tables.filter((t) => t.status === "available").length,

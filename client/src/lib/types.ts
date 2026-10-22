@@ -887,6 +887,8 @@ export interface PosTable {
   captainId: string | null;
   captainName: string | null;
   areaId?: string | null;
+  /** Walk-in table: never occupied, any number of orders can run on it at once. */
+  isGuest?: boolean;
   orders: PosOrderSummary[];
 }
 
@@ -1128,19 +1130,90 @@ export interface BillShare {
 }
 
 export interface PublicBill {
-  restaurant: { name: string; address: string; gstin: string; fssaiLicense: string; logoUrl: string };
+  restaurant: {
+    name: string;
+    address: string;
+    gstin: string;
+    fssaiLicense: string;
+    logoUrl: string;
+    timezone: string;
+  };
   order: {
     invoiceNumber: string;
+    title: string;
     billedAt: string;
     customerName: string;
+    customerPhone: string;
+    customerGstin: string;
     orderType: OrderType;
+    orderTypeText: string;
+    placeOfSupply: string;
+    sac: string;
     status: OrderStatus;
     voided: boolean;
     paymentMethod?: PaymentMethod;
     couponCode: string | null;
+    payments: { label: string; amount: number; tendered: number | null; change: number }[];
   };
-  items: { foodName: string; quantity: number; unitPrice: number; total: number; complimentary: boolean }[];
+  display: { showUnitPrice: boolean; showJainTag: boolean; termsText: string; footerNote: string };
+  items: {
+    foodName: string;
+    quantity: number;
+    unitPrice: number;
+    total: number;
+    complimentary: boolean;
+    isJain: boolean;
+  }[];
   totals: InvoiceTotals;
+}
+
+export interface GstTotals {
+  invoices: number;
+  grossSales: number;
+  discounts: number;
+  serviceCharge: number;
+  packaging: number;
+  taxableValue: number;
+  gst: number;
+  roundOff: number;
+  invoiceValue: number;
+}
+
+export interface GstInvoiceRow {
+  orderId: string;
+  invoiceNumber: string | null;
+  legacy: boolean;
+  billedAt: string | null;
+  customerName: string;
+  customerGstin: string;
+  orderType: OrderType;
+  status: "paid" | "unpaid" | "voided" | "cancelled";
+  paymentMethod?: PaymentMethod;
+  subtotal: number;
+  discount: number;
+  serviceCharge: number;
+  packagingCharge: number;
+  taxableValue: number;
+  taxLines: { name: string; percent: number; amount: number }[];
+  gst: number;
+  roundOff: number;
+  grandTotal: number;
+  placeOfSupply: string;
+  sac: string;
+}
+
+export interface GstReport {
+  from: string;
+  to: string;
+  gstin: string;
+  summary: GstTotals;
+  b2b: GstTotals;
+  b2c: GstTotals;
+  byComponent: { name: string; percent: number; taxableValue: number; amount: number; invoices: number }[];
+  bySlab: { rate: number; taxableValue: number; gst: number; invoices: number }[];
+  byDay: (GstTotals & { date: string })[];
+  excluded: { voided: { count: number; value: number }; cancelled: { count: number; value: number } };
+  invoices: GstInvoiceRow[];
 }
 
 export interface BookingSettings {

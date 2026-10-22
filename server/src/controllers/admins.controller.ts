@@ -5,15 +5,16 @@ import { asyncHandler } from "../middleware/errorHandler";
 import Admin, { IAdmin } from "../models/Admin";
 import TableModel from "../models/Table";
 import { HttpError } from "../utils/httpError";
+import { writeAudit } from "../utils/audit";
 import { hashPassword } from "../utils/password";
-import { MODULES, sanitizePermissions } from "../utils/permissions";
+import { CURRENT_MODULES_VERSION, effectivePermissions, MODULES, sanitizePermissions } from "../utils/permissions";
 
 function toDto(admin: IAdmin) {
   return {
     id: admin._id,
     username: admin.username,
     isOwner: admin.isOwner,
-    permissions: Object.fromEntries(admin.permissions ?? []),
+    permissions: effectivePermissions(admin),
     createdAt: admin.createdAt,
   };
 }
@@ -49,6 +50,7 @@ export const createAdmin = asyncHandler(async (req: Request, res: Response) => {
     securityAnswerHash: await hashPassword(securityAnswer || username.trim()),
     isOwner: false,
     permissions: sanitizePermissions(permissions),
+    modulesVersion: CURRENT_MODULES_VERSION,
   });
 
   res.status(201).json(toDto(admin));
@@ -66,6 +68,7 @@ export const updateAdminPermissions = asyncHandler(async (req: Request, res: Res
   if (admin.isOwner) throw new HttpError(400, "The owner account always has full access");
 
   admin.permissions = new Map(Object.entries(sanitizePermissions(req.body?.permissions)));
+  admin.modulesVersion = CURRENT_MODULES_VERSION;
   await admin.save();
   res.json(toDto(admin));
 });
@@ -76,9 +79,14 @@ export const resetAdminPassword = asyncHandler(async (req: Request, res: Respons
     throw new HttpError(400, "newPassword must be at least 6 characters");
   }
   const admin = await findOwnAdmin(req);
+  // Resetting the owner's password would hand over the whole account, so only the owner may do it.
+  if (admin.isOwner && !req.admin?.isOwner) {
+    throw new HttpError(403, "Only the owner can reset the owner's password");
+  }
   admin.passwordHash = await hashPassword(newPassword);
   admin.tokenVersion = (admin.tokenVersion ?? 0) + 1;
   await admin.save();
+  await writeAudit(req, "admin.resetPassword", `Reset the password of ${admin.username}`);
   res.json({ message: "Password updated successfully" });
 });
 

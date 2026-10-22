@@ -27,6 +27,7 @@ const AdminKot = lazy(() => import("../features/kitchen/pages/AdminKot"));
 const Chefs = lazy(() => import("../pages/admin/Chefs"));
 const Orders = lazy(() => import("../features/orders/pages/Orders"));
 const OrderDetail = lazy(() => import("../features/orders/pages/OrderDetail"));
+const Gst = lazy(() => import("../features/gst/pages/Gst"));
 const Invoices = lazy(() => import("../features/orders/pages/Invoices"));
 const Shifts = lazy(() => import("../features/shifts/pages/Shifts"));
 const DayClose = lazy(() => import("../features/shifts/pages/DayClose"));
@@ -92,7 +93,7 @@ export default function App() {
                 element={
                   <ProtectedRoute role="admin" redirectTo="/admin/login">
                     <AdminProfileProvider>
-                      <RequireModule module="orders">
+                      <RequireModule module="pos">
                         <Pos />
                       </RequireModule>
                     </AdminProfileProvider>
@@ -104,7 +105,7 @@ export default function App() {
                 element={
                   <ProtectedRoute role="admin" redirectTo="/admin/login">
                     <AdminProfileProvider>
-                      <RequireModule module="orders">
+                      <RequireModule module="captain">
                         <Captain />
                       </RequireModule>
                     </AdminProfileProvider>
@@ -165,7 +166,7 @@ export default function App() {
                 <Route
                   path="qr-codes"
                   element={
-                    <RequireModule module="tables">
+                    <RequireModule module="qrCodes">
                       <QrCodes />
                     </RequireModule>
                   }
@@ -251,9 +252,17 @@ export default function App() {
                   }
                 />
                 <Route
+                  path="gst"
+                  element={
+                    <RequireModule module="gst">
+                      <Gst />
+                    </RequireModule>
+                  }
+                />
+                <Route
                   path="invoices"
                   element={
-                    <RequireModule module="orders">
+                    <RequireModule module="invoices">
                       <Invoices />
                     </RequireModule>
                   }
@@ -293,7 +302,7 @@ export default function App() {
                 <Route
                   path="banners"
                   element={
-                    <RequireModule module="landing">
+                    <RequireModule module="banners">
                       <Banners />
                     </RequireModule>
                   }

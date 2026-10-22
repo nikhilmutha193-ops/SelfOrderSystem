@@ -84,8 +84,9 @@ export class PosRepository {
   }
 
   floorTables() {
-    return TableModel.find(this.scoped<ITable>({ isGuest: { $ne: true } }))
-      .select("code status occupiedAt captainId areaId")
+    // Guest (walk-in) tables are included: several orders can run on them at once.
+    return TableModel.find(this.scoped<ITable>({}))
+      .select("code status occupiedAt captainId areaId isGuest")
       .sort({ code: 1 })
       .lean();
   }

@@ -18,6 +18,8 @@ import { MenuGrid } from "../components/MenuGrid";
 import { OfflineBar } from "../components/OfflineBar";
 import { OfflineSettleDialog } from "../components/OfflineSettleDialog";
 import { OrderPanel } from "../components/OrderPanel";
+import { useResizablePanel } from "../useResizablePanel";
+import { CashierBoard } from "../components/CashierBoard";
 import { TableMap } from "../components/TableMap";
 import {
   addToOpenSale,
@@ -37,7 +39,7 @@ import { kotHtml, printHtml, receiptHtml } from "../offlinePrint";
 import { usePosFloor, usePosMenu } from "../queries";
 import { filterMenu, hasOptions, pricedMenu, usePosCart } from "../usePosCart";
 
-type Mode = "tables" | "takeaway";
+type Mode = "tables" | "takeaway" | "cashier";
 
 const NO_MENU: PosMenu = { categories: [], items: [] };
 const NO_TABLES: PosTable[] = [];
@@ -68,6 +70,7 @@ export default function Pos() {
   const cart = usePosCart();
   const { orderId, draft, detail: activeDetail } = cart;
   const [panelOpen, setPanelOpen] = useState(false);
+  const panel = useResizablePanel();
   const billing = rawMenu.billing;
   const online = useOnlineStatus();
   const [forcedOffline, setForcedOffline] = useState<{ at: number; manual: boolean } | null>(null);
@@ -110,7 +113,7 @@ export default function Pos() {
         (s) =>
           s.state === "open" &&
           s.orderType === offlineTarget.orderType &&
-          (offlineTarget.orderType === "takeaway" || s.tableId === offlineTarget.tableId)
+          (offlineTarget.orderType === "takeaway" || s.tableId === offlineTarget.tableId),
       ) ?? null)
     : null;
   const offlineFlow = offline || !!openSale;
@@ -139,6 +142,27 @@ export default function Pos() {
     setTableId(null);
     cart.open(o._id);
     setMessage(null);
+  }
+
+  // Cashier mode keeps its own mode: pick an active table (or takeaway) to see and bill its order.
+  function cashierTable(t: PosTable) {
+    setTableId(t._id);
+    cart.open(t.orders[0]?._id ?? null);
+    setMessage(null);
+    setPanelOpen(true);
+  }
+
+  function cashierTakeaway(o: PosOrderSummary) {
+    setTableId(null);
+    cart.open(o._id);
+    setMessage(null);
+    setPanelOpen(true);
+  }
+
+  function addDishesToSelected() {
+    if (tableId) setMode("tables");
+    else setMode("takeaway");
+    setPanelOpen(false);
   }
 
   function pick(item: PosMenuItem) {
@@ -188,7 +212,7 @@ export default function Pos() {
         });
       }
     },
-    [queryClient]
+    [queryClient],
   );
   useOfflineSync(!forced, afterSync);
 
@@ -348,11 +372,16 @@ export default function Pos() {
   }, [settleOpen, dishFor, offlineSettle]);
 
   const showTables = mode === "tables" && !tableId;
+  const cashier = mode === "cashier";
   const title =
-    mode === "tables"
+    mode === "tables" || cashier
       ? table
         ? `Table ${table.code}`
-        : "Choose a table"
+        : cashier
+          ? orderId
+            ? `Takeaway · ${activeDetail?.order.customerName ?? ""}`
+            : "Pick a table to bill"
+          : "Choose a table"
       : orderId
         ? `Takeaway · ${activeDetail?.order.customerName ?? ""}`
         : "New takeaway";
@@ -370,8 +399,13 @@ export default function Pos() {
           </Chip>
         ))}
       </div>
-    ) : table && table.orders.length > 1 ? (
+    ) : table && (table.orders.length > 1 || table.isGuest) ? (
       <div className="mt-2 flex gap-1.5 overflow-x-auto pb-1">
+        {table.isGuest && (
+          <Chip active={!orderId} onClick={() => cart.open(null)}>
+            + New order
+          </Chip>
+        )}
         {table.orders.map((o) => (
           <Chip key={o._id} active={o._id === orderId} onClick={() => cart.open(o._id)}>
             {o.customerName} · ₹{o.total.toFixed(0)}
@@ -392,16 +426,16 @@ export default function Pos() {
           <span className="hidden sm:inline">Admin</span>
         </Link>
         <div className="flex rounded-lg bg-slate-800 p-1">
-          {(["tables", "takeaway"] as const).map((m) => (
+          {(["tables", "takeaway", "cashier"] as const).map((m) => (
             <button
               key={m}
               type="button"
-              onClick={() => (m === "tables" ? reset("tables") : reset("takeaway"))}
+              onClick={() => reset(m)}
               className={`min-h-[36px] rounded-md px-3 text-sm font-semibold whitespace-nowrap sm:px-4 ${
                 mode === m ? "bg-orange-600 text-white" : "text-slate-300 hover:text-white"
               }`}
             >
-              {m === "tables" ? "Dine-in" : "Takeaway"}
+              {m === "tables" ? "Dine-in" : m === "takeaway" ? "Takeaway" : "Cashier"}
             </button>
           ))}
         </div>
@@ -421,7 +455,7 @@ export default function Pos() {
           autoComplete="off"
           placeholder="Search dish or code  (F2)"
           value={search}
-          disabled={showTables}
+          disabled={showTables || cashier}
           onChange={(e) => setSearch(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter" && visibleItems[0]) {
@@ -467,7 +501,16 @@ export default function Pos() {
 
       <main className="relative flex min-h-0 flex-1">
         <section className="min-w-0 flex-1 pb-20 md:pb-0">
-          {showTables ? (
+          {cashier ? (
+            <CashierBoard
+              tables={tables}
+              takeaways={takeaways}
+              tableId={tableId}
+              orderId={orderId}
+              onSelectTable={cashierTable}
+              onSelectTakeaway={cashierTakeaway}
+            />
+          ) : showTables ? (
             <TableMap tables={tables} areas={floor.data?.areas} onSelect={chooseTable} />
           ) : (
             <MenuGrid
@@ -486,6 +529,11 @@ export default function Pos() {
           )}
         </section>
         <div
+          {...panel.handleProps}
+          className="hidden w-1.5 shrink-0 cursor-col-resize bg-slate-200 transition-colors hover:bg-orange-400 focus-visible:bg-orange-500 focus-visible:outline-none md:block"
+        />
+        <div
+          style={{ "--pos-panel": `${panel.width}px` } as React.CSSProperties}
           className={`${panelOpen ? "fixed inset-0 z-40 flex flex-col bg-white animate-sheet-up" : "hidden"} md:static md:z-auto md:flex md:animate-none`}
         >
           <div className="flex shrink-0 items-center justify-between border-b border-slate-200 bg-slate-900 px-3 py-2 text-white md:hidden">
@@ -496,16 +544,31 @@ export default function Pos() {
               className="inline-flex min-h-[40px] items-center gap-1 rounded-lg px-3 text-sm font-medium text-slate-200 hover:bg-slate-800"
             >
               <ChevronDown size={18} aria-hidden="true" />
-              Back to menu
+              {cashier ? "Back to tables" : "Back to menu"}
             </button>
           </div>
           <OrderPanel
-            className="min-h-0 w-full flex-1 border-l md:w-[340px] md:flex-none lg:w-[390px]"
+            className="min-h-0 w-full flex-1 border-l md:w-[var(--pos-panel)] md:flex-none"
             title={title}
-            emptyText={showTables ? "Tap a table to start or open its order." : undefined}
+            emptyText={
+              cashier
+                ? "Pick a table on the left to see its order and bill it."
+                : showTables
+                  ? "Tap a table to start or open its order."
+                  : undefined
+            }
             headerExtra={
               <>
                 {headerExtra}
+                {cashier && orderId && (
+                  <button
+                    type="button"
+                    onClick={addDishesToSelected}
+                    className="mt-2 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                  >
+                    + Add dishes to this order
+                  </button>
+                )}
                 {offlineFlow && orderId && (
                   <p className="mt-2 rounded-lg bg-amber-50 px-2 py-1.5 text-xs text-amber-900">
                     This table's running order is on the server. Dishes added offline become a separate bill.
@@ -534,7 +597,7 @@ export default function Pos() {
                 ? offlineTotals(
                     [...(openSale?.lines ?? []), ...toOfflineLines(draft)],
                     offlineTarget.orderType,
-                    billing
+                    billing,
                   ).grandTotal
                 : null
             }
@@ -547,7 +610,7 @@ export default function Pos() {
             onHold={mode === "takeaway" && !offlineFlow ? hold : null}
             onBill={bill}
             onSettle={settle}
-            busy={busy || showTables}
+            busy={busy || showTables || (cashier && !orderId)}
           />
         </div>
         {!panelOpen && (

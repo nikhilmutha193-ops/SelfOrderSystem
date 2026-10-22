@@ -9,6 +9,8 @@ import { IBirthdaySmsSettings, ILoyaltySettings } from "../../models/Restaurant"
 import { writeAudit } from "../../utils/audit";
 import { HttpError } from "../../utils/httpError";
 import { computeInvoiceTotals, round2 } from "../../utils/invoice";
+import { DEFAULT_SAC } from "../../utils/invoiceNumber";
+import { invoiceTitle, orderTypeText, PAYMENT_LABELS } from "../../utils/pdf";
 import { sendBirthdayGreetingsForRestaurant } from "../../utils/birthdaySmsScheduler";
 import { normalizePhone } from "../../utils/phone";
 import { sendSms } from "../../utils/sms";
@@ -570,23 +572,44 @@ async function billFromToken(restaurantId: string, token: string) {
 
 export async function publicBill(restaurantId: string, token: string) {
   const { order, items, restaurant, totals } = await billFromToken(restaurantId, token);
+  // Shows what the PDF invoice shows, following the same invoice settings.
+  const settings = restaurant.invoiceSettings;
   return {
     restaurant: {
       name: restaurant.name,
       address: restaurant.address ?? "",
       gstin: restaurant.gstin ?? "",
       fssaiLicense: restaurant.fssaiLicense ?? "",
-      logoUrl: restaurant.logoUrl ?? "",
+      logoUrl: settings?.showLogo === false ? "" : (restaurant.logoUrl ?? ""),
+      timezone: restaurant.timezone || "Asia/Kolkata",
     },
     order: {
       invoiceNumber: order.invoiceNumber,
-      billedAt: order.billedAt ?? order.createdAt,
+      title: invoiceTitle(order),
+      billedAt: order.billedAt ?? order.checkinTime ?? order.createdAt,
       customerName: order.customerName,
+      customerPhone: settings?.showCustomerPhone !== false ? (order.customerPhone ?? "") : "",
+      customerGstin: order.customerGstin ?? "",
       orderType: order.orderType,
+      orderTypeText: orderTypeText(order),
+      placeOfSupply: order.bill?.placeOfSupply || settings?.placeOfSupply || "",
+      sac: order.bill?.sac || DEFAULT_SAC,
       status: order.status,
       voided: !!order.voidedAt,
       paymentMethod: order.paymentMethod,
       couponCode: order.couponCode ?? null,
+      payments: (order.payments ?? []).map((p) => ({
+        label: `Paid by ${PAYMENT_LABELS[p.method] ?? p.method}${p.reference ? ` (${p.reference})` : ""}`,
+        amount: p.amount,
+        tendered: p.tendered ?? null,
+        change: p.change ?? 0,
+      })),
+    },
+    display: {
+      showUnitPrice: settings?.showUnitPrice !== false,
+      showJainTag: settings?.showJainTag !== false,
+      termsText: settings?.termsText ?? "",
+      footerNote: settings?.footerNote || "Thank you for dining with us!",
     },
     items: items
       .filter((i) => i.status !== "cancelled")
@@ -596,6 +619,7 @@ export async function publicBill(restaurantId: string, token: string) {
         unitPrice: i.unitPrice,
         total: i.total,
         complimentary: !!i.complimentary,
+        isJain: !!i.isJain,
       })),
     totals,
   };

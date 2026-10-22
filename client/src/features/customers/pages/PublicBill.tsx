@@ -36,7 +36,7 @@ export default function PublicBill() {
     );
   }
   if (!bill.data) return <p className="p-6 text-sm text-slate-500">Loading your bill…</p>;
-  const { restaurant, order, items, totals } = bill.data;
+  const { restaurant, order, items, totals, display } = bill.data;
 
   return (
     <div className="min-h-dvh bg-slate-50 px-4 py-6">
@@ -50,14 +50,16 @@ export default function PublicBill() {
           {restaurant.gstin && <p className="text-xs text-slate-500">GSTIN {restaurant.gstin}</p>}
           {restaurant.fssaiLicense && <p className="text-xs text-slate-500">FSSAI {restaurant.fssaiLicense}</p>}
         </div>
+        <p className="mb-2 text-center text-sm font-semibold text-slate-800">{order.title}</p>
         <div className="mb-3 flex justify-between border-y border-dashed border-slate-200 py-2 text-sm">
           <span>
-            Bill <span className="font-semibold">{order.invoiceNumber}</span>
+            Invoice No <span className="font-semibold">{order.invoiceNumber}</span>
           </span>
           <span>
-            {new Date(order.billedAt).toLocaleString([], {
+            {new Date(order.billedAt).toLocaleString("en-IN", {
               dateStyle: "medium",
               timeStyle: "short",
+              timeZone: restaurant.timezone,
             })}
           </span>
         </div>
@@ -66,13 +68,24 @@ export default function PublicBill() {
             This bill was {order.voided ? "voided" : "cancelled"}
           </p>
         )}
-        <p className="mb-2 text-sm text-slate-600">For {order.customerName}</p>
+        <div className="mb-3 flex flex-col gap-0.5 text-sm text-slate-600">
+          <p>Order: {order.orderTypeText}</p>
+          <p>
+            Customer: {order.customerName}
+            {order.customerPhone ? `  (${order.customerPhone})` : ""}
+          </p>
+          {order.customerGstin && <p>Customer GSTIN: {order.customerGstin}</p>}
+          {order.placeOfSupply && <p>Place of supply: {order.placeOfSupply}</p>}
+          <p>SAC: {order.sac} (restaurant service)</p>
+        </div>
         <ul className="mb-3 flex flex-col gap-1.5 text-sm">
           {items.map((item, i) => (
             <li key={i} className="flex justify-between gap-2">
               <span>
                 {item.quantity} × {item.foodName}
-                {item.complimentary && <span className="text-green-700"> (on the house)</span>}
+                {display.showJainTag && item.isJain && " (Jain)"}
+                {display.showUnitPrice && <span className="text-slate-400"> @ {rupees(item.unitPrice)}</span>}
+                {item.complimentary && <span className="text-green-700"> (complimentary)</span>}
               </span>
               <span className="tabular-nums">{rupees(item.total)}</span>
             </li>
@@ -100,9 +113,23 @@ export default function PublicBill() {
           {totals.roundOff !== 0 && <Row label="Round off" value={rupees(totals.roundOff)} />}
           <Row label="Total" value={rupees(totals.grandTotal)} strong />
         </div>
+        {order.payments.length > 0 && (
+          <div className="mt-2 flex flex-col gap-0.5 border-t border-dashed border-slate-200 pt-2">
+            {order.payments.map((p, i) => (
+              <div key={i}>
+                <Row label={p.label} value={rupees(p.amount)} />
+                {p.change > 0 && (
+                  <Row label={`Cash received ${rupees(p.tendered ?? 0)}, change`} value={rupees(p.change)} />
+                )}
+              </div>
+            ))}
+          </div>
+        )}
         <p className="mt-3 text-center text-sm font-medium text-slate-600">
           {order.status === "closed" ? "Paid, thank you!" : order.status === "billed" ? "Awaiting payment" : ""}
         </p>
+        {display.termsText && <p className="mt-4 whitespace-pre-line text-xs text-slate-500">{display.termsText}</p>}
+        <p className="mt-3 text-center text-sm text-slate-600">{display.footerNote}</p>
         <a
           href={`${apiBase}/bills/public/${token}/pdf`}
           className="mt-4 block rounded-md bg-orange-600 px-4 py-2.5 text-center text-sm font-semibold text-white hover:bg-orange-700"

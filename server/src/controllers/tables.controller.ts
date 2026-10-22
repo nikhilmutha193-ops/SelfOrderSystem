@@ -133,7 +133,24 @@ export const updateTable = asyncHandler(async (req: Request, res: Response) => {
   };
   const update: Record<string, unknown> = {};
   if (code !== undefined) update.code = code;
-  if (isGuest !== undefined) update.isGuest = !!isGuest;
+  if (isGuest !== undefined) {
+    const current = await TableModel.findOne({ _id: req.params.id, restaurantId: req.restaurantId });
+    if (!current) throw new HttpError(404, "Table not found");
+    if (!!isGuest !== !!current.isGuest) {
+      // A table can only switch kind while nothing is running on it, or guests and bills would be stranded.
+      const running = await Order.exists({
+        restaurantId: req.restaurantId,
+        tableId: current._id,
+        status: { $in: ["open", "billed"] },
+      });
+      if (running || (!current.isGuest && current.status !== "available")) {
+        throw new HttpError(409, `Table ${current.code} has a running order or a seated guest. Settle or release it first.`);
+      }
+      update.isGuest = !!isGuest;
+      // Guest tables are shared, so they have no captain or area.
+      if (isGuest) Object.assign(update, { captainId: null, areaId: null, status: "available" });
+    }
+  }
   if (autoReleaseMinutes !== undefined) {
     // null clears the override so the table falls back to the restaurant default.
     if (autoReleaseMinutes !== null && (typeof autoReleaseMinutes !== "number" || autoReleaseMinutes < 0)) {

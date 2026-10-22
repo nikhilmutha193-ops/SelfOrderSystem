@@ -1,4 +1,4 @@
-import { Pencil, ShieldCheck, Trash2, UserPlus, Wand2 } from "lucide-react";
+import { KeyRound, Pencil, ShieldCheck, Trash2, UserPlus, Wand2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import {
@@ -14,18 +14,28 @@ import { confirmDialog } from "../../shared/ui/confirm";
 import { usePageTour, type TourStep } from "../../shared/ui/PageTour";
 import { Alert, Badge, Button, Card, CardHeader, ErrorText, Field, Input, Page, PageHeader } from "../../shared/ui/ui";
 
+import { ResetPasswordDialog } from "./ResetPasswordDialog";
+
 type Permissions = Partial<Record<ModuleKey, PermissionLevel>>;
 
 const PRESETS: { label: string; hint: string; permissions: Permissions }[] = [
   {
     label: "Captain (waiter)",
     hint: "Takes orders on the Captain app, serves ready items and answers guest requests.",
-    permissions: { orders: "edit", tables: "view", kot: "edit", messages: "edit" },
+    permissions: { captain: "edit", orders: "edit", tables: "view", kot: "edit", messages: "edit" },
   },
   {
     label: "Cashier",
     hint: "Bills and settles on the POS, runs cash shifts and prints.",
-    permissions: { orders: "edit", tables: "view", kot: "view", dayClose: "edit", messages: "view" },
+    permissions: {
+      pos: "edit",
+      orders: "edit",
+      invoices: "view",
+      tables: "view",
+      kot: "view",
+      dayClose: "edit",
+      messages: "view",
+    },
   },
 ];
 
@@ -117,6 +127,7 @@ export default function Admins() {
   const [message, setMessage] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<Permissions>({});
+  const [resetting, setResetting] = useState<{ id: string; username: string } | null>(null);
 
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -194,10 +205,11 @@ export default function Admins() {
       {
         target: "admin-list",
         title: "Staff logins",
-        description: "Edit an account's page access or delete it. The owner account always has full access and can't be edited here.",
+        description:
+          "Edit an account's page access or delete it. The owner account always has full access and can't be edited here.",
       },
     ],
-    []
+    [],
   );
   usePageTour(tourSteps);
 
@@ -282,6 +294,17 @@ export default function Admins() {
                         {editingId === admin.id ? "Cancel" : "Edit access"}
                       </Button>
                     )}
+                    {admin.id !== profile?.id && (!admin.isOwner || profile?.isOwner) && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        icon={KeyRound}
+                        onClick={() => setResetting({ id: admin.id, username: admin.username })}
+                      >
+                        Reset password
+                      </Button>
+                    )}
                     {!admin.isOwner && admin.id !== profile?.id && (
                       <Button
                         type="button"
@@ -324,6 +347,14 @@ export default function Admins() {
           {admins.length === 0 && <p className="text-sm text-slate-500">No admins yet.</p>}
         </div>
       </Card>
+      <ResetPasswordDialog
+        admin={resetting}
+        onClose={() => setResetting(null)}
+        onDone={(text) => {
+          setError(null);
+          setMessage(text);
+        }}
+      />
     </Page>
   );
 }

@@ -12,6 +12,7 @@ export function MenuGrid({
   quantity,
   onQuantity,
   onPick,
+  keypad = true,
 }: {
   categories: { _id: string; name: string }[];
   category: string;
@@ -21,6 +22,8 @@ export function MenuGrid({
   quantity: string;
   onQuantity: (value: string) => void;
   onPick: (item: PosMenuItem) => void;
+  /** The tap-to-set-quantity strip, shown on phones only (other screens type the number on a keyboard). */
+  keypad?: boolean;
 }) {
   function press(key: string) {
     if (key === "C") onQuantity("");
@@ -80,29 +83,35 @@ export function MenuGrid({
             </p>
           )}
         </div>
-        <div className="hidden w-40 shrink-0 flex-col gap-2 border-l border-slate-200 bg-white p-2 md:flex">
-          <div
-            className="rounded-md bg-slate-900 px-3 py-2 text-right font-mono text-2xl text-white"
-            aria-label="Quantity"
-          >
-            {quantity || "1"}
-            <span className="ml-1 text-xs text-slate-400">qty</span>
-          </div>
-          <div className="grid grid-cols-3 gap-1.5">
-            {KEYS.map((key) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => press(key)}
-                className="h-11 rounded-md bg-slate-100 text-lg font-semibold text-slate-800 hover:bg-slate-200 active:scale-95"
-              >
-                {key}
-              </button>
-            ))}
-          </div>
-          <p className="text-[11px] leading-snug text-slate-400">Type a number, then tap a dish to add that many.</p>
-        </div>
       </div>
+      {keypad && (
+        <div className="shrink-0 border-t border-slate-200 bg-white p-2 md:hidden">
+          <div className="flex items-stretch gap-2">
+            <div
+              className="flex w-20 shrink-0 flex-col items-end justify-center rounded-md bg-slate-900 px-2 py-1 font-mono text-2xl text-white"
+              aria-label="Quantity"
+            >
+              {quantity || "1"}
+              <span className="text-[10px] text-slate-400">qty</span>
+            </div>
+            <div className="grid min-w-0 flex-1 grid-cols-6 gap-1.5">
+              {KEYS.map((key) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => press(key)}
+                  className="h-10 rounded-md bg-slate-100 text-lg font-semibold text-slate-800 active:scale-95 active:bg-slate-200"
+                >
+                  {key}
+                </button>
+              ))}
+            </div>
+          </div>
+          <p className="mt-1 text-[11px] leading-snug text-slate-500">
+            Type a number, then tap a dish to add that many.
+          </p>
+        </div>
+      )}
     </div>
   );
 }

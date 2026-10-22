@@ -82,12 +82,9 @@ export async function buildOrderFilter(
 }
 
 /** A table guest may only order if the admin allows it for the way they signed in (QR or code). */
-async function assertGuestMayOrder(ctx: RequestContext, input?: StartDineInInput) {
+async function assertGuestMayOrder(ctx: RequestContext) {
   if (ctx.auth.role !== "table") return;
   const restaurant = await new OrdersRepository(ctx.restaurantId).findRestaurant("tableLoginSettings");
-  const required = restaurant?.tableLoginSettings?.requiredDetails;
-  if (input && required?.phone && !input.customerPhone) throw new HttpError(400, "Phone number is required");
-  if (input && required?.birthday && !input.customerBirthday) throw new HttpError(400, "Date of birth is required");
   const access = ctx.auth.via === "code" ? restaurant?.tableLoginSettings?.manual : restaurant?.tableLoginSettings?.qr;
   if (access && access.placeOrder === false) {
     throw new HttpError(403, "Ordering from this device is turned off. Please ask the staff to place your order.");
@@ -96,7 +93,7 @@ async function assertGuestMayOrder(ctx: RequestContext, input?: StartDineInInput
 
 export async function startDineInOrder(ctx: RequestContext, input: StartDineInInput) {
   if (!ctx.auth.tableId) throw new HttpError(400, "No table session found");
-  await assertGuestMayOrder(ctx, input);
+  await assertGuestMayOrder(ctx);
 
   const repo = new OrdersRepository(ctx.restaurantId);
   const table = await repo.findTable(ctx.auth.tableId);

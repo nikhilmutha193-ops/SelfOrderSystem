@@ -111,26 +111,24 @@ describe("table guest access by sign-in method", () => {
     expect(saved.body.qr).toMatchObject({ showMenu: false, placeOrder: false });
   });
 
-  it("requires only the details the admin ticked", async () => {
+  it("never blocks an order for a missing phone number or birthday, even when they are asked", async () => {
     const saved = await api()
       .put("/api/tables/settings")
       .set(bearer(owner))
-      .send({ requiredDetails: { phone: true } });
-    expect(saved.body.requiredDetails).toEqual({ name: true, phone: true, members: true, birthday: false });
+      .send({ requiredDetails: { phone: true, birthday: true } });
+    expect(saved.body.requiredDetails).toEqual({ name: true, phone: true, members: true, birthday: true });
 
     const session = await login("code");
-    const missing = await api()
+    const res = await api()
       .post("/api/orders/dine-in")
       .set(bearer(session.body.token))
       .send({ customerName: "Asha", members: 2 });
-    expect(missing.status).toBe(400);
-    const given = await api()
-      .post("/api/orders/dine-in")
-      .set(bearer(session.body.token))
-      .send({ customerName: "Asha", members: 2, customerPhone: "+91 98450 00000" });
-    expect(given.status).toBe(201);
+    expect(res.status).toBe(201);
 
-    await api().put("/api/tables/settings").set(bearer(owner)).send({ requiredDetails: { phone: false } });
+    await api()
+      .put("/api/tables/settings")
+      .set(bearer(owner))
+      .send({ requiredDetails: { phone: false, birthday: false } });
   });
 
   it("stores the marketing consent the guest ticked next to their phone number", async () => {

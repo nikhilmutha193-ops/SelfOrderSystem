@@ -10,6 +10,7 @@ import TableModel from "../models/Table";
 import { HttpError } from "../utils/httpError";
 import { AuthTokenPayload, nowSeconds, signToken, staffSessionMaxSeconds } from "../utils/jwt";
 import { comparePassword, hashPassword } from "../utils/password";
+import { effectivePermissions } from "../utils/permissions";
 import { cancelUnsentOrdersForTables } from "../utils/tableRelease";
 import { decryptTableToken } from "../utils/tableToken";
 
@@ -52,7 +53,7 @@ function adminProfile(admin: IAdmin) {
     id: admin._id,
     username: admin.username,
     isOwner: admin.isOwner,
-    permissions: Object.fromEntries(admin.permissions ?? []),
+    permissions: effectivePermissions(admin),
   };
 }
 

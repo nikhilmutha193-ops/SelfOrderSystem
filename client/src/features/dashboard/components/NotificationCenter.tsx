@@ -79,6 +79,39 @@ const TONE_KEY = "admin_notif_tone";
 
 const VOLUME_KEY = "admin_notif_volume";
 
+const DISMISSED_KEY = "admin_notif_dismissed";
+
+// Live counts that "Clear" can dismiss on this device. Unread chats are cleared on the server instead.
+type Dismissed = { kot: number; pay: number; low: number };
+const NOTHING_DISMISSED: Dismissed = { kot: 0, pay: 0, low: 0 };
+
+function readDismissed(): Dismissed {
+  try {
+    const raw = JSON.parse(localStorage.getItem(DISMISSED_KEY) || "null");
+    return raw && typeof raw === "object"
+      ? { kot: Number(raw.kot) || 0, pay: Number(raw.pay) || 0, low: Number(raw.low) || 0 }
+      : NOTHING_DISMISSED;
+  } catch {
+    return NOTHING_DISMISSED;
+  }
+}
+
+function saveDismissed(value: Dismissed) {
+  try {
+    localStorage.setItem(DISMISSED_KEY, JSON.stringify(value));
+  } catch {
+    // Not saved: the badge just comes back after a reload.
+  }
+}
+
+function liveCounts(summary: DashboardSummary | null): Dismissed {
+  return {
+    kot: summary?.pendingKotItems ?? 0,
+    pay: summary?.tablesAwaitingPayment ?? 0,
+    low: summary?.lowStockItems ?? 0,
+  };
+}
+
 const DEFAULT_TONE = "bell";
 
 const DEFAULT_VOLUME = 0.25;
@@ -144,10 +177,11 @@ export default function NotificationCenter() {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const prev = useRef<DashboardSummary | null>(null);
   const [notifPerm, setNotifPerm] = useState<NotificationPermission | "unsupported">(
-    typeof Notification !== "undefined" ? Notification.permission : "unsupported"
+    typeof Notification !== "undefined" ? Notification.permission : "unsupported",
   );
   const [tone, setTone] = useState<string>(() => readTone());
   const [volume, setVolume] = useState<number>(() => readVolume());
+  const [dismissed, setDismissed] = useState<Dismissed>(() => readDismissed());
 
   function changeTone(id: string) {
     setTone(id);
@@ -174,6 +208,18 @@ export default function NotificationCenter() {
   useEffect(() => {
     const next = summaryQuery.data;
     if (!next) return;
+    // When a count falls below what was dismissed, lower the dismissed level so the next rise shows up again.
+    const live = liveCounts(next);
+    setDismissed((d) => {
+      const lowered = {
+        kot: Math.min(d.kot, live.kot),
+        pay: Math.min(d.pay, live.pay),
+        low: Math.min(d.low, live.low),
+      };
+      if (lowered.kot === d.kot && lowered.pay === d.pay && lowered.low === d.low) return d;
+      saveDismissed(lowered);
+      return lowered;
+    });
     const last = prev.current;
     prev.current = next;
     if (!last) return;
@@ -195,16 +241,20 @@ export default function NotificationCenter() {
 
   const clearing = markAllRead.isPending;
 
+  const live = liveCounts(summary);
+  const fresh = {
+    kot: Math.max(0, live.kot - dismissed.kot),
+    pay: Math.max(0, live.pay - dismissed.pay),
+    low: Math.max(0, live.low - dismissed.low),
+  };
+  const badgeCount = fresh.kot + fresh.pay + fresh.low + (summary?.unreadChatCount || 0);
+
   function clearNotifications() {
     setToasts([]);
+    setDismissed(live);
+    saveDismissed(live);
     markAllRead.mutate();
   }
-
-  const badgeCount =
-    (summary?.pendingKotItems || 0) +
-    (summary?.unreadChatCount || 0) +
-    (summary?.tablesAwaitingPayment || 0) +
-    (summary?.lowStockItems || 0);
 
   return (
     <div className="relative">
@@ -232,7 +282,7 @@ export default function NotificationCenter() {
               <button
                 type="button"
                 onClick={clearNotifications}
-                disabled={clearing}
+                disabled={clearing || badgeCount === 0}
                 className="rounded px-2 py-1 text-xs font-medium text-orange-600 hover:bg-orange-50 disabled:opacity-50"
               >
                 {clearing ? "Clearing..." : "Clear"}

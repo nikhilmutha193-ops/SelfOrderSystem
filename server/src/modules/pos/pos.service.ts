@@ -96,6 +96,7 @@ export async function getFloor(ctx: RequestContext) {
       captainId: table.captainId ?? null,
       captainName: table.captainId ? (captainName.get(table.captainId.toString()) ?? null) : null,
       areaId: table.areaId ?? null,
+      isGuest: !!table.isGuest,
       orders: running.filter((o) => o.tableId?.toString() === table._id.toString()),
     })),
     takeaways: running.filter((o) => !o.tableId),

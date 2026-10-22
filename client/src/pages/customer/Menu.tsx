@@ -476,8 +476,8 @@ export default function Menu() {
           </Button>
         </div>
       )}
-      <div className="sticky top-0 z-20 border-b border-slate-200/80 bg-white/95 backdrop-blur">
-        <div className="flex items-center justify-between gap-3 px-4 pt-4">
+      <div className="border-b border-slate-200/80 bg-white">
+        <div className="flex items-center justify-between gap-3 px-4 pb-3 pt-4">
           <div>
             <h1 className="text-xl font-bold tracking-tight text-slate-900">
               {access.showMenu ? ui(lang, "menu") : "Feedback"}
@@ -543,105 +543,102 @@ export default function Menu() {
             </button>
           </div>
         </div>
+      </div>
 
-        {access.showMenu && (
-          <>
-            <div className="relative px-4 pt-3">
-              <svg
-                aria-hidden
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                className="pointer-events-none absolute left-7 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+      {access.showMenu && (
+        <div className="sticky top-0 z-20 border-b border-slate-200/80 bg-white/95 backdrop-blur">
+          <div className="relative px-4 pt-3">
+            <svg
+              aria-hidden
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              className="pointer-events-none absolute left-7 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+              style={{ marginTop: "0.375rem" }}
+            >
+              <circle cx="11" cy="11" r="7" />
+              <path d="M20 20l-3.5-3.5" strokeLinecap="round" />
+            </svg>
+            <Input
+              className="!pl-9 rounded-xl"
+              placeholder={ui(lang, "search")}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch("")}
+                aria-label="Clear search"
+                className="absolute right-6 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center text-slate-400 hover:text-slate-600"
                 style={{ marginTop: "0.375rem" }}
               >
-                <circle cx="11" cy="11" r="7" />
-                <path d="M20 20l-3.5-3.5" strokeLinecap="round" />
-              </svg>
-              <Input
-                className="!pl-9 rounded-xl"
-                placeholder={ui(lang, "search")}
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-              {search && (
-                <button
-                  type="button"
-                  onClick={() => setSearch("")}
-                  aria-label="Clear search"
-                  className="absolute right-6 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center text-slate-400 hover:text-slate-600"
-                  style={{ marginTop: "0.375rem" }}
-                >
-                  ✕
-                </button>
-              )}
-            </div>
-
-            {!isFiltering && menu.length > 0 && (
-              <div ref={navRef} className="mt-3 flex gap-2 overflow-x-auto px-4 pb-1">
-                {menu.map((category) => (
-                  <button
-                    key={category._id}
-                    onClick={() => scrollToCategory(category._id)}
-                    className={`min-h-[36px] shrink-0 whitespace-nowrap rounded-xl px-3.5 text-sm font-semibold transition-colors ${
-                      activeCategoryId === category._id
-                        ? "bg-orange-600 text-white shadow-sm"
-                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                    }`}
-                  >
-                    {tr(category, lang, "name")}
-                  </button>
-                ))}
-              </div>
+                ✕
+              </button>
             )}
+          </div>
 
-            <div className="flex items-center gap-2 overflow-x-auto px-4 py-2">
-              <button
-                onClick={() => setVegOnly((v) => !v)}
-                aria-pressed={vegOnly}
-                className={`inline-flex min-h-[36px] shrink-0 items-center gap-1.5 rounded-xl border px-3 text-sm font-semibold transition-colors ${
-                  vegOnly
-                    ? "border-green-600 bg-green-50 text-green-700"
-                    : "border-slate-300 text-slate-600 hover:bg-slate-50"
-                }`}
-              >
-                <FoodTypeIcon type="veg" size={12} /> {ui(lang, "veg")}
-              </button>
-              <button
-                onClick={() => setBestsellerOnly((v) => !v)}
-                aria-pressed={bestsellerOnly}
-                className={`min-h-[36px] shrink-0 whitespace-nowrap rounded-xl border px-3 text-sm font-semibold transition-colors ${
-                  bestsellerOnly
-                    ? "border-amber-500 bg-amber-50 text-amber-700"
-                    : "border-slate-300 text-slate-600 hover:bg-slate-50"
-                }`}
-              >
-                {ui(lang, "bestsellers")}
-              </button>
-              <Select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as SortOption)}
-                className="!w-auto min-h-[36px] shrink-0 rounded-xl !py-1 text-sm"
-              >
-                {(Object.keys(SORT_LABELS) as SortOption[]).map((opt) => (
-                  <option key={opt} value={opt}>
-                    {ui(lang, "sort")}: {ui(lang, opt)}
-                  </option>
-                ))}
-              </Select>
-              {isFiltering && (
+          {!isFiltering && menu.length > 0 && (
+            <div ref={navRef} className="mt-3 flex gap-2 overflow-x-auto px-4 pb-1">
+              {menu.map((category) => (
                 <button
-                  onClick={clearFilters}
-                  className="shrink-0 px-1 text-sm font-semibold text-orange-700 underline"
+                  key={category._id}
+                  onClick={() => scrollToCategory(category._id)}
+                  className={`min-h-[36px] shrink-0 whitespace-nowrap rounded-xl px-3.5 text-sm font-semibold transition-colors ${
+                    activeCategoryId === category._id
+                      ? "bg-orange-600 text-white shadow-sm"
+                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  }`}
                 >
-                  {ui(lang, "clear")}
+                  {tr(category, lang, "name")}
                 </button>
-              )}
+              ))}
             </div>
-          </>
-        )}
-      </div>
+          )}
+
+          <div className="flex items-center gap-2 overflow-x-auto px-4 py-2">
+            <button
+              onClick={() => setVegOnly((v) => !v)}
+              aria-pressed={vegOnly}
+              className={`inline-flex min-h-[36px] shrink-0 items-center gap-1.5 rounded-xl border px-3 text-sm font-semibold transition-colors ${
+                vegOnly
+                  ? "border-green-600 bg-green-50 text-green-700"
+                  : "border-slate-300 text-slate-600 hover:bg-slate-50"
+              }`}
+            >
+              <FoodTypeIcon type="veg" size={12} /> {ui(lang, "veg")}
+            </button>
+            <button
+              onClick={() => setBestsellerOnly((v) => !v)}
+              aria-pressed={bestsellerOnly}
+              className={`min-h-[36px] shrink-0 whitespace-nowrap rounded-xl border px-3 text-sm font-semibold transition-colors ${
+                bestsellerOnly
+                  ? "border-amber-500 bg-amber-50 text-amber-700"
+                  : "border-slate-300 text-slate-600 hover:bg-slate-50"
+              }`}
+            >
+              {ui(lang, "bestsellers")}
+            </button>
+            <Select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as SortOption)}
+              className="!w-auto min-h-[36px] shrink-0 rounded-xl !py-1 text-sm"
+            >
+              {(Object.keys(SORT_LABELS) as SortOption[]).map((opt) => (
+                <option key={opt} value={opt}>
+                  {ui(lang, "sort")}: {ui(lang, opt)}
+                </option>
+              ))}
+            </Select>
+            {isFiltering && (
+              <button onClick={clearFilters} className="shrink-0 px-1 text-sm font-semibold text-orange-700 underline">
+                {ui(lang, "clear")}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       <QuickRequests onNeedOrder={requestWithoutOrder} />
 
@@ -699,7 +696,7 @@ export default function Menu() {
               ref={(el) => {
                 sectionRefs.current[category._id] = el;
               }}
-              className="scroll-mt-32"
+              className="scroll-mt-44"
             >
               <h2 className="mb-3 text-xl font-bold tracking-tight text-slate-900">{tr(category, lang, "name")}</h2>
               {category.subcategories.map((sub) => (

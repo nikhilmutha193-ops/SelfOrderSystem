@@ -23,7 +23,10 @@ export interface IGuestAccess {
   showFeedback: boolean;
 }
 
-/** Which guest details a table guest must give before their first order. Anything unticked is not asked. */
+/**
+ * Which guest details are asked before a table guest's first order. Name and members are required;
+ * phone and birthday are only offered (always optional). Anything unticked is not asked.
+ */
 export interface IRequiredDetails {
   name: boolean;
   phone: boolean;

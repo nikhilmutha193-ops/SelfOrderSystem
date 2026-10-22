@@ -8,6 +8,7 @@ import {
   Plus,
   Timer,
   Trash2,
+  Users,
   Wallet,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -119,6 +120,26 @@ export default function Tables() {
     setError(null);
     try {
       await setArea.mutateAsync({ tableId: table._id, areaId: areaId || null });
+      load();
+    } catch (err) {
+      setError(extractErrorMessage(err));
+    }
+  }
+
+  async function changeKind(table: TableRow) {
+    const toGuest = !table.isGuest;
+    const confirmed = await confirmDialog({
+      title: toGuest ? `Make ${table.code} a guest table?` : `Make ${table.code} a normal table?`,
+      message: toGuest
+        ? "A guest table is shared by walk-ins and the counter: several orders can run on it at once and it never needs releasing. Its captain and area are cleared."
+        : "It becomes a normal table: one party at a time, signed in with its code and PIN, and released when they leave.",
+      confirmLabel: toGuest ? "Make guest table" : "Make normal table",
+      tone: "primary",
+    });
+    if (!confirmed) return;
+    setError(null);
+    try {
+      await api.put(`/tables/${table._id}`, { isGuest: toGuest });
       load();
     } catch (err) {
       setError(extractErrorMessage(err));
@@ -486,14 +507,17 @@ export default function Tables() {
 
         <div className="mt-5">
           <h3 className="text-sm font-semibold text-slate-900">Details asked before the first order</h3>
-          <p className="text-xs text-slate-500">Only ticked details are asked. Anything unticked is not shown.</p>
+          <p className="text-xs text-slate-500">
+            Only ticked details are asked. Name and members are required; phone and date of birth are optional for the
+            guest.
+          </p>
           <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
             {(
               [
                 ["name", "Name"],
                 ["members", "Number of members"],
-                ["phone", "Phone number"],
-                ["birthday", "Date of birth"],
+                ["phone", "Phone number (optional)"],
+                ["birthday", "Date of birth (optional)"],
               ] as const
             ).map(([field, label]) => (
               <label
@@ -712,6 +736,11 @@ export default function Tables() {
                           <Button size="sm" variant="ghost" icon={KeyRound} onClick={() => startReset(table)}>
                             PIN
                           </Button>
+                          {canEditTables && (
+                            <Button size="sm" variant="ghost" icon={Users} onClick={() => changeKind(table)}>
+                              {table.isGuest ? "Make normal" : "Make guest"}
+                            </Button>
+                          )}
                           <Button
                             size="sm"
                             variant="ghost"

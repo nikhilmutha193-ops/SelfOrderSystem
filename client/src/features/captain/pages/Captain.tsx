@@ -82,6 +82,14 @@ function TabButton({
   );
 }
 
+function NoTabAccess({ page }: { page: string }) {
+  return (
+    <p className="px-6 py-12 text-center text-sm text-slate-500">
+      This login can't open this tab yet. Ask the owner to give it access to {page} under Admin Users.
+    </p>
+  );
+}
+
 export default function Captain() {
   useStaffTheme();
   useCaptainManifest();
@@ -244,7 +252,9 @@ export default function Captain() {
       )}
 
       <main className="min-h-0 flex-1 overflow-y-auto">
-        {tab === "tables" && !tableId && <TableMap tables={myTables} areas={floor?.areas} onSelect={openTable} showOrderStatus />}
+        {tab === "tables" && !tableId && (
+          <TableMap tables={myTables} areas={floor?.areas} onSelect={openTable} showOrderStatus />
+        )}
         {tab === "tables" && tableId && (
           <div className="flex h-full flex-col">
             <div className="shrink-0 bg-white px-3 pt-2">
@@ -270,6 +280,7 @@ export default function Captain() {
                 searching={!!search.trim()}
                 quantity=""
                 onQuantity={() => {}}
+                keypad={false}
                 onPick={(item) => {
                   if (hasOptions(item)) setDishFor(item);
                   else cart.addLine(item, 1);
@@ -287,8 +298,9 @@ export default function Captain() {
             </button>
           </div>
         )}
-        {tab === "ready" && <ReadyList groups={myGroups} />}
-        {tab === "requests" && <RequestFeed conversations={conversations} />}
+        {tab === "ready" && (canKitchen ? <ReadyList groups={myGroups} /> : <NoTabAccess page="Kitchen Queue" />)}
+        {tab === "requests" &&
+          (canMessages ? <RequestFeed conversations={conversations} /> : <NoTabAccess page="Messages" />)}
       </main>
 
       {!tableId && (
@@ -300,24 +312,20 @@ export default function Captain() {
             count={0}
             icon={LayoutGrid}
           />
-          {canKitchen && (
-            <TabButton
-              active={tab === "ready"}
-              onClick={() => setTab("ready")}
-              label="Ready"
-              count={readyCount}
-              icon={HandPlatter}
-            />
-          )}
-          {canMessages && (
-            <TabButton
-              active={tab === "requests"}
-              onClick={() => setTab("requests")}
-              label="Requests"
-              count={unread}
-              icon={MessagesSquare}
-            />
-          )}
+          <TabButton
+            active={tab === "ready"}
+            onClick={() => setTab("ready")}
+            label="Ready"
+            count={readyCount}
+            icon={HandPlatter}
+          />
+          <TabButton
+            active={tab === "requests"}
+            onClick={() => setTab("requests")}
+            label="Requests"
+            count={unread}
+            icon={MessagesSquare}
+          />
         </nav>
       )}
 

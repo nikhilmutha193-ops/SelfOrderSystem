@@ -1,0 +1,34 @@
+import { FilterQuery, Types } from "mongoose";
+
+import Order, { IOrder } from "../../models/Order";
+import Restaurant from "../../models/Restaurant";
+
+export class GstRepository {
+  constructor(private readonly restaurantId: Types.ObjectId | string) {}
+
+  private scoped<T>(filter: FilterQuery<T> = {}): FilterQuery<T> {
+    return { ...filter, restaurantId: this.restaurantId };
+  }
+
+  restaurant() {
+    return Restaurant.findById(this.restaurantId).select("dayEndTime timezone gstin name").lean();
+  }
+
+  /** Every invoice (number or legacy bill) whose bill date falls in the range, whatever its status. */
+  invoices(range: { $gte: Date; $lt: Date }) {
+    return Order.find(
+      this.scoped<IOrder>({
+        $and: [
+          { $or: [{ invoiceNumber: { $type: "string" } }, { "bill.legacy": true }] },
+          { bill: { $ne: null } },
+          { $or: [{ billedAt: range }, { billedAt: null, checkoutTime: range }] },
+        ],
+      })
+    )
+      .select(
+        "invoiceNumber billedAt checkoutTime customerName customerGstin orderType source status voidedAt paymentMethod bill"
+      )
+      .sort({ billedAt: 1, checkoutTime: 1, invoiceNumber: 1 })
+      .lean();
+  }
+}

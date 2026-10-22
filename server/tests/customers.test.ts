@@ -530,6 +530,15 @@ describe("bill links for WhatsApp", () => {
       totals: { grandTotal: 105 },
     });
     expect(res.body.order.invoiceNumber).toMatch(/\/\d{6}$/);
+    // The same invoice details the PDF carries.
+    expect(res.body.order).toMatchObject({
+      title: "Tax Invoice",
+      orderTypeText: "Take away",
+      sac: expect.any(String),
+      payments: [],
+    });
+    expect(res.body.display).toMatchObject({ showUnitPrice: true, footerNote: "Thank you for dining with us!" });
+    expect(res.body.items[0]).toMatchObject({ unitPrice: 100, isJain: false });
 
     const pdf = await api().get(`/api/bills/public/${token}/pdf`);
     expect(pdf.status).toBe(200);

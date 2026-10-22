@@ -217,20 +217,20 @@ function drawRow(doc: PDFKit.PDFDocument, x0: number, y: number, cols: Column[],
   return y + rowHeight;
 }
 
-function invoiceTitle(order: IOrder): string {
+export function invoiceTitle(order: IOrder): string {
   if (!order.invoiceNumber || order.status === "open") return "Bill preview (not a tax invoice)";
   if (order.voidedAt) return "Tax Invoice - VOIDED";
   if (order.status === "cancelled") return "Tax Invoice - CANCELLED";
   return "Tax Invoice";
 }
 
-function orderTypeText(order: IOrder): string {
+export function orderTypeText(order: IOrder): string {
   if (order.orderType === "takeaway") return "Take away";
   if (order.orderType === "delivery") return `Delivery (${order.deliveryProvider || "Other"})`;
   return "Dine-in";
 }
 
-const PAYMENT_LABELS: Record<string, string> = {
+export const PAYMENT_LABELS: Record<string, string> = {
   cash: "cash",
   upi: "UPI",
   card: "card",

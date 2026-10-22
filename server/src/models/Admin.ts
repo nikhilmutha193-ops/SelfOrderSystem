@@ -11,6 +11,8 @@ export interface IAdmin {
   securityAnswerHash: string;
   isOwner: boolean;
   permissions: Map<string, PermissionLevel>;
+  /** Below 2: pages added later (POS, Captain...) follow their parent module. See effectivePermissions. */
+  modulesVersion?: number;
   tokenVersion: number;
   createdAt: Date;
   updatedAt: Date;
@@ -25,6 +27,7 @@ const adminSchema = new Schema<IAdmin>(
     securityAnswerHash: { type: String, required: true },
     isOwner: { type: Boolean, default: false },
     tokenVersion: { type: Number, default: 0 },
+    modulesVersion: { type: Number },
     permissions: {
       type: Map,
       of: { type: String, enum: ["view", "edit"] },

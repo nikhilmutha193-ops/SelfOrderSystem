@@ -6,3 +6,5 @@ build/
 .env
 .env.vercel
 server/invoices/
+.vercel
+.env*

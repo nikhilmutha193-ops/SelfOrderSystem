@@ -40,6 +40,12 @@ export const MODULES = {
   inventory: "Inventory",
   customers: "Customers & Loyalty",
   bookings: "Table Bookings",
+  pos: "POS Billing",
+  captain: "Captain App",
+  invoices: "Invoices",
+  qrCodes: "QR Codes",
+  banners: "Offer Banners",
+  gst: "GST & Tax",
 } as const;
 
 export const MODULE_KEYS = Object.keys(MODULES) as ModuleKey[];
@@ -109,6 +115,9 @@ export function useCanEdit(module: ModuleKey): boolean {
 
 const HOME_ROUTES: { module: ModuleKey; to: string }[] = [
   { module: "dashboard", to: "/admin/dashboard" },
+  // Staff who work on the floor go straight to their app after signing in.
+  { module: "captain", to: "/captain" },
+  { module: "pos", to: "/pos" },
   { module: "orders", to: "/admin/orders?type=dine-in" },
   { module: "kot", to: "/admin/kot" },
   { module: "messages", to: "/admin/messages" },
