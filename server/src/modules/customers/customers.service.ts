@@ -526,7 +526,12 @@ function billSecret() {
   return `${secret}:bill-link`;
 }
 
-export async function shareBill(ctx: RequestContext, orderId: string, origin: string | undefined) {
+export async function shareBill(
+  ctx: RequestContext,
+  orderId: string,
+  origin: string | undefined,
+  phoneOverride?: string
+) {
   const repo = new CustomersRepository(ctx.restaurantId);
   const order = await repo.findOrder(orderId);
   if (!order) throw new HttpError(404, "Order not found");
@@ -540,7 +545,8 @@ export async function shareBill(ctx: RequestContext, orderId: string, origin: st
     expiresIn: `${BILL_LINK_DAYS}d`,
   });
   const url = `${base}/bill/${token}`;
-  const phone = normalizePhone(order.customerPhone);
+  const phone = normalizePhone(phoneOverride ?? order.customerPhone);
+  if (phoneOverride && !phone) throw new HttpError(400, "Enter a valid 10-digit mobile number");
   const total = order.bill?.grandTotal ?? 0;
   const text = `${restaurant?.name ?? "Your restaurant"}: bill ${order.invoiceNumber} for ₹${total.toFixed(2)}. View or download it here: ${url}`;
   return {

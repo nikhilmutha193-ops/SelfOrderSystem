@@ -1,8 +1,6 @@
 import { FoodTypeIcon } from "../../../components/FoodBadges";
 import type { PosMenuItem } from "../../../lib/types";
 
-const KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "C", "0", "⌫"];
-
 export function MenuGrid({
   categories,
   category,
@@ -12,7 +10,6 @@ export function MenuGrid({
   quantity,
   onQuantity,
   onPick,
-  keypad = true,
 }: {
   categories: { _id: string; name: string }[];
   category: string;
@@ -22,15 +19,7 @@ export function MenuGrid({
   quantity: string;
   onQuantity: (value: string) => void;
   onPick: (item: PosMenuItem) => void;
-  /** The tap-to-set-quantity strip, shown on phones only (other screens type the number on a keyboard). */
-  keypad?: boolean;
 }) {
-  function press(key: string) {
-    if (key === "C") onQuantity("");
-    else if (key === "⌫") onQuantity(quantity.slice(0, -1));
-    else if (quantity.length < 3) onQuantity(quantity === "" && key === "0" ? "" : quantity + key);
-  }
-
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex gap-2 overflow-x-auto border-b border-slate-200 bg-white px-3 py-2">
@@ -48,6 +37,16 @@ export function MenuGrid({
             {c.name}
           </button>
         ))}
+        {quantity && (
+          <button
+            type="button"
+            onClick={() => onQuantity("")}
+            title="Quantity for the next dish - tap to clear"
+            className="ml-auto shrink-0 rounded-full bg-slate-900 px-3 py-2 font-mono text-sm font-semibold text-white"
+          >
+            ×{quantity} ✕
+          </button>
+        )}
       </div>
       <div className="flex min-h-0 flex-1">
         <div className="min-h-0 flex-1 overflow-y-auto p-3">
@@ -84,34 +83,6 @@ export function MenuGrid({
           )}
         </div>
       </div>
-      {keypad && (
-        <div className="shrink-0 border-t border-slate-200 bg-white p-2 md:hidden">
-          <div className="flex items-stretch gap-2">
-            <div
-              className="flex w-20 shrink-0 flex-col items-end justify-center rounded-md bg-slate-900 px-2 py-1 font-mono text-2xl text-white"
-              aria-label="Quantity"
-            >
-              {quantity || "1"}
-              <span className="text-[10px] text-slate-400">qty</span>
-            </div>
-            <div className="grid min-w-0 flex-1 grid-cols-6 gap-1.5">
-              {KEYS.map((key) => (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => press(key)}
-                  className="h-10 rounded-md bg-slate-100 text-lg font-semibold text-slate-800 active:scale-95 active:bg-slate-200"
-                >
-                  {key}
-                </button>
-              ))}
-            </div>
-          </div>
-          <p className="mt-1 text-[11px] leading-snug text-slate-500">
-            Type a number, then tap a dish to add that many.
-          </p>
-        </div>
-      )}
     </div>
   );
 }

@@ -74,7 +74,8 @@ export const customersApi = {
     api.put<BirthdaySmsSettings>("/customers/birthday-sms-settings", input).then((res) => res.data),
   sendBirthdaySmsNow: () =>
     api.post<{ sentCount: number }>("/customers/birthday-sms-settings/send").then((res) => res.data),
-  shareBill: (orderId: string) => api.post<BillShare>(`/bills/${orderId}/share`).then((res) => res.data),
+  shareBill: (orderId: string, phone?: string) =>
+    api.post<BillShare>(`/bills/${orderId}/share`, phone ? { phone } : {}).then((res) => res.data),
   publicBill: (token: string) => api.get<PublicBill>(`/bills/public/${token}`).then((res) => res.data),
   smsTemplates: () => api.get<SmsTemplate[]>("/customers/sms/templates").then((res) => res.data),
   createSmsTemplate: (input: { name: string; message: string }) =>

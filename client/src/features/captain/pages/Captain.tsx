@@ -7,6 +7,7 @@ import type { ChatConversation, KotQueueGroup, PosMenu, PosMenuItem, PosTable } 
 import { extractErrorMessage } from "../../../shared/api/client";
 import { POLL } from "../../../shared/api/queryClient";
 import { useStaffTheme } from "../../../shared/theme";
+import { StaffSignOut } from "../../../components/StaffSignOut";
 import { ThemeToggleButton } from "../../../shared/ui/ThemeToggle";
 import { useConversations } from "../../chat/queries";
 import { useKotQueue } from "../../kitchen/queries";
@@ -238,6 +239,7 @@ export default function Captain() {
           </button>
         )}
         <ThemeToggleButton />
+        <StaffSignOut to="/captain/login" />
       </header>
 
       {message && (
@@ -280,7 +282,6 @@ export default function Captain() {
                 searching={!!search.trim()}
                 quantity=""
                 onQuantity={() => {}}
-                keypad={false}
                 onPick={(item) => {
                   if (hasOptions(item)) setDishFor(item);
                   else cart.addLine(item, 1);

@@ -7,6 +7,8 @@ import DishDialog from "../../../components/DishDialog";
 import type { InvoiceTotals, PosMenu, PosMenuItem, PosOrderSummary, PosTable } from "../../../lib/types";
 import { extractErrorMessage } from "../../../shared/api/client";
 import { useStaffTheme } from "../../../shared/theme";
+import { StaffSignOut } from "../../../components/StaffSignOut";
+import { can, useAdmin } from "../../../lib/adminAuth";
 import { ThemeToggleButton } from "../../../shared/ui/ThemeToggle";
 import { CustomerPanel } from "../../customers/components/CustomerPanel";
 import { kitchenApi, openPdfInTab } from "../../kitchen/api";
@@ -61,6 +63,7 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
 
 export default function Pos() {
   useStaffTheme();
+  const { profile } = useAdmin();
   const queryClient = useQueryClient();
   const rawMenu = usePosMenu().data ?? NO_MENU;
   const floor = usePosFloor();
@@ -415,23 +418,25 @@ export default function Pos() {
     ) : null;
 
   return (
-    <div className="flex h-dvh flex-col bg-slate-100">
-      <header className="flex shrink-0 items-center gap-2 bg-slate-900 px-3 py-2 text-white">
-        <Link
-          to="/admin"
-          aria-label="Back to admin"
-          className="inline-flex min-h-[40px] items-center gap-1 rounded-lg px-2 text-sm text-slate-300 hover:bg-slate-800 hover:text-white"
-        >
-          <ArrowLeft size={16} aria-hidden="true" />
-          <span className="hidden sm:inline">Admin</span>
-        </Link>
+    <div className="flex h-dvh max-w-full flex-col overflow-x-hidden bg-slate-100">
+      <header className="flex shrink-0 flex-wrap items-center gap-2 bg-slate-900 px-3 py-2 text-white">
+        {can(profile, "dashboard") && (
+          <Link
+            to="/admin"
+            aria-label="Back to admin"
+            className="inline-flex min-h-[40px] items-center gap-1 rounded-lg px-2 text-sm text-slate-300 hover:bg-slate-800 hover:text-white"
+          >
+            <ArrowLeft size={16} aria-hidden="true" />
+            <span className="hidden sm:inline">Admin</span>
+          </Link>
+        )}
         <div className="flex rounded-lg bg-slate-800 p-1">
           {(["tables", "takeaway", "cashier"] as const).map((m) => (
             <button
               key={m}
               type="button"
               onClick={() => reset(m)}
-              className={`min-h-[36px] rounded-md px-3 text-sm font-semibold whitespace-nowrap sm:px-4 ${
+              className={`min-h-[36px] rounded-md px-2.5 text-sm font-semibold whitespace-nowrap sm:px-4 ${
                 mode === m ? "bg-orange-600 text-white" : "text-slate-300 hover:text-white"
               }`}
             >
@@ -463,7 +468,7 @@ export default function Pos() {
               pick(visibleItems[0]);
             }
           }}
-          className="ml-auto h-10 w-full min-w-0 flex-1 sm:max-w-xs rounded-lg border-0 bg-white px-3 text-base text-slate-900 placeholder:text-slate-400 focus:ring-4 focus:ring-orange-500/30 focus:outline-none disabled:opacity-40 sm:text-sm"
+          className="order-last h-10 w-full basis-full min-w-0 sm:order-none sm:ml-auto sm:basis-auto sm:flex-1 sm:max-w-xs rounded-lg border-0 bg-white px-3 text-base text-slate-900 placeholder:text-slate-400 focus:ring-4 focus:ring-orange-500/30 focus:outline-none disabled:opacity-40 sm:text-sm"
         />
         <button
           type="button"
@@ -471,13 +476,14 @@ export default function Pos() {
           aria-label={forced ? "Go back online" : "Bill offline"}
           title={forced ? "Go back online" : "Bill offline"}
           onClick={() => setForcedOffline(forced ? null : { at: 0, manual: true })}
-          className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg transition-colors ${
+          className={`ml-auto inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg transition-colors sm:ml-0 ${
             forced ? "bg-amber-500 text-slate-900" : "text-slate-300 hover:bg-slate-800 hover:text-white"
           }`}
         >
           <CloudOff size={18} aria-hidden="true" />
         </button>
         <ThemeToggleButton className="hidden sm:inline-flex" />
+        <StaffSignOut to="/pos/login" />
       </header>
 
       <OfflineBar

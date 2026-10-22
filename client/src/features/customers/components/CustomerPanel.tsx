@@ -11,35 +11,84 @@ function formatPhone(phone: string) {
   return phone.length === 12 && phone.startsWith("91") ? `+91 ${phone.slice(2, 7)} ${phone.slice(7)}` : `+${phone}`;
 }
 
-export function WhatsAppBillButton({ orderId, compact = false }: { orderId: string; compact?: boolean }) {
+/**
+ * Opens WhatsApp with the bill link. When the guest left no number on the order it asks for one first,
+ * so staff at the till can still send the bill.
+ */
+export function WhatsAppBillButton({
+  orderId,
+  compact = false,
+  hasPhone = true,
+}: {
+  orderId: string;
+  compact?: boolean;
+  hasPhone?: boolean;
+}) {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [asking, setAsking] = useState(false);
+  const [digits, setDigits] = useState("");
+
+  async function send(phone?: string) {
+    setError(null);
+    setBusy(true);
+    const tab = window.open("", "_blank");
+    try {
+      const share = await customersApi.shareBill(orderId, phone);
+      if (tab) tab.location.href = share.whatsappUrl;
+      else window.location.href = share.whatsappUrl;
+      setAsking(false);
+      setDigits("");
+    } catch (err) {
+      tab?.close();
+      setError(extractErrorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="flex flex-col gap-1">
-      <Button
-        type="button"
-        variant="secondary"
-        icon={MessageCircle}
-        loading={busy}
-        className={compact ? "w-full" : "w-full sm:w-auto"}
-        onClick={async () => {
-          setError(null);
-          setBusy(true);
-          const tab = window.open("", "_blank");
-          try {
-            const share = await customersApi.shareBill(orderId);
-            if (tab) tab.location.href = share.whatsappUrl;
-            else window.location.href = share.whatsappUrl;
-          } catch (err) {
-            tab?.close();
-            setError(extractErrorMessage(err));
-          } finally {
-            setBusy(false);
-          }
-        }}
-      >
-        Send bill on WhatsApp
-      </Button>
+      {asking && !hasPhone && (
+        <form
+          className="flex items-center gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (digits.length === 10) void send(`+91 ${digits}`);
+            else setError("Enter a 10-digit mobile number");
+          }}
+        >
+          <span className="text-sm text-slate-500">+91</span>
+          <Input
+            aria-label="WhatsApp number"
+            type="tel"
+            inputMode="tel"
+            maxLength={10}
+            placeholder="98765 43210"
+            autoFocus
+            value={digits}
+            onChange={(e) => setDigits(e.target.value.replace(/\D/g, ""))}
+          />
+          <Button type="submit" loading={busy}>
+            Send
+          </Button>
+        </form>
+      )}
+      {!(asking && !hasPhone) && (
+        <Button
+          type="button"
+          variant="secondary"
+          icon={MessageCircle}
+          loading={busy}
+          className={compact ? "w-full" : "w-full sm:w-auto"}
+          onClick={() => {
+            if (hasPhone) void send();
+            else setAsking(true);
+          }}
+        >
+          Send bill on WhatsApp
+        </Button>
+      )}
       <ErrorText>{error}</ErrorText>
     </div>
   );
@@ -133,7 +182,7 @@ export function CustomerPanel({
                 setPhone("");
                 setName("");
                 setChanging(false);
-              }
+              },
             );
           }}
         >
@@ -198,7 +247,7 @@ export function CustomerPanel({
                       orderId: order._id,
                       points: Number(points),
                     }),
-                  () => setPoints("")
+                  () => setPoints(""),
                 );
               }}
             >
@@ -224,7 +273,7 @@ export function CustomerPanel({
           )
         ))}
 
-      {billed && <WhatsAppBillButton orderId={order._id} compact={compact} />}
+      {billed && !compact && <WhatsAppBillButton orderId={order._id} />}
       <ErrorText>{error}</ErrorText>
     </div>
   );

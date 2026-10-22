@@ -15,6 +15,7 @@ const Menu = lazy(() => import("../pages/customer/Menu"));
 const CustomerInvoice = lazy(() => import("../pages/customer/CustomerInvoice"));
 
 const AdminLogin = lazy(() => import("../pages/admin/AdminLogin"));
+const StaffLogin = lazy(() => import("../pages/admin/StaffLogin"));
 const ForgotPassword = lazy(() => import("../pages/admin/ForgotPassword"));
 const AdminLayout = lazy(() => import("../pages/admin/AdminLayout"));
 const Dashboard = lazy(() => import("../features/dashboard/pages/Dashboard"));
@@ -88,10 +89,12 @@ export default function App() {
                 }
               />
 
+              <Route path="/pos/login" element={<StaffLogin kind="cashier" />} />
+              <Route path="/captain/login" element={<StaffLogin kind="captain" />} />
               <Route
                 path="/pos"
                 element={
-                  <ProtectedRoute role="admin" redirectTo="/admin/login">
+                  <ProtectedRoute role="admin" redirectTo="/pos/login">
                     <AdminProfileProvider>
                       <RequireModule module="pos">
                         <Pos />
@@ -103,7 +106,7 @@ export default function App() {
               <Route
                 path="/captain"
                 element={
-                  <ProtectedRoute role="admin" redirectTo="/admin/login">
+                  <ProtectedRoute role="admin" redirectTo="/captain/login">
                     <AdminProfileProvider>
                       <RequireModule module="captain">
                         <Captain />

@@ -14,6 +14,7 @@ import {
   orderParams,
   redeemSchema,
   sendCampaignSchema,
+  shareBillBody,
   smsTemplateSchema,
   tokenParams,
   updateCustomerSchema,
@@ -92,7 +93,8 @@ export const removeRedemption = asyncHandler(async (req: Request, res: Response)
 
 export const shareBill = asyncHandler(async (req: Request, res: Response) => {
   const { orderId } = parse(orderParams, req.params);
-  res.json(await customers.shareBill(getContext(req), orderId, req.get("origin") ?? undefined));
+  const phone = parse(shareBillBody, req.body);
+  res.json(await customers.shareBill(getContext(req), orderId, req.get("origin") ?? undefined, phone));
 });
 
 export const publicBill = asyncHandler(async (req: Request, res: Response) => {

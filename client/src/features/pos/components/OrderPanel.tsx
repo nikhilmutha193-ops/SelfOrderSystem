@@ -2,6 +2,7 @@ import { useState, type ReactNode } from "react";
 
 import type { OrderDetailResponse, OrderItem } from "../../../lib/types";
 import { Badge, Button, Input } from "../../../shared/ui/ui";
+import { WhatsAppBillButton } from "../../customers/components/CustomerPanel";
 import BillActions from "../../orders/components/BillActions";
 import { draftUnitPrice, type DraftLine } from "../api";
 
@@ -237,6 +238,20 @@ export function OrderPanel({
             Settle <kbd className="text-[10px] opacity-70">F10</kbd>
           </Button>
         )}
+        {!phone &&
+          order &&
+          !offline &&
+          order.invoiceNumber &&
+          (order.status === "billed" || order.status === "closed") && (
+            <div className="col-span-2">
+              <WhatsAppBillButton
+                key={order._id}
+                orderId={order._id}
+                compact
+                hasPhone={!!order.customerPhone?.replace(/\D/g, "")}
+              />
+            </div>
+          )}
         {onHold && order && !offline && (
           <Button variant="secondary" className="col-span-2" onClick={() => setMoreOpen((v) => !v)}>
             {moreOpen ? "Hide options" : "Split, merge, discount…"}

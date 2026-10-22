@@ -176,3 +176,28 @@ describe("floor", () => {
     expect(table.orders[0]).toMatchObject({ status: "billed", total: 252, invoiceNumber: expect.any(String) });
   });
 });
+
+describe("sending a bill on WhatsApp from the till", () => {
+  it("uses a number typed at the till when the order has none", async () => {
+    const order = await api().post("/api/orders/takeaway").set(bearer(owner)).send({ customerName: "No Phone" });
+    const id = order.body._id as string;
+    await api()
+      .post(`/api/orders/${id}/items`)
+      .set(bearer(owner))
+      .send({ items: [{ foodItemId: world.food.dosa, quantity: 1 }] });
+    await api().post(`/api/orders/${id}/kot/print`).set(bearer(owner));
+    await api().post(`/api/orders/${id}/bill`).set(bearer(owner)).send({});
+
+    const none = await api().post(`/api/bills/${id}/share`).set(bearer(owner)).send({});
+    expect(none.status).toBe(200);
+    expect(none.body.hasPhone).toBe(false);
+
+    const typed = await api().post(`/api/bills/${id}/share`).set(bearer(owner)).send({ phone: "+91 98450 22222" });
+    expect(typed.status).toBe(200);
+    expect(typed.body.whatsappUrl).toMatch(/^https:\/\/wa\.me\/919845022222\?text=/);
+
+    const bad = await api().post(`/api/bills/${id}/share`).set(bearer(owner)).send({ phone: "12345" });
+    expect(bad.status).toBe(400);
+    expect(bad.body.message).toBe("Enter a valid 10-digit mobile number");
+  });
+});

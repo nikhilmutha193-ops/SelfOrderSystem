@@ -10,6 +10,12 @@ const monthDay = z
   });
 
 export const idParams = z.object({ id: objectId() });
+// An optional number to send the bill to, when the guest left none on the order.
+export const shareBillBody = z
+  .object({ phone: z.string().trim().max(20).nullish() })
+  .nullish()
+  .transform((v) => v?.phone || undefined);
+
 export const orderParams = z.object({ orderId: objectId() });
 export const tokenParams = z.object({ token: z.string().min(20).max(2000) });
 

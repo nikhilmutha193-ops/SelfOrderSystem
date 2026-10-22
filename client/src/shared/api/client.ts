@@ -78,13 +78,23 @@ const LOGIN_ENDPOINTS = ["/auth/admin/login", "/auth/chef/login", "/auth/table/l
 
 const SELF_RELEASE_ENDPOINT = "/tables/session/release";
 
+// The counter and the captain app have their own sign-in pages, so an expired session returns there.
+function loginPathFor(role: Role): string {
+  if (role === "admin") {
+    const path = window.location.pathname;
+    if (path.startsWith("/pos")) return "/pos/login";
+    if (path.startsWith("/captain")) return "/captain/login";
+  }
+  return LOGIN_PATH[role];
+}
+
 function handleExpiredSession(role: Role) {
   clearStoredToken(role);
   setActiveAuth(null);
   markExpired(role);
-  const target = `${LOGIN_PATH[role]}?expired=1`;
-  if (!window.location.pathname.startsWith(LOGIN_PATH[role])) {
-    window.location.replace(target);
+  const loginPath = loginPathFor(role);
+  if (!window.location.pathname.startsWith(loginPath)) {
+    window.location.replace(`${loginPath}?expired=1`);
   }
 }
 
