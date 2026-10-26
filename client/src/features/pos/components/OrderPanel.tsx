@@ -161,9 +161,9 @@ export function OrderPanel({
               </span>
               <span className="min-w-0 flex-1">
                 <span className="block truncate">{line.item.name}</span>
-                {(line.modifiers.length > 0 || line.note) && (
+                {(line.modifiers.length > 0 || line.note || line.isJain) && (
                   <span className="block truncate text-xs text-slate-500">
-                    {[...line.modifiers.map((m) => m.label), line.note].filter(Boolean).join(", ")}
+                    {[line.isJain ? "Jain" : "", ...line.modifiers.map((m) => m.label), line.note].filter(Boolean).join(", ")}
                   </span>
                 )}
                 <span className="text-xs font-medium text-orange-700">New</span>

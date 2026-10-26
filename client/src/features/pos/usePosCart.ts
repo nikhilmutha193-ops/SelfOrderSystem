@@ -94,13 +94,23 @@ export function usePosCart() {
     setDraft([]);
   }
 
-  function addLine(item: PosMenuItem, quantity: number, modifiers: SelectedModifier[] = [], note = "") {
+  function addLine(
+    item: PosMenuItem,
+    quantity: number,
+    modifiers: SelectedModifier[] = [],
+    note = "",
+    isJain = false
+  ) {
     setDraft((lines) => {
       const same = lines.find(
-        (l) => l.item._id === item._id && l.note === note && sameModifiers(l.modifiers, modifiers)
+        (l) =>
+          l.item._id === item._id &&
+          l.note === note &&
+          !!l.isJain === isJain &&
+          sameModifiers(l.modifiers, modifiers)
       );
       if (same) return lines.map((l) => (l === same ? { ...l, quantity: l.quantity + quantity } : l));
-      return [...lines, { key: newId(), item, quantity, modifiers, note }];
+      return [...lines, { key: newId(), item, quantity, modifiers, note, isJain }];
     });
   }
 

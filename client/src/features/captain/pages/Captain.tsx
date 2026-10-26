@@ -19,6 +19,7 @@ import { TableMap } from "../../pos/components/TableMap";
 import { usePosFloor, usePosMenu } from "../../pos/queries";
 import { filterMenu, hasOptions, pricedMenu, usePosCart } from "../../pos/usePosCart";
 import { usePrintingStatus } from "../../printing/queries";
+import { MessageToasts } from "../components/MessageToasts";
 import { ReadyList } from "../components/ReadyList";
 import { RequestFeed } from "../components/RequestFeed";
 import { tableCode } from "../tableCode";
@@ -210,6 +211,18 @@ export default function Captain() {
 
   return (
     <div className="flex h-dvh flex-col bg-slate-100">
+      {canMessages && (
+        <MessageToasts
+          conversations={conversations}
+          ready={conversationsQuery.isSuccess}
+          suppress={tab === "requests" && !tableId}
+          onOpen={() => {
+            setTableId(null);
+            setSheetOpen(false);
+            setTab("requests");
+          }}
+        />
+      )}
       <header className="flex shrink-0 items-center gap-3 bg-slate-900 px-3 py-2.5 text-white">
         {tableId ? (
           <button
@@ -286,6 +299,7 @@ export default function Captain() {
                   if (hasOptions(item)) setDishFor(item);
                   else cart.addLine(item, 1);
                 }}
+                onCustomize={setDishFor}
               />
             </div>
             <button
@@ -393,7 +407,7 @@ export default function Captain() {
         onClose={() => setDishFor(null)}
         onAdd={(food, payload) => {
           const item = menu.items.find((i) => i._id === food._id);
-          if (item) cart.addLine(item, payload.quantity, payload.modifiers, payload.note.trim());
+          if (item) cart.addLine(item, payload.quantity, payload.modifiers, payload.note.trim(), payload.isJain);
           setDishFor(null);
         }}
       />

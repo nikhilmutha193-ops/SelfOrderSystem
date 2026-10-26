@@ -9,6 +9,7 @@ export interface DraftLine {
   quantity: number;
   modifiers: SelectedModifier[];
   note: string;
+  isJain?: boolean;
 }
 
 export interface CreatePosOrderInput {
@@ -32,6 +33,7 @@ export function toOrderLines(lines: DraftLine[]): NewOrderLine[] {
     foodItemId: line.item._id,
     quantity: line.quantity,
     note: line.note || undefined,
+    isJain: line.isJain || undefined,
     modifiers: line.modifiers.map(({ groupName, label }) => ({
       groupName,
       label,

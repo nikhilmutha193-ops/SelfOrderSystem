@@ -345,6 +345,8 @@ export const createFoodItem = asyncHandler(async (req: Request, res: Response) =
     isBestseller,
     bestsellerEmoji,
     isTodaySpecial,
+    jainAvailable,
+    spiceAdjustable,
     foodType,
     rating,
     prepTimeMinutes,
@@ -366,6 +368,8 @@ export const createFoodItem = asyncHandler(async (req: Request, res: Response) =
     isBestseller?: boolean;
     bestsellerEmoji?: string;
     isTodaySpecial?: boolean;
+    jainAvailable?: boolean;
+    spiceAdjustable?: boolean;
     foodType?: string;
     rating?: number;
     prepTimeMinutes?: number;
@@ -411,6 +415,8 @@ export const createFoodItem = asyncHandler(async (req: Request, res: Response) =
     isBestseller: !!isBestseller,
     ...(bestsellerEmoji !== undefined && { bestsellerEmoji }),
     isTodaySpecial: !!isTodaySpecial,
+    jainAvailable: jainAvailable !== false,
+    spiceAdjustable: spiceAdjustable !== false,
     foodType: normalizeFoodType(foodType),
     rating: normalizeRating(rating),
     ...(prepTimeMinutes !== undefined && { prepTimeMinutes: normalizePrepTime(prepTimeMinutes) }),
@@ -439,6 +445,8 @@ export const updateFoodItem = asyncHandler(async (req: Request, res: Response) =
     isBestseller,
     bestsellerEmoji,
     isTodaySpecial,
+    jainAvailable,
+    spiceAdjustable,
     foodType,
     rating,
     prepTimeMinutes,
@@ -460,6 +468,8 @@ export const updateFoodItem = asyncHandler(async (req: Request, res: Response) =
     isBestseller?: boolean;
     bestsellerEmoji?: string;
     isTodaySpecial?: boolean;
+    jainAvailable?: boolean;
+    spiceAdjustable?: boolean;
     foodType?: string;
     rating?: number;
     prepTimeMinutes?: number;
@@ -498,6 +508,8 @@ export const updateFoodItem = asyncHandler(async (req: Request, res: Response) =
         ...(isBestseller !== undefined && { isBestseller: !!isBestseller }),
         ...(bestsellerEmoji !== undefined && { bestsellerEmoji }),
         ...(isTodaySpecial !== undefined && { isTodaySpecial: !!isTodaySpecial }),
+        ...(jainAvailable !== undefined && { jainAvailable: !!jainAvailable }),
+        ...(spiceAdjustable !== undefined && { spiceAdjustable: !!spiceAdjustable }),
         ...(foodType !== undefined && { foodType: normalizeFoodType(foodType) }),
         ...(rating !== undefined && { rating: normalizeRating(rating) }),
         ...(prepTimeMinutes !== undefined && { prepTimeMinutes: normalizePrepTime(prepTimeMinutes) }),
@@ -595,6 +607,8 @@ export const getPublicMenu = asyncHandler(async (req: Request, res: Response) =>
             isBestseller: f.isBestseller,
             bestsellerEmoji: f.bestsellerEmoji,
             isTodaySpecial: f.isTodaySpecial,
+            jainAvailable: f.jainAvailable !== false,
+            spiceAdjustable: f.spiceAdjustable !== false,
             foodType: f.foodType,
             rating: f.rating,
             translations: f.translations || {},

@@ -27,6 +27,10 @@ export interface IFoodItem {
   isBestseller: boolean;
   bestsellerEmoji?: string;
   isTodaySpecial: boolean;
+  /** False for dishes that cannot be made without onion and garlic, so guests and staff can't mark them Jain. */
+  jainAvailable?: boolean;
+  /** False for dishes where a spice choice makes no sense (desserts, drinks...), so Less spicy / Spicy isn't offered. */
+  spiceAdjustable?: boolean;
   foodType: FoodType;
   rating: number;
   prepTimeMinutes: number;
@@ -112,6 +116,8 @@ const foodItemSchema = new Schema<IFoodItem>(
     imageUrl: { type: String, default: "" },
     isActive: { type: Boolean, default: true },
     isBestseller: { type: Boolean, default: false },
+    jainAvailable: { type: Boolean, default: true },
+    spiceAdjustable: { type: Boolean, default: true },
     bestsellerEmoji: { type: String, default: "⭐" },
     isTodaySpecial: { type: Boolean, default: false },
     foodType: { type: String, enum: ["veg", "non-veg", "egg"], default: "veg" },

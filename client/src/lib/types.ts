@@ -152,6 +152,8 @@ export interface FoodItem {
   isBestseller: boolean;
   bestsellerEmoji?: string;
   isTodaySpecial?: boolean;
+  jainAvailable?: boolean;
+  spiceAdjustable?: boolean;
   foodType?: FoodType;
   rating?: number;
   prepTimeMinutes?: number;
@@ -176,6 +178,9 @@ export interface MenuFoodItem {
   isBestseller?: boolean;
   bestsellerEmoji?: string;
   isTodaySpecial?: boolean;
+  /** False when the dish can't be made without onion and garlic. */
+  jainAvailable?: boolean;
+  spiceAdjustable?: boolean;
   foodType?: FoodType;
   rating?: number;
   translations?: Translations;
@@ -478,6 +483,7 @@ export interface CartLine {
   quantity: number;
   modifiers?: SelectedModifier[];
   note?: string;
+  isJain?: boolean;
 }
 
 export interface ApiErrorBody {
@@ -843,6 +849,8 @@ export interface PosMenuItem {
   foodType?: FoodType;
   shortCode: string | null;
   isBestseller?: boolean;
+  jainAvailable?: boolean;
+  spiceAdjustable?: boolean;
   modifierGroups: ModifierGroup[];
   stationId: string | null;
   prices?: { takeaway: number | null; delivery: number | null; areas: Record<string, number> };

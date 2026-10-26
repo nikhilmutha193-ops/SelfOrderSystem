@@ -1,3 +1,4 @@
+import { Flame, Leaf, Utensils } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { tr, type Lang } from "../lib/i18n";
@@ -6,9 +7,15 @@ import { BestsellerTag, FoodTypeIcon, RatingChip } from "./FoodBadges";
 
 export interface DishAddPayload {
   quantity: number;
+  /** The spice choice (if any) followed by the guest's own comment. */
   note: string;
   modifiers: SelectedModifier[];
+  isJain: boolean;
 }
+
+type Spice = "less" | "spicy";
+
+const SPICE_LABEL: Record<Spice, string> = { less: "Less spicy", spicy: "Spicy" };
 
 export default function DishDialog({
   food,
@@ -26,6 +33,8 @@ export default function DishDialog({
 }) {
   const [qty, setQty] = useState(1);
   const [note, setNote] = useState("");
+  const [jain, setJain] = useState(false);
+  const [spice, setSpice] = useState<Spice | null>(null);
   // For single groups the value is one label; for multi it's a set of labels.
   const [single, setSingle] = useState<Record<string, string>>({});
   const [multi, setMulti] = useState<Record<string, Set<string>>>({});
@@ -37,6 +46,8 @@ export default function DishDialog({
     if (!food) return;
     setQty(1);
     setNote("");
+    setJain(false);
+    setSpice(null);
     const s: Record<string, string> = {};
     for (const g of food.modifierGroups ?? []) {
       if (g.type === "single" && g.required && g.options[0]) s[g.name] = g.options[0].label;
@@ -86,12 +97,19 @@ export default function DishDialog({
 
   function add() {
     if (!food || missingRequired) return;
-    onAdd(food, { quantity: qty, note: note.trim(), modifiers: selected });
+    const comment = [spice && food.spiceAdjustable !== false ? SPICE_LABEL[spice] : "", note.trim()]
+      .filter(Boolean)
+      .join(" · ");
+    onAdd(food, { quantity: qty, note: comment, modifiers: selected, isJain: jainAllowed && jain });
     onClose();
   }
 
   const name = tr(food, lang, "name");
   const description = tr(food, lang, "description");
+  // Some dishes can't be made without onion and garlic, so they can't be marked Jain.
+  const jainAllowed = food.jainAvailable !== false;
+  // Spice choices are hidden for dishes where they make no sense (desserts, drinks...).
+  const spiceAllowed = food.spiceAdjustable !== false;
 
   return (
     <div
@@ -188,8 +206,82 @@ export default function DishDialog({
 
           {canOrder && (
             <>
+              <div className="mt-4 flex flex-col gap-3">
+                <div>
+                  <p className="mb-1.5 text-sm font-semibold text-slate-800">Preparation</p>
+                  <div className="grid grid-cols-2 gap-2" role="group" aria-label="Regular or Jain">
+                    <button
+                      type="button"
+                      aria-pressed={!jain}
+                      onClick={() => setJain(false)}
+                      className={`flex min-h-[44px] items-center justify-center gap-2 rounded-xl border px-3 text-sm font-semibold ${
+                        !jain ? "border-orange-500 bg-orange-50 text-orange-800" : "border-slate-200 text-slate-600"
+                      }`}
+                    >
+                      <Utensils size={16} aria-hidden="true" />
+                      Regular
+                    </button>
+                    <button
+                      type="button"
+                      aria-pressed={jain}
+                      disabled={!jainAllowed}
+                      onClick={() => setJain(true)}
+                      className={`flex min-h-[44px] items-center justify-center gap-2 rounded-xl border px-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${
+                        jain ? "border-emerald-500 bg-emerald-50 text-emerald-800" : "border-slate-200 text-slate-600"
+                      }`}
+                    >
+                      <Leaf size={16} aria-hidden="true" />
+                      Jain
+                    </button>
+                  </div>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {jainAllowed
+                      ? "Jain means no onion and no garlic."
+                      : "This dish can't be made Jain (it needs onion or garlic)."}
+                  </p>
+                </div>
+                {spiceAllowed && (
+                  <div>
+                    <p className="mb-1.5 text-sm font-semibold text-slate-800">Spice</p>
+                    <div className="grid grid-cols-2 gap-2" role="group" aria-label="Spice level">
+                      {(["less", "spicy"] as const).map((level) => {
+                        const active = spice === level;
+                        return (
+                          <button
+                            key={level}
+                            type="button"
+                            aria-pressed={active}
+                            onClick={() => setSpice(active ? null : level)}
+                            className={`flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl border px-3 text-sm font-semibold ${
+                              active
+                                ? level === "spicy"
+                                  ? "border-red-500 bg-red-50 text-red-700"
+                                  : "border-amber-500 bg-amber-50 text-amber-800"
+                                : "border-slate-200 text-slate-600"
+                            }`}
+                          >
+                            <Flame
+                              size={16}
+                              aria-hidden="true"
+                              className={level === "spicy" ? "text-red-500" : "text-amber-500"}
+                            />
+                            {level === "spicy" && (
+                              <Flame size={16} aria-hidden="true" className="-ml-2.5 text-red-500" />
+                            )}
+                            {SPICE_LABEL[level]}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Tap again to clear. Leave both off for the usual spice.
+                    </p>
+                  </div>
+                )}
+              </div>
+
               <label className="mt-4 block text-sm font-semibold text-slate-800">
-                Note for the kitchen <span className="font-normal text-slate-400">(optional)</span>
+                Comment for the kitchen <span className="font-normal text-slate-400">(optional)</span>
                 <textarea
                   className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
                   rows={2}

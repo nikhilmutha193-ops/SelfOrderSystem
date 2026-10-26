@@ -21,6 +21,7 @@ export interface OfflineLine {
   unitPrice: number;
   modifiers: SelectedModifier[];
   note: string;
+  isJain?: boolean;
   packagingCharge: number;
   components?: { name: string; quantity: number }[];
 }
@@ -129,6 +130,7 @@ export function toOfflineLines(draft: DraftLine[]): OfflineLine[] {
     unitPrice: draftUnitPrice(line),
     modifiers: line.modifiers,
     note: line.note,
+    isJain: line.isJain || undefined,
     packagingCharge: line.item.packagingCharge ?? 0,
     components: line.item.components,
   }));
@@ -250,7 +252,7 @@ export function offlineDetail(sale: OfflineSale, billing: PosBilling | undefined
     unitPrice: line.unitPrice,
     quantity: line.quantity,
     total: round2(line.unitPrice * line.quantity),
-    isJain: false,
+    isJain: !!line.isJain,
     status: "pending",
     kotRound: 1,
     tokenNumber: null,
@@ -305,6 +307,7 @@ export function syncOfflineSales() {
             foodItemId: l.foodItemId,
             quantity: l.quantity,
             note: l.note || undefined,
+            isJain: l.isJain || undefined,
             modifiers: l.modifiers.map(({ groupName, label }) => ({ groupName, label })),
           })),
           ...(sale.payments.length > 0 && { payments: sale.payments }),

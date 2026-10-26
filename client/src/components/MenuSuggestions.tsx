@@ -1,4 +1,4 @@
-import { Flame, Plus, Sparkles } from "lucide-react";
+import { Flame, Plus, SlidersHorizontal, Sparkles } from "lucide-react";
 
 import { tr, type Lang } from "../lib/i18n";
 import type { MenuFoodItem } from "../lib/types";
@@ -65,11 +65,11 @@ export function PopularStrip({
                   <p className="text-sm font-bold text-slate-800">₹{food.price.toFixed(0)}</p>
                 </div>
               </button>
-              <div className="px-2.5 pt-1.5 pb-2.5">
+              <div className="flex gap-1.5 px-2.5 pt-1.5 pb-2.5">
                 <button
                   type="button"
                   onClick={() => onAdd(food)}
-                  className={`flex h-9 w-full items-center justify-center gap-1 rounded-xl text-xs font-bold tracking-wide ${
+                  className={`flex h-9 min-w-0 flex-1 items-center justify-center gap-1 rounded-xl text-xs font-bold tracking-wide ${
                     qty > 0 ? "bg-orange-600 text-white" : "border border-orange-600 text-orange-600 hover:bg-orange-50"
                   }`}
                 >
@@ -81,6 +81,15 @@ export function PopularStrip({
                       ADD
                     </>
                   )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onOpen(food)}
+                  aria-label={`Customize ${name}`}
+                  title="Customize"
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-600 hover:border-orange-300 hover:bg-orange-50 hover:text-orange-600"
+                >
+                  <SlidersHorizontal size={15} aria-hidden="true" />
                 </button>
               </div>
             </div>
@@ -95,11 +104,13 @@ export function PairingRow({
   foods,
   lang,
   onAdd,
+  onCustomize,
   title = "Goes well with your order",
 }: {
   foods: MenuFoodItem[];
   lang: Lang;
   onAdd: (food: MenuFoodItem) => void;
+  onCustomize?: (food: MenuFoodItem) => void;
   title?: string;
 }) {
   if (foods.length === 0) return null;
@@ -113,22 +124,37 @@ export function PairingRow({
         {foods.map((food) => {
           const name = tr(food, lang, "name");
           return (
-            <button
+            <div
               key={food._id}
-              type="button"
-              onClick={() => onAdd(food)}
-              aria-label={`Add ${name}`}
-              className="flex min-w-[11rem] shrink-0 items-center gap-2 rounded-xl border border-slate-200 bg-white p-1.5 pr-2 text-left shadow-sm active:scale-[0.98]"
+              className="flex min-w-[13rem] shrink-0 items-center gap-1 rounded-xl border border-slate-200 bg-white p-1.5 pr-2 shadow-sm"
             >
-              <Thumb food={food} name={name} size="sm" />
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-[13px] font-semibold text-slate-900">{name}</span>
-                <span className="block text-xs font-bold text-slate-700">₹{food.price.toFixed(0)}</span>
-              </span>
-              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-orange-600 text-white">
-                <Plus size={16} aria-hidden="true" />
-              </span>
-            </button>
+              <button
+                type="button"
+                onClick={() => onAdd(food)}
+                aria-label={`Add ${name}`}
+                className="flex min-w-0 flex-1 items-center gap-2 text-left active:scale-[0.98]"
+              >
+                <Thumb food={food} name={name} size="sm" />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[13px] font-semibold text-slate-900">{name}</span>
+                  <span className="block text-xs font-bold text-slate-700">₹{food.price.toFixed(0)}</span>
+                </span>
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-orange-600 text-white">
+                  <Plus size={16} aria-hidden="true" />
+                </span>
+              </button>
+              {onCustomize && (
+                <button
+                  type="button"
+                  onClick={() => onCustomize(food)}
+                  aria-label={`Customize ${name}`}
+                  title="Customize"
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-slate-600 hover:border-orange-300 hover:bg-orange-50 hover:text-orange-600"
+                >
+                  <SlidersHorizontal size={14} aria-hidden="true" />
+                </button>
+              )}
+            </div>
           );
         })}
       </div>

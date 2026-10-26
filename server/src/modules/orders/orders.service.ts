@@ -226,6 +226,8 @@ export async function addOrderItems(ctx: RequestContext, orderId: string, input:
   const foodById = new Map(foods.map((food) => [food._id.toString(), food]));
   const missing = input.items.find((line) => !foodById.has(line.foodItemId));
   if (missing) throw new HttpError(404, `Food item ${missing.foodItemId} is not available`);
+  const notJain = input.items.find((line) => line.isJain && foodById.get(line.foodItemId)?.jainAvailable === false);
+  if (notJain) throw new HttpError(400, `${foodById.get(notJain.foodItemId)!.name} can't be made Jain (no onion or garlic)`);
   const categories = await repo.findCategoryStations(foods.map((food) => food.categoryId));
   const categoryStation = new Map(categories.map((c) => [c._id.toString(), c.defaultStationId ?? null]));
   const categoryName = new Map(categories.map((c) => [c._id.toString(), c.name]));

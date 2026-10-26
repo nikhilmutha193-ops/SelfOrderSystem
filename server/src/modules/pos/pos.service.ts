@@ -43,6 +43,8 @@ export async function getMenu(ctx: RequestContext) {
         foodType: f.foodType,
         shortCode: f.shortCode ?? null,
         isBestseller: f.isBestseller,
+        jainAvailable: f.jainAvailable !== false,
+        spiceAdjustable: f.spiceAdjustable !== false,
         modifierGroups: f.modifierGroups ?? [],
         stationId: f.stationId ?? categoryStation.get(f.categoryId.toString()) ?? null,
         prices: {

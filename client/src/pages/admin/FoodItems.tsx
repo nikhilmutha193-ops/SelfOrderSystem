@@ -45,6 +45,8 @@ export default function FoodItems() {
   const [isBestseller, setIsBestseller] = useState(false);
   const [bestsellerEmoji, setBestsellerEmoji] = useState("⭐");
   const [isTodaySpecial, setIsTodaySpecial] = useState(false);
+  const [jainAvailable, setJainAvailable] = useState(true);
+  const [spiceAdjustable, setSpiceAdjustable] = useState(true);
   const [foodType, setFoodType] = useState<FoodType>("veg");
   const [rating, setRating] = useState<number>(0);
   const [prepTimeMinutes, setPrepTimeMinutes] = useState<number>(10);
@@ -100,6 +102,8 @@ export default function FoodItems() {
   const [query, setQuery] = useState("");
   const [filterCategory, setFilterCategory] = useState("");
   const [filterStatus, setFilterStatus] = useState<"" | "active" | "hidden">("");
+  const [filterJain, setFilterJain] = useState<"" | "yes" | "no">("");
+  const [filterSpice, setFilterSpice] = useState<"" | "yes" | "no">("");
   const [saving, setSaving] = useState(false);
 
   // ---- modifier group editing helpers ----
@@ -122,7 +126,7 @@ export default function FoodItems() {
   }
   function addOption(gi: number) {
     setModifierGroups((g) =>
-      g.map((grp, idx) => (idx === gi ? { ...grp, options: [...grp.options, { label: "", priceDelta: 0 }] } : grp))
+      g.map((grp, idx) => (idx === gi ? { ...grp, options: [...grp.options, { label: "", priceDelta: 0 }] } : grp)),
     );
   }
   function updateOption(gi: number, oi: number, patch: Partial<{ label: string; priceDelta: number }>) {
@@ -133,13 +137,13 @@ export default function FoodItems() {
               ...grp,
               options: grp.options.map((o, j) => (j === oi ? { ...o, ...patch } : o)),
             }
-          : grp
-      )
+          : grp,
+      ),
     );
   }
   function removeOption(gi: number, oi: number) {
     setModifierGroups((g) =>
-      g.map((grp, idx) => (idx === gi ? { ...grp, options: grp.options.filter((_, j) => j !== oi) } : grp))
+      g.map((grp, idx) => (idx === gi ? { ...grp, options: grp.options.filter((_, j) => j !== oi) } : grp)),
     );
   }
 
@@ -162,7 +166,7 @@ export default function FoodItems() {
 
   const subcategoriesForCategory = useMemo(
     () => subcategories.filter((s) => s.categoryId === categoryId),
-    [subcategories, categoryId]
+    [subcategories, categoryId],
   );
 
   useEffect(() => {
@@ -226,6 +230,8 @@ export default function FoodItems() {
       isBestseller,
       bestsellerEmoji,
       isTodaySpecial,
+      jainAvailable,
+      spiceAdjustable,
       foodType,
       rating,
       prepTimeMinutes,
@@ -258,6 +264,8 @@ export default function FoodItems() {
       setIsBestseller(false);
       setBestsellerEmoji("⭐");
       setIsTodaySpecial(false);
+      setJainAvailable(true);
+      setSpiceAdjustable(true);
       setFoodType("veg");
       setRating(0);
       setPrepTimeMinutes(10);
@@ -291,6 +299,8 @@ export default function FoodItems() {
     setIsBestseller(false);
     setBestsellerEmoji("⭐");
     setIsTodaySpecial(false);
+    setJainAvailable(true);
+    setSpiceAdjustable(true);
     setFoodType("veg");
     setRating(0);
     setPrepTimeMinutes(10);
@@ -333,6 +343,8 @@ export default function FoodItems() {
     setIsBestseller(food.isBestseller);
     setBestsellerEmoji(food.bestsellerEmoji || "⭐");
     setIsTodaySpecial(food.isTodaySpecial ?? false);
+    setJainAvailable(food.jainAvailable !== false);
+    setSpiceAdjustable(food.spiceAdjustable !== false);
     setFoodType(food.foodType || "veg");
     setRating(food.rating || 0);
     setPrepTimeMinutes(food.prepTimeMinutes ?? 10);
@@ -349,7 +361,7 @@ export default function FoodItems() {
       (food.modifierGroups ?? []).map((g) => ({
         ...g,
         options: g.options.map((o) => ({ ...o })),
-      }))
+      })),
     );
     setTr({
       kn: {
@@ -374,12 +386,34 @@ export default function FoodItems() {
     }
   }
 
+  // Whether guests and staff may mark this dish Jain (no onion, no garlic). On unless switched off.
+  async function toggleJain(food: FoodItem) {
+    try {
+      await api.put(`/food-items/${food._id}`, { jainAvailable: food.jainAvailable === false });
+      load();
+    } catch (err) {
+      setError(extractErrorMessage(err));
+    }
+  }
+
+  // Whether the Less spicy / Spicy choice is offered for this dish. On unless switched off.
+  async function toggleSpice(food: FoodItem) {
+    try {
+      await api.put(`/food-items/${food._id}`, { spiceAdjustable: food.spiceAdjustable === false });
+      load();
+    } catch (err) {
+      setError(extractErrorMessage(err));
+    }
+  }
+
   const q = query.trim().toLowerCase();
   const visibleFoods = foodItems.filter(
     (f) =>
       (!filterCategory || f.categoryId === filterCategory) &&
       (!filterStatus || (filterStatus === "active" ? f.isActive : !f.isActive)) &&
-      (!q || f.name.toLowerCase().includes(q) || (f.shortCode ?? "").toLowerCase().startsWith(q))
+      (!filterJain || (filterJain === "yes" ? f.jainAvailable !== false : f.jainAvailable === false)) &&
+      (!filterSpice || (filterSpice === "yes" ? f.spiceAdjustable !== false : f.spiceAdjustable === false)) &&
+      (!q || f.name.toLowerCase().includes(q) || (f.shortCode ?? "").toLowerCase().startsWith(q)),
   );
 
   function reviewText(food: FoodItem) {
@@ -392,7 +426,8 @@ export default function FoodItems() {
       {
         target: "food-add",
         title: "Add a dish",
-        description: "Opens a form for the dish's name, price, photo, kitchen routing, customization options and translations.",
+        description:
+          "Opens a form for the dish's name, price, photo, kitchen routing, customization options and translations.",
       },
       {
         target: "food-search",
@@ -415,7 +450,7 @@ export default function FoodItems() {
         description: "Edit a dish or hide it from the guest menu. Bestseller and Today's Special badges show here too.",
       },
     ],
-    []
+    [],
   );
   usePageTour(tourSteps);
 
@@ -466,6 +501,24 @@ export default function FoodItems() {
             <option value="active">On the menu</option>
             <option value="hidden">Hidden</option>
           </Select>
+          <Select
+            aria-label="Filter by Jain"
+            value={filterJain}
+            onChange={(e) => setFilterJain(e.target.value as "" | "yes" | "no")}
+          >
+            <option value="">Jain: any</option>
+            <option value="yes">Can be made Jain</option>
+            <option value="no">Cannot be made Jain</option>
+          </Select>
+          <Select
+            aria-label="Filter by spice"
+            value={filterSpice}
+            onChange={(e) => setFilterSpice(e.target.value as "" | "yes" | "no")}
+          >
+            <option value="">Spice: any</option>
+            <option value="yes">Spice can be changed</option>
+            <option value="no">Spice not offered</option>
+          </Select>
         </div>
         <p className="mb-3 text-xs font-medium text-slate-500">
           Showing {visibleFoods.length} of {foodItems.length} dishes
@@ -506,6 +559,24 @@ export default function FoodItems() {
                       </span>
                       {!food.isActive && <Badge tone="gray">Hidden</Badge>}
                       {food.shortCode && <Badge tone="violet">{food.shortCode}</Badge>}
+                      <button
+                        type="button"
+                        onClick={() => toggleJain(food)}
+                        aria-label={`Jain for ${food.name}: ${food.jainAvailable === false ? "not available" : "available"}. Tap to change`}
+                      >
+                        <Badge tone={food.jainAvailable === false ? "gray" : "green"}>
+                          {food.jainAvailable === false ? "No Jain" : "Jain OK"}
+                        </Badge>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => toggleSpice(food)}
+                        aria-label={`Spice for ${food.name}: ${food.spiceAdjustable === false ? "not offered" : "offered"}. Tap to change`}
+                      >
+                        <Badge tone={food.spiceAdjustable === false ? "gray" : "red"}>
+                          {food.spiceAdjustable === false ? "No spice" : "Spice OK"}
+                        </Badge>
+                      </button>
                     </div>
                   </div>
                   <div className="flex shrink-0 flex-col gap-1">
@@ -531,6 +602,8 @@ export default function FoodItems() {
                       <th>Prep</th>
                       <th>Rating</th>
                       <th>Status</th>
+                      <th>Jain</th>
+                      <th>Spice</th>
                       <th className="text-right">Actions</th>
                     </tr>
                   </thead>
@@ -572,6 +645,30 @@ export default function FoodItems() {
                             </Badge>
                             {food.isBestseller && <Badge tone="amber">Bestseller</Badge>}
                             {food.isTodaySpecial && <Badge tone="orange">Today's Special</Badge>}
+                          </div>
+                        </td>
+                        <td>
+                          <div className="flex items-center gap-2">
+                            <Switch
+                              id={`jain-${food._id}`}
+                              checked={food.jainAvailable !== false}
+                              onChange={() => toggleJain(food)}
+                            />
+                            <label htmlFor={`jain-${food._id}`} className="text-xs text-slate-500">
+                              {food.jainAvailable === false ? "No" : "Yes"}
+                            </label>
+                          </div>
+                        </td>
+                        <td>
+                          <div className="flex items-center gap-2">
+                            <Switch
+                              id={`spice-${food._id}`}
+                              checked={food.spiceAdjustable !== false}
+                              onChange={() => toggleSpice(food)}
+                            />
+                            <label htmlFor={`spice-${food._id}`} className="text-xs text-slate-500">
+                              {food.spiceAdjustable === false ? "No" : "Yes"}
+                            </label>
                           </div>
                         </td>
                         <td className="text-right whitespace-nowrap">
@@ -759,7 +856,7 @@ export default function FoodItems() {
                       value={part.foodItemId}
                       onChange={(e) =>
                         setComboItems((items) =>
-                          items.map((c, i) => (i === index ? { ...c, foodItemId: e.target.value } : c))
+                          items.map((c, i) => (i === index ? { ...c, foodItemId: e.target.value } : c)),
                         )
                       }
                     >
@@ -769,7 +866,7 @@ export default function FoodItems() {
                           (f) =>
                             f._id !== editing?._id &&
                             (f.comboItems ?? []).length === 0 &&
-                            (f._id === part.foodItemId || !comboItems.some((c) => c.foodItemId === f._id))
+                            (f._id === part.foodItemId || !comboItems.some((c) => c.foodItemId === f._id)),
                         )
                         .map((f) => (
                           <option key={f._id} value={f._id}>
@@ -787,7 +884,7 @@ export default function FoodItems() {
                       value={part.quantity}
                       onChange={(e) =>
                         setComboItems((items) =>
-                          items.map((c, i) => (i === index ? { ...c, quantity: Number(e.target.value) || 1 } : c))
+                          items.map((c, i) => (i === index ? { ...c, quantity: Number(e.target.value) || 1 } : c)),
                         )
                       }
                     />
@@ -938,6 +1035,20 @@ export default function FoodItems() {
               onChange={setIsTodaySpecial}
               label="Today's Special"
               description="Features this dish in the Today's Specials section on the landing page."
+            />
+            <Switch
+              id="food-jain-available"
+              checked={jainAvailable}
+              onChange={setJainAvailable}
+              label="Can be made Jain"
+              description="Guests and staff can pick Jain (no onion, no garlic) for this dish. Turn it off for dishes that can't be made without them."
+            />
+            <Switch
+              id="food-spice-adjustable"
+              checked={spiceAdjustable}
+              onChange={setSpiceAdjustable}
+              label="Spice can be changed"
+              description="Shows the Less spicy / Spicy quick choice for this dish. Turn it off for desserts, drinks and anything where spice makes no sense."
             />
           </section>
 

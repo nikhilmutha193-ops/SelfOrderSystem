@@ -531,6 +531,7 @@ export default function Pos() {
               quantity={quantity}
               onQuantity={setQuantity}
               onPick={pick}
+              onCustomize={setDishFor}
             />
           )}
         </section>
@@ -652,7 +653,7 @@ export default function Pos() {
         onClose={() => setDishFor(null)}
         onAdd={(food, payload) => {
           const item = menu.items.find((i) => i._id === food._id);
-          if (item) cart.addLine(item, payload.quantity, payload.modifiers, payload.note.trim());
+          if (item) cart.addLine(item, payload.quantity, payload.modifiers, payload.note.trim(), payload.isJain);
           setDishFor(null);
         }}
       />

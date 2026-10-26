@@ -40,7 +40,7 @@ export class PosRepository {
   activeFoodItems() {
     return FoodItem.find(this.scoped<IFoodItem>({ isActive: true }))
       .select(
-        "name price categoryId subcategoryId foodType shortCode modifierGroups stationId isBestseller priceRules packagingCharge comboItems"
+        "name price categoryId subcategoryId foodType shortCode modifierGroups stationId isBestseller jainAvailable spiceAdjustable priceRules packagingCharge comboItems"
       )
       .sort({ name: 1 })
       .lean();

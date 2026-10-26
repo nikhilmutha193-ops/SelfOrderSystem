@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Flame } from "lucide-react";
+import { Flame, SlidersHorizontal } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -190,7 +190,7 @@ export default function Menu() {
   const cartCount = useMemo(() => cart.reduce((sum, l) => sum + l.quantity, 0), [cart]);
 
   // The "plain" line for a dish: no modifiers and no note. Customized picks live on their own lines.
-  const isPlain = (l: CartLine) => (!l.modifiers || l.modifiers.length === 0) && !l.note;
+  const isPlain = (l: CartLine) => (!l.modifiers || l.modifiers.length === 0) && !l.note && !l.isJain;
 
   // Cart lines keep the English name; show them in the guest's language when the dish has a translation.
   function lineName(line: CartLine) {
@@ -246,6 +246,7 @@ export default function Menu() {
         quantity: payload.quantity,
         modifiers: payload.modifiers,
         note: payload.note || undefined,
+        isJain: payload.isJain || undefined,
       },
     ]);
   }
@@ -267,6 +268,7 @@ export default function Menu() {
         foodItemId: l.foodItemId,
         quantity: l.quantity,
         note: l.note,
+        isJain: l.isJain || undefined,
         modifiers: l.modifiers?.map((m) => ({
           groupName: m.groupName,
           label: m.label,
@@ -867,9 +869,11 @@ export default function Menu() {
                       <span className="truncate">
                         {lineName(line)} <span className="text-slate-400">x {line.quantity}</span>
                       </span>
-                      {(line.modifiers?.length || line.note) && (
+                      {(line.modifiers?.length || line.note || line.isJain) && (
                         <span className="block truncate text-xs text-slate-400">
-                          {[...(line.modifiers?.map((m) => m.label) ?? []), line.note].filter(Boolean).join(", ")}
+                          {[line.isJain ? "Jain" : "", ...(line.modifiers?.map((m) => m.label) ?? []), line.note]
+                            .filter(Boolean)
+                            .join(", ")}
                         </span>
                       )}
                     </span>
@@ -889,7 +893,7 @@ export default function Menu() {
             )}
             {showCart && pairingFoods.length > 0 && (
               <div className="mb-3">
-                <PairingRow foods={pairingFoods} lang={lang} onAdd={quickAddOrOpen} />
+                <PairingRow foods={pairingFoods} lang={lang} onAdd={quickAddOrOpen} onCustomize={setDetailFood} />
               </div>
             )}
             <div className="flex items-center gap-3">
@@ -948,9 +952,11 @@ export default function Menu() {
                     <span className="block truncate font-medium">
                       {lineName(line)} <span className="font-normal text-slate-400">x {line.quantity}</span>
                     </span>
-                    {(line.modifiers?.length || line.note) && (
+                    {(line.modifiers?.length || line.note || line.isJain) && (
                       <span className="block truncate text-xs text-slate-400">
-                        {[...(line.modifiers?.map((m) => m.label) ?? []), line.note].filter(Boolean).join(", ")}
+                        {[line.isJain ? "Jain" : "", ...(line.modifiers?.map((m) => m.label) ?? []), line.note]
+                          .filter(Boolean)
+                          .join(", ")}
                       </span>
                     )}
                   </span>
@@ -976,6 +982,7 @@ export default function Menu() {
                   foods={pairingFoods}
                   lang={lang}
                   onAdd={quickAddOrOpen}
+                  onCustomize={setDetailFood}
                   title="Add something to go with it?"
                 />
               </div>
@@ -1072,7 +1079,7 @@ function FoodCard({
         <span className="mt-1 inline-block text-[11px] font-semibold text-orange-600">{ui(lang, "moreDetails")}</span>
       </button>
 
-      <div className={`w-24 shrink-0 ${canOrder ? "" : "hidden"}`}>
+      <div className={`flex w-24 shrink-0 flex-col gap-1 ${canOrder ? "" : "hidden"}`}>
         {qty === 0 || hasOptions ? (
           <button
             onClick={() => onAdd(food)}
@@ -1100,6 +1107,15 @@ function FoodCard({
             </button>
           </div>
         )}
+        <button
+          type="button"
+          onClick={() => onOpen(food)}
+          aria-label={`Customize ${name}`}
+          className="flex min-h-[32px] w-full items-center justify-center gap-1 rounded-lg border border-slate-200 bg-slate-50 text-[11px] font-semibold text-slate-600 hover:border-orange-300 hover:bg-orange-50 hover:text-orange-600"
+        >
+          <SlidersHorizontal size={13} aria-hidden="true" />
+          {ui(lang, "customizeBtn")}
+        </button>
       </div>
     </div>
   );

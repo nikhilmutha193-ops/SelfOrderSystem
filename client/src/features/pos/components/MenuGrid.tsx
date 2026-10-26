@@ -1,3 +1,5 @@
+import { SlidersHorizontal } from "lucide-react";
+
 import { FoodTypeIcon } from "../../../components/FoodBadges";
 import type { PosMenuItem } from "../../../lib/types";
 
@@ -10,6 +12,7 @@ export function MenuGrid({
   quantity,
   onQuantity,
   onPick,
+  onCustomize,
 }: {
   categories: { _id: string; name: string }[];
   category: string;
@@ -19,6 +22,8 @@ export function MenuGrid({
   quantity: string;
   onQuantity: (value: string) => void;
   onPick: (item: PosMenuItem) => void;
+  /** Opens the dish dialog (Regular or Jain, spice, comment) for any dish, not only ones with options. */
+  onCustomize?: (item: PosMenuItem) => void;
 }) {
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -50,30 +55,47 @@ export function MenuGrid({
       </div>
       <div className="flex min-h-0 flex-1">
         <div className="min-h-0 flex-1 overflow-y-auto p-3">
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(128px,1fr))] gap-2">
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-2">
             {items.map((item) => (
-              <button
+              <div
                 key={item._id}
-                type="button"
-                data-item={item.name}
-                onClick={() => onPick(item)}
-                className="flex min-h-[84px] flex-col justify-between rounded-lg border border-slate-200 bg-white p-2.5 text-left shadow-sm transition hover:border-orange-400 active:scale-[0.97]"
+                className="flex min-h-[84px] overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm transition hover:border-orange-400"
               >
-                <span className="flex items-start gap-1.5">
-                  {item.foodType && <FoodTypeIcon type={item.foodType} />}
-                  <span className="line-clamp-2 text-sm font-medium leading-tight text-slate-800">{item.name}</span>
-                </span>
-                <span className="mt-1 flex items-end justify-between text-xs">
-                  <span className="font-semibold tabular-nums text-slate-900">₹{item.price.toFixed(0)}</span>
-                  {item.shortCode && <span className="font-mono text-slate-400">{item.shortCode}</span>}
-                </span>
-                {item.modifierGroups.length > 0 && <span className="text-[10px] text-orange-600">Options</span>}
-                {(item.components ?? []).length > 0 && (
-                  <span className="truncate text-[10px] text-slate-500">
-                    Combo: {item.components!.map((p) => p.name).join(", ")}
+                <button
+                  type="button"
+                  data-item={item.name}
+                  onClick={() => onPick(item)}
+                  className="flex min-w-0 flex-1 flex-col justify-between p-2.5 text-left active:bg-orange-50"
+                >
+                  <span className="flex items-start gap-1.5">
+                    {item.foodType && <FoodTypeIcon type={item.foodType} />}
+                    <span className="line-clamp-2 min-w-0 text-sm leading-tight font-medium break-words text-slate-800">
+                      {item.name}
+                    </span>
                   </span>
+                  <span className="mt-1 flex items-end justify-between gap-1 text-xs">
+                    <span className="font-semibold text-slate-900 tabular-nums">₹{item.price.toFixed(0)}</span>
+                    {item.shortCode && <span className="font-mono text-slate-400">{item.shortCode}</span>}
+                  </span>
+                  {item.modifierGroups.length > 0 && <span className="text-[10px] text-orange-600">Options</span>}
+                  {(item.components ?? []).length > 0 && (
+                    <span className="truncate text-[10px] text-slate-500">
+                      Combo: {item.components!.map((p) => p.name).join(", ")}
+                    </span>
+                  )}
+                </button>
+                {onCustomize && (
+                  <button
+                    type="button"
+                    aria-label={`Customize ${item.name}`}
+                    title="Customize: Regular or Jain, spice, comment"
+                    onClick={() => onCustomize(item)}
+                    className="flex w-9 shrink-0 items-center justify-center border-l border-slate-100 bg-slate-50 text-slate-500 hover:bg-orange-50 hover:text-orange-600 active:bg-orange-100"
+                  >
+                    <SlidersHorizontal size={17} aria-hidden="true" />
+                  </button>
                 )}
-              </button>
+              </div>
             ))}
           </div>
           {items.length === 0 && (
