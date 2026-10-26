@@ -12,16 +12,19 @@ import {
   ReceiptText,
   RotateCcw,
   Send,
+  SlidersHorizontal,
   UtensilsCrossed,
   Wallet,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
+import DishDialog, { type DishAddPayload } from "../../../components/DishDialog";
 import { BestsellerTag, FoodTypeIcon, RatingChip } from "../../../components/FoodBadges";
 import { useAdmin } from "../../../lib/adminAuth";
 import { renderPrepMessage } from "../../../lib/prepTime";
-import { TENDER_LABELS, type MenuCategory, type MenuFoodItem } from "../../../lib/types";
+import { newId } from "../../../lib/id";
+import { TENDER_LABELS, type MenuCategory, type MenuFoodItem, type SelectedModifier } from "../../../lib/types";
 import { extractErrorMessage } from "../../../shared/api/client";
 import { confirmDialog } from "../../../shared/ui/confirm";
 import ReasonDialog from "../../../shared/ui/ReasonDialog";
@@ -85,6 +88,9 @@ export default function OrderDetail({
   const navigate = useNavigate();
   const [activeCat, setActiveCat] = useState("all");
   const [cart, setCart] = useState<Record<string, number>>({});
+  // Dishes customized with Regular or Jain, spice, a comment or options: each is its own line.
+  const [custom, setCustom] = useState<CustomLine[]>([]);
+  const [customizing, setCustomizing] = useState<MenuFoodItem | null>(null);
   const [settleOpen, setSettleOpen] = useState(false);
   const [editCustomerOpen, setEditCustomerOpen] = useState(false);
   const [complimentaryItem, setComplimentaryItem] = useState<{
@@ -130,8 +136,10 @@ export default function OrderDetail({
       ? Array.from(foodById.values())
       : (menu.find((c) => c._id === activeCat)?.subcategories.flatMap((s) => s.foodItems) ?? []);
 
-  const cartCount = Object.values(cart).reduce((sum, q) => sum + q, 0);
-  const cartTotal = Object.entries(cart).reduce((sum, [id, q]) => sum + (foodById.get(id)?.price ?? 0) * q, 0);
+  const cartCount = Object.values(cart).reduce((sum, q) => sum + q, 0) + custom.reduce((sum, l) => sum + l.quantity, 0);
+  const cartTotal =
+    Object.entries(cart).reduce((sum, [id, q]) => sum + (foodById.get(id)?.price ?? 0) * q, 0) +
+    custom.reduce((sum, l) => sum + (l.food.price + l.modifiers.reduce((s, m) => s + m.priceDelta, 0)) * l.quantity, 0);
 
   // If a selected category disappears (menu edited), fall back to the All tab.
   useEffect(() => {
@@ -157,12 +165,19 @@ export default function OrderDetail({
     try {
       await addItems.mutateAsync({
         orderId,
-        items: Object.entries(cart).map(([foodItemId, quantity]) => ({
-          foodItemId,
-          quantity,
-        })),
+        items: [
+          ...Object.entries(cart).map(([foodItemId, quantity]) => ({ foodItemId, quantity })),
+          ...custom.map((l) => ({
+            foodItemId: l.food._id,
+            quantity: l.quantity,
+            note: l.note || undefined,
+            isJain: l.isJain || undefined,
+            modifiers: l.modifiers.map(({ groupName, label }) => ({ groupName, label })),
+          })),
+        ],
       });
       setCart({});
+      setCustom([]);
     } catch (err) {
       setActionError(extractErrorMessage(err));
     }
@@ -336,7 +351,7 @@ export default function OrderDetail({
         map.set(r, entry);
         return map;
       }, new Map<number, { round: number; token: number | null; count: number }>())
-      .values()
+      .values(),
   ).sort((a, b) => b.round - a.round);
 
   const statusBadge = orderStatusBadge(order);
@@ -448,9 +463,35 @@ export default function OrderDetail({
                   qty={cart[f._id] ?? 0}
                   onAdd={() => incCart(f._id)}
                   onRemove={() => decCart(f._id)}
+                  onCustomize={() => setCustomizing(f)}
                 />
               ))}
             </div>
+          )}
+          {custom.length > 0 && (
+            <ul className="flex flex-col gap-1.5 rounded-xl border border-orange-200 bg-orange-50/60 p-3 text-sm">
+              {custom.map((l) => (
+                <li key={l.id} className="flex items-start justify-between gap-2">
+                  <span className="min-w-0 text-slate-800">
+                    <span className="font-semibold">{l.quantity}×</span> {l.food.name}
+                    {(l.isJain || l.modifiers.length > 0 || l.note) && (
+                      <span className="block text-xs text-slate-500">
+                        {[l.isJain ? "Jain" : "", ...l.modifiers.map((m) => m.label), l.note]
+                          .filter(Boolean)
+                          .join(", ")}
+                      </span>
+                    )}
+                  </span>
+                  <button
+                    type="button"
+                    className="shrink-0 text-xs font-medium text-red-600 hover:underline"
+                    onClick={() => setCustom((current) => current.filter((x) => x.id !== l.id))}
+                  >
+                    Remove
+                  </button>
+                </li>
+              ))}
+            </ul>
           )}
           {cartCount > 0 && (
             <div className="sticky bottom-20 z-10 flex items-center justify-between gap-3 rounded-xl bg-slate-900 px-4 py-3 text-white shadow-pop md:bottom-4">
@@ -464,6 +505,24 @@ export default function OrderDetail({
           )}
         </div>
       )}
+      <DishDialog
+        food={customizing}
+        onClose={() => setCustomizing(null)}
+        onAdd={(food, payload: DishAddPayload) => {
+          setCustom((current) => [
+            ...current,
+            {
+              id: newId(),
+              food,
+              quantity: payload.quantity,
+              note: payload.note,
+              isJain: payload.isJain,
+              modifiers: payload.modifiers,
+            },
+          ]);
+          setCustomizing(null);
+        }}
+      />
     </Card>
   );
 
@@ -752,7 +811,12 @@ export default function OrderDetail({
               <p className="text-sm text-slate-500">{facts.join(" · ")}</p>
             </div>
             {order.status === "open" && (
-              <IconButton size="sm" icon={Pencil} label="Edit guest details" onClick={() => setEditCustomerOpen(true)} />
+              <IconButton
+                size="sm"
+                icon={Pencil}
+                label="Edit guest details"
+                onClick={() => setEditCustomerOpen(true)}
+              />
             )}
           </div>
           <Badge tone={statusBadge.tone} dot>
@@ -847,58 +911,70 @@ export default function OrderDetail({
   );
 }
 
+interface CustomLine {
+  id: string;
+  food: MenuFoodItem;
+  quantity: number;
+  note: string;
+  isJain: boolean;
+  modifiers: SelectedModifier[];
+}
+
 function MenuPickCard({
   food,
   qty,
   onAdd,
   onRemove,
+  onCustomize,
 }: {
   food: MenuFoodItem;
   qty: number;
   onAdd: () => void;
   onRemove: () => void;
+  onCustomize: () => void;
 }) {
   return (
     <div
-      className={`flex items-center gap-3 rounded-xl border bg-white p-3 transition-colors ${
+      className={`flex flex-col gap-3 rounded-xl border bg-white p-3 transition-colors ${
         qty > 0 ? "border-orange-300 ring-1 ring-orange-200" : "border-slate-200"
       }`}
     >
-      {food.imageUrl ? (
-        <img
-          src={food.imageUrl}
-          alt={food.name}
-          loading="lazy"
-          className="h-14 w-14 shrink-0 rounded-lg object-cover"
-        />
-      ) : (
-        <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-orange-100 to-amber-50 text-lg font-bold text-orange-400">
-          {food.name.charAt(0).toUpperCase()}
+      <div className="flex items-start gap-3">
+        {food.imageUrl ? (
+          <img
+            src={food.imageUrl}
+            alt={food.name}
+            loading="lazy"
+            className="h-14 w-14 shrink-0 rounded-lg object-cover"
+          />
+        ) : (
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-orange-100 to-amber-50 text-lg font-bold text-orange-400">
+            {food.name.charAt(0).toUpperCase()}
+          </div>
+        )}
+        <div className="min-w-0 flex-1">
+          <p className="text-sm leading-snug font-semibold break-words text-slate-900">{food.name}</p>
+          <div className="mt-1 flex flex-wrap items-center gap-1.5">
+            <FoodTypeIcon type={food.foodType} />
+            <RatingChip rating={food.rating} />
+            {food.isBestseller && <BestsellerTag emoji={food.bestsellerEmoji} />}
+          </div>
+          <p className="mt-1 text-sm font-bold text-slate-800 tabular-nums">₹{food.price.toFixed(2)}</p>
         </div>
-      )}
-
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-1.5">
-          <FoodTypeIcon type={food.foodType} />
-          <RatingChip rating={food.rating} />
-          {food.isBestseller && <BestsellerTag emoji={food.bestsellerEmoji} />}
-        </div>
-        <p className="mt-1 truncate text-sm font-semibold text-slate-900">{food.name}</p>
-        <p className="text-sm font-bold text-slate-800 tabular-nums">₹{food.price.toFixed(2)}</p>
       </div>
 
-      <div className="w-24 shrink-0">
+      <div className="flex gap-2">
         {qty === 0 ? (
           <button
             type="button"
             onClick={onAdd}
-            className="flex h-11 w-full items-center justify-center gap-1 rounded-lg border border-orange-600 bg-white text-sm font-bold tracking-wide text-orange-700 hover:bg-orange-50"
+            className="flex h-11 min-w-0 flex-1 items-center justify-center gap-1 rounded-lg border border-orange-600 bg-white text-sm font-bold tracking-wide text-orange-700 hover:bg-orange-50"
           >
             <Plus size={16} aria-hidden="true" />
             ADD
           </button>
         ) : (
-          <div className="flex h-11 w-full items-center justify-between rounded-lg bg-orange-600 px-0.5 text-white">
+          <div className="flex h-11 min-w-0 flex-1 items-center justify-between rounded-lg bg-orange-600 px-0.5 text-white">
             <button
               type="button"
               onClick={onRemove}
@@ -918,6 +994,16 @@ function MenuPickCard({
             </button>
           </div>
         )}
+        <button
+          type="button"
+          onClick={onCustomize}
+          aria-label={`Customize ${food.name}`}
+          title="Customize: Regular or Jain, spice, comment"
+          className="flex h-11 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-600 hover:border-orange-300 hover:bg-orange-50 hover:text-orange-700"
+        >
+          <SlidersHorizontal size={16} aria-hidden="true" />
+          <span className="hidden sm:inline">Customize</span>
+        </button>
       </div>
     </div>
   );
