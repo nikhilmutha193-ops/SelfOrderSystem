@@ -78,6 +78,8 @@ export interface ChatModeration {
 export interface Restaurant {
   siteTitle?: string;
   faviconUrl?: string;
+  /** "#rrggbb", or "" for the built-in terracotta. */
+  brandColor?: string;
   _id: string;
   name: string;
   key?: string;
@@ -276,11 +278,15 @@ export interface ManualDiscount {
   reason: string;
 }
 
+/** "after": guests eat, then pay the bill. "upfront": each dine-in order is paid before it goes to the kitchen. */
+export type DineInPayment = "after" | "upfront";
+
 export interface BillingSettings {
   serviceChargePercent: number;
   maxStaffDiscountPercent: number;
   upiVpa: string;
   upiPayeeName: string;
+  dineInPayment?: DineInPayment;
 }
 
 export type DeliveryProvider = "Swiggy" | "Zomato" | "Uber-Eats" | "Other";
@@ -304,7 +310,11 @@ export interface Order {
   paymentMethod: PaymentMethod;
   couponCode?: string;
   discountAmount: number;
-  source?: "guest" | "counter" | "swiggy" | "zomato";
+  source?: "guest" | "counter" | "swiggy" | "zomato" | "kiosk";
+  /** Set on kiosk orders: payAtCounter means the guest chose to pay cash at the counter. */
+  kiosk?: { deviceId: string; payAtCounter: boolean } | null;
+  /** The pickup number a kiosk order was given; its KOT uses it as the token. */
+  pickupNumber?: number | null;
   externalOrderId?: string;
   estimatedReadyAt?: string | null;
   priority?: OrderPriority;
@@ -434,6 +444,9 @@ export interface OrderDetailResponse {
   prepMessageTemplate?: string;
   prepBufferMinutes?: number;
   guestOrderMode?: GuestOrderMode;
+  dineInPayment?: DineInPayment;
+  /** The guest can pay this order online (Razorpay is set up and the order is unpaid). */
+  onlinePayment?: boolean;
   payment?: { upiVpa: string; upiPayeeName: string };
 }
 
@@ -865,6 +878,7 @@ export interface PosBilling {
   taxRates: { name: string; percent: number }[];
   serviceChargePercent: number;
   footerNote: string;
+  dineInPayment?: DineInPayment;
 }
 
 export interface PosMenu {
@@ -885,6 +899,7 @@ export interface PosOrderSummary {
   total: number;
   unsent: number;
   ready: number;
+  source?: Order["source"];
 }
 
 export interface PosTable {
@@ -1299,4 +1314,83 @@ export interface MenuEngineeringReport {
 export interface MenuRecommendations {
   popular: string[];
   pairs: Record<string, string[]>;
+}
+
+export interface PaymentGatewaySettings {
+  provider: "razorpay";
+  enabled: boolean;
+  keyId: string;
+  hasKeySecret: boolean;
+  hasWebhookSecret: boolean;
+  secretsUnreadable: boolean;
+}
+
+export interface PaymentGatewaySettingsInput {
+  enabled?: boolean;
+  keyId?: string;
+  keySecret?: string;
+  webhookSecret?: string;
+}
+
+/** What Razorpay Checkout needs to open for one order (amount in paise). */
+export interface OnlineCheckout {
+  provider: "razorpay";
+  keyId: string;
+  gatewayOrderId: string;
+  amount: number;
+  currency: "INR";
+  name: string;
+  description: string;
+  prefill: { name: string; contact: string };
+}
+
+export type PaymentAttemptStatus = "created" | "processing" | "paid" | "mismatch" | "duplicate";
+
+export interface PaymentAttempt {
+  _id: string;
+  orderId: string;
+  gatewayOrderId: string;
+  amount: number;
+  status: PaymentAttemptStatus;
+  paymentId?: string;
+  method?: string;
+  note?: string;
+  updatedAt: string;
+}
+
+export interface KioskSettings {
+  eatIn: boolean;
+  takeaway: boolean;
+  payAtCounter: boolean;
+  idleSeconds: number;
+}
+
+export interface KioskDevice {
+  _id: string;
+  name: string;
+  paired: boolean;
+  online: boolean;
+  lastSeenAt: string | null;
+  pairingExpiresAt: string | null;
+}
+
+export interface KioskPairingCode {
+  deviceId: string;
+  name: string;
+  pairingCode: string;
+  expiresAt: string;
+}
+
+export interface KioskConfig {
+  device: { name: string };
+  restaurant: { name: string; logoUrl: string; heroImages: string[] };
+  settings: KioskSettings;
+  onlinePayment: boolean;
+}
+
+export interface PickupBoard {
+  restaurantName: string;
+  logoUrl: string;
+  preparing: number[];
+  ready: number[];
 }

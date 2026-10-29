@@ -19,6 +19,7 @@ import LandingContent from "../models/LandingContent";
 import LoyaltyEntry from "../models/LoyaltyEntry";
 import Order from "../models/Order";
 import OrderItem from "../models/OrderItem";
+import PaymentAttempt from "../models/PaymentAttempt";
 import Printer from "../models/Printer";
 import PromoBanner from "../models/PromoBanner";
 import Purchase from "../models/Purchase";
@@ -75,6 +76,8 @@ const TENANT_MODELS: { key: string; model: Model<any> }[] = [
   { key: "promoBanners", model: PromoBanner },
   { key: "smsTemplates", model: SmsTemplate },
   { key: "smsCampaigns", model: SmsCampaign },
+  { key: "paymentAttempts", model: PaymentAttempt },
+  // PaymentGateway is left out on purpose: backups never carry payment gateway secrets.
 ];
 
 async function buildBackupPayload(restaurantId: Types.ObjectId | string) {

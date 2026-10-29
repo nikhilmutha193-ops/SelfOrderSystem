@@ -33,6 +33,7 @@ export const MODULES = {
   qrCodes: "QR Codes",
   banners: "Offer Banners",
   gst: "GST & Tax",
+  kiosks: "Kiosks & Pickup Board",
 } as const;
 
 /**

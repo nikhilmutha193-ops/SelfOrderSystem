@@ -6,6 +6,7 @@ import { IOrder } from "../../models/Order";
 import { writeAudit } from "../../utils/audit";
 import { getBusinessDayRangeForDate, getBusinessDayStart } from "../../utils/businessDay";
 import { computeDiscountAmount, findValidCoupon } from "../../utils/coupon";
+import { paysUpfront, restaurantPaysUpfront } from "../../utils/dineInPayment";
 import { HttpError } from "../../utils/httpError";
 import { computeInvoiceTotals } from "../../utils/invoice";
 import { signToken } from "../../utils/jwt";
@@ -23,6 +24,7 @@ import {
   StartTakeawayInput,
   UpdateOrderCustomerInput,
 } from "./orders.schema";
+import { onlinePaymentAvailable } from "../payments/gateway";
 import { basePriceFor, packagingFor } from "../pricing/pricing";
 
 export interface KitchenSummary {
@@ -195,7 +197,15 @@ export async function startCounterOrder(ctx: RequestContext, input: StartCounter
 
   const table = input.tableId ? await repo.findTable(input.tableId) : null;
   if (input.tableId && !table) throw new HttpError(404, "Table not found");
-  if (table && !table.isGuest && table.status !== "available" && !input.allowOccupied) {
+  const seated = !!table && !table.isGuest && table.status !== "available";
+  // Guests who pay when ordering stay seated after paying; their next round is a new order.
+  const nextRound =
+    table !== null &&
+    seated &&
+    !input.allowOccupied &&
+    (await restaurantPaysUpfront(ctx.restaurantId)) &&
+    !(await repo.hasUnpaidOrders(table._id));
+  if (seated && !input.allowOccupied && !nextRound) {
     throw new HttpError(409, "This table is already occupied");
   }
 
@@ -210,7 +220,7 @@ export async function startCounterOrder(ctx: RequestContext, input: StartCounter
     status: "open",
   });
 
-  if (table && !table.isGuest) await repo.occupyTable(table._id);
+  if (table && !table.isGuest && !nextRound) await repo.occupyTable(table._id);
 
   return announceCreated(ctx, order, { customerBirthday: input.customerBirthday });
 }
@@ -379,6 +389,9 @@ async function getOrderWithTotals(ctx: RequestContext, orderId: string, sortItem
     prepMessageTemplate: restaurant?.prepMessageTemplate || "",
     prepBufferMinutes: restaurant?.prepBufferMinutes ?? 2,
     guestOrderMode: restaurant?.kotSettings?.guestOrderMode ?? "auto",
+    dineInPayment: paysUpfront(restaurant) ? "upfront" : "after",
+    // Guests can pay this order themselves through the gateway (Razorpay).
+    onlinePayment: order.status === "open" || order.status === "billed" ? await onlinePaymentAvailable(ctx.restaurantId) : false,
     payment: {
       upiVpa: restaurant?.billingSettings?.upiVpa ?? "",
       upiPayeeName: restaurant?.billingSettings?.upiPayeeName || restaurant?.name || "",

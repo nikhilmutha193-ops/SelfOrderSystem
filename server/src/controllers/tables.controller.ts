@@ -132,7 +132,17 @@ export const updateTable = asyncHandler(async (req: Request, res: Response) => {
     autoReleaseMinutes?: number | null;
   };
   const update: Record<string, unknown> = {};
-  if (code !== undefined) update.code = code;
+  if (code !== undefined) {
+    const trimmed = typeof code === "string" ? code.trim() : "";
+    if (!trimmed) throw new HttpError(400, "Table code can't be empty");
+    const clash = await TableModel.exists({
+      restaurantId: req.restaurantId,
+      code: trimmed,
+      _id: { $ne: req.params.id },
+    });
+    if (clash) throw new HttpError(409, "A table with that code already exists");
+    update.code = trimmed;
+  }
   if (isGuest !== undefined) {
     const current = await TableModel.findOne({ _id: req.params.id, restaurantId: req.restaurantId });
     if (!current) throw new HttpError(404, "Table not found");

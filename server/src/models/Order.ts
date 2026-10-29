@@ -4,7 +4,13 @@ export type OrderType = "dine-in" | "takeaway" | "delivery";
 export type OrderStatus = "open" | "billed" | "closed" | "cancelled";
 
 export const ORDER_STATUSES: OrderStatus[] = ["open", "billed", "closed", "cancelled"];
-export type OrderSource = "guest" | "counter" | "swiggy" | "zomato";
+export type OrderSource = "guest" | "counter" | "swiggy" | "zomato" | "kiosk";
+
+/** A self-order kiosk order: which device took it, and whether the guest chose to pay at the counter. */
+export interface IKioskOrder {
+  deviceId: Types.ObjectId;
+  payAtCounter: boolean;
+}
 export type PaymentMethod = "pending" | "cash" | "upi" | "card" | "online" | "wallet" | "credit" | "split";
 export type OrderPriority = "normal" | "high" | "rush";
 export type TenderMethod = "cash" | "upi" | "card" | "online" | "wallet" | "credit";
@@ -102,6 +108,9 @@ export interface IOrder {
   mergedInto?: Types.ObjectId | null;
   splitFrom?: Types.ObjectId | null;
   offline?: IOfflineSync | null;
+  kiosk?: IKioskOrder | null;
+  /** The number called out at pickup, reserved when a kiosk order is placed; its KOT uses it as the token. */
+  pickupNumber?: number | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -178,7 +187,7 @@ const orderSchema = new Schema<IOrder>(
     checkinTime: { type: Date, default: Date.now },
     checkoutTime: { type: Date },
     status: { type: String, enum: ORDER_STATUSES, default: "open", index: true },
-    source: { type: String, enum: ["guest", "counter", "swiggy", "zomato"], default: "guest" },
+    source: { type: String, enum: ["guest", "counter", "swiggy", "zomato", "kiosk"], default: "guest" },
     externalOrderId: { type: String, trim: true, index: true },
     paymentMethod: {
       type: String,
@@ -213,6 +222,17 @@ const orderSchema = new Schema<IOrder>(
     serviceChargeWaived: { type: Boolean, default: false },
     priority: { type: String, enum: ["normal", "high", "rush"], default: "normal" },
     mergedInto: { type: Schema.Types.ObjectId, ref: "Order", default: null },
+    kiosk: {
+      type: new Schema<IKioskOrder>(
+        {
+          deviceId: { type: Schema.Types.ObjectId, ref: "KioskDevice", required: true },
+          payAtCounter: { type: Boolean, default: false },
+        },
+        { _id: false }
+      ),
+      default: null,
+    },
+    pickupNumber: { type: Number, default: null },
     splitFrom: { type: Schema.Types.ObjectId, ref: "Order", default: null },
     offline: {
       type: new Schema<IOfflineSync>(

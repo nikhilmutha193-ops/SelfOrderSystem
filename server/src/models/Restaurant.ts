@@ -92,11 +92,29 @@ export interface IChatModeration {
   customWords: string[];
 }
 
+/**
+ * When dine-in guests pay. "after": they eat, then pay the bill (tables wait for payment).
+ * "upfront": each order is paid before it goes to the kitchen and the table stays seated
+ * until staff release it. Takeaway works the same either way.
+ */
+export type DineInPayment = "after" | "upfront";
+
+/** Self-order kiosks (modules/kiosk). */
+export interface IKioskSettings {
+  eatIn: boolean;
+  takeaway: boolean;
+  /** Guests may place the order and pay cash at the counter; it goes to the kitchen once paid there. */
+  payAtCounter: boolean;
+  /** Seconds without a touch before the kiosk asks "Still there?" and then starts over. */
+  idleSeconds: number;
+}
+
 export interface IBillingSettings {
   serviceChargePercent: number;
   maxStaffDiscountPercent: number;
   upiVpa: string;
   upiPayeeName: string;
+  dineInPayment: DineInPayment;
 }
 
 export interface ILoyaltySettings {
@@ -139,6 +157,8 @@ export interface IRestaurant {
   logoUrl?: string;
   siteTitle?: string;
   faviconUrl?: string;
+  /** "#rrggbb", or "" for the built-in terracotta. Every screen's accent palette is built from it (client/src/shared/brand.ts). */
+  brandColor?: string;
   address?: string;
   gstin?: string;
   fssaiLicense?: string;
@@ -157,6 +177,7 @@ export interface IRestaurant {
   qrSettings: IQrSettings;
   tableLoginSettings: ITableLoginSettings;
   kotSettings: IKotSettings;
+  kioskSettings: IKioskSettings;
   invoiceSettings: IInvoiceSettings;
   billingSettings: IBillingSettings;
   inventorySettings: IInventorySettings;
@@ -262,6 +283,7 @@ const billingSettingsSchema = new Schema<IBillingSettings>(
     maxStaffDiscountPercent: { type: Number, default: 10, min: 0, max: 100 },
     upiVpa: { type: String, default: "", trim: true },
     upiPayeeName: { type: String, default: "", trim: true },
+    dineInPayment: { type: String, enum: ["after", "upfront"], default: "after" },
   },
   { _id: false }
 );
@@ -291,6 +313,7 @@ const restaurantSchema = new Schema<IRestaurant>(
     logoUrl: { type: String, default: "" },
     siteTitle: { type: String, default: "" },
     faviconUrl: { type: String, default: "" },
+    brandColor: { type: String, default: "" },
     address: { type: String, default: "" },
     gstin: { type: String, default: "" },
     fssaiLicense: { type: String, default: "" },
@@ -310,6 +333,18 @@ const restaurantSchema = new Schema<IRestaurant>(
     qrSettings: { type: qrSettingsSchema, default: () => ({}) },
     tableLoginSettings: { type: tableLoginSettingsSchema, default: () => ({}) },
     kotSettings: { type: kotSettingsSchema, default: () => ({}) },
+    kioskSettings: {
+      type: new Schema<IKioskSettings>(
+        {
+          eatIn: { type: Boolean, default: true },
+          takeaway: { type: Boolean, default: true },
+          payAtCounter: { type: Boolean, default: true },
+          idleSeconds: { type: Number, default: 60, min: 20, max: 300 },
+        },
+        { _id: false }
+      ),
+      default: () => ({}),
+    },
     invoiceSettings: { type: invoiceSettingsSchema, default: () => ({}) },
     billingSettings: { type: billingSettingsSchema, default: () => ({}) },
     loyaltySettings: {

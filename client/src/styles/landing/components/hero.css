@@ -97,7 +97,7 @@
   letter-spacing: 0.16em;
   text-transform: uppercase;
   color: #fff;
-  background-color: rgba(184, 80, 60, 0.85);
+  background-color: color-mix(in srgb, var(--color-primary) 85%, transparent);
   border-radius: var(--radius-pill);
 }
 

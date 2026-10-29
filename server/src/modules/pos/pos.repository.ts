@@ -73,9 +73,15 @@ export class PosRepository {
     );
   }
 
+  findTable(tableId: string) {
+    return TableModel.findOne(this.scoped<ITable>({ _id: tableId }));
+  }
+
   billingInfo() {
     return Restaurant.findById(this.restaurantId)
-      .select("name address gstin taxRates billingSettings.serviceChargePercent invoiceSettings.footerNote")
+      .select(
+        "name address gstin taxRates billingSettings.serviceChargePercent billingSettings.dineInPayment invoiceSettings.footerNote"
+      )
       .lean();
   }
 
@@ -105,7 +111,7 @@ export class PosRepository {
         archivedAt: null,
       })
     )
-      .select("orderType tableId customerName status invoiceNumber createdAt bill.grandTotal")
+      .select("orderType tableId customerName status invoiceNumber createdAt bill.grandTotal source kiosk")
       .sort({ createdAt: 1 })
       .lean();
   }

@@ -65,7 +65,7 @@ async function buildPreviewRestaurant(req: Request, overrides: Record<string, un
 
 export const getRestaurantPublic = asyncHandler(async (req: Request, res: Response) => {
   const restaurant = await Restaurant.findById(req.restaurantId).select(
-    "name logoUrl address siteTitle faviconUrl tableLoginSettings"
+    "name logoUrl address siteTitle faviconUrl brandColor tableLoginSettings billingSettings.dineInPayment"
   );
   if (!restaurant) throw new HttpError(404, "Restaurant not found");
   res.json(restaurant);
@@ -104,6 +104,7 @@ export const updateRestaurantSettings = asyncHandler(async (req: Request, res: R
     logoUrl,
     siteTitle,
     faviconUrl,
+    brandColor,
     gstin,
     fssaiLicense,
     tagline,
@@ -125,6 +126,7 @@ export const updateRestaurantSettings = asyncHandler(async (req: Request, res: R
     name?: string;
     siteTitle?: string;
     faviconUrl?: string;
+    brandColor?: string;
     address?: string;
     logoUrl?: string;
     gstin?: string;
@@ -158,6 +160,10 @@ export const updateRestaurantSettings = asyncHandler(async (req: Request, res: R
     }
   }
 
+  if (brandColor !== undefined && brandColor !== "" && !/^#[0-9a-f]{6}$/i.test(String(brandColor))) {
+    throw new HttpError(400, "Brand colour must be a hex colour like #c4602f");
+  }
+
   if (heroImages && (!Array.isArray(heroImages) || heroImages.some((url) => typeof url !== "string" || !url))) {
     throw new HttpError(400, "heroImages must be an array of non-empty URLs");
   }
@@ -187,6 +193,7 @@ export const updateRestaurantSettings = asyncHandler(async (req: Request, res: R
   if (logoUrl !== undefined) restaurant.logoUrl = logoUrl;
   if (siteTitle !== undefined) restaurant.siteTitle = siteTitle;
   if (faviconUrl !== undefined) restaurant.faviconUrl = faviconUrl;
+  if (brandColor !== undefined) restaurant.brandColor = String(brandColor).toLowerCase();
   if (gstin !== undefined) restaurant.gstin = gstin;
   if (fssaiLicense !== undefined) restaurant.fssaiLicense = fssaiLicense;
   if (tagline !== undefined) restaurant.tagline = tagline;
@@ -230,7 +237,10 @@ export const updateRestaurantSettings = asyncHandler(async (req: Request, res: R
     Object.assign(restaurant.invoiceSettings, invoiceSettings);
   }
   if (billingSettings !== undefined) {
-    const { serviceChargePercent, maxStaffDiscountPercent, upiVpa, upiPayeeName } = billingSettings;
+    const { serviceChargePercent, maxStaffDiscountPercent, upiVpa, upiPayeeName, dineInPayment } = billingSettings;
+    if (dineInPayment !== undefined && dineInPayment !== "after" && dineInPayment !== "upfront") {
+      throw new HttpError(400, "Choose whether dine-in guests pay after eating or when ordering");
+    }
     if (
       serviceChargePercent !== undefined &&
       (typeof serviceChargePercent !== "number" || serviceChargePercent < 0 || serviceChargePercent > 20)

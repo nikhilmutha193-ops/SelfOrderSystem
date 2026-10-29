@@ -38,7 +38,7 @@ import {
   type OfflineTarget,
 } from "../offline";
 import { kotHtml, printHtml, receiptHtml } from "../offlinePrint";
-import { usePosFloor, usePosMenu } from "../queries";
+import { usePosFloor, usePosMenu, useReleasePosTable } from "../queries";
 import { filterMenu, hasOptions, pricedMenu, usePosCart } from "../usePosCart";
 
 type Mode = "tables" | "takeaway" | "cashier";
@@ -120,6 +120,14 @@ export default function Pos() {
       ) ?? null)
     : null;
   const offlineFlow = offline || !!openSale;
+  // Dine-in guests who pay when ordering: payment, not a KOT, sends the order to the kitchen.
+  // Kiosk orders left to pay at the counter work the same way.
+  const payFirst =
+    !offlineFlow &&
+    (activeDetail?.order.source === "kiosk" ||
+      (billing?.dineInPayment === "upfront" &&
+        (activeDetail ? activeDetail.order.orderType === "dine-in" : !!tableId && mode !== "takeaway")));
+  const releaseTable = useReleasePosTable();
   const menu = pricedMenu(rawMenu, mode === "takeaway" ? { orderType: "takeaway" } : { orderType: "dine-in", areaId });
   const term = search.trim();
   const visibleItems = filterMenu(menu, search, category);
@@ -265,6 +273,7 @@ export default function Pos() {
 
   function saveAndKot() {
     if (offlineFlow) return offlineKot();
+    if (payFirst) return settle();
     const tab = printing?.printersConfigured ? null : window.open("", "_blank");
     void run(async () => {
       try {
@@ -284,11 +293,27 @@ export default function Pos() {
     });
   }
 
+  function release() {
+    if (!table) return;
+    const code = table.code;
+    void run(async () => {
+      await releaseTable.mutateAsync(table._id);
+      setMessage({ tone: "ok", text: `Table ${code} is free` });
+      reset("tables");
+    });
+  }
+
   function hold() {
+    const code = table?.code;
     void run(async () => {
       await save(false);
-      reset("takeaway");
-      setMessage({ tone: "ok", text: "Order held. Resume it from Running." });
+      if (mode === "takeaway") {
+        reset("takeaway");
+        setMessage({ tone: "ok", text: "Order held. Resume it from Running." });
+      } else {
+        reset(mode);
+        setMessage({ tone: "ok", text: `Order held on table ${code}. It goes to the kitchen once paid.` });
+      }
     });
   }
 
@@ -298,7 +323,7 @@ export default function Pos() {
     const tab = toPrinter ? null : window.open("", "_blank");
     void run(async () => {
       try {
-        const { id } = await save(true);
+        const { id } = await save(!payFirst);
         if (!id) return;
         const justBilled = await cart.bill(id);
         if (toPrinter) {
@@ -317,9 +342,10 @@ export default function Pos() {
   function settle() {
     if (offlineFlow) return offlineSettleOpen();
     void run(async () => {
-      const { id } = await save(true);
+      const { id } = await save(!payFirst);
       if (!id) return;
-      await cart.bill(id);
+      // Paying first: the order stays open (and can still change) until the payment bills it.
+      if (!payFirst) await cart.bill(id);
       const fresh = await ordersApi.get(id);
       queryClient.setQueryData(orderKeys.detail(id), fresh);
       setSettleOpen(true);
@@ -331,9 +357,13 @@ export default function Pos() {
     if (!orderId) return;
     const fresh = await ordersApi.get(orderId);
     if (fresh.order.status !== "closed") return;
+    const tokens = fresh.items.map((i) => i.tokenNumber).filter((n): n is number => typeof n === "number");
+    const sent = fresh.order.orderType === "dine-in" && fresh.dineInPayment === "upfront" && tokens.length > 0;
     setMessage({
       tone: "ok",
-      text: `Paid · ${fresh.order.invoiceNumber ?? fresh.order.customerName}`,
+      text: `Paid · ${fresh.order.invoiceNumber ?? fresh.order.customerName}${
+        sent ? ` · sent to the kitchen as T${Math.max(...tokens)}` : ""
+      }`,
     });
     reset(mode);
   }
@@ -398,9 +428,21 @@ export default function Pos() {
         {takeaways.map((o) => (
           <Chip key={o._id} active={o._id === orderId} onClick={() => resumeTakeaway(o)}>
             {o.customerName} · ₹{o.total.toFixed(0)}
-            {o.unsent > 0 ? " · held" : ""}
+            {o.unsent > 0 ? (o.source === "kiosk" ? " · to pay" : " · held") : ""}
           </Chip>
         ))}
+      </div>
+    ) : table && !table.isGuest && table.status !== "available" && table.orders.length === 0 && !offlineFlow ? (
+      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-600">
+        <span>Seated, nothing to pay.</span>
+        <button
+          type="button"
+          onClick={release}
+          disabled={busy}
+          className="rounded-lg border border-slate-300 px-3 py-1.5 font-semibold text-slate-700 hover:bg-slate-50"
+        >
+          Release table
+        </button>
       </div>
     ) : table && (table.orders.length > 1 || table.isGuest) ? (
       <div className="mt-2 flex gap-1.5 overflow-x-auto pb-1">
@@ -515,6 +557,7 @@ export default function Pos() {
               orderId={orderId}
               onSelectTable={cashierTable}
               onSelectTakeaway={cashierTakeaway}
+              payFirst={billing?.dineInPayment === "upfront"}
             />
           ) : showTables ? (
             <TableMap tables={tables} areas={floor.data?.areas} onSelect={chooseTable} />
@@ -614,7 +657,8 @@ export default function Pos() {
             onDraftQuantity={cart.changeQuantity}
             onDraftRemove={cart.removeLine}
             onSaveKot={saveAndKot}
-            onHold={mode === "takeaway" && !offlineFlow ? hold : null}
+            onHold={(mode === "takeaway" || payFirst) && !offlineFlow ? hold : null}
+            payFirst={payFirst}
             onBill={bill}
             onSettle={settle}
             busy={busy || showTables || (cashier && !orderId)}

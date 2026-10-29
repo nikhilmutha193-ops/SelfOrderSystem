@@ -1,6 +1,7 @@
 import { RequestContext } from "../../core/context";
 import { emit } from "../../core/events";
 import { IOrder, OrderPriority } from "../../models/Order";
+import { paidBeforeKitchen, paysUpfront } from "../../utils/dineInPayment";
 import { HttpError } from "../../utils/httpError";
 import { nextTokenNumber } from "../../utils/kotQueue";
 import { getOwnedOrder } from "../orders/orders.service";
@@ -11,11 +12,18 @@ const PRIORITY_RANK: Record<string, number> = { rush: 0, high: 1, normal: 2 };
 
 export async function getKotQueue(ctx: RequestContext, tableId?: string, stationId?: string) {
   const repo = new KitchenRepository(ctx.restaurantId);
-  const orders = await repo.findOpenOrdersWithTable(tableId);
-  const items = await repo.findActiveItems(
-    orders.map((o) => o._id),
-    stationId
+  const orders = await repo.findKitchenOrdersWithTable(tableId);
+  const restaurant = await repo.findRestaurant("billingSettings");
+  // Unpaid orders that are paid before cooking aren't the kitchen's yet.
+  const waitingForPayment = new Set(
+    orders.filter((o) => paidBeforeKitchen(o, restaurant)).map((o) => o._id.toString())
   );
+  const items = (
+    await repo.findActiveItems(
+      orders.map((o) => o._id),
+      stationId
+    )
+  ).filter((item) => !(item.kotRound == null && waitingForPayment.has(item.orderId.toString())));
 
   const itemsByOrder = new Map<string, typeof items>();
   for (const item of items) {
@@ -41,25 +49,43 @@ export async function getKotQueue(ctx: RequestContext, tableId?: string, station
 
 export async function sendOrderToKitchen(
   restaurantId: string,
-  order: Pick<IOrder, "_id" | "status">,
-  options: { silent?: boolean } = {}
+  order: Pick<IOrder, "_id" | "status"> & Partial<Pick<IOrder, "orderType" | "source" | "pickupNumber">>,
+  options: { silent?: boolean; paid?: boolean } = {}
 ) {
-  if (order.status !== "open" && order.status !== "billed") {
+  // A paid order normally has nothing left to send; `paid` is for orders paid before cooking.
+  if (order.status !== "open" && order.status !== "billed" && !(options.paid && order.status === "closed")) {
     throw new HttpError(409, "This order is closed, so nothing can be sent to the kitchen");
   }
   const repo = new KitchenRepository(restaurantId);
+  // Offline sales (`silent`) were paid at the till before they reached the server.
+  if (!options.paid && !options.silent && order.orderType) {
+    if (paidBeforeKitchen({ orderType: order.orderType, source: order.source }, await repo.findRestaurant("billingSettings"))) {
+      throw new HttpError(
+        409,
+        order.source === "kiosk"
+          ? "This kiosk order isn't paid yet. Take the payment and it goes to the kitchen."
+          : "Guests pay when ordering here. Take the payment and the order goes to the kitchen."
+      );
+    }
+  }
   const nothingToSend = { round: null, items: [], message: "No new items to send to the kitchen" };
   if (!(await repo.hasUnsentItems(order._id))) return nothingToSend;
   const round = await repo.nextKotRound(order._id);
   if ((await repo.claimUnsentItems(order._id, round)) === 0) return nothingToSend;
 
   const restaurant = await repo.findRestaurant("dayEndTime timezone prepBufferMinutes kotSettings");
-  const { tokenNumber } = await nextTokenNumber(
-    restaurantId,
-    restaurant?.dayEndTime,
-    restaurant?.timezone,
-    restaurant?.kotSettings?.tokenStart
-  );
+  // A kiosk order's first ticket carries the pickup number the guest was given.
+  const tokenNumber =
+    round === 1 && order.pickupNumber
+      ? order.pickupNumber
+      : (
+          await nextTokenNumber(
+            restaurantId,
+            restaurant?.dayEndTime,
+            restaurant?.timezone,
+            restaurant?.kotSettings?.tokenStart
+          )
+        ).tokenNumber;
   await repo.setRoundToken(order._id, round, tokenNumber);
 
   const items = await repo.findRoundItems(order._id, round);
@@ -93,10 +119,20 @@ export async function reprintKot(ctx: RequestContext, orderId: string, round: nu
 
 export async function sendGuestItemsIfAutomatic(restaurantId: string, orderId: string) {
   const repo = new KitchenRepository(restaurantId);
-  const restaurant = await repo.findRestaurant("kotSettings");
-  if (restaurant?.kotSettings?.guestOrderMode === "accept") return;
+  const restaurant = await repo.findRestaurant("kotSettings billingSettings");
+  // Guests who pay when ordering wait for payment; sendPaidOrderToKitchen sends them then.
+  if (restaurant?.kotSettings?.guestOrderMode === "accept" || paysUpfront(restaurant)) return;
   const order = await repo.findOrder(orderId);
   if (order) await sendOrderToKitchen(restaurantId, order);
+}
+
+/** A settled order that is paid before cooking (kiosk, or pay-first dine-in) sends its items to the kitchen. */
+export async function sendPaidOrderToKitchen(restaurantId: string, orderId: string) {
+  const repo = new KitchenRepository(restaurantId);
+  const order = await repo.findOrder(orderId);
+  if (!order || order.status !== "closed") return;
+  if (!paidBeforeKitchen(order, await repo.findRestaurant("billingSettings"))) return;
+  await sendOrderToKitchen(restaurantId, order, { paid: true });
 }
 
 export async function getKotPdfData(ctx: RequestContext, orderId: string, round: number) {

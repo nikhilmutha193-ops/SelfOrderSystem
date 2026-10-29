@@ -27,6 +27,7 @@ import {
   Smartphone,
   Star,
   Table2,
+  TabletSmartphone,
   TicketPercent,
   UserCog,
   Users,
@@ -36,6 +37,7 @@ import {
 } from "lucide-react";
 
 import { can, type AdminProfile, type ModuleKey } from "../lib/adminAuth";
+import type { DineInPayment } from "../lib/types";
 
 export interface AdminNavItem {
   to: string;
@@ -43,6 +45,8 @@ export interface AdminNavItem {
   module: ModuleKey | null;
   icon: LucideIcon;
   keywords?: string;
+  /** Hidden when dine-in guests pay when ordering (no waiters taking orders at the table). */
+  waiterService?: boolean;
 }
 
 export interface AdminNavGroup {
@@ -68,7 +72,14 @@ export const ADMIN_NAV: AdminNavGroup[] = [
     label: "Service",
     items: [
       { to: "/pos", label: "POS Billing", module: "pos", icon: MonitorSmartphone, keywords: "counter billing till" },
-      { to: "/captain", label: "Captain App", module: "captain", icon: Smartphone, keywords: "waiter" },
+      {
+        to: "/captain",
+        label: "Captain App",
+        module: "captain",
+        icon: Smartphone,
+        keywords: "waiter",
+        waiterService: true,
+      },
       { to: "/admin/orders?type=dine-in", label: "Dine-in Orders", module: "orders", icon: Armchair },
       {
         to: "/admin/orders?type=takeaway",
@@ -127,6 +138,13 @@ export const ADMIN_NAV: AdminNavGroup[] = [
       { to: "/admin/inventory", label: "Inventory", module: "inventory", icon: Boxes, keywords: "stock recipes" },
       { to: "/admin/chefs", label: "Chefs", module: "chefs", icon: ChefHat },
       { to: "/admin/printing", label: "Printers & Stations", module: "printing", icon: Printer, keywords: "kot" },
+      {
+        to: "/admin/kiosks",
+        label: "Kiosks & Pickup Board",
+        module: "kiosks",
+        icon: TabletSmartphone,
+        keywords: "self order touch screen token display",
+      },
     ],
   },
   {
@@ -176,10 +194,13 @@ const EXTRA_TITLES: { prefix: string; group: string; item: AdminNavItem }[] = [
   },
 ];
 
-export function visibleNav(profile: AdminProfile | null): AdminNavGroup[] {
+export function visibleNav(profile: AdminProfile | null, dineInPayment: DineInPayment = "after"): AdminNavGroup[] {
   return ADMIN_NAV.map((group) => ({
     ...group,
-    items: group.items.filter((item) => item.module === null || can(profile, item.module)),
+    items: group.items.filter(
+      (item) =>
+        (item.module === null || can(profile, item.module)) && !(item.waiterService && dineInPayment === "upfront")
+    ),
   })).filter((group) => group.items.length > 0);
 }
 

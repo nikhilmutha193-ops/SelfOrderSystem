@@ -5,6 +5,7 @@ import {
   CookingPot,
   DoorOpen,
   KeyRound,
+  Pencil,
   Plus,
   Timer,
   Trash2,
@@ -17,9 +18,11 @@ import { Link } from "react-router-dom";
 import { AreasCard } from "../../features/pricing/components/AreasCard";
 import { useAreas, useSetTableArea } from "../../features/pricing/queries";
 import { useCanEdit } from "../../lib/adminAuth";
+import { useDineInPayment } from "../../lib/useDineInPayment";
 import type { GuestAccess, RequiredDetails, TableLoginSettings, TableRow } from "../../lib/types";
 import { api, extractErrorMessage } from "../../shared/api/client";
 import { confirmDialog } from "../../shared/ui/confirm";
+import { Dialog } from "../../shared/ui/Dialog";
 import { usePageTour, type TourStep } from "../../shared/ui/PageTour";
 import { buttonClass } from "../../shared/ui/styles";
 import {
@@ -70,14 +73,89 @@ const DEFAULT_LOGIN_DRAFT: LoginDraft = {
   requiredDetails: { name: true, phone: false, members: true, birthday: false },
 };
 
+function EditTableDialog({ table, onClose, onSaved }: { table: TableRow; onClose: () => void; onSaved: () => void }) {
+  const [code, setCode] = useState(table.code);
+  const [pin, setPin] = useState(table.password ?? "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const trimmedCode = code.trim();
+  const changes: { code?: string; password?: string } = {};
+  if (trimmedCode !== table.code) changes.code = trimmedCode;
+  if (pin && pin !== table.password) changes.password = pin;
+  const dirty = Object.keys(changes).length > 0;
+
+  return (
+    <Dialog
+      open
+      onClose={onClose}
+      title={`Edit table ${table.code}`}
+      description="Guests sign in with the new code and PIN. Printed QR codes keep working."
+      size="sm"
+      onSubmit={async (e) => {
+        e.preventDefault();
+        if (!trimmedCode) {
+          setError("Table code can't be empty");
+          return;
+        }
+        if (!dirty) {
+          onClose();
+          return;
+        }
+        setError(null);
+        setSaving(true);
+        try {
+          await api.put(`/tables/${table._id}`, changes);
+          onSaved();
+          onClose();
+        } catch (err) {
+          setError(extractErrorMessage(err));
+        } finally {
+          setSaving(false);
+        }
+      }}
+      footer={
+        <>
+          <Button type="button" variant="secondary" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button type="submit" loading={saving} disabled={!dirty}>
+            Save
+          </Button>
+        </>
+      }
+    >
+      <div className="grid gap-4">
+        <Field label="Table code" htmlFor="edit-table-code">
+          <Input
+            id="edit-table-code"
+            autoComplete="off"
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            required
+          />
+        </Field>
+        <Field label="PIN" htmlFor="edit-table-pin">
+          <Input
+            id="edit-table-pin"
+            autoComplete="off"
+            value={pin}
+            onChange={(e) => setPin(e.target.value)}
+            required
+          />
+        </Field>
+        <ErrorText>{error}</ErrorText>
+      </div>
+    </Dialog>
+  );
+}
+
 export default function Tables() {
   const [tables, setTables] = useState<TableRow[]>([]);
   const [code, setCode] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [resettingId, setResettingId] = useState<string | null>(null);
-  const [newPin, setNewPin] = useState("");
-  const [resetError, setResetError] = useState<string | null>(null);
+  const [editing, setEditing] = useState<TableRow | null>(null);
   const [isGuest, setIsGuest] = useState(false);
   const [autoReleaseMinutes, setAutoReleaseMinutes] = useState("0");
   const [savingExpiry, setSavingExpiry] = useState(false);
@@ -115,6 +193,8 @@ export default function Tables() {
   const { areas } = useAreas();
   const setArea = useSetTableArea();
   const canEditTables = useCanEdit("tables");
+  // Tables have no captain when guests pay when ordering.
+  const showCaptains = useDineInPayment() !== "upfront";
 
   async function assignArea(table: TableRow, areaId: string) {
     setError(null);
@@ -299,31 +379,6 @@ export default function Tables() {
     }
   }
 
-  function startReset(table: TableRow) {
-    setResettingId(table._id);
-    setNewPin("");
-    setResetError(null);
-  }
-
-  function cancelReset() {
-    setResettingId(null);
-    setNewPin("");
-    setResetError(null);
-  }
-
-  async function submitReset(tableId: string) {
-    if (!newPin) return;
-    setResetError(null);
-    try {
-      await api.put(`/tables/${tableId}`, { password: newPin });
-      setResettingId(null);
-      setNewPin("");
-      load();
-    } catch (err) {
-      setResetError(extractErrorMessage(err));
-    }
-  }
-
   const seated = tables.filter((t) => !t.isGuest);
   const counts = {
     available: seated.filter((t) => t.status === "available").length,
@@ -359,7 +414,7 @@ export default function Tables() {
         target: "tables-list",
         title: "All tables",
         description:
-          "See each table's status, who's captaining it, its auto-release override, and reset its PIN, release it or delete it.",
+          "See each table's status, who's captaining it, its auto-release override, and edit its code and PIN, release it or delete it.",
       },
     ],
     [],
@@ -580,7 +635,7 @@ export default function Tables() {
                   <th>PIN</th>
                   <th>Status</th>
                   {areas.length > 0 && <th>Area</th>}
-                  <th>Captain</th>
+                  {showCaptains && <th>Captain</th>}
                   <th>Expires after</th>
                   <th className="text-right">Actions</th>
                 </tr>
@@ -646,6 +701,7 @@ export default function Tables() {
                         )}
                       </td>
                     )}
+                    {showCaptains && (
                     <td>
                       {table.isGuest ? (
                         <span className="text-xs text-slate-400">—</span>
@@ -665,6 +721,7 @@ export default function Tables() {
                         </Select>
                       )}
                     </td>
+                    )}
                     <td>
                       {table.isGuest ? (
                         <span className="text-xs text-slate-400">—</span>
@@ -704,25 +761,6 @@ export default function Tables() {
                       )}
                     </td>
                     <td className="text-right">
-                      {resettingId === table._id ? (
-                        <div className="flex flex-wrap items-center justify-end gap-2">
-                          <Input
-                            aria-label={`New PIN for ${table.code}`}
-                            className="!w-28"
-                            placeholder="New PIN"
-                            value={newPin}
-                            onChange={(e) => setNewPin(e.target.value)}
-                            autoFocus
-                          />
-                          <Button type="button" size="sm" onClick={() => submitReset(table._id)} disabled={!newPin}>
-                            Save
-                          </Button>
-                          <Button type="button" size="sm" variant="ghost" onClick={cancelReset}>
-                            Cancel
-                          </Button>
-                          {resetError && <span className="w-full text-xs text-red-600">{resetError}</span>}
-                        </div>
-                      ) : (
                         <div className="flex justify-end gap-1 whitespace-nowrap">
                           {table.status === "occupied" && !table.isGuest && (
                             <Button size="sm" variant="ghost" icon={DoorOpen} onClick={() => release(table)}>
@@ -733,9 +771,17 @@ export default function Tables() {
                             <CookingPot size={14} aria-hidden="true" />
                             KOT
                           </Link>
-                          <Button size="sm" variant="ghost" icon={KeyRound} onClick={() => startReset(table)}>
-                            PIN
-                          </Button>
+                          {canEditTables && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              icon={Pencil}
+                              onClick={() => setEditing(table)}
+                              aria-label={`Edit ${table.code}`}
+                            >
+                              Edit
+                            </Button>
+                          )}
                           {canEditTables && (
                             <Button size="sm" variant="ghost" icon={Users} onClick={() => changeKind(table)}>
                               {table.isGuest ? "Make normal" : "Make guest"}
@@ -752,7 +798,6 @@ export default function Tables() {
                             Delete
                           </Button>
                         </div>
-                      )}
                     </td>
                   </tr>
                 ))}
@@ -761,6 +806,8 @@ export default function Tables() {
           </TableWrap>
         )}
       </Card>
+
+      {editing && <EditTableDialog table={editing} onClose={() => setEditing(null)} onSaved={load} />}
     </Page>
   );
 }

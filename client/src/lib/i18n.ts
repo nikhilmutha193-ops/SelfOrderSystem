@@ -67,6 +67,11 @@ const UI = {
   addMore: { en: "Add more items", kn: "ಇನ್ನಷ್ಟು ಸೇರಿಸಿ", hi: "और आइटम जोड़ें" },
   confirmPlace: { en: "Confirm & place order", kn: "ದೃಢೀಕರಿಸಿ ಮತ್ತು ಆರ್ಡರ್ ಮಾಡಿ", hi: "पक्का करें और ऑर्डर दें" },
   placing: { en: "Placing...", kn: "ಆರ್ಡರ್ ಮಾಡಲಾಗುತ್ತಿದೆ...", hi: "ऑर्डर हो रहा है..." },
+  payFirstNote: {
+    en: "Pay for your order and it goes straight to the kitchen.",
+    kn: "ನಿಮ್ಮ ಆರ್ಡರ್‌ಗೆ ಪಾವತಿಸಿ, ಅದು ನೇರವಾಗಿ ಅಡುಗೆಮನೆಗೆ ಹೋಗುತ್ತದೆ.",
+    hi: "ऑर्डर का भुगतान करें, वह सीधे किचन में जाएगा।",
+  },
 } as const;
 
 export type UiKey = keyof typeof UI;

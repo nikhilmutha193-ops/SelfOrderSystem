@@ -27,6 +27,8 @@ import inventoryRoutes from "./modules/inventory/inventory.routes";
 import { registerKitchenHandlers } from "./modules/kitchen/kitchen.handlers";
 import kitchenRoutes from "./modules/kitchen/kitchen.routes";
 import ordersRoutes from "./modules/orders/orders.routes";
+import { kioskRoutes, pickupRoutes } from "./modules/kiosk/kiosk.routes";
+import paymentRoutes from "./modules/payments/payments.routes";
 import posRoutes from "./modules/pos/pos.routes";
 import { registerPrintingHandlers } from "./modules/printing/printing.handlers";
 import { printAgentRoutes, printingRoutes } from "./modules/printing/printing.routes";
@@ -85,7 +87,15 @@ app.use(
     },
   })
 );
-app.use(express.json({ limit: "25mb" })); // a full data backup/restore payload can exceed the 100kb default
+app.use(
+  express.json({
+    limit: "25mb", // a full data backup/restore payload can exceed the 100kb default
+    // Payment webhooks are signed over the exact bytes sent, so keep them for that route.
+    verify: (req, _res, buf) => {
+      if (req.url?.startsWith("/api/payments/razorpay/webhook")) (req as express.Request).rawBody = buf;
+    },
+  })
+);
 app.use(sanitizeRequest); // strip Mongo operators from body/query/params before any route uses them
 
 app.get("/health", async (_req, res) => {
@@ -134,6 +144,9 @@ app.use("/api/bills", billRoutes);
 app.use("/api/bookings", bookingRoutes);
 app.use("/api/pricing", pricingRoutes);
 app.use("/api/credit", creditRoutes);
+app.use("/api/payments", paymentRoutes);
+app.use("/api/kiosk", kioskRoutes);
+app.use("/api/pickup", pickupRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/team", teamRoutes);
 app.use("/api/reviews", reviewRoutes);

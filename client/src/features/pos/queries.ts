@@ -58,6 +58,14 @@ export function usePosFloor() {
   });
 }
 
+export function useReleasePosTable() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: posApi.releaseTable,
+    onSuccess: () => refreshOrderData(queryClient),
+  });
+}
+
 export function useCreatePosOrder() {
   const queryClient = useQueryClient();
   return useMutation({

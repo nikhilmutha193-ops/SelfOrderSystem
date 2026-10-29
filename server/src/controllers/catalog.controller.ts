@@ -561,6 +561,8 @@ async function guestAreaId(req: Request): Promise<string | null> {
 
 export const getPublicMenu = asyncHandler(async (req: Request, res: Response) => {
   const areaId = await guestAreaId(req);
+  // Kiosks ask for takeaway prices when the guest chose "Take away".
+  const orderType = req.query.orderType === "takeaway" ? "takeaway" : "dine-in";
   const [categories, subcategories, foodItems] = await Promise.all([
     Category.find({ restaurantId: req.restaurantId, isActive: true }).sort({ name: 1 }),
     Subcategory.find({ restaurantId: req.restaurantId, isActive: true }).sort({ name: 1 }),
@@ -598,7 +600,7 @@ export const getPublicMenu = asyncHandler(async (req: Request, res: Response) =>
           .map((f) => ({
             _id: f._id,
             name: f.name,
-            price: basePriceFor(f, { orderType: "dine-in", areaId }),
+            price: basePriceFor(f, { orderType, areaId }),
             description: f.description,
             imageUrl: f.imageUrl,
             components: (f.comboItems ?? [])

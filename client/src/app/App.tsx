@@ -40,6 +40,9 @@ const PublicBill = lazy(() => import("../features/customers/pages/PublicBill"));
 const NewOrder = lazy(() => import("../features/orders/pages/NewOrder"));
 const Pos = lazy(() => import("../features/pos/pages/Pos"));
 const Captain = lazy(() => import("../features/captain/pages/Captain"));
+const Kiosk = lazy(() => import("../features/kiosk/pages/Kiosk"));
+const PickupBoard = lazy(() => import("../features/kiosk/pages/PickupBoard"));
+const KioskAdmin = lazy(() => import("../features/kiosk/pages/KioskAdmin"));
 const RestaurantSettings = lazy(() => import("../pages/admin/RestaurantSettings"));
 const ChangePassword = lazy(() => import("../pages/admin/ChangePassword"));
 const Team = lazy(() => import("../pages/admin/Team"));
@@ -88,6 +91,10 @@ export default function App() {
                   </ProtectedRoute>
                 }
               />
+
+              {/* Self-order kiosk (paired device, no login) and the pickup TV (public, numbers only). */}
+              <Route path="/kiosk" element={<Kiosk />} />
+              <Route path="/pickup" element={<PickupBoard />} />
 
               <Route path="/pos/login" element={<StaffLogin kind="cashier" />} />
               <Route path="/captain/login" element={<StaffLogin kind="captain" />} />
@@ -251,6 +258,14 @@ export default function App() {
                   element={
                     <RequireModule module="printing">
                       <Printing />
+                    </RequireModule>
+                  }
+                />
+                <Route
+                  path="kiosks"
+                  element={
+                    <RequireModule module="kiosks">
+                      <KioskAdmin />
                     </RequireModule>
                   }
                 />

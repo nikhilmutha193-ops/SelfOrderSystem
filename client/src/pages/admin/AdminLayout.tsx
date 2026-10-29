@@ -30,6 +30,7 @@ import UserMenu from "../../app/shell/UserMenu";
 import NotificationCenter from "../../features/dashboard/components/NotificationCenter";
 import ActiveOrders from "../../features/orders/components/ActiveOrders";
 import { AdminProfileProvider, can, useAdmin } from "../../lib/adminAuth";
+import { useDineInPayment } from "../../lib/useDineInPayment";
 import { activateStoredAuth, api, clearStoredToken, setActiveAuth } from "../../shared/api/client";
 import { useStaffTheme } from "../../shared/theme";
 import { TourProvider, useTour } from "../../shared/ui/PageTour";
@@ -263,7 +264,8 @@ function Shell() {
   const [pins, setPins] = useState<string[]>(() => readStorage(PINS_KEY, parsePins, []));
   const tour = useTour();
 
-  const groups = useMemo(() => visibleNav(profile), [profile]);
+  const dineInPayment = useDineInPayment();
+  const groups = useMemo(() => visibleNav(profile, dineInPayment), [profile, dineInPayment]);
   const allItems = useMemo(() => groups.flatMap((g) => g.items), [groups]);
   const pinned = useMemo(
     () => pins.map((to) => allItems.find((i) => i.to === to)).filter((i): i is AdminNavItem => Boolean(i)),

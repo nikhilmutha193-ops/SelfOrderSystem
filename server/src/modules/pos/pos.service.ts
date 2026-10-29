@@ -1,7 +1,10 @@
 import { RequestContext } from "../../core/context";
 import { IOrder } from "../../models/Order";
 import { writeAudit } from "../../utils/audit";
+import { paysUpfront, restaurantPaysUpfront } from "../../utils/dineInPayment";
 import { HttpError } from "../../utils/httpError";
+import { cancelUnsentOrdersForTables } from "../../utils/tableRelease";
+import { syncTableState } from "../../utils/tableState";
 import { sendOrderToKitchen } from "../kitchen/kitchen.service";
 import { generateBill, settleOrder } from "../orders/orders.billing";
 import { addOrderItems, getOwnedOrder, startCounterOrder, startTakeawayOrder } from "../orders/orders.service";
@@ -30,6 +33,7 @@ export async function getMenu(ctx: RequestContext) {
       gstin: restaurant?.gstin ?? "",
       taxRates: (restaurant?.taxRates ?? []).map((t) => ({ name: t.name, percent: t.percent })),
       serviceChargePercent: restaurant?.billingSettings?.serviceChargePercent ?? 0,
+      dineInPayment: paysUpfront(restaurant) ? "upfront" : "after",
       footerNote: restaurant?.invoiceSettings?.footerNote ?? "",
     },
     categories: categories.map((c) => ({ _id: c._id, name: c.name })),
@@ -72,7 +76,9 @@ export async function getFloor(ctx: RequestContext) {
   const summaryOf = new Map(summaries.map((s) => [s._id.toString(), s]));
   const captainName = new Map(captains.map((c) => [c._id.toString(), c.username]));
 
-  const running = orders.map((order) => {
+  // A kiosk order still being paid on the kiosk isn't the till's business until the guest picks "Pay at counter".
+  const tillOrders = orders.filter((o) => !(o.source === "kiosk" && o.status === "open" && !o.kiosk?.payAtCounter));
+  const running = tillOrders.map((order) => {
     const summary = summaryOf.get(order._id.toString());
     return {
       _id: order._id,
@@ -86,6 +92,7 @@ export async function getFloor(ctx: RequestContext) {
       total: order.status === "billed" && order.bill ? order.bill.grandTotal : round2(summary?.subtotal ?? 0),
       unsent: summary?.unsent ?? 0,
       ready: summary?.ready ?? 0,
+      source: order.source,
     };
   });
 
@@ -202,10 +209,23 @@ export async function createOrder(ctx: RequestContext, input: CreatePosOrderInpu
       : await startCounterOrder(ctx, { ...customer, tableId: input.tableId });
 
   const items = await addOrderItems(ctx, order._id.toString(), { items: input.items });
-  const kot = input.sendToKitchen ? await sendOrderToKitchen(ctx.restaurantId, order) : null;
+  // A dine-in table that pays when ordering is held until it is paid; payment sends the KOT.
+  const send = input.sendToKitchen && !(input.orderType === "dine-in" && (await restaurantPaysUpfront(ctx.restaurantId)));
+  const kot = send ? await sendOrderToKitchen(ctx.restaurantId, order) : null;
   return {
     order,
     items,
     kot: kot?.round ? { round: kot.round, tokenNumber: kot.tokenNumber } : null,
   };
+}
+
+/** Ends a seated table's session from the till (cashiers have Orders access, not Tables). */
+export async function releaseTable(ctx: RequestContext, tableId: string) {
+  const table = await new PosRepository(ctx.restaurantId).findTable(tableId);
+  if (!table) throw new HttpError(404, "Table not found");
+  if (table.isGuest) throw new HttpError(409, "Walk-in tables never need releasing");
+  const cancelledOrders = await cancelUnsentOrdersForTables([table._id]);
+  const status = await syncTableState(table._id, { endSession: true });
+  await writeAudit(ctx, "table.release", `Released table ${table.code} from the POS`);
+  return { status, cancelledOrders };
 }

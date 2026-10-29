@@ -4,7 +4,7 @@ import { getContext } from "../../core/context";
 import { idempotencyKey, runIdempotent } from "../../core/idempotency";
 import { parse } from "../../core/validate";
 import { asyncHandler } from "../../middleware/errorHandler";
-import { createPosOrderSchema, offlineOrderSchema } from "./pos.schema";
+import { createPosOrderSchema, offlineOrderSchema, tableIdParams } from "./pos.schema";
 import * as pos from "./pos.service";
 
 export const getMenu = asyncHandler(async (req: Request, res: Response) => {
@@ -34,4 +34,9 @@ export const createOrder = asyncHandler(async (req: Request, res: Response) => {
     body: await pos.createOrder(ctx, input),
   }));
   res.status(result.status).json(result.body);
+});
+
+export const releaseTable = asyncHandler(async (req: Request, res: Response) => {
+  const { tableId } = parse(tableIdParams, req.params);
+  res.json(await pos.releaseTable(getContext(req), tableId));
 });

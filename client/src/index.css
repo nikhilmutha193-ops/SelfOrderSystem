@@ -3,17 +3,17 @@
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 
-  --color-orange-50: #fdf3ed;
-  --color-orange-100: #fbe3d3;
-  --color-orange-200: #f5c6a5;
-  --color-orange-300: #eba476;
-  --color-orange-400: #dc7d4e;
-  --color-orange-500: #c4602f;
-  --color-orange-600: #a34a22;
-  --color-orange-700: #833a1c;
-  --color-orange-800: #692f1a;
-  --color-orange-900: #542818;
-  --color-orange-950: #2e140b;
+  --color-orange-50: var(--brand-50);
+  --color-orange-100: var(--brand-100);
+  --color-orange-200: var(--brand-200);
+  --color-orange-300: var(--brand-300);
+  --color-orange-400: var(--brand-400);
+  --color-orange-500: var(--brand-500);
+  --color-orange-600: var(--brand-600);
+  --color-orange-700: var(--brand-700);
+  --color-orange-800: var(--brand-800);
+  --color-orange-900: var(--brand-900);
+  --color-orange-950: var(--brand-950);
 
   --color-amber-50: #fffbeb;
   --color-amber-100: #fdf1cc;
@@ -64,6 +64,20 @@
 :root {
   color-scheme: light;
   -webkit-tap-highlight-color: transparent;
+
+  /* The brand scale behind every orange-* class (and the landing and guest order pages). These are
+     the built-in terracotta; shared/brand.ts overrides them on <html> with restaurant.brandColor. */
+  --brand-50: #fdf3ed;
+  --brand-100: #fbe3d3;
+  --brand-200: #f5c6a5;
+  --brand-300: #eba476;
+  --brand-400: #dc7d4e;
+  --brand-500: #c4602f;
+  --brand-600: #a34a22;
+  --brand-700: #833a1c;
+  --brand-800: #692f1a;
+  --brand-900: #542818;
+  --brand-950: #2e140b;
 }
 
 html {
@@ -286,14 +300,14 @@ input[type="datetime-local"] {
   --color-slate-800: oklch(92.9% 0.013 255.508);
   --color-slate-900: oklch(96.8% 0.007 247.896);
   --color-slate-950: oklch(98.4% 0.003 247.858);
-  --color-orange-50: color-mix(in oklab, #c4602f 14%, oklch(21.5% 0.038 264));
-  --color-orange-100: color-mix(in oklab, #c4602f 24%, oklch(21.5% 0.038 264));
-  --color-orange-200: color-mix(in oklab, #c4602f 38%, oklch(21.5% 0.038 264));
-  --color-orange-300: color-mix(in oklab, #c4602f 58%, oklch(21.5% 0.038 264));
-  --color-orange-700: #eba476;
-  --color-orange-800: #f5c6a5;
-  --color-orange-900: #fbe3d3;
-  --color-orange-950: #fdf3ed;
+  --color-orange-50: color-mix(in oklab, var(--brand-500) 14%, oklch(21.5% 0.038 264));
+  --color-orange-100: color-mix(in oklab, var(--brand-500) 24%, oklch(21.5% 0.038 264));
+  --color-orange-200: color-mix(in oklab, var(--brand-500) 38%, oklch(21.5% 0.038 264));
+  --color-orange-300: color-mix(in oklab, var(--brand-500) 58%, oklch(21.5% 0.038 264));
+  --color-orange-700: var(--brand-300);
+  --color-orange-800: var(--brand-200);
+  --color-orange-900: var(--brand-100);
+  --color-orange-950: var(--brand-50);
   --color-amber-50: color-mix(in oklab, #d9a441 14%, oklch(21.5% 0.038 264));
   --color-amber-100: color-mix(in oklab, #d9a441 24%, oklch(21.5% 0.038 264));
   --color-amber-200: color-mix(in oklab, #d9a441 38%, oklch(21.5% 0.038 264));
@@ -478,17 +492,17 @@ input[type="datetime-local"] {
     --color-slate-800: oklch(27.9% 0.041 260.031);
     --color-slate-900: oklch(20.8% 0.042 265.755);
     --color-slate-950: oklch(12.9% 0.042 264.695);
-    --color-orange-50: #fdf3ed;
-    --color-orange-100: #fbe3d3;
-    --color-orange-200: #f5c6a5;
-    --color-orange-300: #eba476;
-    --color-orange-400: #dc7d4e;
-    --color-orange-500: #c4602f;
-    --color-orange-600: #a34a22;
-    --color-orange-700: #833a1c;
-    --color-orange-800: #692f1a;
-    --color-orange-900: #542818;
-    --color-orange-950: #2e140b;
+    --color-orange-50: var(--brand-50);
+    --color-orange-100: var(--brand-100);
+    --color-orange-200: var(--brand-200);
+    --color-orange-300: var(--brand-300);
+    --color-orange-400: var(--brand-400);
+    --color-orange-500: var(--brand-500);
+    --color-orange-600: var(--brand-600);
+    --color-orange-700: var(--brand-700);
+    --color-orange-800: var(--brand-800);
+    --color-orange-900: var(--brand-900);
+    --color-orange-950: var(--brand-950);
     --color-amber-50: #fffbeb;
     --color-amber-100: #fdf1cc;
     --color-amber-200: #fbe4a0;

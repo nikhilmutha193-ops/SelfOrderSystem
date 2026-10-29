@@ -7,6 +7,7 @@ import Restaurant from "../../models/Restaurant";
 import TableModel from "../../models/Table";
 
 const ACTIVE_STATUSES: OrderItemStatus[] = ["pending", "preparing", "ready"];
+const PAID_ORDER_WINDOW_MS = 12 * 60 * 60 * 1000;
 
 export class KitchenRepository {
   constructor(private readonly restaurantId: string) {}
@@ -15,8 +16,14 @@ export class KitchenRepository {
     return { ...filter, restaurantId: this.restaurantId } as FilterQuery<T>;
   }
 
-  findOpenOrdersWithTable(tableId?: string) {
-    const filter: FilterQuery<IOrder> = { status: { $in: ["open", "billed"] } };
+  /** Orders the kitchen may still be working on: unpaid ones, and ones paid in the last 12 hours (paid before cooking). */
+  findKitchenOrdersWithTable(tableId?: string) {
+    const filter: FilterQuery<IOrder> = {
+      $or: [
+        { status: { $in: ["open", "billed"] } },
+        { status: "closed", checkoutTime: { $gte: new Date(Date.now() - PAID_ORDER_WINDOW_MS) } },
+      ],
+    };
     if (tableId) filter.tableId = tableId;
     return Order.find(this.scoped(filter)).populate("tableId", "code");
   }

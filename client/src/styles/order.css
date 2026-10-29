@@ -1,9 +1,9 @@
 @import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap");
 
 .order-page {
-  --color-primary: #b8503c;
-  --color-primary-dark: #9a4130;
-  --color-primary-tint: #f6e6e0;
+  --color-primary: var(--brand-primary, #b8503c);
+  --color-primary-dark: var(--brand-primary-dark, #9a4130);
+  --color-primary-tint: var(--brand-primary-tint, #f6e6e0);
   --color-bg: #fdfbf7;
   --color-bg-tint: #f6f0e6;
   --color-surface: #ffffff;
@@ -118,12 +118,12 @@
   background-color: var(--color-primary);
   border-color: var(--color-primary);
   color: #fff;
-  box-shadow: 0 6px 16px rgba(184, 80, 60, 0.28);
+  box-shadow: 0 6px 16px color-mix(in srgb, var(--color-primary) 28%, transparent);
 }
 .order-page .btn--primary:hover:not(:disabled) {
   background-color: var(--color-primary-dark);
   border-color: var(--color-primary-dark);
-  box-shadow: 0 10px 22px rgba(184, 80, 60, 0.36);
+  box-shadow: 0 10px 22px color-mix(in srgb, var(--color-primary) 36%, transparent);
 }
 .order-page .btn--secondary {
   background-color: transparent;
@@ -503,7 +503,7 @@
   outline: none;
   border-color: var(--color-primary);
   background-color: var(--color-surface);
-  box-shadow: 0 0 0 4px rgba(184, 80, 60, 0.15);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-primary) 15%, transparent);
 }
 .field__input--code {
   font-family: var(--font-heading);

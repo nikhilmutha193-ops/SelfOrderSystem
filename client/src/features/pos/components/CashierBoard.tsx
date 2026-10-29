@@ -27,6 +27,7 @@ function Card({
   billPrinted,
   orders,
   minutes,
+  payFirst,
 }: {
   selected: boolean;
   onClick: () => void;
@@ -36,6 +37,7 @@ function Card({
   billPrinted: boolean;
   orders: PosOrderSummary[];
   minutes: number | null;
+  payFirst: boolean;
 }) {
   const total = orders.reduce((sum, o) => sum + o.total, 0);
   const items = orders.reduce((sum, o) => sum + o.itemCount, 0);
@@ -93,7 +95,7 @@ function Card({
           {unsent > 0 && (
             <span className="inline-flex items-center gap-1 rounded bg-slate-700 px-1.5 py-0.5 text-[11px] font-semibold text-white">
               <Send size={11} aria-hidden="true" />
-              {unsent} not sent
+              {unsent} {payFirst ? "waiting for payment" : "not sent"}
             </span>
           )}
         </span>
@@ -110,6 +112,7 @@ export function CashierBoard({
   orderId,
   onSelectTable,
   onSelectTakeaway,
+  payFirst = false,
 }: {
   tables: PosTable[];
   takeaways: PosOrderSummary[];
@@ -117,6 +120,8 @@ export function CashierBoard({
   orderId: string | null;
   onSelectTable: (table: PosTable) => void;
   onSelectTakeaway: (order: PosOrderSummary) => void;
+  /** Dine-in guests pay when ordering, so a running table order is one waiting to be paid. */
+  payFirst?: boolean;
 }) {
   const now = useNow(30_000);
   const tables = useMemo(() => rawTables.map(withGuestState), [rawTables]);
@@ -198,10 +203,11 @@ export function CashierBoard({
               onClick={() => onSelectTable(table)}
               title={`Table ${table.code}`}
               subtitle={[names, table.captainName && `Captain ${table.captainName}`].filter(Boolean).join(" · ")}
-              status={table.status === "awaiting_payment" ? "Bill printed" : "Running"}
+              status={table.status === "awaiting_payment" ? "Bill printed" : payFirst ? "To pay" : "Running"}
               billPrinted={table.status === "awaiting_payment"}
               orders={table.orders}
               minutes={minutesSince(table.occupiedAt, now)}
+              payFirst={payFirst}
             />
           );
         })}
@@ -220,11 +226,17 @@ export function CashierBoard({
                 selected={!tableId && orderId === order._id}
                 onClick={() => onSelectTakeaway(order)}
                 title={order.customerName || "Takeaway"}
-                subtitle={order.invoiceNumber ?? "Takeaway order"}
-                status={order.status === "billed" ? "Bill printed" : "Running"}
+                subtitle={
+                  order.invoiceNumber ??
+                  (order.source === "kiosk"
+                    ? `Kiosk · ${order.orderType === "takeaway" ? "take away" : "eat here"}`
+                    : "Takeaway order")
+                }
+                status={order.status === "billed" ? "Bill printed" : order.source === "kiosk" ? "To pay" : "Running"}
                 billPrinted={order.status === "billed"}
                 orders={[order]}
                 minutes={minutesSince(order.createdAt, now)}
+                payFirst={order.source === "kiosk"}
               />
             ))}
           </div>

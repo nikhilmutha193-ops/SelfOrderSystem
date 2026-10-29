@@ -12,7 +12,7 @@ export interface DomainEvents {
   // Fired when a guest fills in (or completes) their name/phone/birthday from the menu page after
   // skipping it initially - lets a still-unlinked order get linked to a customer after the fact.
   "order.customerUpdated": OrderRef & { customerBirthday?: string };
-  "order.itemsAdded": OrderRef & { itemIds: string[]; addedByRole: "admin" | "chef" | "table" };
+  "order.itemsAdded": OrderRef & { itemIds: string[]; addedByRole: "admin" | "chef" | "table" | "kiosk" };
   "order.itemCancelled": OrderRef & { itemId: string; previousStatus: string };
   "order.kotSent": OrderRef & { round: number; tokenNumber: number; itemIds: string[]; silent?: boolean };
   "order.billed": OrderRef;

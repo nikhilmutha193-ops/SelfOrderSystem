@@ -20,6 +20,14 @@
         )
           document.documentElement.dataset.theme = "dark";
       } catch (e) {}
+      // The restaurant's brand colour, cached by shared/brand.ts, so pages don't flash the default first.
+      try {
+        var brand = JSON.parse(localStorage.getItem("selforder_brand_v1") || "null");
+        for (var name in brand) {
+          if (/^--brand-[a-z0-9-]+$/.test(name) && /^#[0-9a-f]{6}$/.test(brand[name]))
+            document.documentElement.style.setProperty(name, brand[name]);
+        }
+      } catch (e) {}
     </script>
   </head>
   <body>

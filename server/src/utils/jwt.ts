@@ -1,6 +1,7 @@
 import jwt from "jsonwebtoken";
 
-export type Role = "admin" | "chef" | "table";
+/** "kiosk" is never in a JWT: kiosk requests carry a device token (modules/kiosk) and get this role in their context. */
+export type Role = "admin" | "chef" | "table" | "kiosk";
 
 export interface AuthTokenPayload {
   role: Role;

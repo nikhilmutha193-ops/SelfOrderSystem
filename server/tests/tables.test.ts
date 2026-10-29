@@ -69,6 +69,36 @@ describe("tables stay blocked until the bill is paid", () => {
   });
 });
 
+describe("editing a table", () => {
+  it("renames a table and changes its PIN, so guests sign in with the new ones", async () => {
+    const created = await api().post("/api/tables").set(bearer(owner)).send({ code: "patio1", password: "1111" });
+    expect(created.status).toBe(201);
+
+    const res = await api()
+      .put(`/api/tables/${created.body.id}`)
+      .set(bearer(owner))
+      .send({ code: "  patio9 ", password: "9999" });
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ code: "patio9", password: "9999" });
+
+    expect((await api().post("/api/auth/table/login").send({ code: "patio1", password: "1111" })).status).toBe(401);
+    expect((await api().post("/api/auth/table/login").send({ code: "patio9", password: "9999" })).status).toBe(200);
+  });
+
+  it("refuses an empty code or one another table already uses", async () => {
+    const empty = await api().put(`/api/tables/${world.tableIds[0]}`).set(bearer(owner)).send({ code: "  " });
+    expect(empty.status).toBe(400);
+
+    const clash = await api().put(`/api/tables/${world.tableIds[0]}`).set(bearer(owner)).send({ code: "tbl2" });
+    expect(clash.status).toBe(409);
+    expect(clash.body.message).toBe("A table with that code already exists");
+
+    // Saving a table with its own code is not a clash.
+    const same = await api().put(`/api/tables/${world.tableIds[0]}`).set(bearer(owner)).send({ code: "tbl1" });
+    expect(same.status).toBe(200);
+  });
+});
+
 describe("table login settings", () => {
   it("defaults to allowing QR scan, and the public endpoint reflects changes", async () => {
     const defaults = await api().get("/api/tables/settings").set(bearer(owner));

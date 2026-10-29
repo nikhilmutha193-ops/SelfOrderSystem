@@ -18,6 +18,7 @@ import { LANGS, loadLang, saveLang, tr, ui, type Lang } from "../../lib/i18n";
 import { newId } from "../../lib/id";
 import { suggestionsFor } from "../../lib/recommendations";
 import type { CartLine, MenuCategory, MenuFoodItem, MenuRecommendations } from "../../lib/types";
+import { useDineInPayment } from "../../lib/useDineInPayment";
 import { useGuestAccess } from "../../lib/useGuestAccess";
 import { useTableSession } from "../../lib/useTableSession";
 import { api, clearStoredToken, extractErrorMessage, setActiveAuth, storeToken } from "../../shared/api/client";
@@ -111,7 +112,10 @@ export default function Menu() {
   const access = useGuestAccess();
   const addOrderItems = useAddOrderItems();
   const orderQuery = useOrder(orderId, POLL.guestInvoice);
-  const billReady = !!orderQuery.data && orderQuery.data.order.status !== "open";
+  const payFirst = useDineInPayment() === "upfront";
+  // Paying when ordering: once an order is paid, the guest's next order is a new one.
+  const paidOrder = payFirst && orderQuery.data?.order.status === "closed" ? orderQuery.data.order : null;
+  const billReady = !!orderQuery.data && orderQuery.data.order.status !== "open" && !paidOrder;
   const navigate = useNavigate();
   const [menu, setMenu] = useState<MenuCategory[]>([]);
   const [cart, setCart] = useState<CartLine[]>([]);
@@ -282,6 +286,22 @@ export default function Menu() {
 
   async function placeOrder() {
     if (cart.length === 0) return;
+    if (paidOrder) {
+      setConfirming(true);
+      setError(null);
+      try {
+        await startOrderAndPlace({
+          customerName: paidOrder.customerName || "Guest",
+          members: paidOrder.members || 1,
+          customerPhone: paidOrder.customerPhone || undefined,
+        });
+      } catch (err) {
+        setError(err instanceof Error ? err.message : extractErrorMessage(err));
+      } finally {
+        setConfirming(false);
+      }
+      return;
+    }
     // The order is only created once the guest has given the required details.
     if (!orderId) {
       const needsDetails = Object.values(access.required).some(Boolean);
@@ -994,6 +1014,8 @@ export default function Menu() {
             </div>
 
             <ErrorText>{error}</ErrorText>
+
+            {payFirst && <p className="mt-2 text-xs text-slate-500">{ui(lang, "payFirstNote")}</p>}
 
             <div className="mt-3 flex gap-2">
               <Button variant="secondary" className="flex-1" onClick={() => setReviewOpen(false)} disabled={confirming}>

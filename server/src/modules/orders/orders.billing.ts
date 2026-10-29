@@ -9,6 +9,7 @@ import { IRestaurant } from "../../models/Restaurant";
 import { writeAudit } from "../../utils/audit";
 import { computeDiscountAmount, findValidCoupon } from "../../utils/coupon";
 import { assertDayOpen } from "../../utils/dayLock";
+import { paidBeforeKitchen } from "../../utils/dineInPayment";
 import { HttpError } from "../../utils/httpError";
 import { computeInvoiceTotals, InvoiceItem, InvoiceTotals, PricingInput, round2 } from "../../utils/invoice";
 import { DEFAULT_SAC, financialYearLabel, nextInvoiceNumber } from "../../utils/invoiceNumber";
@@ -129,17 +130,19 @@ async function billOpenOrder(ctx: RequestContext, repo: OrdersRepository, order:
   if (!items.some((i) => i.status !== "cancelled")) {
     throw new HttpError(409, "Add at least one item before generating the bill");
   }
+  const restaurant = await repo.findRestaurant();
+  if (!restaurant) throw new HttpError(404, "Restaurant not found");
+
+  // Orders paid before cooking (kiosk, or dine-in when guests pay first) send their items once paid.
+  const sentOnPayment = paidBeforeKitchen(order, restaurant);
   const unsent = items.filter((i) => i.status === "pending" && i.kotRound == null).length;
-  if (unsent > 0) {
+  if (unsent > 0 && !sentOnPayment) {
     throw new HttpError(
       409,
       `Send ${unsent} item${unsent === 1 ? "" : "s"} to the kitchen or cancel ${unsent === 1 ? "it" : "them"} before billing`
     );
   }
   const subtotal = activeSubtotal(items);
-
-  const restaurant = await repo.findRestaurant();
-  if (!restaurant) throw new HttpError(404, "Restaurant not found");
 
   let couponDiscount = 0;
   let couponId: IOrder["_id"] | null = null;
@@ -267,6 +270,8 @@ export async function settleOrder(ctx: RequestContext, orderId: string, input: S
   };
   await transition(repo, order, "billed", changes);
   order.set(changes);
+  // Dishes already waiting at the pass are handed over with the payment.
+  await repo.serveReadyItems(order._id);
   await syncOrderTable(order);
 
   const breakdown = payments.map((p) => `${p.method} ₹${p.amount.toFixed(2)}`).join(" + ");

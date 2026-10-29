@@ -8,6 +8,9 @@ export async function getOwnedOrder(ctx: RequestContext, orderId: string) {
   if (ctx.auth.role === "table" && ctx.auth.orderId !== orderId) {
     throw new HttpError(403, "This order does not belong to your table session");
   }
+  if (ctx.auth.role === "kiosk" && order.kiosk?.deviceId?.toString() !== ctx.auth.id) {
+    throw new HttpError(403, "This order was placed on another kiosk");
+  }
   return order;
 }
 

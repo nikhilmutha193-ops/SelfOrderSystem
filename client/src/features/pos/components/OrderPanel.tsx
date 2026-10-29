@@ -8,14 +8,14 @@ import { draftUnitPrice, type DraftLine } from "../api";
 
 const rupees = (n: number) => `₹${n.toFixed(2)}`;
 
-function kitchenBadge(item: OrderItem) {
+function kitchenBadge(item: OrderItem, payFirst: boolean) {
   if (item.status === "cancelled") return <Badge tone="red">Cancelled</Badge>;
   if (item.status === "served") return <Badge tone="green">Served</Badge>;
   if (item.status === "ready") return <Badge tone="green">Ready</Badge>;
   if (item.status === "preparing") return <Badge tone="blue">Cooking</Badge>;
   if (item.kotRound != null)
     return <Badge tone="amber">KOT {item.tokenNumber != null ? `T${item.tokenNumber}` : ""}</Badge>;
-  return <Badge tone="gray">Not sent</Badge>;
+  return <Badge tone="gray">{payFirst ? "Not paid yet" : "Not sent"}</Badge>;
 }
 
 function Row({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
@@ -44,6 +44,7 @@ export function OrderPanel({
   onBill,
   onSettle,
   busy,
+  payFirst = false,
   phone = false,
   offline = false,
   offlineTotal = null,
@@ -63,6 +64,8 @@ export function OrderPanel({
   onBill: () => void;
   onSettle: (() => void) | null;
   busy: boolean;
+  /** Dine-in guests pay when ordering: "Pay & send" replaces "Save & KOT" and Settle. */
+  payFirst?: boolean;
   phone?: boolean;
   offline?: boolean;
   offlineTotal?: number | null;
@@ -129,7 +132,7 @@ export function OrderPanel({
                     {item.modifiers!.map((m) => m.label).join(", ")}
                   </span>
                 )}
-                <span className="mt-0.5 block">{kitchenBadge(item)}</span>
+                <span className="mt-0.5 block">{kitchenBadge(item, payFirst)}</span>
               </span>
               <span className="shrink-0 tabular-nums">{rupees(item.total)}</span>
             </li>
@@ -207,9 +210,20 @@ export function OrderPanel({
       </div>
 
       <div className="grid grid-cols-2 gap-2 border-t border-slate-200 p-3">
-        <Button onClick={onSaveKot} disabled={busy || !isOpen || (draft.length === 0 && unsent === 0)} title="F8">
-          {phone ? "Send KOT" : "Save & KOT"} {!phone && <kbd className="text-[10px] opacity-70">F8</kbd>}
-        </Button>
+        {payFirst && onSettle ? (
+          <Button
+            className="!bg-green-600 hover:!bg-green-700"
+            onClick={onSettle}
+            disabled={busy || nothing || order?.status === "closed"}
+            title="F8 or F10"
+          >
+            Pay & send {!phone && <kbd className="text-[10px] opacity-70">F10</kbd>}
+          </Button>
+        ) : (
+          <Button onClick={onSaveKot} disabled={busy || !isOpen || (draft.length === 0 && unsent === 0)} title="F8">
+            {phone ? "Send KOT" : "Save & KOT"} {!phone && <kbd className="text-[10px] opacity-70">F8</kbd>}
+          </Button>
+        )}
         {onHold ? (
           <Button variant="secondary" onClick={onHold} disabled={busy || draft.length === 0}>
             Hold
@@ -228,7 +242,7 @@ export function OrderPanel({
           {order?.status === "billed" ? "Reprint bill" : phone ? "Request bill" : "Bill"}{" "}
           {!phone && <kbd className="text-[10px] opacity-70">F9</kbd>}
         </Button>
-        {onSettle && (
+        {onSettle && !payFirst && (
           <Button
             className="!bg-green-600 hover:!bg-green-700"
             onClick={onSettle}

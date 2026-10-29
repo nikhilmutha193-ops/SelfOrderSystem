@@ -1,11 +1,13 @@
 import { useEffect } from "react";
 
 import { api } from "../shared/api/client";
+import { applyBrandColor } from "../shared/brand";
 
 interface PublicRestaurant {
   name: string;
   siteTitle?: string;
   faviconUrl?: string;
+  brandColor?: string;
 }
 
 function setFavicon(href: string) {
@@ -25,6 +27,7 @@ export function useSiteBranding() {
         const title = data.siteTitle?.trim() || data.name;
         if (title) document.title = title;
         if (data.faviconUrl) setFavicon(data.faviconUrl);
+        applyBrandColor(data.brandColor);
       })
       .catch(() => {
         // Branding is cosmetic - a failure here must not block the app.

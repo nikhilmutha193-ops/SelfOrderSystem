@@ -29,7 +29,11 @@ function isDuplicate(err: unknown): boolean {
   return (err as { code?: number }).code === 11000;
 }
 
-async function orderLabel(repo: PrintingRepository, order: Pick<IOrder, "orderType" | "tableId" | "deliveryProvider">) {
+async function orderLabel(
+  repo: PrintingRepository,
+  order: Pick<IOrder, "orderType" | "tableId" | "deliveryProvider"> & Partial<Pick<IOrder, "source">>
+) {
+  if (order.source === "kiosk") return order.orderType === "takeaway" ? "KIOSK - TAKE AWAY" : "KIOSK - EAT IN";
   if (order.orderType === "takeaway") return "TAKE AWAY";
   if (order.orderType === "delivery") return `DELIVERY (${order.deliveryProvider ?? "Other"})`;
   if (!order.tableId) return "COUNTER";

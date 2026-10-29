@@ -78,4 +78,6 @@ export const posApi = {
       .then((res) => res.data),
   syncOffline: (input: OfflineSyncInput) =>
     api.post<OfflineSyncResult>("/pos/offline-orders", input).then((res) => res.data),
+  releaseTable: (tableId: string) =>
+    api.patch<{ status: string; cancelledOrders: number }>(`/pos/tables/${tableId}/release`).then((res) => res.data),
 };

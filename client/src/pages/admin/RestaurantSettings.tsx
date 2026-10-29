@@ -7,19 +7,23 @@ import {
   Eye,
   ImagePlus,
   Percent,
+  Pipette,
   Plus,
   ReceiptText,
   RefreshCw,
+  RotateCcw,
   ShieldAlert,
   Trash2,
   Truck,
   Wallet,
   type LucideIcon,
 } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
 
 import { currentFinancialYearLabel } from "../../features/orders/status";
+import { OnlinePaymentsCard } from "../../features/payments/components/OnlinePaymentsCard";
 import {
   PRINT_FONT_SIZE_LABELS,
   PRINT_PAPER_SIZE_LABELS,
@@ -31,7 +35,16 @@ import {
   type Restaurant,
   type TaxRate,
 } from "../../lib/types";
+import { PUBLIC_RESTAURANT_KEY } from "../../lib/useDineInPayment";
 import { api, extractErrorMessage, uploadImage } from "../../shared/api/client";
+import {
+  applyBrandColor,
+  BRAND_PRESETS,
+  colorFromImage,
+  DEFAULT_BRAND_COLOR,
+  isBrandColor,
+  useBrandPreview,
+} from "../../shared/brand";
 import { usePageTour, type TourStep } from "../../shared/ui/PageTour";
 import {
   Alert,
@@ -136,6 +149,7 @@ const DEFAULT_BILLING_SETTINGS: BillingSettings = {
   maxStaffDiscountPercent: 10,
   upiVpa: "",
   upiPayeeName: "",
+  dineInPayment: "after",
 };
 
 const DEFAULT_INVOICE_SETTINGS: InvoiceSettings = {
@@ -152,10 +166,157 @@ const DEFAULT_INVOICE_SETTINGS: InvoiceSettings = {
   autoPrintBill: false,
 };
 
+// Literal class names so Tailwind generates them; they follow the live brand colour.
+const BRAND_SWATCHES = [
+  "bg-orange-50",
+  "bg-orange-100",
+  "bg-orange-200",
+  "bg-orange-300",
+  "bg-orange-400",
+  "bg-orange-500",
+  "bg-orange-600",
+  "bg-orange-700",
+  "bg-orange-800",
+  "bg-orange-900",
+];
+
+async function logoColor(logoUrl: string, isSavedLogo: boolean): Promise<string | null> {
+  try {
+    return await colorFromImage(logoUrl);
+  } catch (err) {
+    // A logo on another domain without CORS can't be read directly; the saved logo is also
+    // served from our own API, which can.
+    if (!isSavedLogo) throw err;
+    const res = await api.get<Blob>("/restaurant/logo", { responseType: "blob" });
+    const objectUrl = URL.createObjectURL(res.data);
+    try {
+      return await colorFromImage(objectUrl);
+    } finally {
+      URL.revokeObjectURL(objectUrl);
+    }
+  }
+}
+
+function BrandColorField({
+  value,
+  onChange,
+  logoUrl,
+  savedLogoUrl,
+}: {
+  value: string;
+  onChange: (color: string) => void;
+  logoUrl: string;
+  savedLogoUrl: string;
+}) {
+  // What's typed in the hex box, kept only while it still belongs to the current colour; a swatch,
+  // the picker or the logo replaces it with the new value.
+  const [typed, setTyped] = useState<{ base: string; text: string } | null>(null);
+  const hexText = typed && typed.base === value ? typed.text : value;
+  const [picking, setPicking] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+
+  function typeHex(text: string) {
+    const next = text.trim();
+    const hex = (next.startsWith("#") ? next : `#${next}`).toLowerCase();
+    const color = next === "" ? "" : isBrandColor(hex) ? hex : value;
+    setTyped({ base: color, text: next });
+    if (color !== value) onChange(color);
+  }
+
+  async function pickFromLogo() {
+    setNote(null);
+    setPicking(true);
+    try {
+      const color = await logoColor(logoUrl, logoUrl === savedLogoUrl);
+      if (color) onChange(color);
+      else setNote("The logo has no strong colour. Pick one below instead.");
+    } catch {
+      setNote("Couldn't read the logo's colours. Save the logo first, or pick a colour below.");
+    } finally {
+      setPicking(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="text-sm font-medium text-slate-700">Brand colour</span>
+        <div className="flex flex-wrap gap-1">
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            icon={Pipette}
+            loading={picking}
+            disabled={!logoUrl}
+            onClick={pickFromLogo}
+          >
+            Use colour from logo
+          </Button>
+          {value && (
+            <Button type="button" size="sm" variant="ghost" icon={RotateCcw} onClick={() => onChange("")}>
+              Default
+            </Button>
+          )}
+        </div>
+      </div>
+      <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Brand colour presets">
+        {BRAND_PRESETS.map((preset) => {
+          const selected = preset.color === value;
+          return (
+            <button
+              key={preset.label}
+              type="button"
+              role="radio"
+              aria-checked={selected}
+              aria-label={preset.label}
+              title={preset.label}
+              onClick={() => onChange(preset.color)}
+              className={`h-9 w-9 rounded-full ring-offset-2 transition-shadow ${
+                selected ? "ring-2 ring-slate-900" : "ring-1 ring-slate-200"
+              }`}
+              style={{ backgroundColor: preset.color || DEFAULT_BRAND_COLOR }}
+            >
+              {selected && <Check size={16} className="mx-auto text-white" aria-hidden="true" />}
+            </button>
+          );
+        })}
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          type="color"
+          aria-label="Custom brand colour"
+          value={value || DEFAULT_BRAND_COLOR}
+          onChange={(e) => onChange(e.target.value)}
+          className="h-10 w-12 cursor-pointer rounded border border-slate-300 bg-white p-1"
+        />
+        <Input
+          aria-label="Brand colour hex code"
+          className="!w-32 font-mono"
+          placeholder={DEFAULT_BRAND_COLOR}
+          value={hexText}
+          onChange={(e) => typeHex(e.target.value)}
+        />
+        <div className="flex h-6 overflow-hidden rounded-md ring-1 ring-slate-200" aria-hidden="true">
+          {BRAND_SWATCHES.map((swatch) => (
+            <span key={swatch} className={`w-4 sm:w-5 ${swatch}`} />
+          ))}
+        </div>
+      </div>
+      {note && <p className="text-xs text-amber-700">{note}</p>}
+      <p className="text-xs text-slate-500">
+        Used for buttons, highlights, the guest menu and the landing page on every screen. You see it here as you pick;
+        it applies for everyone once you save. Light colours are darkened where white text sits on them.
+      </p>
+    </div>
+  );
+}
+
 const PAPER_SIZE_OPTIONS = Object.entries(PRINT_PAPER_SIZE_LABELS) as [PrintPaperSize, string][];
 const FONT_SIZE_OPTIONS = Object.entries(PRINT_FONT_SIZE_LABELS) as [PrintFontSize, string][];
 
 export default function RestaurantSettings() {
+  const queryClient = useQueryClient();
   const [name, setName] = useState("");
   const [address, setAddress] = useState("");
   const [logoUrl, setLogoUrl] = useState("");
@@ -163,6 +324,11 @@ export default function RestaurantSettings() {
   const [siteTitle, setSiteTitle] = useState("");
   const [faviconUrl, setFaviconUrl] = useState("");
   const [uploadingFavicon, setUploadingFavicon] = useState(false);
+  const [brandColor, setBrandColor] = useState("");
+  // null until loaded, so the preview doesn't reset the colour before the saved one is known.
+  const [savedBrandColor, setSavedBrandColor] = useState<string | null>(null);
+  const [savedLogoUrl, setSavedLogoUrl] = useState("");
+  useBrandPreview(brandColor, savedBrandColor);
   const [gstin, setGstin] = useState("");
   const [fssaiLicense, setFssaiLicense] = useState("");
   const [publicUrl, setPublicUrl] = useState("");
@@ -262,8 +428,11 @@ export default function RestaurantSettings() {
         setName(res.data.name);
         setAddress(res.data.address || "");
         setLogoUrl(res.data.logoUrl || "");
+        setSavedLogoUrl(res.data.logoUrl || "");
         setSiteTitle(res.data.siteTitle || "");
         setFaviconUrl(res.data.faviconUrl || "");
+        setBrandColor(res.data.brandColor || "");
+        setSavedBrandColor(res.data.brandColor || "");
         setGstin(res.data.gstin || "");
         setFssaiLicense(res.data.fssaiLicense || "");
         setPublicUrl(res.data.publicUrl || "");
@@ -378,6 +547,7 @@ export default function RestaurantSettings() {
         logoUrl,
         siteTitle,
         faviconUrl,
+        brandColor,
         gstin,
         fssaiLicense,
         publicUrl,
@@ -398,6 +568,11 @@ export default function RestaurantSettings() {
         invoiceSettings,
         billingSettings,
       });
+      applyBrandColor(brandColor);
+      setSavedBrandColor(brandColor);
+      // The admin menu, Tables and Admin Users read the payment flow and branding from here.
+      await queryClient.invalidateQueries({ queryKey: PUBLIC_RESTAURANT_KEY });
+      setSavedLogoUrl(logoUrl);
       setMessage("Settings saved");
     } catch (err) {
       setError(extractErrorMessage(err));
@@ -491,7 +666,11 @@ export default function RestaurantSettings() {
               </Card>
 
               <Card>
-                <CardHeader icon={ImagePlus} title="Branding" description="Logo, browser tab title and icon." />
+                <CardHeader
+                  icon={ImagePlus}
+                  title="Branding"
+                  description="Logo, brand colour, browser tab title and icon."
+                />
                 <div className="flex flex-col gap-5">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                     {logoUrl ? (
@@ -523,6 +702,12 @@ export default function RestaurantSettings() {
                       {uploadingLogo && <span className="text-xs text-slate-500">Uploading…</span>}
                     </div>
                   </div>
+                  <BrandColorField
+                    value={brandColor}
+                    onChange={setBrandColor}
+                    logoUrl={logoUrl}
+                    savedLogoUrl={savedLogoUrl}
+                  />
                   <Field
                     label="Browser tab title"
                     htmlFor="rs-site-title"
@@ -760,6 +945,12 @@ export default function RestaurantSettings() {
                     description="New items wait in the Kitchen Queue until someone prints the KOT."
                   />
                 </div>
+                {billingSettings.dineInPayment === "upfront" && (
+                  <p className="mt-3 text-xs text-slate-500">
+                    Guests pay when ordering (Billing), so their orders go to the kitchen once paid, whichever you pick
+                    here.
+                  </p>
+                )}
               </Card>
 
               <Card>
@@ -884,6 +1075,35 @@ export default function RestaurantSettings() {
           )}
 
           {section === "billing" && (
+            <>
+            <Card>
+              <CardHeader
+                title="When do dine-in guests pay?"
+                description="Choose how your restaurant works. Takeaway can be paid either way."
+              />
+              <div className="grid gap-3 sm:grid-cols-2">
+                <ChoiceCard
+                  name="dine-in-payment"
+                  checked={billingSettings.dineInPayment !== "upfront"}
+                  onChange={() => setBillingSettings((prev) => ({ ...prev, dineInPayment: "after" }))}
+                  title="After eating"
+                  description="Guests order in rounds, then pay the bill. The table waits for payment before it frees up. Captains (waiters) can take orders."
+                />
+                <ChoiceCard
+                  name="dine-in-payment"
+                  checked={billingSettings.dineInPayment === "upfront"}
+                  onChange={() => setBillingSettings((prev) => ({ ...prev, dineInPayment: "upfront" }))}
+                  title="When ordering"
+                  description="Each order is paid first and only then goes to the kitchen. The table stays seated until staff release it. The captain app is not used."
+                />
+              </div>
+              {billingSettings.dineInPayment === "upfront" && (
+                <p className="mt-3 text-xs text-slate-500">
+                  Table QR orders wait until they're paid at the counter. Turn on table auto-release (Tables page) so
+                  tables free up even when nobody releases them.
+                </p>
+              )}
+            </Card>
             <Card>
               <CardHeader
                 icon={Wallet}
@@ -941,6 +1161,8 @@ export default function RestaurantSettings() {
                 </Field>
               </div>
             </Card>
+            <OnlinePaymentsCard publicUrl={publicUrl} />
+            </>
           )}
 
           {section === "invoice" && (

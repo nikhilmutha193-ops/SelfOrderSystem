@@ -1,5 +1,5 @@
 import { on } from "../../core/events";
-import { sendGuestItemsIfAutomatic } from "./kitchen.service";
+import { sendGuestItemsIfAutomatic, sendPaidOrderToKitchen } from "./kitchen.service";
 
 let registered = false;
 
@@ -9,5 +9,9 @@ export function registerKitchenHandlers(): void {
 
   on("order.itemsAdded", async (event) => {
     if (event.addedByRole === "table") await sendGuestItemsIfAutomatic(event.restaurantId, event.orderId);
+  });
+
+  on("order.settled", async (event) => {
+    await sendPaidOrderToKitchen(event.restaurantId, event.orderId);
   });
 }

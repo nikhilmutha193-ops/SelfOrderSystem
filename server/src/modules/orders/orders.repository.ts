@@ -140,6 +140,16 @@ export class OrdersRepository {
     });
   }
 
+  serveReadyItems(orderId: Types.ObjectId) {
+    return OrderItem.updateMany(this.scoped<IOrderItem>({ orderId, status: "ready" }), {
+      $set: { status: "served" },
+    });
+  }
+
+  hasUnpaidOrders(tableId: Types.ObjectId) {
+    return Order.exists(this.scoped<IOrder>({ tableId, status: { $in: ["open", "billed"] } }));
+  }
+
   findActiveFoodItems(foodItemIds: string[]) {
     return FoodItem.find(this.scoped({ _id: { $in: foodItemIds }, isActive: true }));
   }

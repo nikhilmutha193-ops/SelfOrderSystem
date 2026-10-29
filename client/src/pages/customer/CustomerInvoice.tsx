@@ -6,6 +6,7 @@ import ChatFab from "../../features/chat/components/ChatFab";
 import { useSendChatMessage } from "../../features/chat/queries";
 import { ordersApi } from "../../features/orders/api";
 import { useApplyCoupon, useOrderInvoice, useRemoveCoupon } from "../../features/orders/queries";
+import { PayOnlineButton } from "../../features/payments/components/PayOnlineButton";
 import { renderPrepMessage } from "../../lib/prepTime";
 import { useGuestAccess } from "../../lib/useGuestAccess";
 import { useTableSession } from "../../lib/useTableSession";
@@ -126,16 +127,23 @@ export default function CustomerInvoice() {
   if (!data) return <p className="p-4 text-sm text-slate-500">Loading...</p>;
 
   const { order, items, totals } = data;
-  const prepMessage =
-    order.status === "open"
-      ? renderPrepMessage(data.prepMessageTemplate, order.estimatedReadyAt, items, data.prepBufferMinutes)
-      : null;
+  // Paying when ordering: each order is paid at the counter (or by UPI) and only then cooked.
+  const payFirst = data.dineInPayment === "upfront";
+  const cooking = order.status === "open" || (payFirst && order.status === "closed");
+  const prepMessage = cooking
+    ? renderPrepMessage(data.prepMessageTemplate, order.estimatedReadyAt, items, data.prepBufferMinutes)
+    : null;
 
   // Cancelled items are settled, so they don't hold the table up.
   const activeItems = items.filter((i) => i.status !== "cancelled");
   const pendingCount = activeItems.filter((i) => i.status !== "served").length;
   const awaitingAccept =
-    order.status === "open" && data.guestOrderMode === "accept" && activeItems.some((i) => i.kotRound == null);
+    !payFirst &&
+    order.status === "open" &&
+    data.guestOrderMode === "accept" &&
+    activeItems.some((i) => i.kotRound == null);
+  const awaitingPayment =
+    payFirst && (order.status === "open" || order.status === "billed") && activeItems.length > 0;
   const orderComplete =
     order.status === "closed" || order.status === "billed" || (activeItems.length > 0 && pendingCount === 0);
   const statusBadge =
@@ -154,13 +162,54 @@ export default function CustomerInvoice() {
         <Badge tone={statusBadge.tone}>{statusBadge.label}</Badge>
       </div>
 
-      {order.status === "billed" && (
+      {awaitingPayment && (
+        <Card className="mb-4">
+          {data.onlinePayment ? (
+            <>
+              <p className="mb-3 text-sm font-medium text-slate-800">
+                Pay now and your order goes straight to the kitchen.
+              </p>
+              <PayOnlineButton orderId={order._id} amount={totals.grandTotal} />
+              <p className="mt-3 text-xs text-slate-500">Paying cash? Pay at the counter instead.</p>
+            </>
+          ) : (
+            <p className="text-sm font-medium text-slate-800">
+              Pay ₹{totals.grandTotal.toFixed(2)} at the counter{data.payment?.upiVpa ? " or scan to pay by UPI" : ""}.
+              Your order goes to the kitchen as soon as it's paid.
+            </p>
+          )}
+          {!data.onlinePayment && data.payment?.upiVpa && (
+            <div className="mt-3">
+              <UpiQr
+                vpa={data.payment.upiVpa}
+                payee={data.payment.upiPayeeName}
+                amount={totals.grandTotal}
+                note={order.invoiceNumber ?? "Order"}
+              />
+              <p className="mt-2 text-center text-xs text-slate-500">
+                Show the payment confirmation at the counter so they can send your order.
+              </p>
+            </div>
+          )}
+        </Card>
+      )}
+
+      {order.status === "billed" && !payFirst && (
         <Card className="mb-4">
           <p className="text-sm text-blue-900">
             Your bill{order.invoiceNumber ? ` ${order.invoiceNumber}` : ""} is ready.{" "}
-            {data.payment?.upiVpa ? "Pay at the counter or scan to pay by UPI." : "Please pay at the counter."}
+            {data.onlinePayment
+              ? "Pay now from your phone, or at the counter."
+              : data.payment?.upiVpa
+                ? "Pay at the counter or scan to pay by UPI."
+                : "Please pay at the counter."}
           </p>
-          {data.payment?.upiVpa && (
+          {data.onlinePayment && (
+            <div className="mt-3">
+              <PayOnlineButton orderId={order._id} amount={totals.grandTotal} />
+            </div>
+          )}
+          {!data.onlinePayment && data.payment?.upiVpa && (
             <div className="mt-3">
               <UpiQr
                 vpa={data.payment.upiVpa}
@@ -338,7 +387,7 @@ export default function CustomerInvoice() {
         </p>
       )}
 
-      {!orderComplete && (
+      {!orderComplete && !payFirst && (
         <p className="mb-3 rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-600">
           {pendingCount > 0
             ? `Checkout and your invoice unlock once all items are served - ${pendingCount} still on the way.`
@@ -347,8 +396,10 @@ export default function CustomerInvoice() {
       )}
 
       <div className="flex flex-wrap gap-3">
-        {order.status === "open" && <Button onClick={() => navigate("/order/menu")}>Order more</Button>}
-        {order.status === "open" && (
+        {(order.status === "open" || (payFirst && order.status === "closed")) && (
+          <Button onClick={() => navigate("/order/menu")}>Order more</Button>
+        )}
+        {order.status === "open" && !payFirst && (
           <Button onClick={requestCheckout} disabled={!orderComplete || checkingOut || checkoutRequested}>
             {checkingOut ? "Notifying..." : checkoutRequested ? "Checkout requested" : "Checkout"}
           </Button>

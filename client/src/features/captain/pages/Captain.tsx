@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import DishDialog from "../../../components/DishDialog";
 import { can, useAdmin } from "../../../lib/adminAuth";
+import { useDineInPayment } from "../../../lib/useDineInPayment";
 import type { ChatConversation, KotQueueGroup, PosMenu, PosMenuItem, PosTable } from "../../../lib/types";
 import { extractErrorMessage } from "../../../shared/api/client";
 import { POLL } from "../../../shared/api/queryClient";
@@ -93,6 +94,30 @@ function NoTabAccess({ page }: { page: string }) {
 }
 
 export default function Captain() {
+  const dineInPayment = useDineInPayment();
+  return dineInPayment === "upfront" ? <NotUsedWhenPayingFirst /> : <CaptainApp />;
+}
+
+function NotUsedWhenPayingFirst() {
+  useStaffTheme();
+  return (
+    <div className="flex h-dvh flex-col bg-slate-100">
+      <header className="flex shrink-0 items-center gap-3 bg-slate-900 px-3 py-2.5 text-white">
+        <span className="flex flex-1 items-center gap-2 text-base font-bold">
+          <Smartphone size={18} className="text-orange-400" aria-hidden="true" />
+          Captain
+        </span>
+        <StaffSignOut to="/captain/login" />
+      </header>
+      <p className="mx-auto max-w-sm px-6 py-16 text-center text-sm text-slate-600">
+        The captain app isn't used here: guests pay when they order, at the counter or from their phone. The owner can
+        change this under Settings → Billing.
+      </p>
+    </div>
+  );
+}
+
+function CaptainApp() {
   useStaffTheme();
   useCaptainManifest();
   const { profile } = useAdmin();

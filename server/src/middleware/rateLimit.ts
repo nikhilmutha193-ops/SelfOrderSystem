@@ -1,4 +1,5 @@
 import { Request } from "express";
+import { createHash } from "crypto";
 import rateLimit from "express-rate-limit";
 
 import { verifyToken } from "../utils/jwt";
@@ -13,7 +14,10 @@ function principalKey(req: Request): string | null {
 
   let key: string | null = null;
   const header = req.headers.authorization;
-  if (header?.startsWith("Bearer ")) {
+  if (header?.startsWith("Kiosk ")) {
+    // Each kiosk screen gets its own limit, even when several share the restaurant's connection.
+    key = `kiosk:${createHash("sha256").update(header.slice("Kiosk ".length).trim()).digest("hex").slice(0, 32)}`;
+  } else if (header?.startsWith("Bearer ")) {
     try {
       const payload = verifyToken(header.slice("Bearer ".length));
       key =

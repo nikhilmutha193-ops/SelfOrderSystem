@@ -1,8 +1,8 @@
 :root {
-  --color-primary: #b8503c;
-  --color-primary-dark: #9a4130;
-  --color-primary-light: #d9765f;
-  --color-primary-tint: #f6e6e0;
+  --color-primary: var(--brand-primary, #b8503c);
+  --color-primary-dark: var(--brand-primary-dark, #9a4130);
+  --color-primary-light: var(--brand-primary-light, #d9765f);
+  --color-primary-tint: var(--brand-primary-tint, #f6e6e0);
 
   --color-bg: #fdfbf7;
   --color-bg-tint: #f6f0e6;
@@ -254,14 +254,14 @@ body.no-scroll {
   background-color: var(--color-primary);
   border-color: var(--color-primary);
   color: #fff;
-  box-shadow: 0 6px 16px rgba(184, 80, 60, 0.28);
+  box-shadow: 0 6px 16px color-mix(in srgb, var(--color-primary) 28%, transparent);
 }
 
 .btn--primary:hover {
   background-color: var(--color-primary-dark);
   border-color: var(--color-primary-dark);
   color: #fff;
-  box-shadow: 0 10px 22px rgba(184, 80, 60, 0.36);
+  box-shadow: 0 10px 22px color-mix(in srgb, var(--color-primary) 36%, transparent);
 }
 
 .btn--secondary {
@@ -322,7 +322,7 @@ body.no-scroll {
   letter-spacing: 0.04em;
   color: var(--color-primary-dark);
   background-color: var(--color-primary-tint);
-  background-image: repeating-linear-gradient(45deg, transparent 0 14px, rgba(184, 80, 60, 0.08) 14px 16px);
+  background-image: repeating-linear-gradient(45deg, transparent 0 14px, color-mix(in srgb, var(--color-primary) 8%, transparent) 14px 16px);
   border: 1px dashed var(--color-primary-light);
 }
 
