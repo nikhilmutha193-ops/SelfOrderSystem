@@ -63,8 +63,11 @@ export const getTableLoginSettings = asyncHandler(async (req: Request, res: Resp
 });
 
 export const updateTableLoginSettings = asyncHandler(async (req: Request, res: Response) => {
-  const { allowQrScan, qr, manual, requiredDetails } = req.body as {
+  const { allowQrScan, showOrderNow, allowQrLogin, allowPinLogin, qr, manual, requiredDetails } = req.body as {
     allowQrScan?: boolean;
+    showOrderNow?: boolean;
+    allowQrLogin?: boolean;
+    allowPinLogin?: boolean;
     requiredDetails?: Partial<Record<"name" | "phone" | "members" | "birthday", boolean>>;
     qr?: Partial<Record<"placeOrder" | "showMenu" | "showFeedback", boolean>>;
     manual?: Partial<Record<"placeOrder" | "showMenu" | "showFeedback", boolean>>;
@@ -73,6 +76,9 @@ export const updateTableLoginSettings = asyncHandler(async (req: Request, res: R
   if (!restaurant) throw new HttpError(404, "Restaurant not found");
   const settings = restaurant.tableLoginSettings;
   if (allowQrScan !== undefined) settings.allowQrScan = !!allowQrScan;
+  if (showOrderNow !== undefined) settings.showOrderNow = !!showOrderNow;
+  if (allowQrLogin !== undefined) settings.allowQrLogin = !!allowQrLogin;
+  if (allowPinLogin !== undefined) settings.allowPinLogin = !!allowPinLogin;
   for (const field of ["name", "phone", "members", "birthday"] as const) {
     if (requiredDetails?.[field] !== undefined) settings.requiredDetails[field] = !!requiredDetails[field];
   }

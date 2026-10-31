@@ -21,6 +21,7 @@ import {
   Printer,
   QrCode,
   ReceiptText,
+  RotateCcw,
   ScrollText,
   Settings,
   ShoppingBag,
@@ -98,6 +99,13 @@ export const ADMIN_NAV: AdminNavGroup[] = [
     items: [
       { to: "/admin/invoices", label: "Invoices", module: "invoices", icon: ReceiptText, keywords: "bills register" },
       { to: "/admin/gst", label: "GST", module: "gst", icon: Landmark, keywords: "tax cgst sgst return report" },
+      {
+        to: "/admin/refunds",
+        label: "Refunds",
+        module: "refunds",
+        icon: RotateCcw,
+        keywords: "money back return cancel",
+      },
       { to: "/admin/shifts", label: "Cash Shifts", module: "dayClose", icon: Wallet, keywords: "drawer" },
       { to: "/admin/day-close", label: "Day Close", module: "dayClose", icon: CalendarCheck, keywords: "z report" },
     ],

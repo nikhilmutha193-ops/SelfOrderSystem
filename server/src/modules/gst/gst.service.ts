@@ -63,7 +63,7 @@ export async function gstReport(ctx: RequestContext, input: GstReportInput) {
     $gte: getBusinessDayRangeForDate(input.from, restaurant?.dayEndTime, restaurant?.timezone).start,
     $lt: getBusinessDayRangeForDate(input.to, restaurant?.dayEndTime, restaurant?.timezone).end,
   };
-  const orders = await repo.invoices(range);
+  const [orders, refunds] = await Promise.all([repo.invoices(range), repo.refundsIn(range)]);
 
   const summary = emptyTotals();
   const byDay = new Map<string, Totals>();
@@ -173,6 +173,8 @@ export async function gstReport(ctx: RequestContext, input: GstReportInput) {
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([date, t]) => ({ date, ...roundTotals(t) })),
     excluded,
+    // Money given back after sale. It is shown here, not taken off the totals above: file a credit note for it.
+    refunds: { count: refunds.count, amount: round2(refunds.amount) },
     invoices: rows,
   };
 }

@@ -83,13 +83,26 @@ export default function TableLogin() {
   const [bkDone, setBkDone] = useState(false);
   // Defaults to true so the button doesn't flash away then back while this loads.
   const [allowQrScan, setAllowQrScan] = useState(true);
+  // The admin can turn either way of signing in to a table off.
+  const [allowQrLogin, setAllowQrLogin] = useState(true);
+  const [allowPinLogin, setAllowPinLogin] = useState(true);
+  // Cafe flow: a guest holding a receipt can follow their order by its token number.
+  const [cafe, setCafe] = useState(false);
+  const [trackToken, setTrackToken] = useState("");
+  const [trackError, setTrackError] = useState<string | null>(null);
+  const [tracking, setTracking] = useState(false);
 
   useEffect(() => {
     api
-      .get<{ name?: string; logoUrl?: string; tableLoginSettings?: TableLoginSettings }>("/restaurant/public")
+      .get<{ name?: string; logoUrl?: string; serviceFlow?: string; tableLoginSettings?: TableLoginSettings }>(
+        "/restaurant/public",
+      )
       .then((res) => {
         setBrand({ name: res.data.name || "Benne Kaffi", logoUrl: res.data.logoUrl || "" });
         setAllowQrScan(res.data.tableLoginSettings?.allowQrScan ?? true);
+        setAllowQrLogin(res.data.tableLoginSettings?.allowQrLogin ?? true);
+        setAllowPinLogin(res.data.tableLoginSettings?.allowPinLogin ?? true);
+        setCafe(res.data.serviceFlow === "cafe");
       })
       .catch(() => {});
   }, []);
@@ -116,7 +129,7 @@ export default function TableLogin() {
   const OWN_TABLE_OCCUPIED_MESSAGE = "You already have an order in progress at this table";
 
   async function attemptLogin(
-    opts: { startNewOrder?: boolean; continueOrder?: boolean; qrTokenOverride?: string } = {}
+    opts: { startNewOrder?: boolean; continueOrder?: boolean; qrTokenOverride?: string } = {},
   ) {
     const tokenToUse = opts.qrTokenOverride ?? qrToken;
     setError(null);
@@ -151,6 +164,22 @@ export default function TableLogin() {
       }
       setError(message);
       setLoading(false);
+    }
+  }
+
+  async function trackOrder(e: React.FormEvent) {
+    e.preventDefault();
+    setTrackError(null);
+    setTracking(true);
+    try {
+      const res = await api.post<{ token: string }>("/auth/table/token-login", { token: Number(trackToken) });
+      storeToken("table", res.data.token);
+      setActiveAuth({ role: "table", token: res.data.token });
+      navigate("/order/invoice");
+    } catch (err) {
+      setTrackError(extractErrorMessage(err));
+    } finally {
+      setTracking(false);
     }
   }
 
@@ -199,7 +228,7 @@ export default function TableLogin() {
         onDecodeError: () => {
           /* fires continuously while no code is in frame - not a real error */
         },
-      }
+      },
     );
     qrScannerRef.current = scanner;
     scanner.start().catch(() => {
@@ -210,7 +239,6 @@ export default function TableLogin() {
   }, [scannerOpen]);
 
   useEffect(() => {
-
     clearExpiredFlag("table");
     const token = activateStoredAuth("table");
 
@@ -221,6 +249,7 @@ export default function TableLogin() {
 
     if (token && !sessionExpired) {
       if (session.tableId) navigate("/order/menu", { replace: true });
+      else if (session.orderId) navigate("/order/invoice", { replace: true });
       return;
     }
 
@@ -348,6 +377,37 @@ export default function TableLogin() {
           </aside>
 
           <section className="order__panel">
+            {cafe && (
+              <form className="order-form" onSubmit={trackOrder} noValidate style={{ marginBottom: "1.5rem" }}>
+                <h2 className="step__title">Collecting your order?</h2>
+                <p className="step__lead">
+                  Enter the token number on your receipt to see how it is coming along, view the menu or send a request.
+                </p>
+                {trackError && <p className="order-note order-note--error">{trackError}</p>}
+                <div className="field">
+                  <label className="field__label" htmlFor="track-token">
+                    Token number
+                  </label>
+                  <input
+                    className="field__input field__input--code"
+                    id="track-token"
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    placeholder="e.g. 12"
+                    value={trackToken}
+                    onChange={(e) => setTrackToken(e.target.value.replace(/\D/g, "").slice(0, 5))}
+                  />
+                </div>
+                <button
+                  className="btn btn--secondary btn--lg btn--block"
+                  type="submit"
+                  disabled={tracking || trackToken === ""}
+                >
+                  {tracking ? "Finding your order…" : "Track my order"}
+                </button>
+              </form>
+            )}
             <form className="order-form" onSubmit={submit} noValidate>
               <ol className="stepper" aria-label="Progress">
                 <li className="stepper__step stepper__step--active" aria-current="step">
@@ -365,7 +425,13 @@ export default function TableLogin() {
               </ol>
 
               <h1 className="step__title">Welcome</h1>
-              <p className="step__lead">Enter your table code and PIN to start ordering.</p>
+              <p className="step__lead">
+                {allowPinLogin
+                  ? "Enter your table code and PIN to start ordering."
+                  : allowQrLogin
+                    ? "Scan the QR code on your table to start ordering."
+                    : "Welcome to our restaurant."}
+              </p>
 
               {sessionExpired && (
                 <p className="order-note order-note--warn">
@@ -406,7 +472,7 @@ export default function TableLogin() {
 
               {!qrToken && !needsOrderChoice && (
                 <>
-                  {allowQrScan && cameraAvailable && (
+                  {allowQrLogin && allowQrScan && cameraAvailable && (
                     <>
                       <button type="button" className="btn btn--primary btn--lg btn--block" onClick={openScanner}>
                         <svg
@@ -424,121 +490,130 @@ export default function TableLogin() {
                         </svg>
                         Scan table QR code
                       </button>
-                      <p className="field__divider">or enter your table code and PIN</p>
+                      {allowPinLogin && <p className="field__divider">or enter your table code and PIN</p>}
                     </>
                   )}
-                  {allowQrScan && insecureContext && (
+                  {allowQrLogin && allowQrScan && insecureContext && (
                     <p className="order-note order-note--warn">
-                      Camera scanning needs a secure (https) connection, so it isn't available here - enter your
-                      table code and PIN below instead.
+                      Camera scanning needs a secure (https) connection, so it isn't available here - enter your table
+                      code and PIN below instead.
                     </p>
                   )}
 
-                  <div className="field">
-                    <label className="field__label" htmlFor="table-code">
-                      Table code
-                    </label>
-                    <input
-                      className="field__input field__input--code"
-                      id="table-code"
-                      type="text"
-                      autoComplete="off"
-                      autoCapitalize="characters"
-                      spellCheck={false}
-                      placeholder="e.g. tbl1"
-                      value={code}
-                      onChange={(e) => setCode(e.target.value)}
-                      required
-                    />
-                  </div>
-
-                  <div className="field">
-                    <label className="field__label" htmlFor="pin">
-                      PIN
-                    </label>
-                    <div className="field__pin">
-                      <input
-                        className="field__input field__input--pin"
-                        id="pin"
-                        type={showPin ? "text" : "password"}
-                        inputMode="text"
-                        autoCapitalize="none"
-                        autoCorrect="off"
-                        spellCheck={false}
-                        autoComplete="one-time-code"
-                        placeholder="e.g. A1B2"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        required
-                      />
-                      <button
-                        className="field__toggle"
-                        type="button"
-                        aria-label={showPin ? "Hide PIN" : "Show PIN"}
-                        aria-pressed={showPin}
-                        onClick={() => setShowPin((v) => !v)}
-                      >
-                        {showPin ? (
-                          <svg
-                            className="field__toggle-icon"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            aria-hidden="true"
-                          >
-                            <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
-                            <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
-                            <path d="M14.12 14.12a3 3 0 1 1-4.24-4.24" />
-                            <path d="M1 1l22 22" />
-                          </svg>
-                        ) : (
-                          <svg
-                            className="field__toggle-icon"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            aria-hidden="true"
-                          >
-                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                            <circle cx="12" cy="12" r="3" />
-                          </svg>
-                        )}
-                      </button>
-                    </div>
-                    <p className="field__hint">The PIN is printed on the card on your table.</p>
-                  </div>
-
-                  <button className="btn btn--primary btn--lg btn--block" type="submit" disabled={loading}>
-                    {loading ? "Signing in…" : "Sign in"}
-                  </button>
-
-                  {available.length > 0 && (
-                    <div className="tables">
-                      <div className="tables__head">
-                        <p className="tables__title">Available tables</p>
-                        <p className="tables__hint">Tap to fill in your code</p>
+                  {!allowQrLogin && !allowPinLogin && (
+                    <p className="order-note order-note--info">
+                      Table sign-in is switched off. Please ask our staff to place your order.
+                    </p>
+                  )}
+                  {allowPinLogin && (
+                    <>
+                      <div className="field">
+                        <label className="field__label" htmlFor="table-code">
+                          Table code
+                        </label>
+                        <input
+                          className="field__input field__input--code"
+                          id="table-code"
+                          type="text"
+                          autoComplete="off"
+                          autoCapitalize="characters"
+                          spellCheck={false}
+                          placeholder="e.g. tbl1"
+                          value={code}
+                          onChange={(e) => setCode(e.target.value)}
+                          required
+                        />
                       </div>
-                      <ul className="tables__list" aria-label="Available tables">
-                        {available.map((t) => (
-                          <li key={t._id}>
-                            <button type="button" className="table-chip" onClick={() => setCode(t.code)}>
-                              <span className="table-chip__code">{t.code}</span>
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
+
+                      <div className="field">
+                        <label className="field__label" htmlFor="pin">
+                          PIN
+                        </label>
+                        <div className="field__pin">
+                          <input
+                            className="field__input field__input--pin"
+                            id="pin"
+                            type={showPin ? "text" : "password"}
+                            inputMode="text"
+                            autoCapitalize="none"
+                            autoCorrect="off"
+                            spellCheck={false}
+                            autoComplete="one-time-code"
+                            placeholder="e.g. A1B2"
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            required
+                          />
+                          <button
+                            className="field__toggle"
+                            type="button"
+                            aria-label={showPin ? "Hide PIN" : "Show PIN"}
+                            aria-pressed={showPin}
+                            onClick={() => setShowPin((v) => !v)}
+                          >
+                            {showPin ? (
+                              <svg
+                                className="field__toggle-icon"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                aria-hidden="true"
+                              >
+                                <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
+                                <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
+                                <path d="M14.12 14.12a3 3 0 1 1-4.24-4.24" />
+                                <path d="M1 1l22 22" />
+                              </svg>
+                            ) : (
+                              <svg
+                                className="field__toggle-icon"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                aria-hidden="true"
+                              >
+                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                                <circle cx="12" cy="12" r="3" />
+                              </svg>
+                            )}
+                          </button>
+                        </div>
+                        <p className="field__hint">The PIN is printed on the card on your table.</p>
+                      </div>
+
+                      <button className="btn btn--primary btn--lg btn--block" type="submit" disabled={loading}>
+                        {loading ? "Signing in…" : "Sign in"}
+                      </button>
+
+                      {available.length > 0 && (
+                        <div className="tables">
+                          <div className="tables__head">
+                            <p className="tables__title">Available tables</p>
+                            <p className="tables__hint">Tap to fill in your code</p>
+                          </div>
+                          <ul className="tables__list" aria-label="Available tables">
+                            {available.map((t) => (
+                              <li key={t._id}>
+                                <button type="button" className="table-chip" onClick={() => setCode(t.code)}>
+                                  <span className="table-chip__code">{t.code}</span>
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </>
                   )}
 
                   {bookingSettings?.enabled && (
                     <>
-                      <p className="field__divider">or</p>
+                      {(allowPinLogin || allowQrLogin) && <p className="field__divider">or</p>}
                       <button type="button" className="btn btn--secondary btn--lg btn--block" onClick={openBooking}>
                         Reserve a table for later
                       </button>
@@ -573,7 +648,12 @@ export default function TableLogin() {
           <div className="scanner-overlay__inner">
             <div className="scanner-overlay__head">
               <p className="scanner-overlay__title">Scan the QR code on your table</p>
-              <button type="button" className="scanner-overlay__close" onClick={closeScanner} aria-label="Close scanner">
+              <button
+                type="button"
+                className="scanner-overlay__close"
+                onClick={closeScanner}
+                aria-label="Close scanner"
+              >
                 ✕
               </button>
             </div>
@@ -606,8 +686,8 @@ export default function TableLogin() {
             {bkDone ? (
               <>
                 <p className="order-note order-note--info">
-                  Thanks{bkName ? `, ${bkName}` : ""}! We've noted your booking for {bkDate} at {bkSlot}. Our staff
-                  will confirm it and may call {bkPhone} to coordinate.
+                  Thanks{bkName ? `, ${bkName}` : ""}! We've noted your booking for {bkDate} at {bkSlot}. Our staff will
+                  confirm it and may call {bkPhone} to coordinate.
                 </p>
                 <button type="button" className="btn btn--primary btn--lg btn--block" onClick={closeBooking}>
                   Done

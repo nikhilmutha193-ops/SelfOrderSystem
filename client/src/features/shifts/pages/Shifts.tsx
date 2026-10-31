@@ -93,12 +93,14 @@ export default function Shifts() {
                   {
                     target: "shift-cash-move",
                     title: "Cash in or out",
-                    description: "Record cash taken from or added to the drawer, with a reason - a paid-out for supplies, for example.",
+                    description:
+                      "Record cash taken from or added to the drawer, with a reason - a paid-out for supplies, for example.",
                   },
                   {
                     target: "shift-close",
                     title: "Close shift",
-                    description: "Count the drawer and close the shift - the difference from the expected amount is recorded as the variance.",
+                    description:
+                      "Count the drawer and close the shift - the difference from the expected amount is recorded as the variance.",
                   },
                 ]
               : []),
@@ -109,7 +111,7 @@ export default function Shifts() {
         description: "Every past shift, with its float, expected and counted cash, and the variance.",
       },
     ],
-    [shift, canEdit]
+    [shift, canEdit],
   );
   usePageTour(tourSteps);
 
@@ -193,6 +195,12 @@ export default function Shifts() {
                 <dt className="text-slate-500">Cash out</dt>
                 <dd className="font-semibold tabular-nums">{rupees(shift.cashOut)}</dd>
               </div>
+              {(shift.cashRefunds ?? 0) > 0 && (
+                <div>
+                  <dt className="text-slate-500">Cash refunds</dt>
+                  <dd className="font-semibold tabular-nums">{rupees(shift.cashRefunds ?? 0)}</dd>
+                </div>
+              )}
             </dl>
             {shift.cashMovements.length > 0 && (
               <ul className="mt-4 flex flex-col gap-1 border-t border-slate-100 pt-3 text-sm">
@@ -230,7 +238,7 @@ export default function Shifts() {
                       () => {
                         setMoveAmount("");
                         setMoveReason("");
-                      }
+                      },
                     );
                   }}
                 >
@@ -285,7 +293,7 @@ export default function Shifts() {
                       () => {
                         setCounted("");
                         setNote("");
-                      }
+                      },
                     );
                   }}
                 >

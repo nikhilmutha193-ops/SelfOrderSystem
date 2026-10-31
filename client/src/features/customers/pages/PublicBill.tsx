@@ -68,6 +68,11 @@ export default function PublicBill() {
             This bill was {order.voided ? "voided" : "cancelled"}
           </p>
         )}
+        {order.token && (
+          <p className="mb-3 rounded-lg bg-orange-50 py-2 text-center text-2xl font-extrabold text-orange-700">
+            {order.token}
+          </p>
+        )}
         <div className="mb-3 flex flex-col gap-0.5 text-sm text-slate-600">
           <p>Order: {order.orderTypeText}</p>
           <p>

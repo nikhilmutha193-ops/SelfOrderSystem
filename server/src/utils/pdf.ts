@@ -11,6 +11,7 @@ import { IOrderItem } from "../models/OrderItem";
 import { IRestaurant, PrintFontSize, PrintPaperSize } from "../models/Restaurant";
 import { InvoiceTotals } from "./invoice";
 import { DEFAULT_SAC } from "./invoiceNumber";
+import { orderTokenText } from "./orderToken";
 import { describeError, logger } from "./logger";
 import { putObject, UPLOADS_DIR } from "./objectStore";
 
@@ -291,6 +292,8 @@ export async function streamInvoicePdf(
 
       doc.fontSize(fz(10));
       if (order.invoiceNumber) doc.text(`Invoice No: ${order.invoiceNumber}`);
+      const tokenText = restaurant.serviceFlow === "cafe" ? orderTokenText(items) : "";
+      if (tokenText) doc.fontSize(fz(14)).text(tokenText.toUpperCase(), { align: "center" }).fontSize(fz(10));
       const billDate = order.billedAt ?? order.checkinTime;
       doc.text(
         `Date: ${new Date(billDate).toLocaleString("en-IN", { timeZone: restaurant.timezone || "Asia/Kolkata" })}`

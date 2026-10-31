@@ -10,6 +10,8 @@ import Restaurant, {
   IQrSettings,
   IRestaurant,
   ITaxRate,
+  SERVICE_FLOWS,
+  ServiceFlow,
 } from "../models/Restaurant";
 import { isValidDayEndTime, isValidTimezone } from "../utils/businessDay";
 import { HttpError } from "../utils/httpError";
@@ -65,7 +67,7 @@ async function buildPreviewRestaurant(req: Request, overrides: Record<string, un
 
 export const getRestaurantPublic = asyncHandler(async (req: Request, res: Response) => {
   const restaurant = await Restaurant.findById(req.restaurantId).select(
-    "name logoUrl address siteTitle faviconUrl brandColor tableLoginSettings billingSettings.dineInPayment"
+    "name logoUrl address siteTitle faviconUrl brandColor tableLoginSettings billingSettings.dineInPayment serviceFlow"
   );
   if (!restaurant) throw new HttpError(404, "Restaurant not found");
   res.json(restaurant);
@@ -119,6 +121,7 @@ export const updateRestaurantSettings = asyncHandler(async (req: Request, res: R
     invoiceSettings,
     billingSettings,
     tableAutoReleaseMinutes,
+    serviceFlow,
     prepBufferMinutes,
     prepMessageTemplate,
     chatModeration,
@@ -143,6 +146,7 @@ export const updateRestaurantSettings = asyncHandler(async (req: Request, res: R
     invoiceSettings?: Partial<IInvoiceSettings>;
     billingSettings?: Partial<IBillingSettings>;
     tableAutoReleaseMinutes?: number;
+    serviceFlow?: string;
     prepBufferMinutes?: number;
     prepMessageTemplate?: string;
     chatModeration?: { enabled?: boolean; mode?: "mask" | "block"; customWords?: string[] };
@@ -203,6 +207,12 @@ export const updateRestaurantSettings = asyncHandler(async (req: Request, res: R
   if (dayEndTime !== undefined) restaurant.dayEndTime = dayEndTime;
   if (timezone !== undefined) restaurant.timezone = timezone;
   if (tableAutoReleaseMinutes !== undefined) restaurant.tableAutoReleaseMinutes = tableAutoReleaseMinutes;
+  if (serviceFlow !== undefined) {
+    if (!(SERVICE_FLOWS as string[]).includes(serviceFlow)) {
+      throw new HttpError(400, "Choose the restaurant flow (pay after) or the cafe flow (pay first)");
+    }
+    restaurant.serviceFlow = serviceFlow as ServiceFlow;
+  }
   if (prepBufferMinutes !== undefined) restaurant.prepBufferMinutes = prepBufferMinutes;
   if (prepMessageTemplate !== undefined) restaurant.prepMessageTemplate = prepMessageTemplate;
   if (taxRates !== undefined) restaurant.taxRates = taxRates;

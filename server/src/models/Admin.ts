@@ -2,6 +2,13 @@ import { model, Schema, Types } from "mongoose";
 
 import { PermissionLevel } from "../utils/permissions";
 
+/**
+ * Which sign-in page a staff login belongs to. "admin" logins can use every page (subject to their access);
+ * a cashier or captain login can only sign in on its own page.
+ */
+export type LoginArea = "admin" | "cashier" | "captain";
+export const LOGIN_AREAS: LoginArea[] = ["admin", "cashier", "captain"];
+
 export interface IAdmin {
   _id: Types.ObjectId;
   restaurantId: Types.ObjectId;
@@ -10,6 +17,7 @@ export interface IAdmin {
   securityQuestion: string;
   securityAnswerHash: string;
   isOwner: boolean;
+  loginArea: LoginArea;
   permissions: Map<string, PermissionLevel>;
   /** Below 2: pages added later (POS, Captain...) follow their parent module. See effectivePermissions. */
   modulesVersion?: number;
@@ -26,6 +34,7 @@ const adminSchema = new Schema<IAdmin>(
     securityQuestion: { type: String, required: true },
     securityAnswerHash: { type: String, required: true },
     isOwner: { type: Boolean, default: false },
+    loginArea: { type: String, enum: LOGIN_AREAS, default: "admin" },
     tokenVersion: { type: Number, default: 0 },
     modulesVersion: { type: Number },
     permissions: {

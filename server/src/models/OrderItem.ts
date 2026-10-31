@@ -28,6 +28,8 @@ export interface IOrderItem {
   cancelReason?: string;
   cancelNote?: string;
   complimentary?: boolean;
+  /** Units already refunded after payment. */
+  refundedQty?: number;
   packagingCharge?: number;
   components?: IOrderItemComponent[];
   stationId?: Types.ObjectId | null;
@@ -49,6 +51,7 @@ const orderItemSchema = new Schema<IOrderItem>(
     quantity: { type: Number, required: true, min: 1 },
     total: { type: Number, required: true, min: 0 },
     isJain: { type: Boolean, default: false },
+    refundedQty: { type: Number, default: 0, min: 0 },
     modifiers: {
       type: [new Schema({ groupName: String, label: String, priceDelta: Number }, { _id: false })],
       default: [],

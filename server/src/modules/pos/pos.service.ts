@@ -1,7 +1,7 @@
 import { RequestContext } from "../../core/context";
 import { IOrder } from "../../models/Order";
 import { writeAudit } from "../../utils/audit";
-import { paysUpfront, restaurantPaysUpfront } from "../../utils/dineInPayment";
+import { paysUpfront, restaurantIsCafe, restaurantPaysUpfront } from "../../utils/dineInPayment";
 import { HttpError } from "../../utils/httpError";
 import { cancelUnsentOrdersForTables } from "../../utils/tableRelease";
 import { syncTableState } from "../../utils/tableState";
@@ -35,6 +35,7 @@ export async function getMenu(ctx: RequestContext) {
       serviceChargePercent: restaurant?.billingSettings?.serviceChargePercent ?? 0,
       dineInPayment: paysUpfront(restaurant) ? "upfront" : "after",
       footerNote: restaurant?.invoiceSettings?.footerNote ?? "",
+      serviceFlow: restaurant?.serviceFlow ?? "restaurant",
     },
     categories: categories.map((c) => ({ _id: c._id, name: c.name })),
     items: foods
@@ -210,7 +211,10 @@ export async function createOrder(ctx: RequestContext, input: CreatePosOrderInpu
 
   const items = await addOrderItems(ctx, order._id.toString(), { items: input.items });
   // A dine-in table that pays when ordering is held until it is paid; payment sends the KOT.
-  const send = input.sendToKitchen && !(input.orderType === "dine-in" && (await restaurantPaysUpfront(ctx.restaurantId)));
+  const send =
+    input.sendToKitchen &&
+    !(await restaurantIsCafe(ctx.restaurantId)) &&
+    !(input.orderType === "dine-in" && (await restaurantPaysUpfront(ctx.restaurantId)));
   const kot = send ? await sendOrderToKitchen(ctx.restaurantId, order) : null;
   return {
     order,
@@ -224,7 +228,9 @@ export async function releaseTable(ctx: RequestContext, tableId: string) {
   const table = await new PosRepository(ctx.restaurantId).findTable(tableId);
   if (!table) throw new HttpError(404, "Table not found");
   if (table.isGuest) throw new HttpError(409, "Walk-in tables never need releasing");
-  const cancelledOrders = await cancelUnsentOrdersForTables([table._id]);
+  const cancelledOrders = await cancelUnsentOrdersForTables([table._id], {
+    includeCounter: await restaurantIsCafe(ctx.restaurantId),
+  });
   const status = await syncTableState(table._id, { endSession: true });
   await writeAudit(ctx, "table.release", `Released table ${table.code} from the POS`);
   return { status, cancelledOrders };

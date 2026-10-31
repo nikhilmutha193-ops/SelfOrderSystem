@@ -166,6 +166,14 @@ export default function Gst() {
             </Alert>
           )}
 
+          {data.refunds && data.refunds.count > 0 && (
+            <Alert tone="warning">
+              {data.refunds.count} refund{data.refunds.count === 1 ? "" : "s"} worth {rupees(data.refunds.amount)} were
+              given in this period. They are not taken off the totals above. Raise credit notes for them in your GST
+              return.
+            </Alert>
+          )}
+
           <div className="grid gap-5 lg:grid-cols-2">
             <Card>
               <CardHeader title="GST by tax" description="Each tax line on the bills." />

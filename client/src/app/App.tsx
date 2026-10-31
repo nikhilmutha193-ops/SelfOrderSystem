@@ -29,6 +29,7 @@ const Chefs = lazy(() => import("../pages/admin/Chefs"));
 const Orders = lazy(() => import("../features/orders/pages/Orders"));
 const OrderDetail = lazy(() => import("../features/orders/pages/OrderDetail"));
 const Gst = lazy(() => import("../features/gst/pages/Gst"));
+const Refunds = lazy(() => import("../features/refunds/pages/Refunds"));
 const Invoices = lazy(() => import("../features/orders/pages/Invoices"));
 const Shifts = lazy(() => import("../features/shifts/pages/Shifts"));
 const DayClose = lazy(() => import("../features/shifts/pages/DayClose"));
@@ -266,6 +267,14 @@ export default function App() {
                   element={
                     <RequireModule module="kiosks">
                       <KioskAdmin />
+                    </RequireModule>
+                  }
+                />
+                <Route
+                  path="refunds"
+                  element={
+                    <RequireModule module="refunds">
+                      <Refunds />
                     </RequireModule>
                   }
                 />

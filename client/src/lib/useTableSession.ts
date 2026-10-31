@@ -6,7 +6,7 @@ interface TablePayload {
   id: string;
   tableId?: string;
   orderId?: string;
-  via?: "qr" | "code";
+  via?: "qr" | "code" | "token";
 }
 
 export function useTableSession() {

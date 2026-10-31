@@ -30,7 +30,18 @@ export default function ChefLogin() {
       setActiveAuth({ role: "chef", token: res.data.token });
       navigate("/chef/dashboard");
     } catch (err) {
-      setError(extractErrorMessage(err));
+      // Admin logins can use the kitchen screen too, through the admin portal's Kitchen Queue.
+      try {
+        const res = await api.post("/auth/admin/login", { username, password, area: "chef" });
+        storeToken("admin", res.data.token);
+        setActiveAuth({ role: "admin", token: res.data.token });
+        navigate("/admin/kot");
+        return;
+      } catch (adminErr) {
+        // A 403 means the admin login is real but belongs to another page: tell the person why.
+        const forbidden = (adminErr as { response?: { status?: number } }).response?.status === 403;
+        setError(extractErrorMessage(forbidden ? adminErr : err));
+      }
     } finally {
       setLoading(false);
     }

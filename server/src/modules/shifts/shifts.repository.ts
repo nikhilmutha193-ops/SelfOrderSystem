@@ -5,6 +5,7 @@ import DayClose, { IDayClose } from "../../models/DayClose";
 import FoodItem from "../../models/FoodItem";
 import Order, { IOrder } from "../../models/Order";
 import OrderItem, { IOrderItem } from "../../models/OrderItem";
+import Refund from "../../models/Refund";
 import Restaurant from "../../models/Restaurant";
 import Shift, { IShift } from "../../models/Shift";
 
@@ -45,6 +46,21 @@ export class ShiftsRepository {
       { $unwind: "$payments" },
       { $match: { "payments.method": "cash", "payments.at": { $gte: start, $lt: end } } },
       { $group: { _id: null, total: { $sum: "$payments.amount" } } },
+    ]);
+    return row?.total ?? 0;
+  }
+
+  /** Cash handed back to guests as refunds: it leaves the drawer. */
+  async cashRefundedBetween(start: Date, end: Date): Promise<number> {
+    const [row] = await Refund.aggregate<{ total: number }>([
+      {
+        $match: {
+          restaurantId: new Types.ObjectId(this.restaurantId),
+          method: "cash",
+          createdAt: { $gte: start, $lt: end },
+        },
+      },
+      { $group: { _id: null, total: { $sum: "$amount" } } },
     ]);
     return row?.total ?? 0;
   }

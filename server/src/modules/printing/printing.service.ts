@@ -8,6 +8,7 @@ import { IPrinter } from "../../models/Printer";
 import { IPrintJob } from "../../models/PrintJob";
 import { writeAudit } from "../../utils/audit";
 import { HttpError } from "../../utils/httpError";
+import { orderTokenText } from "../../utils/orderToken";
 import { totalsForOrder } from "../orders/orders.billing";
 import { renderBill, renderKot, renderTestPage } from "./printing.render";
 import { MAX_ATTEMPTS, PrintingRepository } from "./printing.repository";
@@ -309,6 +310,7 @@ export async function enqueueBill(restaurantId: string, orderId: string | Types.
         order,
         orderLabel: label,
         items,
+        tokenText: restaurant.serviceFlow === "cafe" ? orderTokenText(items) : "",
         totals,
         upiLink,
         openDrawer:

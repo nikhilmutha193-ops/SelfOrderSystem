@@ -14,7 +14,7 @@ import {
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { Link, Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
 
 import {
   findActiveNav,
@@ -29,7 +29,7 @@ import CommandPalette from "../../app/shell/CommandPalette";
 import UserMenu from "../../app/shell/UserMenu";
 import NotificationCenter from "../../features/dashboard/components/NotificationCenter";
 import ActiveOrders from "../../features/orders/components/ActiveOrders";
-import { AdminProfileProvider, can, useAdmin } from "../../lib/adminAuth";
+import { AdminProfileProvider, can, staffHome, useAdmin } from "../../lib/adminAuth";
 import { useDineInPayment } from "../../lib/useDineInPayment";
 import { activateStoredAuth, api, clearStoredToken, setActiveAuth } from "../../shared/api/client";
 import { useStaffTheme } from "../../shared/theme";
@@ -269,11 +269,11 @@ function Shell() {
   const allItems = useMemo(() => groups.flatMap((g) => g.items), [groups]);
   const pinned = useMemo(
     () => pins.map((to) => allItems.find((i) => i.to === to)).filter((i): i is AdminNavItem => Boolean(i)),
-    [pins, allItems]
+    [pins, allItems],
   );
   const mobileTabs = useMemo(
     () => MOBILE_TABS.map((to) => allItems.find((i) => i.to === to)).filter((i): i is AdminNavItem => Boolean(i)),
-    [allItems]
+    [allItems],
   );
   const current = findActiveNav(location.pathname, location.search);
 
@@ -329,6 +329,10 @@ function Shell() {
 
   const showTabs = mobileTabs.length >= 2;
   const canOrders = can(profile, "orders");
+
+  // A cashier or captain login works in its own app and never in the admin pages.
+  const ownApp = staffHome(profile);
+  if (ownApp) return <Navigate to={ownApp} replace />;
 
   return (
     <div className="ui-app flex min-h-dvh">

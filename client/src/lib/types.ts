@@ -29,6 +29,12 @@ export interface RequiredDetails {
 
 export interface TableLoginSettings {
   allowQrScan: boolean;
+  /** Show the "Order now" buttons on the landing page. */
+  showOrderNow?: boolean;
+  /** Guests may sign in through a table's QR code. */
+  allowQrLogin?: boolean;
+  /** Guests may sign in with a table code and PIN. */
+  allowPinLogin?: boolean;
   requiredDetails?: RequiredDetails;
   qr?: GuestAccess;
   manual?: GuestAccess;
@@ -75,6 +81,9 @@ export interface ChatModeration {
   customWords: string[];
 }
 
+/** restaurant: order, cook, serve, then bill and pay. cafe: pay first; the kitchen gets the order once it is paid. */
+export type ServiceFlow = "restaurant" | "cafe";
+
 export interface Restaurant {
   siteTitle?: string;
   faviconUrl?: string;
@@ -94,6 +103,7 @@ export interface Restaurant {
   dayEndTime: string;
   timezone?: string;
   tableAutoReleaseMinutes?: number;
+  serviceFlow?: ServiceFlow;
   prepBufferMinutes?: number;
   prepMessageTemplate?: string;
   chatModeration?: ChatModeration;
@@ -318,6 +328,8 @@ export interface Order {
   externalOrderId?: string;
   estimatedReadyAt?: string | null;
   priority?: OrderPriority;
+  /** Money already given back through refunds. */
+  refundedTotal?: number;
   kitchen?: OrderKitchenSummary;
   invoiceNumber?: string;
   billedAt?: string | null;
@@ -392,6 +404,7 @@ export type OrderItemStatus = "pending" | "preparing" | "ready" | "served" | "ca
 
 export interface OrderItem {
   _id: string;
+  refundedQty?: number;
   orderId: string;
   foodItemId: string;
   foodName: string;
@@ -463,6 +476,10 @@ export interface DashboardSummary {
   pendingKotItems: number;
   unreadChatCount: number;
   tablesAwaitingPayment?: number;
+  /** Cafe flow: orders waiting to be paid before they go to the kitchen. */
+  ordersAwaitingPayment?: number;
+  refundsToday?: number;
+  serviceFlow?: ServiceFlow;
   lowStockItems?: number;
   businessDayStart: string;
 }
@@ -730,6 +747,7 @@ export interface Shift {
   cashSales?: number;
   cashIn?: number;
   cashOut?: number;
+  cashRefunds?: number;
 }
 
 export interface NamedAmount {
@@ -879,6 +897,7 @@ export interface PosBilling {
   serviceChargePercent: number;
   footerNote: string;
   dineInPayment?: DineInPayment;
+  serviceFlow?: ServiceFlow;
 }
 
 export interface PosMenu {
@@ -1168,6 +1187,8 @@ export interface PublicBill {
     customerName: string;
     customerPhone: string;
     customerGstin: string;
+    /** Cafe flow: "Token 12", the number the guest collects the order by. */
+    token?: string;
     orderType: OrderType;
     orderTypeText: string;
     placeOfSupply: string;
@@ -1236,7 +1257,67 @@ export interface GstReport {
   bySlab: { rate: number; taxableValue: number; gst: number; invoices: number }[];
   byDay: (GstTotals & { date: string })[];
   excluded: { voided: { count: number; value: number }; cancelled: { count: number; value: number } };
+  refunds?: { count: number; amount: number };
   invoices: GstInvoiceRow[];
+}
+
+export type RefundReason =
+  | "customer_cancelled"
+  | "changed_item"
+  | "wrong_item"
+  | "quality_issue"
+  | "item_unavailable"
+  | "other";
+
+export const REFUND_REASON_LABELS: Record<RefundReason, string> = {
+  customer_cancelled: "Customer cancelled",
+  changed_item: "Customer changed the item",
+  wrong_item: "Wrong item served",
+  quality_issue: "Quality issue",
+  item_unavailable: "Item unavailable",
+  other: "Other",
+};
+
+export type RefundMethod = "cash" | "upi" | "card" | "online" | "wallet";
+
+export interface Refund {
+  _id: string;
+  orderId: string;
+  invoiceNumber?: string;
+  customerName: string;
+  amount: number;
+  method: RefundMethod;
+  reason: RefundReason;
+  note?: string;
+  kind: "items" | "amount";
+  items: { itemId: string; foodName: string; quantity: number; amount: number }[];
+  createdByName: string;
+  createdAt: string;
+}
+
+export interface RefundSummary {
+  orderId: string;
+  invoiceNumber: string | null;
+  canRefund: boolean;
+  paid: number;
+  refunded: number;
+  refundable: number;
+  items: {
+    _id: string;
+    foodName: string;
+    quantity: number;
+    refundedQty: number;
+    refundableQty: number;
+    unitRefund: number;
+  }[];
+  refunds: Refund[];
+}
+
+export interface RefundList {
+  refunds: Refund[];
+  total: number;
+  count: number;
+  byMethod: Partial<Record<RefundMethod, number>>;
 }
 
 export interface BookingSettings {

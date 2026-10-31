@@ -34,6 +34,7 @@ export const MODULES = {
   banners: "Offer Banners",
   gst: "GST & Tax",
   kiosks: "Kiosks & Pickup Board",
+  refunds: "Refunds",
 } as const;
 
 /**
@@ -48,6 +49,7 @@ export const MODULE_PARENT: Partial<Record<ModuleKey, ModuleKey>> = {
   invoices: "orders",
   qrCodes: "tables",
   banners: "landing",
+  refunds: "orders",
 };
 
 export const CURRENT_MODULES_VERSION = 2;

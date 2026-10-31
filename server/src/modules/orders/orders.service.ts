@@ -86,6 +86,10 @@ export async function buildOrderFilter(
 /** A table guest may only order if the admin allows it for the way they signed in (QR or code). */
 async function assertGuestMayOrder(ctx: RequestContext) {
   if (ctx.auth.role !== "table") return;
+  // A guest who signed in by token number is following a paid order, not ordering.
+  if (ctx.auth.via === "token") {
+    throw new HttpError(403, "To order more, please order at the counter.");
+  }
   const restaurant = await new OrdersRepository(ctx.restaurantId).findRestaurant("tableLoginSettings");
   const access = ctx.auth.via === "code" ? restaurant?.tableLoginSettings?.manual : restaurant?.tableLoginSettings?.qr;
   if (access && access.placeOrder === false) {

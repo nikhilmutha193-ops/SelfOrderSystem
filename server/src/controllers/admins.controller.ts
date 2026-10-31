@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import { HydratedDocument } from "mongoose";
 
 import { asyncHandler } from "../middleware/errorHandler";
-import Admin, { IAdmin } from "../models/Admin";
+import Admin, { IAdmin, LOGIN_AREAS, LoginArea } from "../models/Admin";
 import TableModel from "../models/Table";
 import { HttpError } from "../utils/httpError";
 import { writeAudit } from "../utils/audit";
@@ -14,6 +14,7 @@ function toDto(admin: IAdmin) {
     id: admin._id,
     username: admin.username,
     isOwner: admin.isOwner,
+    loginArea: admin.loginArea ?? "admin",
     permissions: effectivePermissions(admin),
     createdAt: admin.createdAt,
   };
@@ -28,8 +29,17 @@ export const listAdmins = asyncHandler(async (req: Request, res: Response) => {
   res.json(admins.map(toDto));
 });
 
+function parseLoginArea(value: unknown): LoginArea {
+  if (value === undefined || value === null || value === "") return "admin";
+  if (!LOGIN_AREAS.includes(value as LoginArea)) {
+    throw new HttpError(400, "Choose the admin portal, the Cashier page or the Captain app");
+  }
+  return value as LoginArea;
+}
+
 export const createAdmin = asyncHandler(async (req: Request, res: Response) => {
-  const { username, password, securityQuestion, securityAnswer, permissions } = req.body as {
+  const { username, password, securityQuestion, securityAnswer, permissions, loginArea } = req.body as {
+    loginArea?: string;
     username?: string;
     password?: string;
     securityQuestion?: string;
@@ -49,6 +59,7 @@ export const createAdmin = asyncHandler(async (req: Request, res: Response) => {
     securityQuestion: securityQuestion || "Who created this account?",
     securityAnswerHash: await hashPassword(securityAnswer || username.trim()),
     isOwner: false,
+    loginArea: parseLoginArea(loginArea),
     permissions: sanitizePermissions(permissions),
     modulesVersion: CURRENT_MODULES_VERSION,
   });
@@ -69,6 +80,7 @@ export const updateAdminPermissions = asyncHandler(async (req: Request, res: Res
 
   admin.permissions = new Map(Object.entries(sanitizePermissions(req.body?.permissions)));
   admin.modulesVersion = CURRENT_MODULES_VERSION;
+  if (req.body?.loginArea !== undefined) admin.loginArea = parseLoginArea(req.body.loginArea);
   await admin.save();
   res.json(toDto(admin));
 });

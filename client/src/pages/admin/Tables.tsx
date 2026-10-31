@@ -19,6 +19,7 @@ import { AreasCard } from "../../features/pricing/components/AreasCard";
 import { useAreas, useSetTableArea } from "../../features/pricing/queries";
 import { useCanEdit } from "../../lib/adminAuth";
 import { useDineInPayment } from "../../lib/useDineInPayment";
+import { useServiceFlow } from "../../lib/useServiceFlow";
 import type { GuestAccess, RequiredDetails, TableLoginSettings, TableRow } from "../../lib/types";
 import { api, extractErrorMessage } from "../../shared/api/client";
 import { confirmDialog } from "../../shared/ui/confirm";
@@ -61,6 +62,9 @@ function formatMinutes(mins: number): string {
 
 interface LoginDraft {
   allowQrScan: boolean;
+  showOrderNow: boolean;
+  allowQrLogin: boolean;
+  allowPinLogin: boolean;
   qr: GuestAccess;
   manual: GuestAccess;
   requiredDetails: RequiredDetails;
@@ -68,6 +72,9 @@ interface LoginDraft {
 
 const DEFAULT_LOGIN_DRAFT: LoginDraft = {
   allowQrScan: true,
+  showOrderNow: true,
+  allowQrLogin: true,
+  allowPinLogin: true,
   qr: { placeOrder: true, showMenu: true, showFeedback: true },
   manual: { placeOrder: true, showMenu: true, showFeedback: true },
   requiredDetails: { name: true, phone: false, members: true, birthday: false },
@@ -195,6 +202,8 @@ export default function Tables() {
   const canEditTables = useCanEdit("tables");
   // Tables have no captain when guests pay when ordering.
   const showCaptains = useDineInPayment() !== "upfront";
+  // Cafe flow: guests pay first, so no table is ever "waiting to pay".
+  const cafe = useServiceFlow() === "cafe";
 
   async function assignArea(table: TableRow, areaId: string) {
     setError(null);
@@ -251,6 +260,9 @@ export default function Tables() {
       .then((res) => {
         const loaded: LoginDraft = {
           allowQrScan: res.data.allowQrScan,
+          showOrderNow: res.data.showOrderNow ?? true,
+          allowQrLogin: res.data.allowQrLogin ?? true,
+          allowPinLogin: res.data.allowPinLogin ?? true,
           qr: res.data.qr ?? DEFAULT_LOGIN_DRAFT.qr,
           manual: res.data.manual ?? DEFAULT_LOGIN_DRAFT.manual,
           requiredDetails: res.data.requiredDetails ?? DEFAULT_LOGIN_DRAFT.requiredDetails,
@@ -428,10 +440,10 @@ export default function Tables() {
         description="Table logins for guests scanning the QR code, who looks after each table, and when idle tables free up."
       />
 
-      <div className="grid grid-cols-3 gap-3 sm:gap-4" data-tour="tables-stats">
+      <div className={`grid gap-3 sm:gap-4 ${cafe ? "grid-cols-2" : "grid-cols-3"}`} data-tour="tables-stats">
         <StatCard label="Free" value={counts.available} icon={CircleCheck} tone="green" />
-        <StatCard label="Seated" value={counts.occupied} icon={Armchair} tone="amber" />
-        <StatCard label="Waiting to pay" value={counts.awaiting} icon={Wallet} tone="red" />
+        <StatCard label="Seated" value={counts.occupied + (cafe ? counts.awaiting : 0)} icon={Armchair} tone="amber" />
+        {!cafe && <StatCard label="Waiting to pay" value={counts.awaiting} icon={Wallet} tone="red" />}
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2 lg:gap-6">
@@ -509,6 +521,39 @@ export default function Tables() {
           title="Table sign-in page"
           description="What guests can do after they sign in to a table, and what we ask them before their first order."
         />
+
+        <div className="mb-3 flex flex-col divide-y divide-slate-100 rounded-lg border border-slate-200 px-3">
+          <div className="py-2.5">
+            <Switch
+              id="show-order-now"
+              checked={loginDraft.showOrderNow}
+              disabled={!canEditTables}
+              onChange={(v) => setLoginDraft((d) => ({ ...d, showOrderNow: v }))}
+              label={'Show the "Order now" buttons on the landing page'}
+              description="Turn it off when staff take every order and guests shouldn't start ordering themselves."
+            />
+          </div>
+          <div className="py-2.5">
+            <Switch
+              id="allow-qr-login"
+              checked={loginDraft.allowQrLogin}
+              disabled={!canEditTables}
+              onChange={(v) => setLoginDraft((d) => ({ ...d, allowQrLogin: v }))}
+              label="Let guests sign in with the table QR code"
+              description="Off: scanning a table QR code no longer starts an order, and the scan button is hidden."
+            />
+          </div>
+          <div className="py-2.5">
+            <Switch
+              id="allow-pin-login"
+              checked={loginDraft.allowPinLogin}
+              disabled={!canEditTables}
+              onChange={(v) => setLoginDraft((d) => ({ ...d, allowPinLogin: v }))}
+              label="Let guests sign in with a table code and PIN"
+              description="Off: the table code and PIN form is hidden from the sign-in page."
+            />
+          </div>
+        </div>
 
         <div className="rounded-lg border border-slate-200 px-3 py-2.5">
           <Switch
@@ -665,7 +710,7 @@ export default function Tables() {
                                   : "amber"
                             }
                           >
-                            {table.status === "awaiting_payment"
+                            {table.status === "awaiting_payment" && !cafe
                               ? "Waiting to pay"
                               : table.status === "available"
                                 ? "Free"

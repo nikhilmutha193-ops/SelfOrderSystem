@@ -36,6 +36,12 @@ export interface IRequiredDetails {
 
 export interface ITableLoginSettings {
   allowQrScan: boolean;
+  /** Show the "Order now" buttons on the public landing page. */
+  showOrderNow: boolean;
+  /** Guests may sign in to a table through its QR code (scanned or opened as a link). */
+  allowQrLogin: boolean;
+  /** Guests may sign in to a table with its code and PIN. */
+  allowPinLogin: boolean;
   requiredDetails: IRequiredDetails;
   /** Guests who scanned the table's QR code. */
   qr: IGuestAccess;
@@ -48,6 +54,10 @@ export type PrintPaperSize = "thermal58" | "thermal80" | "a5" | "a4";
 export type PrintFontSize = "compact" | "normal" | "large";
 
 export type GuestOrderMode = "auto" | "accept";
+
+/** restaurant: order, cook, serve, then bill and pay. cafe: pay first, and the kitchen gets the order once it is paid. */
+export type ServiceFlow = "restaurant" | "cafe";
+export const SERVICE_FLOWS: ServiceFlow[] = ["restaurant", "cafe"];
 
 export interface IKotSettings {
   guestOrderMode: GuestOrderMode;
@@ -169,6 +179,7 @@ export interface IRestaurant {
   dayEndTime: string;
   timezone: string;
   tableAutoReleaseMinutes: number;
+  serviceFlow: ServiceFlow;
   prepBufferMinutes: number;
   prepMessageTemplate: string;
   chatModeration: IChatModeration;
@@ -235,6 +246,9 @@ const requiredDetailsSchema = new Schema<IRequiredDetails>(
 const tableLoginSettingsSchema = new Schema<ITableLoginSettings>(
   {
     allowQrScan: { type: Boolean, default: true },
+    showOrderNow: { type: Boolean, default: true },
+    allowQrLogin: { type: Boolean, default: true },
+    allowPinLogin: { type: Boolean, default: true },
     requiredDetails: { type: requiredDetailsSchema, default: () => ({}) },
     qr: { type: guestAccessSchema, default: () => ({}) },
     manual: { type: guestAccessSchema, default: () => ({}) },
@@ -324,6 +338,7 @@ const restaurantSchema = new Schema<IRestaurant>(
     dayEndTime: { type: String, default: "00:00" },
     timezone: { type: String, default: DEFAULT_TIMEZONE },
     tableAutoReleaseMinutes: { type: Number, default: 0, min: 0 },
+    serviceFlow: { type: String, enum: SERVICE_FLOWS, default: "restaurant" },
     prepBufferMinutes: { type: Number, default: 2, min: 0 },
     prepMessageTemplate: {
       type: String,

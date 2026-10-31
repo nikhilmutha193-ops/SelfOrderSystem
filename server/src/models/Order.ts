@@ -104,6 +104,8 @@ export interface IOrder {
   customerId?: Types.ObjectId | null;
   loyaltyRedeem?: { points: number; amount: number } | null;
   serviceChargeWaived?: boolean;
+  /** Money already given back through refunds (see the Refund model). */
+  refundedTotal?: number;
   priority?: OrderPriority;
   mergedInto?: Types.ObjectId | null;
   splitFrom?: Types.ObjectId | null;
@@ -220,6 +222,7 @@ const orderSchema = new Schema<IOrder>(
       default: null,
     },
     serviceChargeWaived: { type: Boolean, default: false },
+    refundedTotal: { type: Number, default: 0, min: 0 },
     priority: { type: String, enum: ["normal", "high", "rush"], default: "normal" },
     mergedInto: { type: Schema.Types.ObjectId, ref: "Order", default: null },
     kiosk: {

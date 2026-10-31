@@ -3,10 +3,14 @@ import { Types } from "mongoose";
 import Order from "../models/Order";
 import OrderItem from "../models/OrderItem";
 
-export async function cancelUnsentOrdersForTables(tableIds: Types.ObjectId[]): Promise<number> {
+/** `includeCounter`: the cafe flow also drops unpaid counter orders that never reached the kitchen. */
+export async function cancelUnsentOrdersForTables(
+  tableIds: Types.ObjectId[],
+  options: { includeCounter?: boolean } = {}
+): Promise<number> {
   if (tableIds.length === 0) return 0;
 
-  const open = await Order.find({ tableId: { $in: tableIds }, status: "open", source: { $ne: "counter" } }).select(
+  const open = await Order.find({ tableId: { $in: tableIds }, status: "open", ...(!options.includeCounter && { source: { $ne: "counter" } }) }).select(
     "_id"
   );
   if (open.length === 0) return 0;

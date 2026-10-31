@@ -74,7 +74,11 @@ export default function StaffLogin({ kind }: { kind: StaffLoginKind }) {
     setError(null);
     setLoading(true);
     try {
-      const res = await api.post<{ token: string; admin: AdminProfile }>("/auth/admin/login", { username, password });
+      const res = await api.post<{ token: string; admin: AdminProfile }>("/auth/admin/login", {
+        username,
+        password,
+        area: kind,
+      });
       // Check the page access before keeping the sign-in, so a wrong role is never left signed in.
       if (!can(res.data.admin, config.module)) {
         setError(

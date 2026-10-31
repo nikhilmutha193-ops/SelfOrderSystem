@@ -27,6 +27,7 @@ import Recipe from "../models/Recipe";
 import Restaurant from "../models/Restaurant";
 import Review from "../models/Review";
 import Shift from "../models/Shift";
+import Refund from "../models/Refund";
 import SmsCampaign from "../models/SmsCampaign";
 import SmsTemplate from "../models/SmsTemplate";
 import Station from "../models/Station";
@@ -78,6 +79,7 @@ const TENANT_MODELS: { key: string; model: Model<any> }[] = [
   { key: "smsCampaigns", model: SmsCampaign },
   { key: "paymentAttempts", model: PaymentAttempt },
   // PaymentGateway is left out on purpose: backups never carry payment gateway secrets.
+  { key: "refunds", model: Refund },
 ];
 
 async function buildBackupPayload(restaurantId: Types.ObjectId | string) {

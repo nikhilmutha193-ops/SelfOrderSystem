@@ -132,8 +132,7 @@ async function billOpenOrder(ctx: RequestContext, repo: OrdersRepository, order:
   }
   const restaurant = await repo.findRestaurant();
   if (!restaurant) throw new HttpError(404, "Restaurant not found");
-
-  // Orders paid before cooking (kiosk, or dine-in when guests pay first) send their items once paid.
+  // Orders paid before cooking (kiosk, cafe flow, or dine-in when guests pay first) send their items once paid.
   const sentOnPayment = paidBeforeKitchen(order, restaurant);
   const unsent = items.filter((i) => i.status === "pending" && i.kotRound == null).length;
   if (unsent > 0 && !sentOnPayment) {

@@ -5,7 +5,9 @@ import {
   MODULE_KEYS,
   MODULES,
   useAdmin,
+  LOGIN_AREA_LABELS,
   type AdminProfile,
+  type LoginArea,
   type ModuleKey,
   type PermissionLevel,
 } from "../../lib/adminAuth";
@@ -13,21 +15,35 @@ import { useDineInPayment } from "../../lib/useDineInPayment";
 import { api, extractErrorMessage } from "../../shared/api/client";
 import { confirmDialog } from "../../shared/ui/confirm";
 import { usePageTour, type TourStep } from "../../shared/ui/PageTour";
-import { Alert, Badge, Button, Card, CardHeader, ErrorText, Field, Input, Page, PageHeader } from "../../shared/ui/ui";
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  CardHeader,
+  ErrorText,
+  Field,
+  Input,
+  Page,
+  PageHeader,
+  Select,
+} from "../../shared/ui/ui";
 
 import { ResetPasswordDialog } from "./ResetPasswordDialog";
 
 type Permissions = Partial<Record<ModuleKey, PermissionLevel>>;
 
-const PRESETS: { label: string; hint: string; permissions: Permissions; waiterService?: boolean }[] = [
+const PRESETS: { label: string; hint: string; permissions: Permissions; area: LoginArea; waiterService?: boolean }[] = [
   {
     label: "Captain (waiter)",
     waiterService: true,
+    area: "captain",
     hint: "Takes orders on the Captain app, serves ready items and answers guest requests.",
     permissions: { captain: "edit", orders: "edit", tables: "view", kot: "edit", messages: "edit" },
   },
   {
     label: "Cashier",
+    area: "cashier",
     hint: "Bills and settles on the POS, runs cash shifts and prints.",
     permissions: {
       pos: "edit",
@@ -41,7 +57,13 @@ const PRESETS: { label: string; hint: string; permissions: Permissions; waiterSe
   },
 ];
 
-function PresetButtons({ onPick, disabled }: { onPick: (permissions: Permissions) => void; disabled?: boolean }) {
+function PresetButtons({
+  onPick,
+  disabled,
+}: {
+  onPick: (permissions: Permissions, area: LoginArea) => void;
+  disabled?: boolean;
+}) {
   // No waiters take orders when guests pay when ordering.
   const upfront = useDineInPayment() === "upfront";
   return (
@@ -55,7 +77,7 @@ function PresetButtons({ onPick, disabled }: { onPick: (permissions: Permissions
           icon={Wand2}
           disabled={disabled}
           title={preset.hint}
-          onClick={() => onPick({ ...preset.permissions })}
+          onClick={() => onPick({ ...preset.permissions }, preset.area)}
         >
           {preset.label} preset
         </Button>
@@ -131,11 +153,13 @@ export default function Admins() {
   const [message, setMessage] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<Permissions>({});
+  const [draftArea, setDraftArea] = useState<LoginArea>("admin");
   const [resetting, setResetting] = useState<{ id: string; username: string } | null>(null);
 
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [newPermissions, setNewPermissions] = useState<Permissions>({});
+  const [newArea, setNewArea] = useState<LoginArea>("admin");
   const [creating, setCreating] = useState(false);
 
   function load() {
@@ -153,10 +177,11 @@ export default function Admins() {
     setMessage(null);
     setCreating(true);
     try {
-      await api.post("/admins", { username, password, permissions: newPermissions });
+      await api.post("/admins", { username, password, permissions: newPermissions, loginArea: newArea });
       setUsername("");
       setPassword("");
       setNewPermissions({});
+      setNewArea("admin");
       setMessage("Admin created");
       load();
     } catch (err) {
@@ -170,7 +195,7 @@ export default function Admins() {
     setError(null);
     setMessage(null);
     try {
-      await api.put(`/admins/${id}/permissions`, { permissions: draft });
+      await api.put(`/admins/${id}/permissions`, { permissions: draft, loginArea: draftArea });
       setEditingId(null);
       setMessage("Permissions updated");
       load();
@@ -253,9 +278,27 @@ export default function Admins() {
           </div>
           <div>
             <p className="mb-2 text-sm font-medium text-slate-700">Page access</p>
-            <PresetButtons onPick={setNewPermissions} />
+            <PresetButtons
+              onPick={(permissions, area) => {
+                setNewPermissions(permissions);
+                setNewArea(area);
+              }}
+            />
             <PermissionGrid value={newPermissions} onChange={setNewPermissions} />
           </div>
+          <Field
+            label="Sign-in page"
+            htmlFor="new-admin-area"
+            hint="A cashier or captain login can only sign in on its own page. Admin logins can use any page."
+          >
+            <Select id="new-admin-area" value={newArea} onChange={(e) => setNewArea(e.target.value as LoginArea)}>
+              {(Object.keys(LOGIN_AREA_LABELS) as LoginArea[]).map((a) => (
+                <option key={a} value={a}>
+                  {LOGIN_AREA_LABELS[a]}
+                </option>
+              ))}
+            </Select>
+          </Field>
           <Button type="submit" icon={UserPlus} loading={creating} className="self-start">
             {creating ? "Creating..." : "Create login"}
           </Button>
@@ -282,6 +325,11 @@ export default function Admins() {
                       </Badge>
                     )}
                     {admin.id === profile?.id && <Badge tone="gray">You</Badge>}
+                    {!admin.isOwner && admin.loginArea && admin.loginArea !== "admin" && (
+                      <Badge tone="violet">
+                        {admin.loginArea === "cashier" ? "Cashier sign-in" : "Captain sign-in"}
+                      </Badge>
+                    )}
                   </div>
                   <div className="flex gap-1">
                     {!admin.isOwner && (
@@ -293,6 +341,7 @@ export default function Admins() {
                         onClick={() => {
                           setEditingId(editingId === admin.id ? null : admin.id);
                           setDraft(admin.permissions ?? {});
+                          setDraftArea(admin.loginArea ?? "admin");
                         }}
                       >
                         {editingId === admin.id ? "Cancel" : "Edit access"}
@@ -328,8 +377,26 @@ export default function Admins() {
                   <p className="mt-2 text-sm text-slate-500">The owner account always has full access.</p>
                 ) : editingId === admin.id ? (
                   <div className="mt-4 flex flex-col gap-3 border-t border-slate-100 pt-4">
-                    <PresetButtons onPick={setDraft} />
+                    <PresetButtons
+                      onPick={(permissions, area) => {
+                        setDraft(permissions);
+                        setDraftArea(area);
+                      }}
+                    />
                     <PermissionGrid value={draft} onChange={setDraft} />
+                    <Field label="Sign-in page" htmlFor={`area-${admin.id}`}>
+                      <Select
+                        id={`area-${admin.id}`}
+                        value={draftArea}
+                        onChange={(e) => setDraftArea(e.target.value as LoginArea)}
+                      >
+                        {(Object.keys(LOGIN_AREA_LABELS) as LoginArea[]).map((a) => (
+                          <option key={a} value={a}>
+                            {LOGIN_AREA_LABELS[a]}
+                          </option>
+                        ))}
+                      </Select>
+                    </Field>
                     <Button type="button" className="self-start" onClick={() => savePermissions(admin.id)}>
                       Save access
                     </Button>

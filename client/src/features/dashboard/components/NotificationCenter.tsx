@@ -106,7 +106,8 @@ function saveDismissed(value: Dismissed) {
 
 function liveCounts(summary: DashboardSummary | null): Dismissed {
   return {
-    kot: summary?.pendingKotItems ?? 0,
+    // Cafe flow: what waits is orders to be paid at the counter, not items for the kitchen.
+    kot: summary?.serviceFlow === "cafe" ? (summary.ordersAwaitingPayment ?? 0) : (summary?.pendingKotItems ?? 0),
     pay: summary?.tablesAwaitingPayment ?? 0,
     low: summary?.lowStockItems ?? 0,
   };
@@ -231,7 +232,13 @@ export default function NotificationCenter() {
       setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 6000);
     };
     if (next.openOrdersToday > last.openOrdersToday) pushToast("New order placed");
-    if (next.pendingKotItems > last.pendingKotItems) pushToast("New items ready to send to kitchen");
+    if (next.serviceFlow === "cafe") {
+      if ((next.ordersAwaitingPayment ?? 0) > (last.ordersAwaitingPayment ?? 0)) {
+        pushToast("An order is waiting to be paid");
+      }
+    } else if (next.pendingKotItems > last.pendingKotItems) {
+      pushToast("New items ready to send to kitchen");
+    }
     if (next.unreadChatCount > last.unreadChatCount) pushToast("New message from a table");
     if ((next.tablesAwaitingPayment ?? 0) > (last.tablesAwaitingPayment ?? 0)) {
       pushToast("A table is waiting to pay its bill");
@@ -347,26 +354,47 @@ export default function NotificationCenter() {
             </div>
 
             <div className="flex flex-col gap-2 text-sm">
-              <Link
-                to="/admin/kot"
-                onClick={() => setOpen(false)}
-                className="flex min-h-[44px] items-center justify-between rounded-lg px-2 py-2 hover:bg-slate-50"
-              >
-                <span className="text-slate-600">Items waiting for KOT</span>
-                <span className={`font-semibold ${summary?.pendingKotItems ? "text-orange-600" : "text-slate-400"}`}>
-                  {summary?.pendingKotItems ?? 0}
-                </span>
-              </Link>
-              <Link
-                to="/admin/tables"
-                onClick={() => setOpen(false)}
-                className="flex min-h-[44px] items-center justify-between rounded-lg px-2 py-2 hover:bg-slate-50"
-              >
-                <span className="text-slate-600">Tables awaiting payment</span>
-                <span className={`font-semibold ${summary?.tablesAwaitingPayment ? "text-red-600" : "text-slate-400"}`}>
-                  {summary?.tablesAwaitingPayment ?? 0}
-                </span>
-              </Link>
+              {summary?.serviceFlow === "cafe" ? (
+                <Link
+                  to="/pos"
+                  onClick={() => setOpen(false)}
+                  className="flex min-h-[44px] items-center justify-between rounded-lg px-2 py-2 hover:bg-slate-50"
+                >
+                  <span className="text-slate-600">Orders awaiting payment</span>
+                  <span
+                    className={`font-semibold ${summary.ordersAwaitingPayment ? "text-orange-600" : "text-slate-400"}`}
+                  >
+                    {summary.ordersAwaitingPayment ?? 0}
+                  </span>
+                </Link>
+              ) : (
+                <>
+                  <Link
+                    to="/admin/kot"
+                    onClick={() => setOpen(false)}
+                    className="flex min-h-[44px] items-center justify-between rounded-lg px-2 py-2 hover:bg-slate-50"
+                  >
+                    <span className="text-slate-600">Items waiting for KOT</span>
+                    <span
+                      className={`font-semibold ${summary?.pendingKotItems ? "text-orange-600" : "text-slate-400"}`}
+                    >
+                      {summary?.pendingKotItems ?? 0}
+                    </span>
+                  </Link>
+                  <Link
+                    to="/admin/tables"
+                    onClick={() => setOpen(false)}
+                    className="flex min-h-[44px] items-center justify-between rounded-lg px-2 py-2 hover:bg-slate-50"
+                  >
+                    <span className="text-slate-600">Tables awaiting payment</span>
+                    <span
+                      className={`font-semibold ${summary?.tablesAwaitingPayment ? "text-red-600" : "text-slate-400"}`}
+                    >
+                      {summary?.tablesAwaitingPayment ?? 0}
+                    </span>
+                  </Link>
+                </>
+              )}
               <Link
                 to="/admin/inventory"
                 onClick={() => setOpen(false)}

@@ -13,6 +13,7 @@ import {
   RefreshCw,
   RotateCcw,
   ShieldAlert,
+  Store,
   Trash2,
   Truck,
   Wallet,
@@ -33,6 +34,7 @@ import {
   type PrintFontSize,
   type PrintPaperSize,
   type Restaurant,
+  type ServiceFlow,
   type TaxRate,
 } from "../../lib/types";
 import { PUBLIC_RESTAURANT_KEY } from "../../lib/useDineInPayment";
@@ -63,7 +65,15 @@ import {
   Textarea,
 } from "../../shared/ui/ui";
 
-type SectionKey = "general" | "day" | "taxes" | "kot" | "billing" | "invoice" | "chat" | "delivery";
+type SectionKey =
+  | "general"
+  | "day"
+  | "taxes"
+  | "kot"
+  | "billing"
+  | "invoice"
+  | "chat"
+  | "delivery";
 
 const SECTIONS: { value: SectionKey; label: string; icon: LucideIcon }[] = [
   { value: "general", label: "General", icon: Building2 },
@@ -91,7 +101,13 @@ function ToggleRow({
 }) {
   return (
     <div className="py-3">
-      <Switch id={id} checked={checked} onChange={onChange} label={label} description={description} />
+      <Switch
+        id={id}
+        checked={checked}
+        onChange={onChange}
+        label={label}
+        description={description}
+      />
     </div>
   );
 }
@@ -112,13 +128,25 @@ function ChoiceCard({
   return (
     <label
       className={`flex cursor-pointer items-start gap-3 rounded-xl border p-4 transition-colors ${
-        checked ? "border-orange-400 bg-orange-50/60 ring-1 ring-orange-400" : "border-slate-200 hover:bg-slate-50"
+        checked
+          ? "border-orange-400 bg-orange-50/60 ring-1 ring-orange-400"
+          : "border-slate-200 hover:bg-slate-50"
       }`}
     >
-      <input type="radio" name={name} className="mt-0.5" checked={checked} onChange={onChange} />
+      <input
+        type="radio"
+        name={name}
+        className="mt-0.5"
+        checked={checked}
+        onChange={onChange}
+      />
       <span>
-        <span className="block text-sm font-semibold text-slate-900">{title}</span>
-        <span className="mt-0.5 block text-xs text-slate-500">{description}</span>
+        <span className="block text-sm font-semibold text-slate-900">
+          {title}
+        </span>
+        <span className="mt-0.5 block text-xs text-slate-500">
+          {description}
+        </span>
       </span>
     </label>
   );
@@ -127,7 +155,13 @@ function ChoiceCard({
 const TIMEZONE_CHOICES: string[] =
   typeof Intl.supportedValuesOf === "function"
     ? Intl.supportedValuesOf("timeZone")
-    : ["Asia/Kolkata", "Asia/Dubai", "Europe/London", "America/New_York", "UTC"];
+    : [
+        "Asia/Kolkata",
+        "Asia/Dubai",
+        "Europe/London",
+        "America/New_York",
+        "UTC",
+      ];
 
 const DEFAULT_KOT_SETTINGS: KotSettings = {
   guestOrderMode: "auto",
@@ -180,14 +214,19 @@ const BRAND_SWATCHES = [
   "bg-orange-900",
 ];
 
-async function logoColor(logoUrl: string, isSavedLogo: boolean): Promise<string | null> {
+async function logoColor(
+  logoUrl: string,
+  isSavedLogo: boolean,
+): Promise<string | null> {
   try {
     return await colorFromImage(logoUrl);
   } catch (err) {
     // A logo on another domain without CORS can't be read directly; the saved logo is also
     // served from our own API, which can.
     if (!isSavedLogo) throw err;
-    const res = await api.get<Blob>("/restaurant/logo", { responseType: "blob" });
+    const res = await api.get<Blob>("/restaurant/logo", {
+      responseType: "blob",
+    });
     const objectUrl = URL.createObjectURL(res.data);
     try {
       return await colorFromImage(objectUrl);
@@ -210,7 +249,9 @@ function BrandColorField({
 }) {
   // What's typed in the hex box, kept only while it still belongs to the current colour; a swatch,
   // the picker or the logo replaces it with the new value.
-  const [typed, setTyped] = useState<{ base: string; text: string } | null>(null);
+  const [typed, setTyped] = useState<{ base: string; text: string } | null>(
+    null,
+  );
   const hexText = typed && typed.base === value ? typed.text : value;
   const [picking, setPicking] = useState(false);
   const [note, setNote] = useState<string | null>(null);
@@ -231,7 +272,9 @@ function BrandColorField({
       if (color) onChange(color);
       else setNote("The logo has no strong colour. Pick one below instead.");
     } catch {
-      setNote("Couldn't read the logo's colours. Save the logo first, or pick a colour below.");
+      setNote(
+        "Couldn't read the logo's colours. Save the logo first, or pick a colour below.",
+      );
     } finally {
       setPicking(false);
     }
@@ -254,13 +297,23 @@ function BrandColorField({
             Use colour from logo
           </Button>
           {value && (
-            <Button type="button" size="sm" variant="ghost" icon={RotateCcw} onClick={() => onChange("")}>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              icon={RotateCcw}
+              onClick={() => onChange("")}
+            >
               Default
             </Button>
           )}
         </div>
       </div>
-      <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Brand colour presets">
+      <div
+        className="flex flex-wrap gap-2"
+        role="radiogroup"
+        aria-label="Brand colour presets"
+      >
         {BRAND_PRESETS.map((preset) => {
           const selected = preset.color === value;
           return (
@@ -277,7 +330,13 @@ function BrandColorField({
               }`}
               style={{ backgroundColor: preset.color || DEFAULT_BRAND_COLOR }}
             >
-              {selected && <Check size={16} className="mx-auto text-white" aria-hidden="true" />}
+              {selected && (
+                <Check
+                  size={16}
+                  className="mx-auto text-white"
+                  aria-hidden="true"
+                />
+              )}
             </button>
           );
         })}
@@ -297,7 +356,10 @@ function BrandColorField({
           value={hexText}
           onChange={(e) => typeHex(e.target.value)}
         />
-        <div className="flex h-6 overflow-hidden rounded-md ring-1 ring-slate-200" aria-hidden="true">
+        <div
+          className="flex h-6 overflow-hidden rounded-md ring-1 ring-slate-200"
+          aria-hidden="true"
+        >
           {BRAND_SWATCHES.map((swatch) => (
             <span key={swatch} className={`w-4 sm:w-5 ${swatch}`} />
           ))}
@@ -305,15 +367,22 @@ function BrandColorField({
       </div>
       {note && <p className="text-xs text-amber-700">{note}</p>}
       <p className="text-xs text-slate-500">
-        Used for buttons, highlights, the guest menu and the landing page on every screen. You see it here as you pick;
-        it applies for everyone once you save. Light colours are darkened where white text sits on them.
+        Used for buttons, highlights, the guest menu and the landing page on
+        every screen. You see it here as you pick; it applies for everyone once
+        you save. Light colours are darkened where white text sits on them.
       </p>
     </div>
   );
 }
 
-const PAPER_SIZE_OPTIONS = Object.entries(PRINT_PAPER_SIZE_LABELS) as [PrintPaperSize, string][];
-const FONT_SIZE_OPTIONS = Object.entries(PRINT_FONT_SIZE_LABELS) as [PrintFontSize, string][];
+const PAPER_SIZE_OPTIONS = Object.entries(PRINT_PAPER_SIZE_LABELS) as [
+  PrintPaperSize,
+  string,
+][];
+const FONT_SIZE_OPTIONS = Object.entries(PRINT_FONT_SIZE_LABELS) as [
+  PrintFontSize,
+  string,
+][];
 
 export default function RestaurantSettings() {
   const queryClient = useQueryClient();
@@ -337,28 +406,40 @@ export default function RestaurantSettings() {
   const dayEndTimeWarning = useMemo(() => {
     const [hour] = dayEndTime.split(":").map(Number);
     if (!Number.isFinite(hour) || hour < 5) return null;
-    const label = new Date(`2000-01-01T${dayEndTime}:00`).toLocaleTimeString([], {
-      hour: "numeric",
-      minute: "2-digit",
-    });
+    const label = new Date(`2000-01-01T${dayEndTime}:00`).toLocaleTimeString(
+      [],
+      {
+        hour: "numeric",
+        minute: "2-digit",
+      },
+    );
     return `Heads up: with a ${label} cutoff, every order taken between midnight and ${label} is filed under the previous date - that is most of a trading day, so the Orders date filter and daily sales will look shifted by one day. Only keep this if you genuinely serve through ${label}; otherwise use 00:00.`;
   }, [dayEndTime]);
 
   const timezoneOptions = useMemo(
-    () => (TIMEZONE_CHOICES.includes(timezone) ? TIMEZONE_CHOICES : [timezone, ...TIMEZONE_CHOICES]),
-    [timezone]
+    () =>
+      TIMEZONE_CHOICES.includes(timezone)
+        ? TIMEZONE_CHOICES
+        : [timezone, ...TIMEZONE_CHOICES],
+    [timezone],
   );
   const [prepBufferMinutes, setPrepBufferMinutes] = useState<number>(2);
   const [prepMessageTemplate, setPrepMessageTemplate] = useState(
-    "Your order should be ready in about {minutes} minutes (around {time})."
+    "Your order should be ready in about {minutes} minutes (around {time}).",
   );
   const [chatModEnabled, setChatModEnabled] = useState(true);
   const [chatModMode, setChatModMode] = useState<"mask" | "block">("mask");
   const [chatModWords, setChatModWords] = useState("");
   const [taxRates, setTaxRates] = useState<TaxRate[]>([]);
-  const [kotSettings, setKotSettings] = useState<KotSettings>(DEFAULT_KOT_SETTINGS);
-  const [invoiceSettings, setInvoiceSettings] = useState<InvoiceSettings>(DEFAULT_INVOICE_SETTINGS);
-  const [billingSettings, setBillingSettings] = useState<BillingSettings>(DEFAULT_BILLING_SETTINGS);
+  const [kotSettings, setKotSettings] =
+    useState<KotSettings>(DEFAULT_KOT_SETTINGS);
+  const [invoiceSettings, setInvoiceSettings] = useState<InvoiceSettings>(
+    DEFAULT_INVOICE_SETTINGS,
+  );
+  const [billingSettings, setBillingSettings] = useState<BillingSettings>(
+    DEFAULT_BILLING_SETTINGS,
+  );
+  const [serviceFlow, setServiceFlow] = useState<ServiceFlow>("restaurant");
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [previewingKot, setPreviewingKot] = useState(false);
@@ -369,7 +450,8 @@ export default function RestaurantSettings() {
   const [copied, setCopied] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [params, setParams] = useSearchParams();
-  const section = (SECTIONS.find((s) => s.value === params.get("section"))?.value ?? "general") as SectionKey;
+  const section = (SECTIONS.find((s) => s.value === params.get("section"))
+    ?.value ?? "general") as SectionKey;
   function openSection(next: SectionKey) {
     setParams({ section: next }, { replace: true });
     setMessage(null);
@@ -384,7 +466,7 @@ export default function RestaurantSettings() {
           "General (name, address, logo, GSTIN), Business day (day-end time, timezone), Taxes, Kitchen tickets, Billing, Invoice, Guest chat and Online delivery. Switch sections here - each has its own Save.",
       },
     ],
-    []
+    [],
   );
   usePageTour(tourSteps);
 
@@ -439,23 +521,36 @@ export default function RestaurantSettings() {
         setDayEndTime(res.data.dayEndTime || "00:00");
         if (res.data.timezone) setTimezone(res.data.timezone);
         setPrepBufferMinutes(res.data.prepBufferMinutes ?? 2);
-        if (res.data.prepMessageTemplate !== undefined) setPrepMessageTemplate(res.data.prepMessageTemplate);
+        if (res.data.prepMessageTemplate !== undefined)
+          setPrepMessageTemplate(res.data.prepMessageTemplate);
         if (res.data.chatModeration) {
           setChatModEnabled(res.data.chatModeration.enabled);
           setChatModMode(res.data.chatModeration.mode);
-          setChatModWords((res.data.chatModeration.customWords || []).join(", "));
+          setChatModWords(
+            (res.data.chatModeration.customWords || []).join(", "),
+          );
         }
         setTaxRates(res.data.taxRates);
         if (res.data.kotSettings) setKotSettings(res.data.kotSettings);
-        if (res.data.invoiceSettings) setInvoiceSettings(res.data.invoiceSettings);
-        if (res.data.billingSettings) setBillingSettings({ ...DEFAULT_BILLING_SETTINGS, ...res.data.billingSettings });
+        if (res.data.invoiceSettings)
+          setInvoiceSettings(res.data.invoiceSettings);
+        if (res.data.billingSettings)
+          setBillingSettings({
+            ...DEFAULT_BILLING_SETTINGS,
+            ...res.data.billingSettings,
+          });
+        setServiceFlow(res.data.serviceFlow ?? "restaurant");
       })
       .catch((err) => setError(extractErrorMessage(err)));
   }, []);
 
   function updateTaxRate(idx: number, field: keyof TaxRate, value: string) {
     setTaxRates((prev) =>
-      prev.map((t, i) => (i === idx ? { ...t, [field]: field === "percent" ? Number(value) : value } : t))
+      prev.map((t, i) =>
+        i === idx
+          ? { ...t, [field]: field === "percent" ? Number(value) : value }
+          : t,
+      ),
     );
   }
 
@@ -504,7 +599,11 @@ export default function RestaurantSettings() {
     const pdfTab = window.open("", "_blank");
     setPreviewingKot(true);
     try {
-      const res = await api.post("/restaurant/kot-preview", { name, logoUrl, kotSettings }, { responseType: "blob" });
+      const res = await api.post(
+        "/restaurant/kot-preview",
+        { name, logoUrl, kotSettings },
+        { responseType: "blob" },
+      );
       const url = URL.createObjectURL(res.data);
       if (pdfTab) pdfTab.location.href = url;
     } catch (err) {
@@ -522,8 +621,16 @@ export default function RestaurantSettings() {
     try {
       const res = await api.post(
         "/restaurant/invoice-preview",
-        { name, logoUrl, address, gstin, fssaiLicense, taxRates, invoiceSettings },
-        { responseType: "blob" }
+        {
+          name,
+          logoUrl,
+          address,
+          gstin,
+          fssaiLicense,
+          taxRates,
+          invoiceSettings,
+        },
+        { responseType: "blob" },
       );
       const url = URL.createObjectURL(res.data);
       if (pdfTab) pdfTab.location.href = url;
@@ -567,6 +674,7 @@ export default function RestaurantSettings() {
         kotSettings,
         invoiceSettings,
         billingSettings,
+        serviceFlow,
       });
       applyBrandColor(brandColor);
       setSavedBrandColor(brandColor);
@@ -581,13 +689,22 @@ export default function RestaurantSettings() {
     }
   }
 
-  const aggBase = (aggBaseUrl || publicUrl || (typeof window !== "undefined" ? window.location.origin : "")).replace(
-    /\/$/,
-    ""
-  );
+  const aggBase = (
+    aggBaseUrl ||
+    publicUrl ||
+    (typeof window !== "undefined" ? window.location.origin : "")
+  ).replace(/\/$/, "");
   const webhookUrls = [
-    { label: "Swiggy", url: `${aggBase}/api/webhooks/aggregator/swiggy`, key: "swiggy" },
-    { label: "Zomato", url: `${aggBase}/api/webhooks/aggregator/zomato`, key: "zomato" },
+    {
+      label: "Swiggy",
+      url: `${aggBase}/api/webhooks/aggregator/swiggy`,
+      key: "swiggy",
+    },
+    {
+      label: "Zomato",
+      url: `${aggBase}/api/webhooks/aggregator/zomato`,
+      key: "zomato",
+    },
   ];
   const current = SECTIONS.find((s) => s.value === section)!;
 
@@ -623,7 +740,11 @@ export default function RestaurantSettings() {
                     : "text-slate-600 hover:bg-white/70"
                 }`}
               >
-                <Icon size={16} className={active ? "text-orange-600" : "text-slate-400"} aria-hidden="true" />
+                <Icon
+                  size={16}
+                  className={active ? "text-orange-600" : "text-slate-400"}
+                  aria-hidden="true"
+                />
                 {s.label}
               </button>
             );
@@ -641,12 +762,25 @@ export default function RestaurantSettings() {
                 />
                 <div className="grid gap-4 sm:grid-cols-2">
                   <Field label="Restaurant name" htmlFor="rs-name">
-                    <Input id="rs-name" value={name} onChange={(e) => setName(e.target.value)} required />
+                    <Input
+                      id="rs-name"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      required
+                    />
                   </Field>
                   <Field label="Address" htmlFor="rs-address">
-                    <Input id="rs-address" value={address} onChange={(e) => setAddress(e.target.value)} />
+                    <Input
+                      id="rs-address"
+                      value={address}
+                      onChange={(e) => setAddress(e.target.value)}
+                    />
                   </Field>
-                  <Field label="GST number" htmlFor="rs-gstin" hint="Prints on the invoice header.">
+                  <Field
+                    label="GST number"
+                    htmlFor="rs-gstin"
+                    hint="Prints on the invoice header."
+                  >
                     <Input
                       id="rs-gstin"
                       placeholder="e.g. 22AAAAA0000A1Z5"
@@ -654,7 +788,11 @@ export default function RestaurantSettings() {
                       onChange={(e) => setGstin(e.target.value)}
                     />
                   </Field>
-                  <Field label="FSSAI registration number" htmlFor="rs-fssai" hint="Prints on the invoice header.">
+                  <Field
+                    label="FSSAI registration number"
+                    htmlFor="rs-fssai"
+                    hint="Prints on the invoice header."
+                  >
                     <Input
                       id="rs-fssai"
                       placeholder="e.g. 12345678901234"
@@ -685,7 +823,9 @@ export default function RestaurantSettings() {
                       </div>
                     )}
                     <div className="flex min-w-0 flex-1 flex-col gap-2">
-                      <span className="text-sm font-medium text-slate-700">Logo</span>
+                      <span className="text-sm font-medium text-slate-700">
+                        Logo
+                      </span>
                       <input
                         type="file"
                         aria-label="Upload logo"
@@ -699,7 +839,11 @@ export default function RestaurantSettings() {
                         value={logoUrl}
                         onChange={(e) => setLogoUrl(e.target.value)}
                       />
-                      {uploadingLogo && <span className="text-xs text-slate-500">Uploading…</span>}
+                      {uploadingLogo && (
+                        <span className="text-xs text-slate-500">
+                          Uploading…
+                        </span>
+                      )}
                     </div>
                   </div>
                   <BrandColorField
@@ -721,7 +865,9 @@ export default function RestaurantSettings() {
                     />
                   </Field>
                   <div className="flex flex-col gap-1.5">
-                    <span className="text-sm font-medium text-slate-700">Favicon</span>
+                    <span className="text-sm font-medium text-slate-700">
+                      Favicon
+                    </span>
                     <div className="flex flex-wrap items-center gap-3">
                       {faviconUrl && (
                         <img
@@ -730,8 +876,17 @@ export default function RestaurantSettings() {
                           className="h-9 w-9 rounded-md border border-slate-200 object-cover"
                         />
                       )}
-                      <input type="file" aria-label="Upload favicon" accept="image/*" onChange={handleFaviconFile} />
-                      {uploadingFavicon && <span className="text-xs text-slate-500">Uploading…</span>}
+                      <input
+                        type="file"
+                        aria-label="Upload favicon"
+                        accept="image/*"
+                        onChange={handleFaviconFile}
+                      />
+                      {uploadingFavicon && (
+                        <span className="text-xs text-slate-500">
+                          Uploading…
+                        </span>
+                      )}
                       {faviconUrl && (
                         <Button
                           type="button"
@@ -746,14 +901,18 @@ export default function RestaurantSettings() {
                       )}
                     </div>
                     <p className="text-xs text-slate-500">
-                      The small icon on the browser tab. A square PNG around 64×64 works best.
+                      The small icon on the browser tab. A square PNG around
+                      64×64 works best.
                     </p>
                   </div>
                 </div>
               </Card>
 
               <Card>
-                <CardHeader title="Public address" description="Used in table QR codes and shared bill links." />
+                <CardHeader
+                  title="Public address"
+                  description="Used in table QR codes and shared bill links."
+                />
                 <Field
                   label="Public URL"
                   htmlFor="rs-public-url"
@@ -791,7 +950,11 @@ export default function RestaurantSettings() {
                     <ChoiceCard
                       name="day-end"
                       checked={dayEndTime !== "00:00"}
-                      onChange={() => setDayEndTime(dayEndTime === "00:00" ? "02:00" : dayEndTime)}
+                      onChange={() =>
+                        setDayEndTime(
+                          dayEndTime === "00:00" ? "02:00" : dayEndTime,
+                        )
+                      }
                       title="Open past midnight"
                       description="Late orders count toward the previous day."
                     />
@@ -814,11 +977,20 @@ export default function RestaurantSettings() {
                       htmlFor="rs-timezone"
                       hint={
                         <>
-                          Local time there: <strong>{new Date().toLocaleString([], { timeZone: timezone })}</strong>
+                          Local time there:{" "}
+                          <strong>
+                            {new Date().toLocaleString([], {
+                              timeZone: timezone,
+                            })}
+                          </strong>
                         </>
                       }
                     >
-                      <Select id="rs-timezone" value={timezone} onChange={(e) => setTimezone(e.target.value)}>
+                      <Select
+                        id="rs-timezone"
+                        value={timezone}
+                        onChange={(e) => setTimezone(e.target.value)}
+                      >
                         {timezoneOptions.map((tz) => (
                           <option key={tz} value={tz}>
                             {tz}
@@ -827,7 +999,9 @@ export default function RestaurantSettings() {
                       </Select>
                     </Field>
                   </div>
-                  {dayEndTimeWarning && <Alert tone="warning">{dayEndTimeWarning}</Alert>}
+                  {dayEndTimeWarning && (
+                    <Alert tone="warning">{dayEndTimeWarning}</Alert>
+                  )}
                 </div>
               </Card>
 
@@ -844,7 +1018,9 @@ export default function RestaurantSettings() {
                       inputMode="numeric"
                       min={0}
                       value={prepBufferMinutes}
-                      onChange={(e) => setPrepBufferMinutes(Number(e.target.value))}
+                      onChange={(e) =>
+                        setPrepBufferMinutes(Number(e.target.value))
+                      }
                     />
                   </Field>
                   <Field
@@ -852,9 +1028,15 @@ export default function RestaurantSettings() {
                     htmlFor="rs-prep-message"
                     hint={
                       <>
-                        Use <code className="rounded bg-slate-100 px-1">{"{minutes}"}</code> for the wait left and{" "}
-                        <code className="rounded bg-slate-100 px-1">{"{time}"}</code> for the ready time. Leave empty to
-                        hide it.
+                        Use{" "}
+                        <code className="rounded bg-slate-100 px-1">
+                          {"{minutes}"}
+                        </code>{" "}
+                        for the wait left and{" "}
+                        <code className="rounded bg-slate-100 px-1">
+                          {"{time}"}
+                        </code>{" "}
+                        for the ready time. Leave empty to hide it.
                       </>
                     }
                   >
@@ -877,20 +1059,32 @@ export default function RestaurantSettings() {
                 title="Tax rates"
                 description="Applied to the taxable value of every bill. Paid bills keep the rates they were billed with."
                 actions={
-                  <Button type="button" size="sm" variant="soft" icon={Plus} onClick={addTaxRate}>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="soft"
+                    icon={Plus}
+                    onClick={addTaxRate}
+                  >
                     Add tax
                   </Button>
                 }
               />
               <div className="flex flex-col gap-2">
-                {taxRates.length === 0 && <p className="text-sm text-slate-500">No taxes. Bills will show no GST.</p>}
+                {taxRates.length === 0 && (
+                  <p className="text-sm text-slate-500">
+                    No taxes. Bills will show no GST.
+                  </p>
+                )}
                 {taxRates.map((rate, idx) => (
                   <div key={idx} className="flex items-center gap-2">
                     <Input
                       aria-label="Tax name"
                       placeholder="Name (e.g. CGST)"
                       value={rate.name}
-                      onChange={(e) => updateTaxRate(idx, "name", e.target.value)}
+                      onChange={(e) =>
+                        updateTaxRate(idx, "name", e.target.value)
+                      }
                       className="flex-1"
                     />
                     <div className="relative w-28 shrink-0">
@@ -903,7 +1097,9 @@ export default function RestaurantSettings() {
                         step="0.01"
                         placeholder="0"
                         value={rate.percent}
-                        onChange={(e) => updateTaxRate(idx, "percent", e.target.value)}
+                        onChange={(e) =>
+                          updateTaxRate(idx, "percent", e.target.value)
+                        }
                         className="pr-7"
                       />
                       <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-sm text-slate-400">
@@ -933,22 +1129,32 @@ export default function RestaurantSettings() {
                   <ChoiceCard
                     name="guest-order-mode"
                     checked={kotSettings.guestOrderMode === "auto"}
-                    onChange={() => setKotSettings((prev) => ({ ...prev, guestOrderMode: "auto" }))}
+                    onChange={() =>
+                      setKotSettings((prev) => ({
+                        ...prev,
+                        guestOrderMode: "auto",
+                      }))
+                    }
                     title="Send to the kitchen straight away"
                     description="The KOT prints as soon as the guest places the order."
                   />
                   <ChoiceCard
                     name="guest-order-mode"
                     checked={kotSettings.guestOrderMode === "accept"}
-                    onChange={() => setKotSettings((prev) => ({ ...prev, guestOrderMode: "accept" }))}
+                    onChange={() =>
+                      setKotSettings((prev) => ({
+                        ...prev,
+                        guestOrderMode: "accept",
+                      }))
+                    }
                     title="Wait for staff to accept"
                     description="New items wait in the Kitchen Queue until someone prints the KOT."
                   />
                 </div>
                 {billingSettings.dineInPayment === "upfront" && (
                   <p className="mt-3 text-xs text-slate-500">
-                    Guests pay when ordering (Billing), so their orders go to the kitchen once paid, whichever you pick
-                    here.
+                    Guests pay when ordering (Billing), so their orders go to
+                    the kitchen once paid, whichever you pick here.
                   </p>
                 )}
               </Card>
@@ -977,7 +1183,10 @@ export default function RestaurantSettings() {
                       id="kot-paper"
                       value={kotSettings.paperSize}
                       onChange={(e) =>
-                        setKotSettings((prev) => ({ ...prev, paperSize: e.target.value as PrintPaperSize }))
+                        setKotSettings((prev) => ({
+                          ...prev,
+                          paperSize: e.target.value as PrintPaperSize,
+                        }))
                       }
                     >
                       {PAPER_SIZE_OPTIONS.map(([value, label]) => (
@@ -992,7 +1201,10 @@ export default function RestaurantSettings() {
                       id="kot-font"
                       value={kotSettings.fontSize}
                       onChange={(e) =>
-                        setKotSettings((prev) => ({ ...prev, fontSize: e.target.value as PrintFontSize }))
+                        setKotSettings((prev) => ({
+                          ...prev,
+                          fontSize: e.target.value as PrintFontSize,
+                        }))
                       }
                     >
                       {FONT_SIZE_OPTIONS.map(([value, label]) => (
@@ -1006,7 +1218,12 @@ export default function RestaurantSettings() {
                     <Input
                       id="kot-header"
                       value={kotSettings.headerText}
-                      onChange={(e) => setKotSettings((prev) => ({ ...prev, headerText: e.target.value }))}
+                      onChange={(e) =>
+                        setKotSettings((prev) => ({
+                          ...prev,
+                          headerText: e.target.value,
+                        }))
+                      }
                     />
                   </Field>
                   <Field label="Footer note" htmlFor="kot-footer">
@@ -1014,7 +1231,12 @@ export default function RestaurantSettings() {
                       id="kot-footer"
                       placeholder="e.g. Prepare fresh, serve hot"
                       value={kotSettings.footerNote}
-                      onChange={(e) => setKotSettings((prev) => ({ ...prev, footerNote: e.target.value }))}
+                      onChange={(e) =>
+                        setKotSettings((prev) => ({
+                          ...prev,
+                          footerNote: e.target.value,
+                        }))
+                      }
                     />
                   </Field>
                 </div>
@@ -1022,31 +1244,47 @@ export default function RestaurantSettings() {
                   <ToggleRow
                     id="kot-logo"
                     checked={kotSettings.showLogo}
-                    onChange={(v) => setKotSettings((prev) => ({ ...prev, showLogo: v }))}
+                    onChange={(v) =>
+                      setKotSettings((prev) => ({ ...prev, showLogo: v }))
+                    }
                     label="Show logo"
                   />
                   <ToggleRow
                     id="kot-customer"
                     checked={kotSettings.showCustomerName}
-                    onChange={(v) => setKotSettings((prev) => ({ ...prev, showCustomerName: v }))}
+                    onChange={(v) =>
+                      setKotSettings((prev) => ({
+                        ...prev,
+                        showCustomerName: v,
+                      }))
+                    }
                     label="Show customer name"
                   />
                   <ToggleRow
                     id="kot-table"
                     checked={kotSettings.showTableInfo}
-                    onChange={(v) => setKotSettings((prev) => ({ ...prev, showTableInfo: v }))}
+                    onChange={(v) =>
+                      setKotSettings((prev) => ({ ...prev, showTableInfo: v }))
+                    }
                     label="Show order and table info"
                   />
                   <ToggleRow
                     id="kot-prices"
                     checked={kotSettings.showPrices}
-                    onChange={(v) => setKotSettings((prev) => ({ ...prev, showPrices: v }))}
+                    onChange={(v) =>
+                      setKotSettings((prev) => ({ ...prev, showPrices: v }))
+                    }
                     label="Show item prices"
                   />
                   <ToggleRow
                     id="kot-split-category"
                     checked={kotSettings.splitByCategory}
-                    onChange={(v) => setKotSettings((prev) => ({ ...prev, splitByCategory: v }))}
+                    onChange={(v) =>
+                      setKotSettings((prev) => ({
+                        ...prev,
+                        splitByCategory: v,
+                      }))
+                    }
                     label="Print a separate ticket for each category"
                     description="Starters, mains and drinks print on their own ticket. All tickets of one order share the same token number."
                   />
@@ -1065,7 +1303,10 @@ export default function RestaurantSettings() {
                       max={99999}
                       value={kotSettings.tokenStart}
                       onChange={(e) =>
-                        setKotSettings((prev) => ({ ...prev, tokenStart: Math.max(1, Number(e.target.value) || 1) }))
+                        setKotSettings((prev) => ({
+                          ...prev,
+                          tokenStart: Math.max(1, Number(e.target.value) || 1),
+                        }))
                       }
                     />
                   </Field>
@@ -1076,92 +1317,165 @@ export default function RestaurantSettings() {
 
           {section === "billing" && (
             <>
-            <Card>
-              <CardHeader
-                title="When do dine-in guests pay?"
-                description="Choose how your restaurant works. Takeaway can be paid either way."
-              />
-              <div className="grid gap-3 sm:grid-cols-2">
-                <ChoiceCard
-                  name="dine-in-payment"
-                  checked={billingSettings.dineInPayment !== "upfront"}
-                  onChange={() => setBillingSettings((prev) => ({ ...prev, dineInPayment: "after" }))}
-                  title="After eating"
-                  description="Guests order in rounds, then pay the bill. The table waits for payment before it frees up. Captains (waiters) can take orders."
+              <Card>
+                <CardHeader
+                  title="When do dine-in guests pay?"
+                  description="Choose how your restaurant works. Takeaway can be paid either way."
                 />
-                <ChoiceCard
-                  name="dine-in-payment"
-                  checked={billingSettings.dineInPayment === "upfront"}
-                  onChange={() => setBillingSettings((prev) => ({ ...prev, dineInPayment: "upfront" }))}
-                  title="When ordering"
-                  description="Each order is paid first and only then goes to the kitchen. The table stays seated until staff release it. The captain app is not used."
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <ChoiceCard
+                    name="dine-in-payment"
+                    checked={billingSettings.dineInPayment !== "upfront"}
+                    onChange={() =>
+                      setBillingSettings((prev) => ({
+                        ...prev,
+                        dineInPayment: "after",
+                      }))
+                    }
+                    title="After eating"
+                    description="Guests order in rounds, then pay the bill. The table waits for payment before it frees up. Captains (waiters) can take orders."
+                  />
+                  <ChoiceCard
+                    name="dine-in-payment"
+                    checked={billingSettings.dineInPayment === "upfront"}
+                    onChange={() =>
+                      setBillingSettings((prev) => ({
+                        ...prev,
+                        dineInPayment: "upfront",
+                      }))
+                    }
+                    title="When ordering"
+                    description="Each order is paid first and only then goes to the kitchen. The table stays seated until staff release it. The captain app is not used."
+                  />
+                </div>
+                {billingSettings.dineInPayment === "upfront" && (
+                  <p className="mt-3 text-xs text-slate-500">
+                    Table QR orders wait until they're paid at the counter. Turn
+                    on table auto-release (Tables page) so tables free up even
+                    when nobody releases them.
+                  </p>
+                )}
+              </Card>
+              <Card>
+                <CardHeader
+                  icon={Store}
+                  title="How you serve"
+                  description="When guests pay, and when the kitchen gets the order."
                 />
-              </div>
-              {billingSettings.dineInPayment === "upfront" && (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <ChoiceCard
+                    name="service-flow"
+                    checked={serviceFlow === "restaurant"}
+                    onChange={() => setServiceFlow("restaurant")}
+                    title="Restaurant: pay after"
+                    description="Take the order, send it to the kitchen, serve, then bill and collect payment at the end. The bill can only be made once everything has been sent to the kitchen."
+                  />
+                  <ChoiceCard
+                    name="service-flow"
+                    checked={serviceFlow === "cafe"}
+                    onChange={() => setServiceFlow("cafe")}
+                    title="Cafe: pay first"
+                    description="Take the order and collect payment first. The kitchen ticket prints the moment it is paid, and the receipt carries the token the guest collects by."
+                  />
+                </div>
+                {serviceFlow === "cafe" && (
+                  <ul className="mt-3 list-disc space-y-1 pl-5 text-xs text-slate-500">
+                    <li>
+                      Guest QR orders wait as "awaiting payment" until staff
+                      take payment at the counter.
+                    </li>
+                    <li>
+                      The Captain app's "request bill" and the "waiting to pay"
+                      table states are hidden.
+                    </li>
+                    <li>
+                      Adding more to a paid order starts a new order. Refund an
+                      item from the paid bill if it was cancelled.
+                    </li>
+                  </ul>
+                )}
                 <p className="mt-3 text-xs text-slate-500">
-                  Table QR orders wait until they're paid at the counter. Turn on table auto-release (Tables page) so
-                  tables free up even when nobody releases them.
+                  Press Save settings at the bottom to apply the change.
                 </p>
-              )}
-            </Card>
-            <Card>
-              <CardHeader
-                icon={Wallet}
-                title="Billing and payments"
-                description="Service charge, how much discount staff can give, and the UPI ID printed as a QR code on unpaid bills."
-              />
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field
-                  label="Service charge (%)"
-                  htmlFor="service-charge"
-                  hint="0 turns it off. Staff can remove it per bill."
-                >
-                  <Input
-                    id="service-charge"
-                    type="number"
-                    inputMode="decimal"
-                    min={0}
-                    max={20}
-                    step="0.5"
-                    value={billingSettings.serviceChargePercent}
-                    onChange={(e) =>
-                      setBillingSettings((prev) => ({ ...prev, serviceChargePercent: Number(e.target.value) || 0 }))
-                    }
-                  />
-                </Field>
-                <Field label="Staff discount limit (%)" htmlFor="staff-discount-limit" hint="The owner has no limit.">
-                  <Input
-                    id="staff-discount-limit"
-                    type="number"
-                    inputMode="numeric"
-                    min={0}
-                    max={100}
-                    value={billingSettings.maxStaffDiscountPercent}
-                    onChange={(e) =>
-                      setBillingSettings((prev) => ({ ...prev, maxStaffDiscountPercent: Number(e.target.value) || 0 }))
-                    }
-                  />
-                </Field>
-                <Field label="UPI ID" htmlFor="upi-vpa">
-                  <Input
-                    id="upi-vpa"
-                    placeholder="restaurant@okicici"
-                    value={billingSettings.upiVpa}
-                    onChange={(e) => setBillingSettings((prev) => ({ ...prev, upiVpa: e.target.value.trim() }))}
-                  />
-                </Field>
-                <Field label="UPI payee name" htmlFor="upi-payee">
-                  <Input
-                    id="upi-payee"
-                    maxLength={60}
-                    placeholder={name || "Restaurant name"}
-                    value={billingSettings.upiPayeeName}
-                    onChange={(e) => setBillingSettings((prev) => ({ ...prev, upiPayeeName: e.target.value }))}
-                  />
-                </Field>
-              </div>
-            </Card>
-            <OnlinePaymentsCard publicUrl={publicUrl} />
+              </Card>
+              <Card>
+                <CardHeader
+                  icon={Wallet}
+                  title="Billing and payments"
+                  description="Service charge, how much discount staff can give, and the UPI ID printed as a QR code on unpaid bills."
+                />
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field
+                    label="Service charge (%)"
+                    htmlFor="service-charge"
+                    hint="0 turns it off. Staff can remove it per bill."
+                  >
+                    <Input
+                      id="service-charge"
+                      type="number"
+                      inputMode="decimal"
+                      min={0}
+                      max={20}
+                      step="0.5"
+                      value={billingSettings.serviceChargePercent}
+                      onChange={(e) =>
+                        setBillingSettings((prev) => ({
+                          ...prev,
+                          serviceChargePercent: Number(e.target.value) || 0,
+                        }))
+                      }
+                    />
+                  </Field>
+                  <Field
+                    label="Staff discount limit (%)"
+                    htmlFor="staff-discount-limit"
+                    hint="The owner has no limit."
+                  >
+                    <Input
+                      id="staff-discount-limit"
+                      type="number"
+                      inputMode="numeric"
+                      min={0}
+                      max={100}
+                      value={billingSettings.maxStaffDiscountPercent}
+                      onChange={(e) =>
+                        setBillingSettings((prev) => ({
+                          ...prev,
+                          maxStaffDiscountPercent: Number(e.target.value) || 0,
+                        }))
+                      }
+                    />
+                  </Field>
+                  <Field label="UPI ID" htmlFor="upi-vpa">
+                    <Input
+                      id="upi-vpa"
+                      placeholder="restaurant@okicici"
+                      value={billingSettings.upiVpa}
+                      onChange={(e) =>
+                        setBillingSettings((prev) => ({
+                          ...prev,
+                          upiVpa: e.target.value.trim(),
+                        }))
+                      }
+                    />
+                  </Field>
+                  <Field label="UPI payee name" htmlFor="upi-payee">
+                    <Input
+                      id="upi-payee"
+                      maxLength={60}
+                      placeholder={name || "Restaurant name"}
+                      value={billingSettings.upiPayeeName}
+                      onChange={(e) =>
+                        setBillingSettings((prev) => ({
+                          ...prev,
+                          upiPayeeName: e.target.value,
+                        }))
+                      }
+                    />
+                  </Field>
+                </div>
+              </Card>
+              <OnlinePaymentsCard publicUrl={publicUrl} />
             </>
           )}
 
@@ -1198,17 +1512,27 @@ export default function RestaurantSettings() {
                     onChange={(e) =>
                       setInvoiceSettings((prev) => ({
                         ...prev,
-                        invoicePrefix: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""),
+                        invoicePrefix: e.target.value
+                          .toUpperCase()
+                          .replace(/[^A-Z0-9]/g, ""),
                       }))
                     }
                   />
                 </Field>
-                <Field label="Place of supply (state)" htmlFor="place-of-supply">
+                <Field
+                  label="Place of supply (state)"
+                  htmlFor="place-of-supply"
+                >
                   <Input
                     id="place-of-supply"
                     maxLength={60}
                     value={invoiceSettings.placeOfSupply}
-                    onChange={(e) => setInvoiceSettings((prev) => ({ ...prev, placeOfSupply: e.target.value }))}
+                    onChange={(e) =>
+                      setInvoiceSettings((prev) => ({
+                        ...prev,
+                        placeOfSupply: e.target.value,
+                      }))
+                    }
                     placeholder="Karnataka"
                   />
                 </Field>
@@ -1217,7 +1541,10 @@ export default function RestaurantSettings() {
                     id="invoice-paper"
                     value={invoiceSettings.paperSize}
                     onChange={(e) =>
-                      setInvoiceSettings((prev) => ({ ...prev, paperSize: e.target.value as PrintPaperSize }))
+                      setInvoiceSettings((prev) => ({
+                        ...prev,
+                        paperSize: e.target.value as PrintPaperSize,
+                      }))
                     }
                   >
                     {PAPER_SIZE_OPTIONS.map(([value, label]) => (
@@ -1232,7 +1559,10 @@ export default function RestaurantSettings() {
                     id="invoice-font"
                     value={invoiceSettings.fontSize}
                     onChange={(e) =>
-                      setInvoiceSettings((prev) => ({ ...prev, fontSize: e.target.value as PrintFontSize }))
+                      setInvoiceSettings((prev) => ({
+                        ...prev,
+                        fontSize: e.target.value as PrintFontSize,
+                      }))
                     }
                   >
                     {FONT_SIZE_OPTIONS.map(([value, label]) => (
@@ -1247,7 +1577,12 @@ export default function RestaurantSettings() {
                     id="invoice-footer"
                     placeholder="e.g. Thank you for dining with us!"
                     value={invoiceSettings.footerNote}
-                    onChange={(e) => setInvoiceSettings((prev) => ({ ...prev, footerNote: e.target.value }))}
+                    onChange={(e) =>
+                      setInvoiceSettings((prev) => ({
+                        ...prev,
+                        footerNote: e.target.value,
+                      }))
+                    }
                   />
                 </Field>
                 <Field label="Terms / notes" htmlFor="invoice-terms">
@@ -1256,7 +1591,12 @@ export default function RestaurantSettings() {
                     rows={2}
                     placeholder="e.g. Prices are inclusive of all taxes."
                     value={invoiceSettings.termsText}
-                    onChange={(e) => setInvoiceSettings((prev) => ({ ...prev, termsText: e.target.value }))}
+                    onChange={(e) =>
+                      setInvoiceSettings((prev) => ({
+                        ...prev,
+                        termsText: e.target.value,
+                      }))
+                    }
                   />
                 </Field>
               </div>
@@ -1264,25 +1604,42 @@ export default function RestaurantSettings() {
                 <ToggleRow
                   id="invoice-logo"
                   checked={invoiceSettings.showLogo}
-                  onChange={(v) => setInvoiceSettings((prev) => ({ ...prev, showLogo: v }))}
+                  onChange={(v) =>
+                    setInvoiceSettings((prev) => ({ ...prev, showLogo: v }))
+                  }
                   label="Show logo"
                 />
                 <ToggleRow
                   id="invoice-phone"
                   checked={invoiceSettings.showCustomerPhone}
-                  onChange={(v) => setInvoiceSettings((prev) => ({ ...prev, showCustomerPhone: v }))}
+                  onChange={(v) =>
+                    setInvoiceSettings((prev) => ({
+                      ...prev,
+                      showCustomerPhone: v,
+                    }))
+                  }
                   label="Show customer phone number"
                 />
                 <ToggleRow
                   id="invoice-unit"
                   checked={invoiceSettings.showUnitPrice}
-                  onChange={(v) => setInvoiceSettings((prev) => ({ ...prev, showUnitPrice: v }))}
+                  onChange={(v) =>
+                    setInvoiceSettings((prev) => ({
+                      ...prev,
+                      showUnitPrice: v,
+                    }))
+                  }
                   label="Show unit price column"
                 />
                 <ToggleRow
                   id="invoice-autoprint"
                   checked={invoiceSettings.autoPrintBill}
-                  onChange={(v) => setInvoiceSettings((prev) => ({ ...prev, autoPrintBill: v }))}
+                  onChange={(v) =>
+                    setInvoiceSettings((prev) => ({
+                      ...prev,
+                      autoPrintBill: v,
+                    }))
+                  }
                   label="Print bills automatically"
                   description="Sends the bill to the bill printer as soon as it's generated."
                 />
@@ -1325,7 +1682,11 @@ export default function RestaurantSettings() {
                         description="The message isn't sent at all."
                       />
                     </div>
-                    <Field label="Extra banned words" htmlFor="chat-words" hint="Separate words with commas.">
+                    <Field
+                      label="Extra banned words"
+                      htmlFor="chat-words"
+                      hint="Separate words with commas."
+                    >
                       <Textarea
                         id="chat-words"
                         rows={2}
@@ -1351,14 +1712,21 @@ export default function RestaurantSettings() {
                 <div className="flex flex-col gap-5">
                   <div className="flex flex-col gap-3">
                     <div>
-                      <h3 className="text-sm font-semibold text-slate-900">1. Webhook URLs</h3>
+                      <h3 className="text-sm font-semibold text-slate-900">
+                        1. Webhook URLs
+                      </h3>
                       <p className="text-xs text-slate-500">
-                        Paste these into the partner or middleware dashboard as the "new order" webhook. They use your
-                        Public URL, so set that to a public HTTPS address first.
+                        Paste these into the partner or middleware dashboard as
+                        the "new order" webhook. They use your Public URL, so
+                        set that to a public HTTPS address first.
                       </p>
                     </div>
                     {webhookUrls.map((w) => (
-                      <Field key={w.key} label={w.label} htmlFor={`webhook-${w.key}`}>
+                      <Field
+                        key={w.key}
+                        label={w.label}
+                        htmlFor={`webhook-${w.key}`}
+                      >
                         <div className="flex gap-2">
                           <Input
                             id={`webhook-${w.key}`}
@@ -1382,11 +1750,19 @@ export default function RestaurantSettings() {
 
                   <div className="flex flex-col gap-3 border-t border-slate-100 pt-5">
                     <div>
-                      <h3 className="text-sm font-semibold text-slate-900">2. Webhook secret</h3>
+                      <h3 className="text-sm font-semibold text-slate-900">
+                        2. Webhook secret
+                      </h3>
                       <p className="text-xs text-slate-500">
-                        Sent as an <code className="rounded bg-slate-100 px-1">x-webhook-secret</code> header (or{" "}
-                        <code className="rounded bg-slate-100 px-1">?secret=</code>). Regenerating it invalidates the
-                        old one.
+                        Sent as an{" "}
+                        <code className="rounded bg-slate-100 px-1">
+                          x-webhook-secret
+                        </code>{" "}
+                        header (or{" "}
+                        <code className="rounded bg-slate-100 px-1">
+                          ?secret=
+                        </code>
+                        ). Regenerating it invalidates the old one.
                       </p>
                     </div>
                     <div className="flex flex-wrap gap-2">
@@ -1408,7 +1784,12 @@ export default function RestaurantSettings() {
                           {copied === "secret" ? "Copied" : "Copy"}
                         </Button>
                       )}
-                      <Button type="button" icon={RefreshCw} loading={rotatingSecret} onClick={regenerateSecret}>
+                      <Button
+                        type="button"
+                        icon={RefreshCw}
+                        loading={rotatingSecret}
+                        onClick={regenerateSecret}
+                      >
                         {aggSecret ? "Regenerate" : "Generate"}
                       </Button>
                     </div>
@@ -1419,8 +1800,9 @@ export default function RestaurantSettings() {
                       3. Order payload format
                     </summary>
                     <p className="mt-2 text-xs text-slate-500">
-                      POST JSON in this shape. Items are matched to your menu by name where possible; unmatched items
-                      are kept as free-form lines using the price you send.
+                      POST JSON in this shape. Items are matched to your menu by
+                      name where possible; unmatched items are kept as free-form
+                      lines using the price you send.
                     </p>
                     <pre className="mt-2 overflow-x-auto rounded-lg bg-slate-900 p-3 text-[11px] leading-relaxed text-slate-100">
                       {`{
@@ -1453,7 +1835,9 @@ export default function RestaurantSettings() {
                     {message}
                   </span>
                 ) : (
-                  <span className="text-slate-500">Editing {current.label.toLowerCase()} settings</span>
+                  <span className="text-slate-500">
+                    Editing {current.label.toLowerCase()} settings
+                  </span>
                 )}
               </div>
               <Button type="submit" loading={saving} icon={Check}>

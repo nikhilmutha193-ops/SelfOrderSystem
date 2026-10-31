@@ -19,7 +19,9 @@ export function useGuestAccess(): GuestAccess & { required: RequiredDetails } {
       .then((res) => {
         const settings = res.data.tableLoginSettings;
         setRequired(settings?.requiredDetails ?? DEFAULT_REQUIRED);
-        setAccess((via === "code" ? settings?.manual : settings?.qr) ?? FULL_ACCESS);
+        const chosen = (via === "code" ? settings?.manual : settings?.qr) ?? FULL_ACCESS;
+        // A guest following a paid order by its token can look around, but ordering is at the counter.
+        setAccess(via === "token" ? { ...chosen, placeOrder: false } : chosen);
       })
       .catch(() => {
         /* best effort - the server still refuses orders that aren't allowed */

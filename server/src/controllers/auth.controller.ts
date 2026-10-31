@@ -3,10 +3,13 @@ import { Request, Response } from "express";
 
 import { asyncHandler } from "../middleware/errorHandler";
 import { findActiveReservationForTable } from "../modules/bookings/bookings.service";
-import Admin, { IAdmin } from "../models/Admin";
+import Admin, { IAdmin, LoginArea } from "../models/Admin";
 import Chef from "../models/Chef";
 import Order from "../models/Order";
+import OrderItem from "../models/OrderItem";
+import Restaurant from "../models/Restaurant";
 import TableModel from "../models/Table";
+import { getBusinessDayStart } from "../utils/businessDay";
 import { HttpError } from "../utils/httpError";
 import { AuthTokenPayload, nowSeconds, signToken, staffSessionMaxSeconds } from "../utils/jwt";
 import { comparePassword, hashPassword } from "../utils/password";
@@ -21,6 +24,29 @@ function requireString(value: unknown, field: string): string {
   return value;
 }
 
+const AREA_NAMES: Record<LoginArea | "chef", string> = {
+  admin: "admin portal",
+  cashier: "Cashier (POS)",
+  captain: "Captain app",
+  chef: "kitchen screen",
+};
+
+/**
+ * Each sign-in page lets in only the logins that belong there: a cashier or captain login uses its own page,
+ * while admin logins (and the owner) can use any page they have access to.
+ */
+function assertMayUseSignIn(admin: IAdmin, area: LoginArea | "chef") {
+  if (admin.isOwner) return;
+  const own = admin.loginArea ?? "admin";
+  if (own !== "admin" && own !== area) {
+    throw new HttpError(403, `This login is for the ${AREA_NAMES[own]} sign-in page. Please use that page.`);
+  }
+  const needs = area === "cashier" ? "pos" : area === "captain" ? "captain" : area === "chef" ? "kot" : null;
+  if (needs && !effectivePermissions(admin)[needs]) {
+    throw new HttpError(403, `This login does not have access to the ${AREA_NAMES[area]}.`);
+  }
+}
+
 export const adminLogin = asyncHandler(async (req: Request, res: Response) => {
   const username = requireString(req.body?.username, "username");
   const password = requireString(req.body?.password, "password");
@@ -29,6 +55,7 @@ export const adminLogin = asyncHandler(async (req: Request, res: Response) => {
   if (!admin || !(await comparePassword(password, admin.passwordHash))) {
     throw new HttpError(401, "Invalid username or password");
   }
+  const area = ["admin", "cashier", "captain", "chef"].includes(req.body?.area) ? req.body.area : "admin";
 
   if (!admin.isOwner && !(await Admin.exists({ restaurantId: req.restaurantId, isOwner: true }))) {
     const earliest = await Admin.findOne({ restaurantId: req.restaurantId }).sort({ createdAt: 1 });
@@ -37,6 +64,7 @@ export const adminLogin = asyncHandler(async (req: Request, res: Response) => {
       await admin.save();
     }
   }
+  assertMayUseSignIn(admin, area);
 
   const token = signToken({
     role: "admin",
@@ -53,6 +81,7 @@ function adminProfile(admin: IAdmin) {
     id: admin._id,
     username: admin.username,
     isOwner: admin.isOwner,
+    loginArea: admin.loginArea ?? "admin",
     permissions: effectivePermissions(admin),
   };
 }
@@ -147,6 +176,15 @@ export const tableLogin = asyncHandler(async (req: Request, res: Response) => {
   };
   if (!code && !qrToken) throw new HttpError(400, "code or token is required");
 
+  // The admin can switch either way of signing in to a table off (for example when staff take every order).
+  const loginSettings = (await Restaurant.findById(req.restaurantId).select("tableLoginSettings"))?.tableLoginSettings;
+  if (qrToken && loginSettings?.allowQrLogin === false) {
+    throw new HttpError(403, "Signing in with the table QR code is turned off. Please ask the staff to place your order.");
+  }
+  if (!qrToken && loginSettings?.allowPinLogin === false) {
+    throw new HttpError(403, "Signing in with a table code and PIN is turned off. Please ask the staff to place your order.");
+  }
+
   let table;
   if (qrToken) {
     const decrypted = decryptTableToken(requireString(qrToken, "token"));
@@ -219,6 +257,39 @@ export const tableLogin = asyncHandler(async (req: Request, res: Response) => {
     via: qrToken ? "qr" : "code",
   });
   res.json({ token, table: { id: table._id, code: table.code } });
+});
+
+/**
+ * Cafe flow: a guest with a receipt signs in by the token number printed on it, to watch their order, see the
+ * menu, leave feedback and send quick requests. The session belongs to that one order and cannot order more.
+ */
+export const tokenLogin = asyncHandler(async (req: Request, res: Response) => {
+  const tokenNumber = Number(req.body?.token);
+  if (!Number.isInteger(tokenNumber) || tokenNumber < 1 || tokenNumber > 99999) {
+    throw new HttpError(400, "Enter the token number from your receipt");
+  }
+  const restaurant = await Restaurant.findById(req.restaurantId).select("serviceFlow dayEndTime timezone");
+  if (restaurant?.serviceFlow !== "cafe") throw new HttpError(404, "Token sign-in is not available here");
+
+  // Tokens restart every business day, so only today's count.
+  const since = getBusinessDayStart(new Date(), restaurant.dayEndTime, restaurant.timezone);
+  const item = await OrderItem.findOne({
+    restaurantId: req.restaurantId,
+    tokenNumber,
+    kotPrintedAt: { $gte: since },
+  })
+    .sort({ kotPrintedAt: -1 })
+    .select("orderId");
+  if (!item) throw new HttpError(404, "We couldn't find that token today. Check the number on your receipt.");
+
+  const token = signToken({
+    role: "table",
+    restaurantId: req.restaurantId!,
+    id: `token-${tokenNumber}`,
+    orderId: item.orderId.toString(),
+    via: "token",
+  });
+  res.json({ token, tokenNumber });
 });
 
 export const refreshSession = asyncHandler(async (req: Request, res: Response) => {

@@ -10,6 +10,7 @@ import { writeAudit } from "../../utils/audit";
 import { HttpError } from "../../utils/httpError";
 import { computeInvoiceTotals, round2 } from "../../utils/invoice";
 import { DEFAULT_SAC } from "../../utils/invoiceNumber";
+import { orderTokenText } from "../../utils/orderToken";
 import { invoiceTitle, orderTypeText, PAYMENT_LABELS } from "../../utils/pdf";
 import { sendBirthdayGreetingsForRestaurant } from "../../utils/birthdaySmsScheduler";
 import { normalizePhone } from "../../utils/phone";
@@ -596,6 +597,7 @@ export async function publicBill(restaurantId: string, token: string) {
       customerName: order.customerName,
       customerPhone: settings?.showCustomerPhone !== false ? (order.customerPhone ?? "") : "",
       customerGstin: order.customerGstin ?? "",
+      token: restaurant.serviceFlow === "cafe" ? orderTokenText(items) : "",
       orderType: order.orderType,
       orderTypeText: orderTypeText(order),
       placeOfSupply: order.bill?.placeOfSupply || settings?.placeOfSupply || "",

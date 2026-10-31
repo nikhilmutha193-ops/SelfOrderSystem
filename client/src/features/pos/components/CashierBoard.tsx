@@ -25,6 +25,7 @@ function Card({
   subtitle,
   status,
   billPrinted,
+  cafe,
   orders,
   minutes,
   payFirst,
@@ -35,6 +36,7 @@ function Card({
   subtitle: string;
   status: string;
   billPrinted: boolean;
+  cafe: boolean;
   orders: PosOrderSummary[];
   minutes: number | null;
   payFirst: boolean;
@@ -95,7 +97,7 @@ function Card({
           {unsent > 0 && (
             <span className="inline-flex items-center gap-1 rounded bg-slate-700 px-1.5 py-0.5 text-[11px] font-semibold text-white">
               <Send size={11} aria-hidden="true" />
-              {unsent} {payFirst ? "waiting for payment" : "not sent"}
+              {cafe ? "awaiting payment" : `${unsent} ${payFirst ? "waiting for payment" : "not sent"}`}
             </span>
           )}
         </span>
@@ -113,6 +115,7 @@ export function CashierBoard({
   onSelectTable,
   onSelectTakeaway,
   payFirst = false,
+  cafe = false,
 }: {
   tables: PosTable[];
   takeaways: PosOrderSummary[];
@@ -122,6 +125,8 @@ export function CashierBoard({
   onSelectTakeaway: (order: PosOrderSummary) => void;
   /** Dine-in guests pay when ordering, so a running table order is one waiting to be paid. */
   payFirst?: boolean;
+  /** Cafe flow: orders are paid before they are cooked, so there is no "bill printed" state. */
+  cafe?: boolean;
 }) {
   const now = useNow(30_000);
   const tables = useMemo(() => rawTables.map(withGuestState), [rawTables]);
@@ -146,7 +151,7 @@ export function CashierBoard({
   const outstanding =
     active.reduce((sum, t) => sum + t.orders.reduce((s, o) => s + o.total, 0), 0) +
     takeaways.reduce((sum, o) => sum + o.total, 0);
-  const billCount = active.filter((t) => t.status === "awaiting_payment").length;
+  const billCount = cafe ? active.length : active.filter((t) => t.status === "awaiting_payment").length;
   const showTakeaways = filter === "all" || filter === "running";
 
   return (
@@ -156,14 +161,15 @@ export function CashierBoard({
           <b className="block text-base tabular-nums">{active.length}</b>Active tables
         </span>
         <span className="rounded-lg border border-blue-300 bg-blue-50 py-1.5 text-blue-900">
-          <b className="block text-base tabular-nums">{billCount}</b>Bill printed
+          <b className="block text-base tabular-nums">{billCount}</b>
+          {cafe ? "To pay" : "Bill printed"}
         </span>
         <span className="rounded-lg border border-orange-300 bg-orange-50 py-1.5 text-orange-900">
           <b className="block text-base tabular-nums">{rupees(outstanding)}</b>To collect
         </span>
       </div>
 
-      <div className="flex gap-1.5">
+      <div className={`flex gap-1.5 ${cafe ? "hidden" : ""}`}>
         {(
           [
             ["all", "All"],
@@ -203,8 +209,17 @@ export function CashierBoard({
               onClick={() => onSelectTable(table)}
               title={`Table ${table.code}`}
               subtitle={[names, table.captainName && `Captain ${table.captainName}`].filter(Boolean).join(" · ")}
-              status={table.status === "awaiting_payment" ? "Bill printed" : payFirst ? "To pay" : "Running"}
-              billPrinted={table.status === "awaiting_payment"}
+              status={
+                cafe
+                  ? "Awaiting payment"
+                  : table.status === "awaiting_payment"
+                    ? "Bill printed"
+                    : payFirst
+                      ? "To pay"
+                      : "Running"
+              }
+              billPrinted={cafe ? false : table.status === "awaiting_payment"}
+              cafe={cafe}
               orders={table.orders}
               minutes={minutesSince(table.occupiedAt, now)}
               payFirst={payFirst}
@@ -232,8 +247,17 @@ export function CashierBoard({
                     ? `Kiosk · ${order.orderType === "takeaway" ? "take away" : "eat here"}`
                     : "Takeaway order")
                 }
-                status={order.status === "billed" ? "Bill printed" : order.source === "kiosk" ? "To pay" : "Running"}
-                billPrinted={order.status === "billed"}
+                status={
+                  cafe
+                    ? "Awaiting payment"
+                    : order.status === "billed"
+                      ? "Bill printed"
+                      : order.source === "kiosk"
+                        ? "To pay"
+                        : "Running"
+                }
+                billPrinted={cafe ? false : order.status === "billed"}
+                cafe={cafe}
                 orders={[order]}
                 minutes={minutesSince(order.createdAt, now)}
                 payFirst={order.source === "kiosk"}

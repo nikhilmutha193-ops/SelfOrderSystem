@@ -9,6 +9,7 @@ import { useApplyCoupon, useOrderInvoice, useRemoveCoupon } from "../../features
 import { PayOnlineButton } from "../../features/payments/components/PayOnlineButton";
 import { renderPrepMessage } from "../../lib/prepTime";
 import { useGuestAccess } from "../../lib/useGuestAccess";
+import { useServiceFlow } from "../../lib/useServiceFlow";
 import { useTableSession } from "../../lib/useTableSession";
 import { api, clearStoredToken, extractErrorMessage, setActiveAuth } from "../../shared/api/client";
 import { POLL } from "../../shared/api/queryClient";
@@ -26,6 +27,8 @@ const STATUS_TONE = {
 export default function CustomerInvoice() {
   const { orderId } = useTableSession();
   const access = useGuestAccess();
+  // Cafe flow: the order is paid at the counter first, then it goes to the kitchen and gets a token.
+  const cafe = useServiceFlow() === "cafe";
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [checkingOut, setCheckingOut] = useState(false);
   const [checkoutRequested, setCheckoutRequested] = useState(false);
@@ -139,11 +142,15 @@ export default function CustomerInvoice() {
   const pendingCount = activeItems.filter((i) => i.status !== "served").length;
   const awaitingAccept =
     !payFirst &&
+    !cafe &&
     order.status === "open" &&
     data.guestOrderMode === "accept" &&
     activeItems.some((i) => i.kotRound == null);
   const awaitingPayment =
-    payFirst && (order.status === "open" || order.status === "billed") && activeItems.length > 0;
+    payFirst && !cafe && (order.status === "open" || order.status === "billed") && activeItems.length > 0;
+  const tokens = [...new Set(activeItems.map((i) => i.tokenNumber).filter((n): n is number => n != null))].sort(
+    (a, b) => a - b,
+  );
   const orderComplete =
     order.status === "closed" || order.status === "billed" || (activeItems.length > 0 && pendingCount === 0);
   const statusBadge =
@@ -219,6 +226,38 @@ export default function CustomerInvoice() {
               />
               <p className="mt-2 text-center text-xs text-slate-500">
                 Show the payment confirmation to staff so they can close your bill.
+              </p>
+            </div>
+          )}
+        </Card>
+      )}
+
+      {cafe && tokens.length > 0 && (
+        <Card className="mb-4 text-center">
+          <p className="text-xs font-semibold tracking-wide text-slate-500 uppercase">
+            {tokens.length > 1 ? "Your tokens" : "Your token"}
+          </p>
+          <p className="mt-1 text-5xl font-extrabold text-orange-600 tabular-nums">{tokens.join(" · ")}</p>
+          <p className="mt-1 text-sm text-slate-600">We will call this number when your order is ready.</p>
+        </Card>
+      )}
+
+      {cafe && order.status === "open" && activeItems.length > 0 && (
+        <Card className="mb-4">
+          <p className="text-sm font-medium text-blue-900">
+            Awaiting payment: please pay ₹{totals.grandTotal.toFixed(2)} at the counter. Your order goes to the kitchen
+            as soon as it is paid.
+          </p>
+          {data.payment?.upiVpa && (
+            <div className="mt-3">
+              <UpiQr
+                vpa={data.payment.upiVpa}
+                payee={data.payment.upiPayeeName}
+                amount={totals.grandTotal}
+                note="Order"
+              />
+              <p className="mt-2 text-center text-xs text-slate-500">
+                Show the payment confirmation to staff at the counter.
               </p>
             </div>
           )}
@@ -349,7 +388,7 @@ export default function CustomerInvoice() {
 
       {(() => {
         const dishes = Array.from(
-          new Map(items.filter((i) => i.status !== "cancelled").map((i) => [i.foodItemId, i.foodName]))
+          new Map(items.filter((i) => i.status !== "cancelled").map((i) => [i.foodItemId, i.foodName])),
         );
         if (dishes.length === 0) return null;
         return (
@@ -387,7 +426,7 @@ export default function CustomerInvoice() {
         </p>
       )}
 
-      {!orderComplete && !payFirst && (
+      {!orderComplete && !payFirst && !cafe && (
         <p className="mb-3 rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-600">
           {pendingCount > 0
             ? `Checkout and your invoice unlock once all items are served - ${pendingCount} still on the way.`
@@ -399,7 +438,7 @@ export default function CustomerInvoice() {
         {(order.status === "open" || (payFirst && order.status === "closed")) && (
           <Button onClick={() => navigate("/order/menu")}>Order more</Button>
         )}
-        {order.status === "open" && !payFirst && (
+        {order.status === "open" && !payFirst && !cafe && (
           <Button onClick={requestCheckout} disabled={!orderComplete || checkingOut || checkoutRequested}>
             {checkingOut ? "Notifying..." : checkoutRequested ? "Checkout requested" : "Checkout"}
           </Button>

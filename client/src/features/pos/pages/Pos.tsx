@@ -75,6 +75,8 @@ export default function Pos() {
   const [panelOpen, setPanelOpen] = useState(false);
   const panel = useResizablePanel();
   const billing = rawMenu.billing;
+  // Cafe flow: pay first, and the kitchen gets the order the moment it is paid.
+  const cafe = billing?.serviceFlow === "cafe";
   const online = useOnlineStatus();
   const [forcedOffline, setForcedOffline] = useState<{ at: number; manual: boolean } | null>(null);
   const recovered =
@@ -273,6 +275,13 @@ export default function Pos() {
 
   function saveAndKot() {
     if (offlineFlow) return offlineKot();
+    if (cafe) {
+      setMessage({
+        tone: "error",
+        text: "Cafe flow: the kitchen gets the order when it is paid. Use Pay & send KOT (F10).",
+      });
+      return;
+    }
     if (payFirst) return settle();
     const tab = printing?.printersConfigured ? null : window.open("", "_blank");
     void run(async () => {
@@ -307,13 +316,15 @@ export default function Pos() {
     const code = table?.code;
     void run(async () => {
       await save(false);
-      if (mode === "takeaway") {
-        reset("takeaway");
-        setMessage({ tone: "ok", text: "Order held. Resume it from Running." });
-      } else {
-        reset(mode);
-        setMessage({ tone: "ok", text: `Order held on table ${code}. It goes to the kitchen once paid.` });
-      }
+      reset(mode);
+      setMessage({
+        tone: "ok",
+        text: cafe
+          ? "Order held. Find it again under Cashier and take payment to send it to the kitchen."
+          : mode === "takeaway"
+            ? "Order held. Resume it from Running."
+            : `Order held on table ${code}. It goes to the kitchen once paid.`,
+      });
     });
   }
 
@@ -323,7 +334,7 @@ export default function Pos() {
     const tab = toPrinter ? null : window.open("", "_blank");
     void run(async () => {
       try {
-        const { id } = await save(!payFirst);
+        const { id } = await save(!payFirst && !cafe);
         if (!id) return;
         const justBilled = await cart.bill(id);
         if (toPrinter) {
@@ -342,7 +353,8 @@ export default function Pos() {
   function settle() {
     if (offlineFlow) return offlineSettleOpen();
     void run(async () => {
-      const { id } = await save(!payFirst);
+      // Cafe flow: save the order without a KOT. Paying it is what sends it to the kitchen.
+      const { id } = await save(!payFirst && !cafe);
       if (!id) return;
       // Paying first: the order stays open (and can still change) until the payment bills it.
       if (!payFirst) await cart.bill(id);
@@ -357,12 +369,17 @@ export default function Pos() {
     if (!orderId) return;
     const fresh = await ordersApi.get(orderId);
     if (fresh.order.status !== "closed") return;
-    const tokens = fresh.items.map((i) => i.tokenNumber).filter((n): n is number => typeof n === "number");
-    const sent = fresh.order.orderType === "dine-in" && fresh.dineInPayment === "upfront" && tokens.length > 0;
+    const tokens = [
+      ...new Set(
+        fresh.items.filter((i) => i.status !== "cancelled" && i.tokenNumber != null).map((i) => i.tokenNumber),
+      ),
+    ];
+    const sent =
+      (cafe || (fresh.order.orderType === "dine-in" && fresh.dineInPayment === "upfront")) && tokens.length > 0;
     setMessage({
       tone: "ok",
       text: `Paid · ${fresh.order.invoiceNumber ?? fresh.order.customerName}${
-        sent ? ` · sent to the kitchen as T${Math.max(...tokens)}` : ""
+        sent ? ` · sent to the kitchen as token T${tokens.join(", T")}` : ""
       }`,
     });
     reset(mode);
@@ -558,9 +575,10 @@ export default function Pos() {
               onSelectTable={cashierTable}
               onSelectTakeaway={cashierTakeaway}
               payFirst={billing?.dineInPayment === "upfront"}
+              cafe={cafe}
             />
           ) : showTables ? (
-            <TableMap tables={tables} areas={floor.data?.areas} onSelect={chooseTable} />
+            <TableMap tables={tables} areas={floor.data?.areas} onSelect={chooseTable} cafe={cafe} />
           ) : (
             <MenuGrid
               categories={menu.categories}
@@ -657,8 +675,9 @@ export default function Pos() {
             onDraftQuantity={cart.changeQuantity}
             onDraftRemove={cart.removeLine}
             onSaveKot={saveAndKot}
-            onHold={(mode === "takeaway" || payFirst) && !offlineFlow ? hold : null}
+            onHold={(mode === "takeaway" || payFirst || cafe) && !offlineFlow ? hold : null}
             payFirst={payFirst}
+            cafe={cafe}
             onBill={bill}
             onSettle={settle}
             busy={busy || showTables || (cashier && !orderId)}

@@ -90,6 +90,8 @@ export interface BillTicket {
   > & { payments?: IPayment[] };
   orderLabel: string;
   items: Pick<IOrderItem, "foodName" | "quantity" | "total" | "status" | "complimentary">[];
+  /** Cafe flow: the token the guest collects the order by, printed large under the invoice number. */
+  tokenText?: string;
   totals: InvoiceTotals;
   upiLink?: string | null;
   paperWidth: 58 | 80;
@@ -115,6 +117,7 @@ export function renderBill(ticket: BillTicket): Buffer {
     .divider();
 
   if (order.invoiceNumber) p.line(`Invoice: ${order.invoiceNumber}`);
+  if (ticket.tokenText) p.align("center").bold(true).size(true).line(ticket.tokenText.toUpperCase()).size(false).bold(false).align("left");
   p.line(`Date: ${stamp(order.billedAt ?? order.checkinTime, restaurant.timezone)}`);
   p.line(ticket.orderLabel);
   p.line(`Guest: ${order.customerName}`);

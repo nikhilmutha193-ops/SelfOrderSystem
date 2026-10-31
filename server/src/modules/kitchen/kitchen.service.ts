@@ -1,11 +1,11 @@
 import { RequestContext } from "../../core/context";
 import { emit } from "../../core/events";
 import { IOrder, OrderPriority } from "../../models/Order";
-import { paidBeforeKitchen, paysUpfront } from "../../utils/dineInPayment";
+import { isCafeFlow, paidBeforeKitchen, paysUpfront } from "../../utils/dineInPayment";
 import { HttpError } from "../../utils/httpError";
 import { nextTokenNumber } from "../../utils/kotQueue";
 import { getOwnedOrder } from "../orders/orders.service";
-import { enqueueKot } from "../printing/printing.service";
+import { enqueueBill, enqueueKot } from "../printing/printing.service";
 import { KitchenRepository } from "./kitchen.repository";
 
 const PRIORITY_RANK: Record<string, number> = { rush: 0, high: 1, normal: 2 };
@@ -13,7 +13,7 @@ const PRIORITY_RANK: Record<string, number> = { rush: 0, high: 1, normal: 2 };
 export async function getKotQueue(ctx: RequestContext, tableId?: string, stationId?: string) {
   const repo = new KitchenRepository(ctx.restaurantId);
   const orders = await repo.findKitchenOrdersWithTable(tableId);
-  const restaurant = await repo.findRestaurant("billingSettings");
+  const restaurant = await repo.findRestaurant("billingSettings serviceFlow");
   // Unpaid orders that are paid before cooking aren't the kitchen's yet.
   const waitingForPayment = new Set(
     orders.filter((o) => paidBeforeKitchen(o, restaurant)).map((o) => o._id.toString())
@@ -59,7 +59,7 @@ export async function sendOrderToKitchen(
   const repo = new KitchenRepository(restaurantId);
   // Offline sales (`silent`) were paid at the till before they reached the server.
   if (!options.paid && !options.silent && order.orderType) {
-    if (paidBeforeKitchen({ orderType: order.orderType, source: order.source }, await repo.findRestaurant("billingSettings"))) {
+    if (paidBeforeKitchen({ orderType: order.orderType, source: order.source }, await repo.findRestaurant("billingSettings serviceFlow"))) {
       throw new HttpError(
         409,
         order.source === "kiosk"
@@ -119,20 +119,27 @@ export async function reprintKot(ctx: RequestContext, orderId: string, round: nu
 
 export async function sendGuestItemsIfAutomatic(restaurantId: string, orderId: string) {
   const repo = new KitchenRepository(restaurantId);
-  const restaurant = await repo.findRestaurant("kotSettings billingSettings");
-  // Guests who pay when ordering wait for payment; sendPaidOrderToKitchen sends them then.
+  const restaurant = await repo.findRestaurant("kotSettings billingSettings serviceFlow");
+  // Guests who pay when ordering (or the cafe flow) wait for payment; sendPaidOrderToKitchen sends them then.
   if (restaurant?.kotSettings?.guestOrderMode === "accept" || paysUpfront(restaurant)) return;
   const order = await repo.findOrder(orderId);
   if (order) await sendOrderToKitchen(restaurantId, order);
 }
 
-/** A settled order that is paid before cooking (kiosk, or pay-first dine-in) sends its items to the kitchen. */
+/**
+ * A settled order that is paid before cooking (kiosk, cafe flow, or pay-first dine-in) sends its items to the kitchen.
+ * In the cafe flow the receipt prints afterwards, with the token the KOT got.
+ */
 export async function sendPaidOrderToKitchen(restaurantId: string, orderId: string) {
   const repo = new KitchenRepository(restaurantId);
   const order = await repo.findOrder(orderId);
   if (!order || order.status !== "closed") return;
-  if (!paidBeforeKitchen(order, await repo.findRestaurant("billingSettings"))) return;
+  const restaurant = await repo.findRestaurant("billingSettings serviceFlow invoiceSettings");
+  if (!paidBeforeKitchen(order, restaurant)) return;
   await sendOrderToKitchen(restaurantId, order, { paid: true });
+  if (isCafeFlow(restaurant) && restaurant?.invoiceSettings?.autoPrintBill && !order.offline) {
+    await enqueueBill(restaurantId, orderId);
+  }
 }
 
 export async function getKotPdfData(ctx: RequestContext, orderId: string, round: number) {

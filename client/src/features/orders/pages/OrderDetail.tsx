@@ -21,6 +21,7 @@ import { useNavigate, useParams } from "react-router-dom";
 
 import DishDialog, { type DishAddPayload } from "../../../components/DishDialog";
 import { BestsellerTag, FoodTypeIcon, RatingChip } from "../../../components/FoodBadges";
+import { RefundDialog } from "../../refunds/components/RefundDialog";
 import { useAdmin } from "../../../lib/adminAuth";
 import { renderPrepMessage } from "../../../lib/prepTime";
 import { newId } from "../../../lib/id";
@@ -91,6 +92,7 @@ export default function OrderDetail({
   // Dishes customized with Regular or Jain, spice, a comment or options: each is its own line.
   const [custom, setCustom] = useState<CustomLine[]>([]);
   const [customizing, setCustomizing] = useState<MenuFoodItem | null>(null);
+  const [refundOpen, setRefundOpen] = useState(false);
   const [settleOpen, setSettleOpen] = useState(false);
   const [editCustomerOpen, setEditCustomerOpen] = useState(false);
   const [complimentaryItem, setComplimentaryItem] = useState<{
@@ -571,6 +573,11 @@ export default function OrderDetail({
   const totalsCard = (
     <Card>
       <CardHeader icon={ReceiptText} title="Bill" className="mb-3" />
+      {(order.refundedTotal ?? 0) > 0 && (
+        <p className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
+          Refunded ₹{(order.refundedTotal ?? 0).toFixed(2)} on this bill
+        </p>
+      )}
       {order.status === "open" && (
         <div className="mb-4 flex flex-col gap-2 border-b border-slate-100 pb-4">
           {order.couponCode ? (
@@ -744,6 +751,11 @@ export default function OrderDetail({
             {order.status === "billed" ? "Cancel bill" : "Cancel order"}
           </Button>
         )}
+        {order.status === "closed" && !order.voidedAt && (
+          <Button variant="secondary" icon={RotateCcw} onClick={() => setRefundOpen(true)}>
+            Refund
+          </Button>
+        )}
         {order.status === "closed" && profile?.isOwner && (
           <Button
             variant="ghost"
@@ -860,6 +872,12 @@ export default function OrderDetail({
         </div>
       </div>
 
+      <RefundDialog
+        orderId={order._id}
+        open={refundOpen}
+        onClose={() => setRefundOpen(false)}
+        paidWith={order.paymentMethod}
+      />
       <SettleDialog
         open={settleOpen}
         orderId={order._id}

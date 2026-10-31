@@ -17,7 +17,9 @@ export function registerPrintingHandlers(): void {
   on("order.billed", async (event) => {
     const order = await Order.findOne({ _id: event.orderId, restaurantId: event.restaurantId }).select("offline");
     if (order?.offline) return;
-    const restaurant = await Restaurant.findById(event.restaurantId).select("invoiceSettings");
+    const restaurant = await Restaurant.findById(event.restaurantId).select("invoiceSettings serviceFlow");
+    // Cafe flow: the receipt carries the KOT token, so it prints once the paid order reaches the kitchen.
+    if (restaurant?.serviceFlow === "cafe") return;
     if (restaurant?.invoiceSettings?.autoPrintBill) await enqueueBill(event.restaurantId, event.orderId);
   });
 }

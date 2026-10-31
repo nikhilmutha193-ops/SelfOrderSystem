@@ -1,6 +1,8 @@
 import { ArrowLeft, HandPlatter, LayoutGrid, MessagesSquare, Smartphone, type LucideIcon } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
+import { useQueryClient } from "@tanstack/react-query";
+
 import DishDialog from "../../../components/DishDialog";
 import { can, useAdmin } from "../../../lib/adminAuth";
 import { useDineInPayment } from "../../../lib/useDineInPayment";
@@ -9,15 +11,18 @@ import { extractErrorMessage } from "../../../shared/api/client";
 import { POLL } from "../../../shared/api/queryClient";
 import { useStaffTheme } from "../../../shared/theme";
 import { StaffSignOut } from "../../../components/StaffSignOut";
+import { confirmDialog } from "../../../shared/ui/confirm";
 import { ThemeToggleButton } from "../../../shared/ui/ThemeToggle";
 import { useConversations } from "../../chat/queries";
 import { useKotQueue } from "../../kitchen/queries";
+import SettleDialog from "../../orders/components/SettleDialog";
 import { ordersApi } from "../../orders/api";
+import { orderKeys } from "../../orders/queries";
 import { draftUnitPrice } from "../../pos/api";
 import { MenuGrid } from "../../pos/components/MenuGrid";
 import { OrderPanel } from "../../pos/components/OrderPanel";
 import { TableMap } from "../../pos/components/TableMap";
-import { usePosFloor, usePosMenu } from "../../pos/queries";
+import { usePosFloor, usePosMenu, useReleasePosTable } from "../../pos/queries";
 import { filterMenu, hasOptions, pricedMenu, usePosCart } from "../../pos/usePosCart";
 import { usePrintingStatus } from "../../printing/queries";
 import { MessageToasts } from "../components/MessageToasts";
@@ -122,7 +127,10 @@ function CaptainApp() {
   useCaptainManifest();
   const { profile } = useAdmin();
   const rawMenu = usePosMenu().data ?? NO_MENU;
+  // Cafe flow: guests pay at the counter first, so there is no bill to request and the kitchen waits for payment.
+  const cafe = rawMenu.billing?.serviceFlow === "cafe";
   const floor = usePosFloor().data;
+  const releasePosTable = useReleasePosTable();
   const tables = floor?.tables ?? NO_TABLES;
   const printing = usePrintingStatus().data;
   const canKitchen = can(profile, "kot");
@@ -142,6 +150,8 @@ function CaptainApp() {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("all");
   const [dishFor, setDishFor] = useState<PosMenuItem | null>(null);
+  const [settleOpen, setSettleOpen] = useState(false);
+  const queryClient = useQueryClient();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{
     tone: "ok" | "error";
@@ -178,6 +188,31 @@ function CaptainApp() {
     cart.open(t.orders[0]._id);
   }
 
+  async function releaseCurrentTable() {
+    if (!table) return;
+    const ok = await confirmDialog({
+      title: `Release table ${table.code}?`,
+      message: "Orders that are still waiting for payment and were never sent to the kitchen will be cancelled.",
+      confirmLabel: "Release table",
+    });
+    if (!ok) return;
+    void run(async () => {
+      await releasePosTable.mutateAsync(table._id);
+      setMessage({ tone: "ok", text: `Table ${table.code} is free` });
+      backToTables();
+    });
+  }
+
+  function releaseFreeTable() {
+    if (!askGuests) return;
+    const { _id, code } = askGuests;
+    setAskGuests(null);
+    void run(async () => {
+      await releasePosTable.mutateAsync(_id);
+      setMessage({ tone: "ok", text: `Table ${code} is free` });
+    });
+  }
+
   function startTable(count: number) {
     if (!askGuests) return;
     setGuests(count);
@@ -208,13 +243,46 @@ function CaptainApp() {
   function sendKot() {
     const code = table?.code;
     void run(async () => {
-      const { kot } = await cart.save(true, target());
+      const { kot } = await cart.save(!cafe, target());
       setMessage({
         tone: "ok",
-        text: kot ? `Table ${code}: KOT T${kot.tokenNumber ?? ""} sent` : "Order saved",
+        text: cafe
+          ? `Table ${code}: order sent to the counter. The kitchen gets it once it is paid.`
+          : kot
+            ? `Table ${code}: KOT T${kot.tokenNumber ?? ""} sent`
+            : "Order saved",
       });
       backToTables();
     });
+  }
+
+  /** Cafe flow: take the payment here (UPI QR, cash, card...), then mark it paid and the kitchen gets the KOT. */
+  function payNow() {
+    void run(async () => {
+      const { id } = await cart.save(false, target());
+      if (!id) return;
+      await cart.bill(id);
+      queryClient.setQueryData(orderKeys.detail(id), await ordersApi.get(id));
+      setSettleOpen(true);
+    });
+  }
+
+  async function afterPay() {
+    setSettleOpen(false);
+    const id = cart.orderId;
+    if (!id) return;
+    const fresh = await ordersApi.get(id);
+    if (fresh.order.status !== "closed") return;
+    const tokens = [
+      ...new Set(
+        fresh.items.filter((i) => i.status !== "cancelled" && i.tokenNumber != null).map((i) => i.tokenNumber),
+      ),
+    ];
+    setMessage({
+      tone: "ok",
+      text: `Table ${table?.code}: paid, sent to the kitchen${tokens.length ? ` as token T${tokens.join(", T")}` : ""}`,
+    });
+    backToTables();
   }
 
   function requestBill() {
@@ -267,6 +335,16 @@ function CaptainApp() {
         <span className="min-w-0 flex-1 truncate text-sm text-slate-300">
           {table ? `Table ${table.code}${cart.orderId ? "" : ` · ${guests} guests`}` : profile?.username}
         </span>
+        {cafe && table && table.status !== "available" && (
+          <button
+            type="button"
+            onClick={() => void releaseCurrentTable()}
+            disabled={busy}
+            className="inline-flex min-h-[40px] items-center rounded-lg bg-slate-800 px-3 text-sm font-medium"
+          >
+            Release
+          </button>
+        )}
         {!tableId && tab === "tables" && hasAssigned && (
           <button
             type="button"
@@ -293,7 +371,7 @@ function CaptainApp() {
 
       <main className="min-h-0 flex-1 overflow-y-auto">
         {tab === "tables" && !tableId && (
-          <TableMap tables={myTables} areas={floor?.areas} onSelect={openTable} showOrderStatus />
+          <TableMap tables={myTables} areas={floor?.areas} onSelect={openTable} showOrderStatus cafe={cafe} />
         )}
         {tab === "tables" && tableId && (
           <div className="flex h-full flex-col">
@@ -390,6 +468,16 @@ function CaptainApp() {
                 </button>
               ))}
             </div>
+            {askGuests.status !== "available" && askGuests.orders.length === 0 && (
+              <button
+                type="button"
+                onClick={releaseFreeTable}
+                disabled={busy}
+                className="mt-3 h-12 w-full rounded-xl border border-slate-300 text-sm font-semibold text-slate-700 active:bg-slate-100"
+              >
+                No order here: release table
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -420,11 +508,23 @@ function CaptainApp() {
               onSaveKot={sendKot}
               onHold={null}
               onBill={requestBill}
-              onSettle={null}
+              onSettle={cafe ? payNow : null}
+              cafe={cafe}
               busy={busy}
             />
           </div>
         </div>
+      )}
+
+      {cafe && cart.detail && (
+        <SettleDialog
+          open={settleOpen}
+          orderId={cart.detail.order._id}
+          total={cart.detail.totals.grandTotal}
+          invoiceNumber={cart.detail.order.invoiceNumber}
+          upi={cart.detail.payment}
+          onClose={() => void afterPay()}
+        />
       )}
 
       <DishDialog

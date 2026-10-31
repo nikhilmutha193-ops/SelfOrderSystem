@@ -8,10 +8,20 @@ export type ModuleKey = keyof typeof MODULES;
 
 export type PermissionLevel = "view" | "edit";
 
+/** Which sign-in page a login belongs to: admins use any page, a cashier or captain only their own. */
+export type LoginArea = "admin" | "cashier" | "captain";
+
+export const LOGIN_AREA_LABELS: Record<LoginArea, string> = {
+  admin: "Admin portal (any page)",
+  cashier: "Cashier page (POS only)",
+  captain: "Captain app only",
+};
+
 export interface AdminProfile {
   id: string;
   username: string;
   isOwner: boolean;
+  loginArea?: LoginArea;
   permissions: Partial<Record<ModuleKey, PermissionLevel>>;
 }
 
@@ -47,6 +57,7 @@ export const MODULES = {
   banners: "Offer Banners",
   gst: "GST & Tax",
   kiosks: "Kiosks & Pickup Board",
+  refunds: "Refunds",
 } as const;
 
 export const MODULE_KEYS = Object.keys(MODULES) as ModuleKey[];
@@ -137,9 +148,19 @@ const HOME_ROUTES: { module: ModuleKey; to: string }[] = [
   { module: "admins", to: "/admin/admins" },
 ];
 
+/** Where a cashier or captain login belongs: it never uses the admin pages. Admin logins have no such home. */
+export function staffHome(profile: AdminProfile | null): string | null {
+  if (!profile || profile.isOwner) return null;
+  if (profile.loginArea === "cashier") return "/pos";
+  if (profile.loginArea === "captain") return "/captain";
+  return null;
+}
+
 export function AdminHomeRedirect() {
   const { profile, loading } = useAdmin();
   if (loading) return null;
+  const home = staffHome(profile);
+  if (home) return <Navigate to={home} replace />;
   const first = HOME_ROUTES.find((route) => can(profile, route.module));
   return <Navigate to={first ? first.to : "/admin/change-password"} replace />;
 }

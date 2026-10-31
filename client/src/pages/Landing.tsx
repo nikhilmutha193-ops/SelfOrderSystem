@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 import type { LandingContent, LandingData } from "../lib/types";
+import { usePublicSettings } from "../lib/usePublicSettings";
 import { api, extractErrorMessage } from "../shared/api/client";
 
 import "../styles/landing/index.css";
@@ -44,6 +45,8 @@ export default function Landing() {
   const [flipped, setFlipped] = useState<string | null>(null);
   const [slide, setSlide] = useState(0);
   const [bannerDismissed, setBannerDismissed] = useState(false);
+  // The admin can hide every "Order now" button (for example when staff take all the orders).
+  const showOrder = usePublicSettings()?.tableLoginSettings?.showOrderNow !== false;
 
   useEffect(() => {
     api
@@ -174,11 +177,13 @@ export default function Landing() {
                   </a>
                 </li>
               ))}
-              <li className="nav__item">
-                <Link className="nav__link nav__link--cta" to="/order" onClick={() => setNavOpen(false)}>
-                  {c?.hero.primaryLabel || "Order Now"}
-                </Link>
-              </li>
+              {showOrder && (
+                <li className="nav__item">
+                  <Link className="nav__link nav__link--cta" to="/order" onClick={() => setNavOpen(false)}>
+                    {c?.hero.primaryLabel || "Order Now"}
+                  </Link>
+                </li>
+              )}
             </ul>
           </nav>
         </div>
@@ -227,9 +232,11 @@ export default function Landing() {
               </p>
             )}
             <div className="hero__actions">
-              <Link className="btn btn--primary btn--lg" to="/order">
-                {c?.hero.primaryLabel || "Order Now"}
-              </Link>
+              {showOrder && (
+                <Link className="btn btn--primary btn--lg" to="/order">
+                  {c?.hero.primaryLabel || "Order Now"}
+                </Link>
+              )}
               <a className="btn btn--secondary btn--lg" href="#menu">
                 {c?.hero.secondaryLabel || "Explore Menu"}
               </a>
@@ -310,11 +317,13 @@ export default function Landing() {
                 </ul>
               </div>
 
-              <div className="menu__footer">
-                <Link className="btn btn--primary btn--lg" to="/order">
-                  {c?.menu.ctaLabel || "See the full menu"}
-                </Link>
-              </div>
+              {showOrder && (
+                <div className="menu__footer">
+                  <Link className="btn btn--primary btn--lg" to="/order">
+                    {c?.menu.ctaLabel || "See the full menu"}
+                  </Link>
+                </div>
+              )}
             </div>
           </section>
         )}
@@ -525,9 +534,11 @@ export default function Landing() {
                   <p className="outlet-card__address">
                     Scan the QR code on your table to browse the menu and order without waiting.
                   </p>
-                  <Link className="btn btn--primary btn--block" to="/order">
-                    Start Ordering
-                  </Link>
+                  {showOrder && (
+                    <Link className="btn btn--primary btn--block" to="/order">
+                      Start Ordering
+                    </Link>
+                  )}
                 </li>
               </ul>
             </div>
@@ -550,9 +561,11 @@ export default function Landing() {
                   {c.partnership.ctaLabel || "Enquire now"}
                 </a>
               ) : (
-                <Link className="btn btn--light btn--lg" to="/order">
-                  {c?.partnership.ctaLabel || "Start Ordering"}
-                </Link>
+                showOrder && (
+                  <Link className="btn btn--light btn--lg" to="/order">
+                    {c?.partnership.ctaLabel || "Start Ordering"}
+                  </Link>
+                )
               )}
             </div>
           </section>
@@ -617,7 +630,7 @@ export default function Landing() {
                 ))}
               </ul>
             </div>
-          ) : (
+          ) : showOrder ? (
             <div className="footer__col">
               <h3 className="footer__heading">Order</h3>
               <ul className="footer__list" role="list">
@@ -628,7 +641,7 @@ export default function Landing() {
                 </li>
               </ul>
             </div>
-          )}
+          ) : null}
         </div>
 
         <div className="footer__bottom">

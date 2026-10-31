@@ -34,7 +34,7 @@ export default function AdminLogin() {
     setError(null);
     setLoading(true);
     try {
-      const res = await api.post("/auth/admin/login", { username, password });
+      const res = await api.post("/auth/admin/login", { username, password, area: "admin" });
       storeToken("admin", res.data.token);
       setActiveAuth({ role: "admin", token: res.data.token });
       const next = searchParams.get("next");

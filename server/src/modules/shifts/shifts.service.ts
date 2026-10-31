@@ -22,13 +22,15 @@ async function expectedCash(
 ) {
   const end = shift.closedAt ?? new Date();
   const cashSales = await repo.cashReceivedBetween(shift.openedAt, end);
+  const cashRefunds = await repo.cashRefundedBetween(shift.openedAt, end);
   const cashIn = shift.cashMovements.filter((m) => m.type === "in").reduce((s, m) => s + m.amount, 0);
   const cashOut = shift.cashMovements.filter((m) => m.type === "out").reduce((s, m) => s + m.amount, 0);
   return {
     cashSales: round2(cashSales),
     cashIn: round2(cashIn),
     cashOut: round2(cashOut),
-    expectedCash: round2(shift.openingFloat + cashSales + cashIn - cashOut),
+    cashRefunds: round2(cashRefunds),
+    expectedCash: round2(shift.openingFloat + cashSales + cashIn - cashOut - cashRefunds),
   };
 }
 

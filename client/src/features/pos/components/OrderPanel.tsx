@@ -8,13 +8,15 @@ import { draftUnitPrice, type DraftLine } from "../api";
 
 const rupees = (n: number) => `₹${n.toFixed(2)}`;
 
-function kitchenBadge(item: OrderItem, payFirst: boolean) {
+function kitchenBadge(item: OrderItem, payFirst: boolean, cafe = false) {
   if (item.status === "cancelled") return <Badge tone="red">Cancelled</Badge>;
   if (item.status === "served") return <Badge tone="green">Served</Badge>;
   if (item.status === "ready") return <Badge tone="green">Ready</Badge>;
   if (item.status === "preparing") return <Badge tone="blue">Cooking</Badge>;
   if (item.kotRound != null)
     return <Badge tone="amber">KOT {item.tokenNumber != null ? `T${item.tokenNumber}` : ""}</Badge>;
+  // Cafe flow: an unsent item is simply waiting for payment.
+  if (cafe) return <Badge tone="amber">Awaiting payment</Badge>;
   return <Badge tone="gray">{payFirst ? "Not paid yet" : "Not sent"}</Badge>;
 }
 
@@ -48,6 +50,7 @@ export function OrderPanel({
   phone = false,
   offline = false,
   offlineTotal = null,
+  cafe = false,
   className = "w-[340px] border-l lg:w-[390px]",
 }: {
   title: string;
@@ -69,6 +72,8 @@ export function OrderPanel({
   phone?: boolean;
   offline?: boolean;
   offlineTotal?: number | null;
+  /** Cafe flow: pay first. One Pay & send KOT button; no separate KOT or bill buttons. */
+  cafe?: boolean;
   className?: string;
 }) {
   const [moreOpen, setMoreOpen] = useState(false);
@@ -132,7 +137,7 @@ export function OrderPanel({
                     {item.modifiers!.map((m) => m.label).join(", ")}
                   </span>
                 )}
-                <span className="mt-0.5 block">{kitchenBadge(item, payFirst)}</span>
+                <span className="mt-0.5 block">{kitchenBadge(item, payFirst, cafe)}</span>
               </span>
               <span className="shrink-0 tabular-nums">{rupees(item.total)}</span>
             </li>
@@ -166,7 +171,9 @@ export function OrderPanel({
                 <span className="block truncate">{line.item.name}</span>
                 {(line.modifiers.length > 0 || line.note || line.isJain) && (
                   <span className="block truncate text-xs text-slate-500">
-                    {[line.isJain ? "Jain" : "", ...line.modifiers.map((m) => m.label), line.note].filter(Boolean).join(", ")}
+                    {[line.isJain ? "Jain" : "", ...line.modifiers.map((m) => m.label), line.note]
+                      .filter(Boolean)
+                      .join(", ")}
                   </span>
                 )}
                 <span className="text-xs font-medium text-orange-700">New</span>
@@ -210,47 +217,100 @@ export function OrderPanel({
       </div>
 
       <div className="grid grid-cols-2 gap-2 border-t border-slate-200 p-3">
-        {payFirst && onSettle ? (
-          <Button
-            className="!bg-green-600 hover:!bg-green-700"
-            onClick={onSettle}
-            disabled={busy || nothing || order?.status === "closed"}
-            title="F8 or F10"
-          >
-            Pay & send {!phone && <kbd className="text-[10px] opacity-70">F10</kbd>}
-          </Button>
+        {cafe && !offline ? (
+          <>
+            {onSettle ? (
+              <>
+                <Button
+                  size="lg"
+                  className="col-span-2 !bg-green-600 hover:!bg-green-700"
+                  onClick={onSettle}
+                  disabled={busy || nothing || order?.status === "closed"}
+                  title="F10"
+                >
+                  Pay &amp; send KOT {!phone && <kbd className="text-[10px] opacity-70">F10</kbd>}
+                </Button>
+                {phone && (
+                  <Button
+                    variant="secondary"
+                    className="col-span-2"
+                    onClick={onSaveKot}
+                    disabled={busy || !isOpen || (draft.length === 0 && unsent === 0)}
+                  >
+                    Send to the counter to pay there
+                  </Button>
+                )}
+              </>
+            ) : (
+              <Button
+                size="lg"
+                className="col-span-2"
+                onClick={onSaveKot}
+                disabled={busy || !isOpen || (draft.length === 0 && unsent === 0)}
+              >
+                Send order to the counter
+              </Button>
+            )}
+            {onHold ? (
+              <Button variant="secondary" className="col-span-2" onClick={onHold} disabled={busy || draft.length === 0}>
+                Hold (pay later)
+              </Button>
+            ) : (
+              <Button
+                variant="secondary"
+                className="col-span-2"
+                onClick={() => setMoreOpen((v) => !v)}
+                disabled={!order}
+              >
+                {moreOpen ? "Hide options" : "More"}
+              </Button>
+            )}
+          </>
         ) : (
-          <Button onClick={onSaveKot} disabled={busy || !isOpen || (draft.length === 0 && unsent === 0)} title="F8">
-            {phone ? "Send KOT" : "Save & KOT"} {!phone && <kbd className="text-[10px] opacity-70">F8</kbd>}
-          </Button>
-        )}
-        {onHold ? (
-          <Button variant="secondary" onClick={onHold} disabled={busy || draft.length === 0}>
-            Hold
-          </Button>
-        ) : (
-          <Button variant="secondary" onClick={() => setMoreOpen((v) => !v)} disabled={!order || offline}>
-            {moreOpen ? "Hide options" : "More"}
-          </Button>
-        )}
-        <Button
-          variant="secondary"
-          onClick={onBill}
-          disabled={busy || nothing || order?.status === "closed"}
-          title="F9"
-        >
-          {order?.status === "billed" ? "Reprint bill" : phone ? "Request bill" : "Bill"}{" "}
-          {!phone && <kbd className="text-[10px] opacity-70">F9</kbd>}
-        </Button>
-        {onSettle && !payFirst && (
-          <Button
-            className="!bg-green-600 hover:!bg-green-700"
-            onClick={onSettle}
-            disabled={busy || nothing || order?.status === "closed"}
-            title="F10"
-          >
-            Settle <kbd className="text-[10px] opacity-70">F10</kbd>
-          </Button>
+          <>
+            {payFirst && onSettle ? (
+              <Button
+                className="!bg-green-600 hover:!bg-green-700"
+                onClick={onSettle}
+                disabled={busy || nothing || order?.status === "closed"}
+                title="F8 or F10"
+              >
+                Pay & send {!phone && <kbd className="text-[10px] opacity-70">F10</kbd>}
+              </Button>
+            ) : (
+              <Button onClick={onSaveKot} disabled={busy || !isOpen || (draft.length === 0 && unsent === 0)} title="F8">
+                {phone ? "Send KOT" : "Save & KOT"} {!phone && <kbd className="text-[10px] opacity-70">F8</kbd>}
+              </Button>
+            )}
+            {onHold ? (
+              <Button variant="secondary" onClick={onHold} disabled={busy || draft.length === 0}>
+                Hold
+              </Button>
+            ) : (
+              <Button variant="secondary" onClick={() => setMoreOpen((v) => !v)} disabled={!order || offline}>
+                {moreOpen ? "Hide options" : "More"}
+              </Button>
+            )}
+            <Button
+              variant="secondary"
+              onClick={onBill}
+              disabled={busy || nothing || order?.status === "closed"}
+              title="F9"
+            >
+              {order?.status === "billed" ? "Reprint bill" : phone ? "Request bill" : "Bill"}{" "}
+              {!phone && <kbd className="text-[10px] opacity-70">F9</kbd>}
+            </Button>
+            {onSettle && !payFirst && (
+              <Button
+                className="!bg-green-600 hover:!bg-green-700"
+                onClick={onSettle}
+                disabled={busy || nothing || order?.status === "closed"}
+                title="F10"
+              >
+                Settle <kbd className="text-[10px] opacity-70">F10</kbd>
+              </Button>
+            )}
+          </>
         )}
         {!phone &&
           order &&

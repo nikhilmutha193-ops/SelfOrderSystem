@@ -2,6 +2,7 @@ import { Plus, Split, Trash2 } from "lucide-react";
 import { useState } from "react";
 
 import { cashSuggestions } from "../../../lib/cash";
+import { useServiceFlow } from "../../../lib/useServiceFlow";
 import { TENDER_LABELS, type TenderMethod } from "../../../lib/types";
 import { extractErrorMessage } from "../../../shared/api/client";
 import { Dialog } from "../../../shared/ui/Dialog";
@@ -43,7 +44,11 @@ export default function SettleDialog(props: SettleDialogProps) {
 }
 
 function SettleForm({ orderId, total, invoiceNumber, upi, onClose }: SettleDialogProps) {
-  const [lines, setLines] = useState<Line[]>([{ method: "cash", amount: money(total), reference: "", tendered: "" }]);
+  const cafe = useServiceFlow() === "cafe";
+  // Cafe flow: the guest pays before the food is made, usually on their phone, so the UPI QR is shown first.
+  const [lines, setLines] = useState<Line[]>([
+    { method: cafe && upi?.upiVpa ? "upi" : "cash", amount: money(total), reference: "", tendered: "" },
+  ]);
   const [splitCount, setSplitCount] = useState("2");
   const [error, setError] = useState<string | null>(null);
   const settle = useSettleOrder();
@@ -83,7 +88,7 @@ function SettleForm({ orderId, total, invoiceNumber, upi, onClose }: SettleDialo
         amount: money(i === n - 1 ? last : share),
         reference: "",
         tendered: "",
-      }))
+      })),
     );
   }
 
@@ -92,7 +97,7 @@ function SettleForm({ orderId, total, invoiceNumber, upi, onClose }: SettleDialo
     setError(null);
     if (Math.abs(remaining) > 0.001) {
       setError(
-        remaining > 0 ? `₹${money(remaining)} is still unpaid` : `Payments are ₹${money(-remaining)} over the bill`
+        remaining > 0 ? `₹${money(remaining)} is still unpaid` : `Payments are ₹${money(-remaining)} over the bill`,
       );
       return;
     }
@@ -119,8 +124,12 @@ function SettleForm({ orderId, total, invoiceNumber, upi, onClose }: SettleDialo
       open
       onClose={onClose}
       size="lg"
-      title={`Settle ${invoiceNumber ?? "bill"}`}
-      description="Take one payment, or split it across methods and people."
+      title={cafe ? "Pay and send to the kitchen" : `Settle ${invoiceNumber ?? "bill"}`}
+      description={
+        cafe
+          ? "Take one payment, or split it across methods. The kitchen ticket prints as soon as it is paid."
+          : "Take one payment, or split it across methods and people."
+      }
       onSubmit={submit}
       dismissible={!settle.isPending}
       footer={
@@ -129,7 +138,7 @@ function SettleForm({ orderId, total, invoiceNumber, upi, onClose }: SettleDialo
             Not yet
           </Button>
           <Button type="submit" size="lg" variant="success" loading={settle.isPending} disabled={!settled}>
-            {settle.isPending ? "Settling..." : "Mark paid"}
+            {settle.isPending ? "Settling..." : cafe ? "Paid · send KOT" : "Mark paid"}
           </Button>
         </>
       }

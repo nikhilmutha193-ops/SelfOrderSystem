@@ -148,7 +148,7 @@ export default function Menu() {
   const navRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    if (!tableId) {
+    if (!tableId && !orderId) {
       navigate("/order", { replace: true });
       return;
     }
@@ -160,12 +160,12 @@ export default function Menu() {
       })
       .catch((err) => setError(extractErrorMessage(err)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tableId]);
+  }, [tableId, orderId]);
 
   const recsQuery = useQuery({
     queryKey: ["menu", "recommendations"],
     queryFn: () => api.get<MenuRecommendations>("/menu/recommendations").then((r) => r.data),
-    enabled: !!tableId,
+    enabled: !!tableId || !!orderId,
     staleTime: 5 * 60 * 1000,
   });
   const recs = recsQuery.data;
@@ -398,9 +398,11 @@ export default function Menu() {
         // Non-critical - a failed review submission shouldn't block leaving the table.
       }
     }
-    try {
-      await api.patch("/tables/session/release");
-    } catch {}
+    if (tableId) {
+      try {
+        await api.patch("/tables/session/release");
+      } catch {}
+    }
     clearStoredToken("table");
     setActiveAuth(null);
     try {
