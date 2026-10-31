@@ -30,6 +30,7 @@ import Shift from "../models/Shift";
 import Refund from "../models/Refund";
 import SmsCampaign from "../models/SmsCampaign";
 import SmsTemplate from "../models/SmsTemplate";
+import Display from "../models/Display";
 import Station from "../models/Station";
 import StockCount from "../models/StockCount";
 import StockItem from "../models/StockItem";
@@ -61,6 +62,7 @@ const TENANT_MODELS: { key: string; model: Model<any> }[] = [
   { key: "shifts", model: Shift },
   { key: "dayCloses", model: DayClose },
   { key: "stations", model: Station },
+  { key: "displays", model: Display },
   { key: "printers", model: Printer },
   { key: "stockItems", model: StockItem },
   { key: "recipes", model: Recipe },

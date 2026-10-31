@@ -10,6 +10,7 @@ import { writeAudit } from "../../utils/audit";
 import { HttpError } from "../../utils/httpError";
 import { orderTokenText } from "../../utils/orderToken";
 import { totalsForOrder } from "../orders/orders.billing";
+import { kotTicketKey, kotTicketLabel } from "../../utils/kotGroups";
 import { renderBill, renderKot, renderTestPage } from "./printing.render";
 import { MAX_ATTEMPTS, PrintingRepository } from "./printing.repository";
 import { PrinterInput } from "./printing.schema";
@@ -235,16 +236,17 @@ export async function enqueueKot(
 
   // Optionally one ticket per category; every ticket of the round carries the same token number.
   const splitByCategory = !!restaurant.kotSettings?.splitByCategory;
+  const categoryGroups = restaurant.kotSettings?.categoryGroups ?? [];
   const groups = new Map<string, typeof items>();
   for (const item of items) {
-    const key = `${item.stationId?.toString() ?? ""}|${splitByCategory ? (item.categoryName ?? "") : ""}`;
+    const key = `${item.stationId?.toString() ?? ""}|${splitByCategory ? kotTicketKey(item, categoryGroups) : ""}`;
     groups.set(key, [...(groups.get(key) ?? []), item]);
   }
 
   const jobs: Omit<Partial<IPrintJob>, "restaurantId">[] = [];
   for (const [groupKey, groupItems] of groups) {
     const key = groupKey.split("|")[0];
-    const category = splitByCategory ? groupItems[0].categoryName : undefined;
+    const category = splitByCategory ? kotTicketLabel(groupItems) : undefined;
     const routed = key ? printers.filter((p) => p.stationIds.some((s) => s.toString() === key)) : [];
     const targets = routed.length ? routed : fallback;
     const station = key ? stationName.get(key) : undefined;

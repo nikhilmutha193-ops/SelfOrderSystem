@@ -60,7 +60,13 @@ export interface KotSettings {
   showPrices: boolean;
   showJainTag: boolean;
   splitByCategory: boolean;
+  /** Categories ticked together print on one ticket when the KOT is split by category. */
+  categoryGroups?: KotCategoryGroup[];
   tokenStart: number;
+}
+
+export interface KotCategoryGroup {
+  categoryIds: string[];
 }
 
 export interface InvoiceSettings {

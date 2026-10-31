@@ -10,6 +10,7 @@ import { IOrder } from "../models/Order";
 import { IOrderItem } from "../models/OrderItem";
 import { IRestaurant, PrintFontSize, PrintPaperSize } from "../models/Restaurant";
 import { InvoiceTotals } from "./invoice";
+import { kotTicketKey, kotTicketLabel } from "./kotGroups";
 import { DEFAULT_SAC } from "./invoiceNumber";
 import { orderTokenText } from "./orderToken";
 import { describeError, logger } from "./logger";
@@ -110,7 +111,7 @@ async function renderToPaper(
   res: Response,
   filename: string,
   paperSize: PrintPaperSize,
-  render: (doc: PDFKit.PDFDocument, x0: number, usableWidth: number) => void,
+  render: (doc: PDFKit.PDFDocument, x0: number, usableWidth: number) => void | number,
   archive?: (pdf: Buffer) => Promise<void>
 ): Promise<void> {
   const width = PAPER_WIDTH[paperSize];
@@ -120,8 +121,10 @@ async function renderToPaper(
   let height = FIXED_PAPER_HEIGHT[paperSize];
   if (height === undefined) {
     const measureDoc = new PDFDocument({ size: [width, THERMAL_MAX_HEIGHT], margin, bufferPages: true });
-    render(measureDoc, margin, usableWidth);
-    height = Math.min(THERMAL_MAX_HEIGHT, Math.max(THERMAL_MIN_HEIGHT, Math.ceil(measureDoc.y + margin)));
+    // A render over several pages (one ticket each) reports its tallest page; otherwise the last position counts.
+    const tallest = render(measureDoc, margin, usableWidth);
+    const used = typeof tallest === "number" ? tallest : measureDoc.y;
+    height = Math.min(THERMAL_MAX_HEIGHT, Math.max(THERMAL_MIN_HEIGHT, Math.ceil(used + margin)));
   }
 
   const pdf = await new Promise<Buffer>((resolve, reject) => {
@@ -521,7 +524,36 @@ export async function streamKotPdf(
 
   const logo = settings?.showLogo ? await resolveLogoBuffer(restaurant.logoUrl) : null;
 
+  // With "split by category" every category is its own ticket on its own page, all with the same token.
+  const sections: { category?: string; items: IOrderItem[] }[] = [];
+  if (settings?.splitByCategory) {
+    const byTicket = new Map<string, IOrderItem[]>();
+    for (const item of items) {
+      const key = kotTicketKey(item, settings.categoryGroups);
+      byTicket.set(key, [...(byTicket.get(key) ?? []), item]);
+    }
+    for (const group of byTicket.values()) sections.push({ category: kotTicketLabel(group), items: group });
+  } else {
+    sections.push({ items });
+  }
+
   await renderToPaper(res, `kot-${order._id}-round${round}.pdf`, paperSize, (doc, x0, usableWidth) => {
+    let tallest = 0;
+    sections.forEach((section, index) => {
+      if (index > 0) doc.addPage();
+      drawKotTicket(doc, x0, usableWidth, section.items, section.category);
+      tallest = Math.max(tallest, doc.y);
+    });
+    return tallest;
+  });
+
+  function drawKotTicket(
+    doc: PDFKit.PDFDocument,
+    x0: number,
+    usableWidth: number,
+    items: IOrderItem[],
+    category?: string
+  ) {
     if (logo) drawLogo(doc, logo, x0, usableWidth);
 
     doc.fontSize(fz(14)).text(restaurant.name, { align: "center" });
@@ -532,6 +564,11 @@ export async function streamKotPdf(
       // The number the kitchen calls out - biggest thing on the ticket.
       doc.moveDown(0.2);
       doc.font("Helvetica-Bold").fontSize(fz(20)).text(`TOKEN ${tokenNumber}`, { align: "center" });
+      doc.font("Helvetica");
+    }
+    if (category) {
+      doc.moveDown(0.2);
+      doc.font("Helvetica-Bold").fontSize(fz(13)).text(category.toUpperCase(), { align: "center" });
       doc.font("Helvetica");
     }
     doc.moveDown(0.5);
@@ -638,7 +675,7 @@ export async function streamKotPdf(
     if (settings?.footerNote) {
       doc.fontSize(fz(9)).text(settings.footerNote, { align: "center" });
     }
-  });
+  }
 }
 
 export async function streamOrdersReportPdf(

@@ -35,6 +35,7 @@ export const MODULES = {
   gst: "GST & Tax",
   kiosks: "Kiosks & Pickup Board",
   refunds: "Refunds",
+  displays: "Display Slideshows",
 } as const;
 
 /**

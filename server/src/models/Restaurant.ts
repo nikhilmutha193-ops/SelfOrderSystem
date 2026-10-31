@@ -74,6 +74,8 @@ export interface IKotSettings {
   showJainTag: boolean;
   /** One ticket per menu category (sharing the round's token) instead of one per station. */
   splitByCategory: boolean;
+  /** With the split on: categories listed together share one ticket (each group has two or more). */
+  categoryGroups?: { categoryIds: Types.ObjectId[] }[];
   /** First token number of each business day. */
   tokenStart: number;
 }
@@ -272,6 +274,10 @@ const kotSettingsSchema = new Schema<IKotSettings>(
     showPrices: { type: Boolean, default: false },
     showJainTag: { type: Boolean, default: true },
     splitByCategory: { type: Boolean, default: false },
+    categoryGroups: {
+      type: [new Schema({ categoryIds: [{ type: Schema.Types.ObjectId, ref: "Category" }] }, { _id: false })],
+      default: [],
+    },
     tokenStart: { type: Number, default: 1, min: 1, max: 99999 },
   },
   { _id: false }

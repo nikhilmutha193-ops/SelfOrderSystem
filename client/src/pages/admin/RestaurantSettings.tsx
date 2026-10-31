@@ -24,6 +24,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
 
 import { currentFinancialYearLabel } from "../../features/orders/status";
+import { KotCategoryGroups } from "../../components/KotCategoryGroups";
 import { OnlinePaymentsCard } from "../../features/payments/components/OnlinePaymentsCard";
 import {
   PRINT_FONT_SIZE_LABELS,
@@ -175,6 +176,7 @@ const DEFAULT_KOT_SETTINGS: KotSettings = {
   showPrices: false,
   showJainTag: true,
   splitByCategory: false,
+  categoryGroups: [],
   tokenStart: 1,
 };
 
@@ -671,7 +673,11 @@ export default function RestaurantSettings() {
             .filter(Boolean),
         },
         taxRates,
-        kotSettings,
+        kotSettings: {
+          ...kotSettings,
+          // A group needs two categories to mean anything.
+          categoryGroups: (kotSettings.categoryGroups ?? []).filter((g) => g.categoryIds.length >= 2),
+        },
         invoiceSettings,
         billingSettings,
         serviceFlow,
@@ -1289,6 +1295,14 @@ export default function RestaurantSettings() {
                     description="Starters, mains and drinks print on their own ticket. All tickets of one order share the same token number."
                   />
                 </div>
+                {kotSettings.splitByCategory && (
+                  <KotCategoryGroups
+                    groups={kotSettings.categoryGroups}
+                    onChange={(categoryGroups) =>
+                      setKotSettings((prev) => ({ ...prev, categoryGroups }))
+                    }
+                  />
+                )}
                 <div className="mt-4 max-w-xs">
                   <Field
                     label="First token number of the day"

@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 
+import { Types } from "mongoose";
 import { asyncHandler } from "../middleware/errorHandler";
 import { IOrder } from "../models/Order";
 import { IOrderItem } from "../models/OrderItem";
@@ -234,6 +235,23 @@ export const updateRestaurantSettings = asyncHandler(async (req: Request, res: R
         throw new HttpError(400, "The first token number must be a whole number from 1 to 99999");
       }
       kotSettings.tokenStart = start;
+    }
+    if (kotSettings.categoryGroups !== undefined) {
+      const groups = kotSettings.categoryGroups as { categoryIds?: unknown }[];
+      if (!Array.isArray(groups) || groups.length > 10) {
+        throw new HttpError(400, "Use at most 10 groups of categories");
+      }
+      const seen = new Set<string>();
+      kotSettings.categoryGroups = groups.map((group) => {
+        const ids = Array.isArray(group?.categoryIds) ? group.categoryIds : [];
+        if (ids.length < 2) throw new HttpError(400, "Choose at least two categories to print on one ticket");
+        for (const id of ids) {
+          if (typeof id !== "string" || !Types.ObjectId.isValid(id)) throw new HttpError(400, "Invalid category");
+          if (seen.has(id)) throw new HttpError(400, "A category can be in only one group");
+          seen.add(id);
+        }
+        return { categoryIds: ids as string[] };
+      }) as never;
     }
     Object.assign(restaurant.kotSettings, kotSettings);
   }

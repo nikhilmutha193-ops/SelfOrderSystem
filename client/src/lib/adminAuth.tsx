@@ -58,6 +58,7 @@ export const MODULES = {
   gst: "GST & Tax",
   kiosks: "Kiosks & Pickup Board",
   refunds: "Refunds",
+  displays: "Display Slideshows",
 } as const;
 
 export const MODULE_KEYS = Object.keys(MODULES) as ModuleKey[];

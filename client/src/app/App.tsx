@@ -49,6 +49,8 @@ const Captain = lazy(() => import("../features/captain/pages/Captain"));
 const Kiosk = lazy(() => import("../features/kiosk/pages/Kiosk"));
 const PickupBoard = lazy(() => import("../features/kiosk/pages/PickupBoard"));
 const KioskAdmin = lazy(() => import("../features/kiosk/pages/KioskAdmin"));
+const Displays = lazy(() => import("../features/displays/pages/Displays"));
+const DisplayScreen = lazy(() => import("../features/displays/pages/DisplayScreen"));
 const RestaurantSettings = lazy(
   () => import("../pages/admin/RestaurantSettings"),
 );
@@ -109,6 +111,7 @@ export default function App() {
               {/* Self-order kiosk (paired device, no login) and the pickup TV (public, numbers only). */}
               <Route path="/kiosk" element={<Kiosk />} />
               <Route path="/pickup" element={<PickupBoard />} />
+              <Route path="/display/:code" element={<DisplayScreen />} />
 
               <Route
                 path="/pos/login"
@@ -289,6 +292,14 @@ export default function App() {
                   element={
                     <RequireModule module="kiosks">
                       <KioskAdmin />
+                    </RequireModule>
+                  }
+                />
+                <Route
+                  path="displays"
+                  element={
+                    <RequireModule module="displays">
+                      <Displays />
                     </RequireModule>
                   }
                 />
