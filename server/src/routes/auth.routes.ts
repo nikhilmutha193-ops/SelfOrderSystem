@@ -9,7 +9,9 @@ import {
   chefLogin,
   refreshSession,
   tableLogin,
+  tokenLink,
   tokenLogin,
+  tokenSeat,
 } from "../controllers/auth.controller";
 import { requireAuth } from "../middleware/auth";
 
@@ -25,6 +27,8 @@ router.post("/chef/login", chefLogin);
 
 router.post("/table/login", tableLogin);
 router.post("/table/token-login", tokenLogin);
+router.post("/table/token-link", requireAuth("table"), tokenLink);
+router.post("/table/token-seat", requireAuth("table"), tokenSeat);
 router.post("/refresh", requireAuth("admin", "chef"), refreshSession);
 
 export default router;

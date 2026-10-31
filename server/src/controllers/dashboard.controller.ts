@@ -16,7 +16,15 @@ export const getDashboardSummary = asyncHandler(async (req: Request, res: Respon
   const restaurant = await Restaurant.findById(req.restaurantId).select("dayEndTime timezone taxRates serviceFlow");
   const businessDayStart = getBusinessDayStart(new Date(), restaurant?.dayEndTime, restaurant?.timezone);
 
-  const [openOrdersToday, closedToday, pendingKotItems, unreadChatCount, tablesAwaitingPayment, lowStockItems] =
+  const [
+    openOrdersToday,
+    closedToday,
+    pendingKotItems,
+    unreadChatCount,
+    tablesAwaitingPayment,
+    lowStockItems,
+    itemsInKitchen,
+  ] =
     await Promise.all([
       Order.countDocuments({
         restaurantId: req.restaurantId,
@@ -28,6 +36,13 @@ export const getDashboardSummary = asyncHandler(async (req: Request, res: Respon
       ChatMessage.countDocuments({ restaurantId: req.restaurantId, senderRole: "table", readByAdmin: false }),
       TableModel.countDocuments({ restaurantId: req.restaurantId, status: "awaiting_payment" }),
       lowStockCount(req.restaurantId!),
+      // What the kitchen is working on today, whether or not the order is paid yet.
+      OrderItem.countDocuments({
+        restaurantId: req.restaurantId,
+        status: { $in: ["pending", "preparing", "ready"] },
+        kotRound: { $ne: null },
+        kotPrintedAt: { $gte: businessDayStart },
+      }),
     ]);
 
   // Cafe flow: unsent items are orders waiting for payment, not work for the kitchen, and no table waits to pay.
@@ -70,6 +85,7 @@ export const getDashboardSummary = asyncHandler(async (req: Request, res: Respon
     serviceFlow: restaurant?.serviceFlow ?? "restaurant",
     ordersAwaitingPayment,
     pendingKotItems: cafe ? 0 : pendingKotItems,
+    itemsInKitchen,
     unreadChatCount,
     tablesAwaitingPayment: cafe ? 0 : tablesAwaitingPayment,
     lowStockItems,

@@ -65,12 +65,19 @@ async function buildPreviewRestaurant(req: Request, overrides: Record<string, un
   } as unknown as IRestaurant;
 }
 
+/** Token sign-in follows the admin switch; until it is set, it is on in the cafe flow only. */
+export function tokenLoginAllowed(restaurant: Pick<IRestaurant, "tableLoginSettings" | "serviceFlow"> | null): boolean {
+  return restaurant?.tableLoginSettings?.allowTokenLogin ?? restaurant?.serviceFlow === "cafe";
+}
+
 export const getRestaurantPublic = asyncHandler(async (req: Request, res: Response) => {
   const restaurant = await Restaurant.findById(req.restaurantId).select(
     "name logoUrl address siteTitle faviconUrl brandColor tableLoginSettings billingSettings.dineInPayment serviceFlow"
   );
   if (!restaurant) throw new HttpError(404, "Restaurant not found");
-  res.json(restaurant);
+  const body = restaurant.toObject();
+  body.tableLoginSettings = { ...body.tableLoginSettings, allowTokenLogin: tokenLoginAllowed(restaurant) };
+  res.json(body);
 });
 
 export const getRestaurantSettings = asyncHandler(async (req: Request, res: Response) => {

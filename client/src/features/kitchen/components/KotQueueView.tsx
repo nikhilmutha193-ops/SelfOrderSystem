@@ -13,7 +13,8 @@ import { confirmDialog } from "../../../shared/ui/confirm";
 import { usePageTour, type TourStep } from "../../../shared/ui/PageTour";
 import ReasonDialog from "../../../shared/ui/ReasonDialog";
 import { Alert, Card, EmptyState, ErrorText, IconButton, Tabs } from "../../../shared/ui/ui";
-import { useCancelOrderItem } from "../../orders/queries";
+import { useCancelOrder, useCancelOrderItem } from "../../orders/queries";
+import { RefundDialog } from "../../refunds/components/RefundDialog";
 import { useMyStation, usePrintingStatus } from "../../printing/queries";
 import { kitchenApi, openPdfInTab } from "../api";
 import {
@@ -58,6 +59,8 @@ export default function KotQueueView({ canCancel }: { canCancel: boolean }) {
   const [notice, setNotice] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState<OrderItem | null>(null);
+  // A paid order can't have items cancelled: the money goes back through a refund instead.
+  const [refunding, setRefunding] = useState<KotQueueGroup["order"] | null>(null);
   const [collapsed, setCollapsed] = useState<Record<string, true>>(loadCollapsed);
   const { ref: boardRef, columns } = useColumnCount(330, 5);
   const error = actionError ?? (queue.error ? extractErrorMessage(queue.error) : null);
@@ -66,6 +69,8 @@ export default function KotQueueView({ canCancel }: { canCancel: boolean }) {
   const markItemReady = useMarkReady();
   const serveItem = useServeItem();
   const cancelItem = useCancelOrderItem();
+  const cancelWholeOrder = useCancelOrder();
+  const [cancellingOrder, setCancellingOrder] = useState<KotQueueGroup["order"] | null>(null);
   const printTicket = usePrintKot();
   const setPriority = useSetPriority();
 
@@ -92,6 +97,11 @@ export default function KotQueueView({ canCancel }: { canCancel: boolean }) {
   }
 
   async function cancelLine(item: OrderItem) {
+    const paidOrder = groups.find((g) => g.order._id === item.orderId)?.order;
+    if (paidOrder?.status === "closed") {
+      setRefunding(paidOrder);
+      return;
+    }
     if (item.kotRound != null) {
       setCancelling(item);
       return;
@@ -147,6 +157,8 @@ export default function KotQueueView({ canCancel }: { canCancel: boolean }) {
     ready: (item) => run(() => markItemReady.mutateAsync(item._id)),
     serve: (item) => run(() => serveItem.mutateAsync(item._id)),
     cancel: (item) => void cancelLine(item),
+    // A paid order can only go back through a refund; an unpaid one is simply cancelled.
+    cancelOrder: (order) => (order.status === "closed" ? setRefunding(order) : setCancellingOrder(order)),
     bulk: (kind, items) =>
       run(async () => {
         const mutate =
@@ -314,6 +326,31 @@ export default function KotQueueView({ canCancel }: { canCancel: boolean }) {
         ))}
       </div>
 
+      {refunding && (
+        <RefundDialog
+          orderId={refunding._id}
+          open
+          onClose={() => setRefunding(null)}
+          paidWith={refunding.paymentMethod}
+        />
+      )}
+      <ReasonDialog
+        open={cancellingOrder !== null}
+        title="Cancel this order?"
+        description="The order hasn't been paid, so it is simply cancelled and leaves the kitchen. The reason is recorded in the audit log."
+        confirmLabel="Cancel order"
+        danger
+        options={CANCEL_OPTIONS}
+        onCancel={() => setCancellingOrder(null)}
+        onConfirm={async ({ option, note }) => {
+          const label = ITEM_CANCEL_REASON_LABELS[option as ItemCancelReason] ?? option;
+          await cancelWholeOrder.mutateAsync({
+            orderId: cancellingOrder!._id,
+            reason: note ? `${label}: ${note}` : label,
+          });
+          setCancellingOrder(null);
+        }}
+      />
       <ReasonDialog
         open={cancelling !== null}
         title={cancelling ? `Cancel ${cancelling.foodName} x${cancelling.quantity}?` : ""}

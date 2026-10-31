@@ -111,6 +111,14 @@ export async function createRefund(ctx: RequestContext, input: CreateRefundInput
     throw new HttpError(400, `At most ₹${refundable.toFixed(2)} can still be refunded on this bill`);
   }
 
+  // Giving back everything that was paid ends the order: whatever is left on it leaves the kitchen too.
+  if (round2(refundable - amount) <= 0) {
+    const handled = new Set(fullyRefunded.map((i) => i._id.toString()));
+    for (const item of items) {
+      if (item.status !== "cancelled" && !handled.has(item._id.toString())) fullyRefunded.push(item);
+    }
+  }
+
   const who = ctx.admin?.username ?? "staff";
   const refund = await withTransaction(async (session) => {
     if (!(await repo.claimRefundAmount(order._id, amount, paidAmount(order), session)))

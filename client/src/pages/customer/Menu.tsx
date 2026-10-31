@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Flame, SlidersHorizontal } from "lucide-react";
+import { Flame, Menu as MenuIcon, ScanLine, SlidersHorizontal } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -20,6 +20,7 @@ import { suggestionsFor } from "../../lib/recommendations";
 import type { CartLine, MenuCategory, MenuFoodItem, MenuRecommendations } from "../../lib/types";
 import { useDineInPayment } from "../../lib/useDineInPayment";
 import { useGuestAccess } from "../../lib/useGuestAccess";
+import { TokenTrackDialog, useTokenTrackAllowed } from "../../components/TokenTrackDialog";
 import { useTableSession } from "../../lib/useTableSession";
 import { api, clearStoredToken, extractErrorMessage, setActiveAuth, storeToken } from "../../shared/api/client";
 import { POLL } from "../../shared/api/queryClient";
@@ -108,7 +109,7 @@ const SORT_LABELS: Record<SortOption, string> = {
 };
 
 export default function Menu() {
-  const { orderId, tableId } = useTableSession();
+  const { orderId, tableId, via } = useTableSession();
   const access = useGuestAccess();
   const addOrderItems = useAddOrderItems();
   const orderQuery = useOrder(orderId, POLL.guestInvoice);
@@ -126,6 +127,9 @@ export default function Menu() {
   const [reviewOpen, setReviewOpen] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [optionsOpen, setOptionsOpen] = useState(false);
+  const [trackOpen, setTrackOpen] = useState(false);
+  const canTrackToken = useTokenTrackAllowed() && via !== "token";
   const [guestOpen, setGuestOpen] = useState(false);
   const [pendingRequest, setPendingRequest] = useState<string | null>(null);
   const sendChat = useSendChatMessage();
@@ -488,6 +492,7 @@ export default function Menu() {
 
   return (
     <div className="mx-auto max-w-3xl pb-32">
+      <TokenTrackDialog forceOpen={trackOpen} onForceClose={() => setTrackOpen(false)} />
       {billReady && (
         <div className="flex flex-wrap items-center justify-between gap-3 bg-blue-50 px-4 py-3 text-sm text-blue-900">
           <span>
@@ -510,61 +515,94 @@ export default function Menu() {
               {access.showMenu ? ui(lang, "tapDish") : "Tell us how we are doing"}
             </p>
           </div>
-          <div className="flex items-center gap-2">
-            {access.showMenu && (
-              <select
-                value={lang}
-                onChange={(e) => {
-                  const l = e.target.value as Lang;
-                  setLang(l);
-                  saveLang(l);
-                }}
-                aria-label="Menu language"
-                className="min-h-[36px] rounded-xl border border-slate-300 px-2 text-sm"
-              >
-                {LANGS.map((l) => (
-                  <option key={l.code} value={l.code}>
-                    {l.label}
-                  </option>
-                ))}
-              </select>
+          <div className="relative flex items-center gap-2">
+            {canTrackToken && (
+              <Button variant="secondary" className="rounded-xl" aria-label="Track by token" onClick={() => setTrackOpen(true)}>
+                <ScanLine className="h-4 w-4" aria-hidden="true" /> <span className="hidden min-[430px]:inline">Track by token</span>
+              </Button>
             )}
             {access.showMenu && (
               <Button variant="secondary" className="rounded-xl" onClick={() => navigate("/order/invoice")}>
                 {ui(lang, "myOrder")}
               </Button>
             )}
-            {orderId && (
-              <button
-                type="button"
-                onClick={() => setDetailsOpen(true)}
-                aria-label="Add your details"
-                title="Add your details"
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-300 text-slate-500 hover:bg-slate-50 hover:text-orange-500"
-              >
-                <UserIcon className="h-[18px] w-[18px]" />
-              </button>
-            )}
-            {access.showFeedback && access.showMenu && (
-              <button
-                type="button"
-                onClick={() => setFeedbackOpen(true)}
-                aria-label="Rate us"
-                title="Rate us"
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-300 text-slate-500 hover:bg-slate-50 hover:text-amber-500"
-              >
-                <StarOutlineIcon className="h-[18px] w-[18px]" />
-              </button>
-            )}
             <button
               type="button"
-              onClick={openLeaveConfirm}
-              aria-label="Leave table"
-              title="Leave table"
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-300 text-slate-500 hover:bg-red-50 hover:text-red-600"
+              onClick={() => setOptionsOpen((v) => !v)}
+              aria-label="More options"
+              aria-expanded={optionsOpen}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-300 text-slate-600 hover:bg-slate-50"
             >
-              <LeaveIcon className="h-[18px] w-[18px]" />
+              <MenuIcon className="h-[18px] w-[18px]" />
             </button>
+            {optionsOpen && (
+              <>
+                <div className="fixed inset-0 z-30" onClick={() => setOptionsOpen(false)} aria-hidden="true" />
+                <div
+                  role="menu"
+                  className="absolute right-0 top-11 z-40 w-60 rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg"
+                >
+                  {access.showMenu && (
+                    <label className="flex items-center justify-between gap-3 px-3 py-2 text-sm text-slate-700">
+                      Language
+                      <select
+                        value={lang}
+                        onChange={(e) => {
+                          const l = e.target.value as Lang;
+                          setLang(l);
+                          saveLang(l);
+                        }}
+                        aria-label="Menu language"
+                        className="min-h-[36px] rounded-lg border border-slate-300 px-2 text-sm"
+                      >
+                        {LANGS.map((l) => (
+                          <option key={l.code} value={l.code}>
+                            {l.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
+                  {orderId && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setOptionsOpen(false);
+                        setDetailsOpen(true);
+                      }}
+                      className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm text-slate-700 hover:bg-slate-50"
+                    >
+                      <UserIcon className="h-[18px] w-[18px]" /> Add your details
+                    </button>
+                  )}
+                  {access.showFeedback && access.showMenu && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setOptionsOpen(false);
+                        setFeedbackOpen(true);
+                      }}
+                      className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm text-slate-700 hover:bg-slate-50"
+                    >
+                      <StarOutlineIcon className="h-[18px] w-[18px]" /> Rate us
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setOptionsOpen(false);
+                      openLeaveConfirm();
+                    }}
+                    className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm text-red-600 hover:bg-red-50"
+                  >
+                    <LeaveIcon className="h-[18px] w-[18px]" /> Leave table
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>

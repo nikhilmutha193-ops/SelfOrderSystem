@@ -2,8 +2,20 @@ import type { InvoiceRegisterStatus, Order } from "../../lib/types";
 
 export type BadgeTone = "green" | "gray" | "red" | "amber" | "blue";
 
-export function orderStatusBadge(order: Pick<Order, "status" | "voidedAt">): { tone: BadgeTone; label: string } {
+/** "full" once everything that was paid has gone back, "partial" for some of it, else null. */
+export function refundState(order: Pick<Order, "status" | "refundedTotal" | "payments">): "full" | "partial" | null {
+  const refunded = order.refundedTotal ?? 0;
+  if (order.status !== "closed" || refunded <= 0) return null;
+  const paid = (order.payments ?? []).filter((p) => p.method !== "credit").reduce((sum, p) => sum + p.amount, 0);
+  return refunded >= paid - 0.01 ? "full" : "partial";
+}
+
+export function orderStatusBadge(
+  order: Pick<Order, "status" | "voidedAt" | "refundedTotal" | "payments">,
+): { tone: BadgeTone; label: string } {
   if (order.voidedAt) return { tone: "red", label: "Voided" };
+  const refund = refundState(order);
+  if (refund) return refund === "full" ? { tone: "red", label: "Refunded" } : { tone: "amber", label: "Partly refunded" };
   switch (order.status) {
     case "open":
       return { tone: "amber", label: "Open" };

@@ -1,7 +1,11 @@
 import { lazy, Suspense } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 
-import { AdminHomeRedirect, AdminProfileProvider, RequireModule } from "../lib/adminAuth";
+import {
+  AdminHomeRedirect,
+  AdminProfileProvider,
+  RequireModule,
+} from "../lib/adminAuth";
 import { useSiteBranding } from "../lib/useSiteBranding";
 import ErrorBoundary from "../shared/ui/ErrorBoundary";
 import PageLoader from "../shared/ui/PageLoader";
@@ -11,6 +15,7 @@ import AppProviders from "./providers";
 
 const Landing = lazy(() => import("../pages/Landing"));
 const TableLogin = lazy(() => import("../pages/customer/TableLogin"));
+const TrackOrder = lazy(() => import("../pages/customer/TrackOrder"));
 const Menu = lazy(() => import("../pages/customer/Menu"));
 const CustomerInvoice = lazy(() => import("../pages/customer/CustomerInvoice"));
 
@@ -44,7 +49,9 @@ const Captain = lazy(() => import("../features/captain/pages/Captain"));
 const Kiosk = lazy(() => import("../features/kiosk/pages/Kiosk"));
 const PickupBoard = lazy(() => import("../features/kiosk/pages/PickupBoard"));
 const KioskAdmin = lazy(() => import("../features/kiosk/pages/KioskAdmin"));
-const RestaurantSettings = lazy(() => import("../pages/admin/RestaurantSettings"));
+const RestaurantSettings = lazy(
+  () => import("../pages/admin/RestaurantSettings"),
+);
 const ChangePassword = lazy(() => import("../pages/admin/ChangePassword"));
 const Team = lazy(() => import("../pages/admin/Team"));
 const Awards = lazy(() => import("../pages/admin/Awards"));
@@ -60,7 +67,9 @@ const LandingPageEditor = lazy(() => import("../pages/admin/LandingPage"));
 const NoAccess = lazy(() => import("../pages/admin/NoAccess"));
 
 const ChefLogin = lazy(() => import("../pages/chef/ChefLogin"));
-const ChefDashboard = lazy(() => import("../features/kitchen/pages/ChefDashboard"));
+const ChefDashboard = lazy(
+  () => import("../features/kitchen/pages/ChefDashboard"),
+);
 
 export default function App() {
   useSiteBranding();
@@ -74,8 +83,12 @@ export default function App() {
             <Routes>
               <Route path="/" element={<Landing />} />
               <Route path="/order" element={<TableLogin />} />
+              <Route path="/order/track" element={<TrackOrder />} />
               <Route path="/bill/:token" element={<PublicBill />} />
-              <Route path="/order/details" element={<Navigate to="/order/menu" replace />} />
+              <Route
+                path="/order/details"
+                element={<Navigate to="/order/menu" replace />}
+              />
               <Route
                 path="/order/menu"
                 element={
@@ -97,8 +110,14 @@ export default function App() {
               <Route path="/kiosk" element={<Kiosk />} />
               <Route path="/pickup" element={<PickupBoard />} />
 
-              <Route path="/pos/login" element={<StaffLogin kind="cashier" />} />
-              <Route path="/captain/login" element={<StaffLogin kind="captain" />} />
+              <Route
+                path="/pos/login"
+                element={<StaffLogin kind="cashier" />}
+              />
+              <Route
+                path="/captain/login"
+                element={<StaffLogin kind="captain" />}
+              />
               <Route
                 path="/pos"
                 element={
@@ -124,7 +143,10 @@ export default function App() {
                 }
               />
               <Route path="/admin/login" element={<AdminLogin />} />
-              <Route path="/admin/forgot-password" element={<ForgotPassword />} />
+              <Route
+                path="/admin/forgot-password"
+                element={<ForgotPassword />}
+              />
               <Route
                 path="/admin"
                 element={

@@ -178,6 +178,7 @@ export interface TicketActions {
   ready: (item: OrderItem) => Promise<unknown>;
   serve: (item: OrderItem) => Promise<unknown>;
   cancel: (item: OrderItem) => void;
+  cancelOrder: (order: KotQueueGroup["order"]) => void;
   bulk: (kind: "start" | "ready" | "serve", items: OrderItem[]) => Promise<unknown>;
   send: (orderId: string) => Promise<unknown> | void;
   reprint: (orderId: string, round: number) => void;
@@ -429,6 +430,18 @@ export function KotTicket({
             );
           })}
         </ul>
+        {canCancel && (
+          <div className="flex justify-end border-t border-slate-100 px-3 py-2">
+            <Button
+              size="sm"
+              variant="secondary"
+              className="!text-red-600"
+              onClick={() => actions.cancelOrder(order)}
+            >
+              {order.status === "closed" ? "Refund order" : "Cancel order"}
+            </Button>
+          </div>
+        )}
         {hiddenCount > 0 && (
           <p className="border-t border-slate-100 px-4 py-2 text-xs text-slate-500">
             {hiddenCount} more item{hiddenCount === 1 ? "" : "s"} hidden by the filter

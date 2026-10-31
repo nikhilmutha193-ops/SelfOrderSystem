@@ -35,6 +35,8 @@ export interface TableLoginSettings {
   allowQrLogin?: boolean;
   /** Guests may sign in with a table code and PIN. */
   allowPinLogin?: boolean;
+  /** Guests may follow an order by its token number. Unset follows the service flow (cafe on). */
+  allowTokenLogin?: boolean;
   requiredDetails?: RequiredDetails;
   qr?: GuestAccess;
   manual?: GuestAccess;
@@ -474,6 +476,8 @@ export interface DashboardSummary {
   closedOrdersToday: number;
   salesToday: number;
   pendingKotItems: number;
+  /** Sent to the kitchen today and not served yet, paid or not. */
+  itemsInKitchen?: number;
   unreadChatCount: number;
   tablesAwaitingPayment?: number;
   /** Cafe flow: orders waiting to be paid before they go to the kitchen. */

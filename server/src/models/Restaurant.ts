@@ -42,6 +42,8 @@ export interface ITableLoginSettings {
   allowQrLogin: boolean;
   /** Guests may sign in to a table with its code and PIN. */
   allowPinLogin: boolean;
+  /** Guests may follow an order by the token number on their receipt. Unset follows the service flow (cafe on). */
+  allowTokenLogin?: boolean;
   requiredDetails: IRequiredDetails;
   /** Guests who scanned the table's QR code. */
   qr: IGuestAccess;
@@ -249,6 +251,7 @@ const tableLoginSettingsSchema = new Schema<ITableLoginSettings>(
     showOrderNow: { type: Boolean, default: true },
     allowQrLogin: { type: Boolean, default: true },
     allowPinLogin: { type: Boolean, default: true },
+    allowTokenLogin: { type: Boolean },
     requiredDetails: { type: requiredDetailsSchema, default: () => ({}) },
     qr: { type: guestAccessSchema, default: () => ({}) },
     manual: { type: guestAccessSchema, default: () => ({}) },

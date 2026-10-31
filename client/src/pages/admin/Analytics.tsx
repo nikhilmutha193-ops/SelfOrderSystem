@@ -1,4 +1,4 @@
-import { ChartColumn, ClipboardList, IndianRupee, Lightbulb, ReceiptText } from "lucide-react";
+import { ChartColumn, ClipboardList, IndianRupee, Lightbulb, ReceiptText, Undo2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
@@ -9,9 +9,13 @@ import { Card, ErrorText, Page, PageHeader, Skeleton, StatCard, TableWrap, Tabs 
 
 interface SalesData {
   days: number;
+  /** Net of refunds. */
   totalRevenue: number;
+  grossRevenue?: number;
+  totalRefunds?: number;
+  refundCount?: number;
   totalOrders: number;
-  byDay: { date: string; revenue: number; orders: number }[];
+  byDay: { date: string; revenue: number; orders: number; refunds?: number }[];
   byHour: { hour: number; revenue: number; orders: number }[];
   byType: { type: string; revenue: number; orders: number }[];
   topDishes: { name: string; qty: number; revenue: number }[];
@@ -196,6 +200,14 @@ export default function Analytics() {
                   icon={IndianRupee}
                   tone="green"
                 />
+                {(sales.totalRefunds ?? 0) > 0 && (
+                  <StatCard
+                    label={`Refunds (${sales.days}d)`}
+                    value={rupee(sales.totalRefunds ?? 0)}
+                    icon={Undo2}
+                    tone="red"
+                  />
+                )}
                 <StatCard
                   label={`Orders (${sales.days}d)`}
                   value={sales.totalOrders}

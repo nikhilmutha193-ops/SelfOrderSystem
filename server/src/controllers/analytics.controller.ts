@@ -5,6 +5,7 @@ import AuditLog from "../models/AuditLog";
 import FoodItem from "../models/FoodItem";
 import Order from "../models/Order";
 import OrderItem, { IOrderItem } from "../models/OrderItem";
+import Refund from "../models/Refund";
 import Restaurant from "../models/Restaurant";
 import { HttpError } from "../utils/httpError";
 import { computeInvoiceTotals } from "../utils/invoice";
@@ -41,7 +42,7 @@ export const getSalesAnalytics = asyncHandler(async (req: Request, res: Response
 
   const orderIds = orders.map((o) => o._id);
   const items = await OrderItem.find({ orderId: { $in: orderIds } })
-    .select("orderId status total foodName quantity")
+    .select("orderId status total foodName quantity refundedQty")
     .lean();
   const itemsByOrder = new Map<string, Pick<IOrderItem, "status" | "total">[]>();
   for (const it of items) {
@@ -74,28 +75,60 @@ export const getSalesAnalytics = asyncHandler(async (req: Request, res: Response
     byType.set(o.orderType, t);
   }
 
-  // Top dishes by quantity across the same closed orders.
+  // Refunds are taken off on the day they were given, by the type of the order they belong to.
+  const refunds = await Refund.find({ restaurantId: req.restaurantId, createdAt: { $gte: since } })
+    .select("orderId amount createdAt")
+    .lean();
+  const refundOrderTypes = new Map(orders.map((o) => [o._id.toString(), o.orderType]));
+  const unknownOrderIds = refunds.map((r) => r.orderId).filter((id) => !refundOrderTypes.has(id.toString()));
+  if (unknownOrderIds.length > 0) {
+    const older = await Order.find({ _id: { $in: unknownOrderIds } }).select("orderType").lean();
+    for (const o of older) refundOrderTypes.set(o._id.toString(), o.orderType);
+  }
+  const refundsByDay = new Map<string, number>();
+  let totalRefunds = 0;
+  for (const r of refunds) {
+    totalRefunds += r.amount;
+    const { date, hour } = localParts(new Date(r.createdAt), tz);
+    refundsByDay.set(date, (refundsByDay.get(date) ?? 0) + r.amount);
+    byHour[hour].revenue -= r.amount;
+    const type = refundOrderTypes.get(r.orderId.toString());
+    if (type) {
+      const t = byType.get(type) ?? { revenue: 0, orders: 0 };
+      t.revenue -= r.amount;
+      byType.set(type, t);
+    }
+  }
+
+  // Top dishes by quantity across the same closed orders, less what was refunded.
   const dish = new Map<string, { name: string; qty: number; revenue: number }>();
   for (const it of items) {
     if (it.status === "cancelled") continue;
+    const kept = Math.max(0, it.quantity - (it.refundedQty ?? 0));
+    if (kept === 0) continue;
     const key = it.foodName;
     const d = dish.get(key) ?? { name: it.foodName, qty: 0, revenue: 0 };
-    d.qty += it.quantity;
-    d.revenue += it.total;
+    d.qty += kept;
+    d.revenue += (it.total * kept) / it.quantity;
     dish.set(key, d);
   }
 
   // A continuous day series so the chart has no gaps.
-  const dayjs: { date: string; revenue: number; orders: number }[] = [];
+  const dayjs: { date: string; revenue: number; orders: number; refunds: number }[] = [];
   for (let i = days - 1; i >= 0; i--) {
     const { date } = localParts(new Date(Date.now() - i * 24 * 60 * 60 * 1000), tz);
     const d = byDay.get(date) ?? { revenue: 0, orders: 0 };
-    dayjs.push({ date, revenue: round2(d.revenue), orders: d.orders });
+    const refunded = refundsByDay.get(date) ?? 0;
+    dayjs.push({ date, revenue: round2(d.revenue - refunded), orders: d.orders, refunds: round2(refunded) });
   }
 
   res.json({
     days,
-    totalRevenue: round2(totalRevenue),
+    // Net of refunds; `grossRevenue` is before them.
+    totalRevenue: round2(totalRevenue - totalRefunds),
+    grossRevenue: round2(totalRevenue),
+    totalRefunds: round2(totalRefunds),
+    refundCount: refunds.length,
     totalOrders: orders.length,
     byDay: dayjs,
     byHour: byHour.map((h, hour) => ({ hour, revenue: round2(h.revenue), orders: h.orders })),

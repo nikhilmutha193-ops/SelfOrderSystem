@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from "react";
 
 import type { OrderDetailResponse, OrderItem } from "../../../lib/types";
+import { refundState } from "../../orders/status";
 import { Badge, Button, Input } from "../../../shared/ui/ui";
 import { WhatsAppBillButton } from "../../customers/components/CustomerPanel";
 import BillActions from "../../orders/components/BillActions";
@@ -100,7 +101,11 @@ export function OrderPanel({
                 {order.status === "billed"
                   ? (order.invoiceNumber ?? "Billed")
                   : order.status === "closed"
-                    ? "Paid"
+                    ? refundState(order) === "full"
+                      ? "Refunded"
+                      : refundState(order) === "partial"
+                        ? "Partly refunded"
+                        : "Paid"
                     : "Open"}
               </Badge>
             )

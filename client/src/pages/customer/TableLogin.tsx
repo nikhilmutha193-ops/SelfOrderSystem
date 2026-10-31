@@ -3,7 +3,12 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import QrScanner from "qr-scanner";
 
 import { todayIst } from "../../lib/istDate";
-import type { BookingAvailabilitySlot, BookingSettings, TableLoginSettings, TableRow } from "../../lib/types";
+import type {
+  BookingAvailabilitySlot,
+  BookingSettings,
+  TableLoginSettings,
+  TableRow,
+} from "../../lib/types";
 import { useTableSession } from "../../lib/useTableSession";
 import {
   activateStoredAuth,
@@ -44,14 +49,19 @@ function formatSlotLabel(hhmm: string): string {
 export default function TableLogin() {
   const [searchParams] = useSearchParams();
   const urlQrToken = searchParams.get("t") || "";
-  const [sessionExpired] = useState(() => searchParams.get("expired") === "1" || wasSessionExpired("table"));
+  const [sessionExpired] = useState(
+    () => searchParams.get("expired") === "1" || wasSessionExpired("table"),
+  );
   const [code, setCode] = useState(() => searchParams.get("code") || "");
   const [password, setPassword] = useState("");
   const [showPin, setShowPin] = useState(false);
   const [available, setAvailable] = useState<TableRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [brand, setBrand] = useState<{ name: string; logoUrl: string }>({ name: "Benne Kaffi", logoUrl: "" });
+  const [brand, setBrand] = useState<{ name: string; logoUrl: string }>({
+    name: "Benne Kaffi",
+    logoUrl: "",
+  });
   const [needsOrderChoice, setNeedsOrderChoice] = useState(false);
   // In-page camera QR scanning, as an alternative to arriving via a scanned-elsewhere link
   // (?t=) or typing the code+PIN by hand. Once a scan succeeds, its token is kept here and
@@ -69,7 +79,8 @@ export default function TableLogin() {
 
   // Prebooking - a guest can reserve a table for a later time slot without needing to be at a
   // table (or logged in) at all. Staff then confirm it and assign a table from the admin side.
-  const [bookingSettings, setBookingSettings] = useState<BookingSettings | null>(null);
+  const [bookingSettings, setBookingSettings] =
+    useState<BookingSettings | null>(null);
   const [bookingOpen, setBookingOpen] = useState(false);
   const [bkName, setBkName] = useState("");
   const [bkPhone, setBkPhone] = useState("");
@@ -86,23 +97,23 @@ export default function TableLogin() {
   // The admin can turn either way of signing in to a table off.
   const [allowQrLogin, setAllowQrLogin] = useState(true);
   const [allowPinLogin, setAllowPinLogin] = useState(true);
-  // Cafe flow: a guest holding a receipt can follow their order by its token number.
-  const [cafe, setCafe] = useState(false);
-  const [trackToken, setTrackToken] = useState("");
-  const [trackError, setTrackError] = useState<string | null>(null);
-  const [tracking, setTracking] = useState(false);
 
   useEffect(() => {
     api
-      .get<{ name?: string; logoUrl?: string; serviceFlow?: string; tableLoginSettings?: TableLoginSettings }>(
-        "/restaurant/public",
-      )
+      .get<{
+        name?: string;
+        logoUrl?: string;
+        serviceFlow?: string;
+        tableLoginSettings?: TableLoginSettings;
+      }>("/restaurant/public")
       .then((res) => {
-        setBrand({ name: res.data.name || "Benne Kaffi", logoUrl: res.data.logoUrl || "" });
+        setBrand({
+          name: res.data.name || "Benne Kaffi",
+          logoUrl: res.data.logoUrl || "",
+        });
         setAllowQrScan(res.data.tableLoginSettings?.allowQrScan ?? true);
         setAllowQrLogin(res.data.tableLoginSettings?.allowQrLogin ?? true);
         setAllowPinLogin(res.data.tableLoginSettings?.allowPinLogin ?? true);
-        setCafe(res.data.serviceFlow === "cafe");
       })
       .catch(() => {});
   }, []);
@@ -114,7 +125,8 @@ export default function TableLogin() {
   // to false regardless of whether a camera actually exists - the button then just vanishes
   // with no explanation ("not able to see the QR scan option"). Distinguish that case so the
   // guest (or whoever's testing it) sees why, instead of a silently missing button.
-  const insecureContext = typeof window !== "undefined" && !window.isSecureContext;
+  const insecureContext =
+    typeof window !== "undefined" && !window.isSecureContext;
 
   // Only offer "Scan QR code" where a camera can plausibly exist - avoids a button that would
   // just fail on a desktop with no webcam.
@@ -126,15 +138,38 @@ export default function TableLogin() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const OWN_TABLE_OCCUPIED_MESSAGE = "You already have an order in progress at this table";
+  const OWN_TABLE_OCCUPIED_MESSAGE =
+    "You already have an order in progress at this table";
 
   async function attemptLogin(
-    opts: { startNewOrder?: boolean; continueOrder?: boolean; qrTokenOverride?: string } = {},
+    opts: {
+      startNewOrder?: boolean;
+      continueOrder?: boolean;
+      qrTokenOverride?: string;
+    } = {},
   ) {
     const tokenToUse = opts.qrTokenOverride ?? qrToken;
     setError(null);
     setNeedsOrderChoice(false);
     setLoading(true);
+    // A guest who is following an order by token number and scans a table: give that table to the order if it
+    // is free, otherwise just show the order status.
+    if (tokenToUse && session.via === "token" && session.orderId) {
+      try {
+        const res = await api.post("/auth/table/token-seat", {
+          token: tokenToUse,
+        });
+        storeToken("table", res.data.token);
+        setActiveAuth({ role: "table", token: res.data.token });
+        navigate("/order/menu", { replace: true });
+      } catch (err) {
+        navigate("/order/invoice", {
+          replace: true,
+          state: { notice: extractErrorMessage(err) },
+        });
+      }
+      return;
+    }
     try {
       const res = await api.post("/auth/table/login", {
         ...(tokenToUse ? { token: tokenToUse } : { code, password }),
@@ -145,7 +180,10 @@ export default function TableLogin() {
       storeToken("table", res.data.token);
       setActiveAuth({ role: "table", token: res.data.token });
       try {
-        localStorage.setItem("selforder_table_code", res.data.table?.code || code);
+        localStorage.setItem(
+          "selforder_table_code",
+          res.data.table?.code || code,
+        );
       } catch {
         /* ignore */
       }
@@ -164,22 +202,6 @@ export default function TableLogin() {
       }
       setError(message);
       setLoading(false);
-    }
-  }
-
-  async function trackOrder(e: React.FormEvent) {
-    e.preventDefault();
-    setTrackError(null);
-    setTracking(true);
-    try {
-      const res = await api.post<{ token: string }>("/auth/table/token-login", { token: Number(trackToken) });
-      storeToken("table", res.data.token);
-      setActiveAuth({ role: "table", token: res.data.token });
-      navigate("/order/invoice");
-    } catch (err) {
-      setTrackError(extractErrorMessage(err));
-    } finally {
-      setTracking(false);
     }
   }
 
@@ -232,7 +254,9 @@ export default function TableLogin() {
     );
     qrScannerRef.current = scanner;
     scanner.start().catch(() => {
-      setScannerError("Couldn't access the camera. Check your browser's camera permission and try again.");
+      setScannerError(
+        "Couldn't access the camera. Check your browser's camera permission and try again.",
+      );
     });
     return stopScanner;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -271,7 +295,9 @@ export default function TableLogin() {
     setBkSlotsLoading(true);
     setBkSlot("");
     api
-      .get<BookingAvailabilitySlot[]>("/bookings/public/availability", { params: { date: bkDate } })
+      .get<BookingAvailabilitySlot[]>("/bookings/public/availability", {
+        params: { date: bkDate },
+      })
       .then((res) => setBkSlots(res.data))
       .catch(() => setBkSlots([]))
       .finally(() => setBkSlotsLoading(false));
@@ -322,12 +348,23 @@ export default function TableLogin() {
         <div className="container order-header__inner">
           <a className="order-header__brand" href="/">
             {brand.logoUrl ? (
-              <img className="order-header__logo" src={brand.logoUrl} alt="" width={40} height={40} />
+              <img
+                className="order-header__logo"
+                src={brand.logoUrl}
+                alt=""
+                width={40}
+                height={40}
+              />
             ) : (
               <span
                 className="order-header__logo"
                 aria-hidden
-                style={{ display: "grid", placeItems: "center", background: "var(--color-primary-tint)", fontSize: 20 }}
+                style={{
+                  display: "grid",
+                  placeItems: "center",
+                  background: "var(--color-primary-tint)",
+                  fontSize: 20,
+                }}
               >
                 ☕
               </span>
@@ -356,7 +393,12 @@ export default function TableLogin() {
         <div className="order__layout">
           <aside className="order__aside">
             {brand.logoUrl ? (
-              <img className="order__aside-art order__aside-art--logo" src={brand.logoUrl} alt="" aria-hidden />
+              <img
+                className="order__aside-art order__aside-art--logo"
+                src={brand.logoUrl}
+                alt=""
+                aria-hidden
+              />
             ) : (
               <div className="order__aside-art" aria-hidden>
                 ☕
@@ -366,51 +408,28 @@ export default function TableLogin() {
               <p className="order__aside-eyebrow">Dine-in ordering</p>
               <h2 className="order__aside-title">Order from your table</h2>
               <p className="order__aside-text">
-                Sign in with the code on your table and we'll bring your kaffi and dosas straight to you.
+                Sign in with the code on your table and we'll bring your kaffi
+                and dosas straight to you.
               </p>
               <ul className="order__perks">
-                <li className="order__perk">No queue, no waving for the waiter</li>
+                <li className="order__perk">
+                  No queue, no waving for the waiter
+                </li>
                 <li className="order__perk">Live menu with today's specials</li>
-                <li className="order__perk">Pay at the table when you're done</li>
+                <li className="order__perk">
+                  Pay at the table when you're done
+                </li>
               </ul>
             </div>
           </aside>
 
           <section className="order__panel">
-            {cafe && (
-              <form className="order-form" onSubmit={trackOrder} noValidate style={{ marginBottom: "1.5rem" }}>
-                <h2 className="step__title">Collecting your order?</h2>
-                <p className="step__lead">
-                  Enter the token number on your receipt to see how it is coming along, view the menu or send a request.
-                </p>
-                {trackError && <p className="order-note order-note--error">{trackError}</p>}
-                <div className="field">
-                  <label className="field__label" htmlFor="track-token">
-                    Token number
-                  </label>
-                  <input
-                    className="field__input field__input--code"
-                    id="track-token"
-                    type="text"
-                    inputMode="numeric"
-                    autoComplete="off"
-                    placeholder="e.g. 12"
-                    value={trackToken}
-                    onChange={(e) => setTrackToken(e.target.value.replace(/\D/g, "").slice(0, 5))}
-                  />
-                </div>
-                <button
-                  className="btn btn--secondary btn--lg btn--block"
-                  type="submit"
-                  disabled={tracking || trackToken === ""}
-                >
-                  {tracking ? "Finding your order…" : "Track my order"}
-                </button>
-              </form>
-            )}
             <form className="order-form" onSubmit={submit} noValidate>
               <ol className="stepper" aria-label="Progress">
-                <li className="stepper__step stepper__step--active" aria-current="step">
+                <li
+                  className="stepper__step stepper__step--active"
+                  aria-current="step"
+                >
                   <span className="stepper__num" aria-hidden>
                     1
                   </span>
@@ -435,19 +454,22 @@ export default function TableLogin() {
 
               {sessionExpired && (
                 <p className="order-note order-note--warn">
-                  Your session has ended. Please scan the QR code again or sign in to continue.
+                  Your session has ended. Please scan the QR code again or sign
+                  in to continue.
                 </p>
               )}
               {qrToken && !error && !needsOrderChoice && (
-                <p className="order-note order-note--info">Table identified from QR code — signing you in…</p>
+                <p className="order-note order-note--info">
+                  Table identified from QR code — signing you in…
+                </p>
               )}
               {error && <p className="order-note order-note--error">{error}</p>}
 
               {needsOrderChoice && (
                 <div className="order-choice">
                   <p className="order-note order-note--info">
-                    You already have an order in progress at this table. Would you like to continue it, or start a new
-                    order?
+                    You already have an order in progress at this table. Would
+                    you like to continue it, or start a new order?
                   </p>
                   <div className="order-choice__actions">
                     <button
@@ -474,7 +496,11 @@ export default function TableLogin() {
                 <>
                   {allowQrLogin && allowQrScan && cameraAvailable && (
                     <>
-                      <button type="button" className="btn btn--primary btn--lg btn--block" onClick={openScanner}>
+                      <button
+                        type="button"
+                        className="btn btn--primary btn--lg btn--block"
+                        onClick={openScanner}
+                      >
                         <svg
                           viewBox="0 0 24 24"
                           fill="none"
@@ -490,19 +516,25 @@ export default function TableLogin() {
                         </svg>
                         Scan table QR code
                       </button>
-                      {allowPinLogin && <p className="field__divider">or enter your table code and PIN</p>}
+                      {allowPinLogin && (
+                        <p className="field__divider">
+                          or enter your table code and PIN
+                        </p>
+                      )}
                     </>
                   )}
                   {allowQrLogin && allowQrScan && insecureContext && (
                     <p className="order-note order-note--warn">
-                      Camera scanning needs a secure (https) connection, so it isn't available here - enter your table
-                      code and PIN below instead.
+                      Camera scanning needs a secure (https) connection, so it
+                      isn't available here - enter your table code and PIN below
+                      instead.
                     </p>
                   )}
 
                   {!allowQrLogin && !allowPinLogin && (
                     <p className="order-note order-note--info">
-                      Table sign-in is switched off. Please ask our staff to place your order.
+                      Table sign-in is switched off. Please ask our staff to
+                      place your order.
                     </p>
                   )}
                   {allowPinLogin && (
@@ -584,10 +616,16 @@ export default function TableLogin() {
                             )}
                           </button>
                         </div>
-                        <p className="field__hint">The PIN is printed on the card on your table.</p>
+                        <p className="field__hint">
+                          The PIN is printed on the card on your table.
+                        </p>
                       </div>
 
-                      <button className="btn btn--primary btn--lg btn--block" type="submit" disabled={loading}>
+                      <button
+                        className="btn btn--primary btn--lg btn--block"
+                        type="submit"
+                        disabled={loading}
+                      >
                         {loading ? "Signing in…" : "Sign in"}
                       </button>
 
@@ -595,13 +633,24 @@ export default function TableLogin() {
                         <div className="tables">
                           <div className="tables__head">
                             <p className="tables__title">Available tables</p>
-                            <p className="tables__hint">Tap to fill in your code</p>
+                            <p className="tables__hint">
+                              Tap to fill in your code
+                            </p>
                           </div>
-                          <ul className="tables__list" aria-label="Available tables">
+                          <ul
+                            className="tables__list"
+                            aria-label="Available tables"
+                          >
                             {available.map((t) => (
                               <li key={t._id}>
-                                <button type="button" className="table-chip" onClick={() => setCode(t.code)}>
-                                  <span className="table-chip__code">{t.code}</span>
+                                <button
+                                  type="button"
+                                  className="table-chip"
+                                  onClick={() => setCode(t.code)}
+                                >
+                                  <span className="table-chip__code">
+                                    {t.code}
+                                  </span>
                                 </button>
                               </li>
                             ))}
@@ -613,8 +662,14 @@ export default function TableLogin() {
 
                   {bookingSettings?.enabled && (
                     <>
-                      {(allowPinLogin || allowQrLogin) && <p className="field__divider">or</p>}
-                      <button type="button" className="btn btn--secondary btn--lg btn--block" onClick={openBooking}>
+                      {(allowPinLogin || allowQrLogin) && (
+                        <p className="field__divider">or</p>
+                      )}
+                      <button
+                        type="button"
+                        className="btn btn--secondary btn--lg btn--block"
+                        onClick={openBooking}
+                      >
                         Reserve a table for later
                       </button>
                     </>
@@ -644,10 +699,17 @@ export default function TableLogin() {
       </footer>
 
       {scannerOpen && (
-        <div className="scanner-overlay" role="dialog" aria-modal="true" aria-label="Scan table QR code">
+        <div
+          className="scanner-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Scan table QR code"
+        >
           <div className="scanner-overlay__inner">
             <div className="scanner-overlay__head">
-              <p className="scanner-overlay__title">Scan the QR code on your table</p>
+              <p className="scanner-overlay__title">
+                Scan the QR code on your table
+              </p>
               <button
                 type="button"
                 className="scanner-overlay__close"
@@ -659,14 +721,25 @@ export default function TableLogin() {
             </div>
             <div className="scanner-overlay__video-wrap">
               {/* muted+playsInline are required for iOS Safari to auto-play the camera stream inline. */}
-              <video ref={videoRef} className="scanner-overlay__video" muted playsInline />
+              <video
+                ref={videoRef}
+                className="scanner-overlay__video"
+                muted
+                playsInline
+              />
             </div>
             {scannerError ? (
               <p className="order-note order-note--error">{scannerError}</p>
             ) : (
-              <p className="scanner-overlay__hint">Line the QR code up inside the frame.</p>
+              <p className="scanner-overlay__hint">
+                Line the QR code up inside the frame.
+              </p>
             )}
-            <button type="button" className="btn btn--secondary btn--lg btn--block" onClick={closeScanner}>
+            <button
+              type="button"
+              className="btn btn--secondary btn--lg btn--block"
+              onClick={closeScanner}
+            >
               Cancel
             </button>
           </div>
@@ -674,11 +747,23 @@ export default function TableLogin() {
       )}
 
       {bookingOpen && (
-        <div className="scanner-overlay" role="dialog" aria-modal="true" aria-label="Reserve a table">
+        <div
+          className="scanner-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Reserve a table"
+        >
           <div className="scanner-overlay__inner">
             <div className="scanner-overlay__head">
-              <p className="scanner-overlay__title">{bkDone ? "Booking requested" : "Reserve a table"}</p>
-              <button type="button" className="scanner-overlay__close" onClick={closeBooking} aria-label="Close">
+              <p className="scanner-overlay__title">
+                {bkDone ? "Booking requested" : "Reserve a table"}
+              </p>
+              <button
+                type="button"
+                className="scanner-overlay__close"
+                onClick={closeBooking}
+                aria-label="Close"
+              >
                 ✕
               </button>
             </div>
@@ -686,10 +771,15 @@ export default function TableLogin() {
             {bkDone ? (
               <>
                 <p className="order-note order-note--info">
-                  Thanks{bkName ? `, ${bkName}` : ""}! We've noted your booking for {bkDate} at {bkSlot}. Our staff will
-                  confirm it and may call {bkPhone} to coordinate.
+                  Thanks{bkName ? `, ${bkName}` : ""}! We've noted your booking
+                  for {bkDate} at {bkSlot}. Our staff will confirm it and may
+                  call {bkPhone} to coordinate.
                 </p>
-                <button type="button" className="btn btn--primary btn--lg btn--block" onClick={closeBooking}>
+                <button
+                  type="button"
+                  className="btn btn--primary btn--lg btn--block"
+                  onClick={closeBooking}
+                >
                   Done
                 </button>
               </>
@@ -719,7 +809,9 @@ export default function TableLogin() {
                     onChange={(e) => setBkPhone(e.target.value)}
                     required
                   />
-                  <p className="field__hint">We may call to confirm your booking.</p>
+                  <p className="field__hint">
+                    We may call to confirm your booking.
+                  </p>
                 </div>
                 <div className="field">
                   <label className="field__label" htmlFor="bk-party">
@@ -757,7 +849,11 @@ export default function TableLogin() {
                   {bkSlotsLoading ? (
                     <p className="field__hint">Loading slots…</p>
                   ) : bkSlots.some((s) => s.available) ? (
-                    <div className="slot-grid" role="group" aria-labelledby="bk-slot-label">
+                    <div
+                      className="slot-grid"
+                      role="group"
+                      aria-labelledby="bk-slot-label"
+                    >
                       {bkSlots
                         .filter((s) => s.available)
                         .map((s) => (
@@ -773,11 +869,19 @@ export default function TableLogin() {
                         ))}
                     </div>
                   ) : (
-                    <p className="field__hint">No slots available for this date</p>
+                    <p className="field__hint">
+                      No slots available for this date
+                    </p>
                   )}
                 </div>
-                {bkError && <p className="order-note order-note--error">{bkError}</p>}
-                <button className="btn btn--primary btn--lg btn--block" type="submit" disabled={bkSubmitting}>
+                {bkError && (
+                  <p className="order-note order-note--error">{bkError}</p>
+                )}
+                <button
+                  className="btn btn--primary btn--lg btn--block"
+                  type="submit"
+                  disabled={bkSubmitting}
+                >
                   {bkSubmitting ? "Requesting…" : "Request booking"}
                 </button>
               </form>

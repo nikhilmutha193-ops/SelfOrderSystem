@@ -38,11 +38,15 @@ import { useDashboardSummary } from "../queries";
 
 function orderTypeLabel(o: Order): string {
   if (o.orderType === "dine-in") {
-    return typeof o.tableId === "object" && o.tableId?.code ? `Table ${o.tableId.code}` : "Counter";
+    return typeof o.tableId === "object" && o.tableId?.code
+      ? `Table ${o.tableId.code}`
+      : "Counter";
   }
   if (o.orderType === "takeaway") return "Take away";
   return `Delivery${o.deliveryProvider ? ` (${o.deliveryProvider})` : ""}`;
 }
+
+const NO_ORDERS: Order[] = [];
 
 function kitchenBadge(o: Order): { label: string; tone: BadgeTone } {
   const k = o.kitchen;
@@ -51,14 +55,35 @@ function kitchenBadge(o: Order): { label: string; tone: BadgeTone } {
   if (k.preparing > 0) return { label: "Preparing", tone: "blue" };
   if (k.ready > 0) return { label: "Ready to serve", tone: "green" };
   if (k.pendingSent > 0) return { label: "In kitchen", tone: "amber" };
-  if (k.pendingUnsent > 0) return { label: "Not sent to kitchen", tone: "gray" };
+  if (k.pendingUnsent > 0)
+    return { label: "Not sent to kitchen", tone: "gray" };
   return { label: "In progress", tone: "amber" };
 }
 
-const ORDER_GROUPS: { key: string; label: string; icon: LucideIcon; match: (t: Order["orderType"]) => boolean }[] = [
-  { key: "dine-in", label: "Dine-in", icon: Armchair, match: (t) => t === "dine-in" },
-  { key: "takeaway", label: "Take away", icon: ShoppingBag, match: (t) => t === "takeaway" },
-  { key: "other", label: "Other", icon: Truck, match: (t) => t !== "dine-in" && t !== "takeaway" },
+const ORDER_GROUPS: {
+  key: string;
+  label: string;
+  icon: LucideIcon;
+  match: (t: Order["orderType"]) => boolean;
+}[] = [
+  {
+    key: "dine-in",
+    label: "Dine-in",
+    icon: Armchair,
+    match: (t) => t === "dine-in",
+  },
+  {
+    key: "takeaway",
+    label: "Take away",
+    icon: ShoppingBag,
+    match: (t) => t === "takeaway",
+  },
+  {
+    key: "other",
+    label: "Other",
+    icon: Truck,
+    match: (t) => t !== "dine-in" && t !== "takeaway",
+  },
 ];
 
 interface AttentionItem {
@@ -85,15 +110,25 @@ export default function Dashboard() {
   const { profile } = useAdmin();
   const summaryQuery = useDashboardSummary();
   const todayQuery = useOrders({ today: "true", status: "open" });
+  // Paid orders (pay-first) stay on the board while the kitchen is still cooking them.
+  const paidQuery = useOrders({ today: "true", status: "closed" });
   const summary = summaryQuery.data ?? null;
-  const todayOrders = todayQuery.data ?? [];
+  const paidInKitchen = (paidQuery.data ?? NO_ORDERS).filter((o) => {
+    const k = o.kitchen;
+    return !!k && k.pendingSent + k.preparing + k.ready > 0;
+  });
+  const todayOrders = [...(todayQuery.data ?? NO_ORDERS), ...paidInKitchen];
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const loadError = summaryQuery.error ?? todayQuery.error;
   const error = loadError ? extractErrorMessage(loadError) : null;
   const canOrders = can(profile, "orders", "edit");
 
   const dayStart = summary
-    ? new Date(summary.businessDayStart).toLocaleString([], { weekday: "short", hour: "2-digit", minute: "2-digit" })
+    ? new Date(summary.businessDayStart).toLocaleString([], {
+        weekday: "short",
+        hour: "2-digit",
+        minute: "2-digit",
+      })
     : null;
 
   const attention: AttentionItem[] = [];
@@ -131,21 +166,24 @@ export default function Dashboard() {
       {
         target: "dashboard-stats",
         title: "Today at a glance",
-        description: "Sales, open orders, paid orders and how many items are still in the kitchen - all for today.",
+        description:
+          "Sales, open orders, paid orders and how many items are still in the kitchen - all for today.",
       },
       ...(attention.length > 0
         ? [
             {
               target: "dashboard-attention",
               title: "Needs attention",
-              description: "Shortcuts to things that usually need a quick look: unpaid tables, unread guest messages, low stock.",
+              description:
+                "Shortcuts to things that usually need a quick look: unpaid tables, unread guest messages, low stock.",
             },
           ]
         : []),
       {
         target: "dashboard-open-orders",
         title: "Open orders",
-        description: "Every order still open today, grouped by dine-in/take-away/other. Click one to open its details.",
+        description:
+          "Every order still open today, grouped by dine-in/take-away/other. Click one to open its details.",
       },
       ...(canOrders
         ? [
@@ -157,12 +195,13 @@ export default function Dashboard() {
             {
               target: "dashboard-new-order",
               title: "New order",
-              description: "Start a dine-in, take-away or delivery order from here.",
+              description:
+                "Start a dine-in, take-away or delivery order from here.",
             },
           ]
         : []),
     ],
-    [attention.length, canOrders]
+    [attention.length, canOrders],
   );
   usePageTour(tourSteps);
 
@@ -170,15 +209,27 @@ export default function Dashboard() {
     <Page>
       <PageHeader
         title="Dashboard"
-        description={dayStart ? `Today started ${dayStart}, based on your day-end time.` : "Today at a glance."}
+        description={
+          dayStart
+            ? `Today started ${dayStart}, based on your day-end time.`
+            : "Today at a glance."
+        }
         actions={
           canOrders && (
             <>
-              <Link data-tour="dashboard-pos" to="/pos" className={buttonClass("secondary")}>
+              <Link
+                data-tour="dashboard-pos"
+                to="/pos"
+                className={buttonClass("secondary")}
+              >
                 <MonitorSmartphone size={16} aria-hidden="true" />
                 Open POS
               </Link>
-              <Link data-tour="dashboard-new-order" to="/admin/delivery/new" className={buttonClass("primary")}>
+              <Link
+                data-tour="dashboard-new-order"
+                to="/admin/delivery/new"
+                className={buttonClass("primary")}
+              >
                 <Plus size={16} aria-hidden="true" />
                 New order
               </Link>
@@ -188,31 +239,66 @@ export default function Dashboard() {
       />
       <ErrorText>{error}</ErrorText>
 
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4" data-tour="dashboard-stats">
+      <div
+        className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4"
+        data-tour="dashboard-stats"
+      >
         {summary ? (
           <>
-            <StatCard label="Sales today" value={`₹${summary.salesToday.toFixed(2)}`} icon={IndianRupee} tone="green" />
-            <StatCard label="Open orders" value={summary.openOrdersToday} icon={ClipboardList} tone="orange" />
-            <StatCard label="Paid orders" value={summary.closedOrdersToday} icon={CircleCheck} tone="blue" />
-            <StatCard label="Items in kitchen" value={summary.pendingKotItems} icon={CookingPot} tone="amber" />
+            <StatCard
+              label="Sales today"
+              value={`₹${summary.salesToday.toFixed(2)}`}
+              icon={IndianRupee}
+              tone="green"
+            />
+            <StatCard
+              label="Open orders"
+              value={summary.openOrdersToday}
+              icon={ClipboardList}
+              tone="orange"
+            />
+            <StatCard
+              label="Paid orders"
+              value={summary.closedOrdersToday}
+              icon={CircleCheck}
+              tone="blue"
+            />
+            <StatCard
+              label="Items in kitchen"
+              value={summary.itemsInKitchen ?? summary.pendingKotItems}
+              icon={CookingPot}
+              tone="amber"
+            />
           </>
         ) : (
-          Array.from({ length: 4 }, (_, i) => <Skeleton key={i} className="h-[104px] rounded-xl" />)
+          Array.from({ length: 4 }, (_, i) => (
+            <Skeleton key={i} className="h-[104px] rounded-xl" />
+          ))
         )}
       </div>
 
       {attention.length > 0 && (
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3" data-tour="dashboard-attention">
+        <div
+          className="grid gap-3 md:grid-cols-2 xl:grid-cols-3"
+          data-tour="dashboard-attention"
+        >
           {attention.map((a) => (
             <Attention key={a.to} {...a} />
           ))}
         </div>
       )}
 
-      <section className="flex flex-col gap-3" data-tour="dashboard-open-orders">
+      <section
+        className="flex flex-col gap-3"
+        data-tour="dashboard-open-orders"
+      >
         <div className="flex items-center justify-between">
-          <h2 className="text-base font-semibold text-slate-900">Open orders</h2>
-          {todayOrders.length > 0 && <Badge tone="orange">{todayOrders.length} open</Badge>}
+          <h2 className="text-base font-semibold text-slate-900">
+            Open orders
+          </h2>
+          {todayOrders.length > 0 && (
+            <Badge tone="orange">{todayOrders.length} open</Badge>
+          )}
         </div>
         {todayQuery.isLoading ? (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -231,15 +317,26 @@ export default function Dashboard() {
         ) : (
           <div className="flex flex-col gap-4">
             {ORDER_GROUPS.map((group) => {
-              const groupOrders = todayOrders.filter((o) => group.match(o.orderType));
+              const groupOrders = todayOrders.filter((o) =>
+                group.match(o.orderType),
+              );
               if (groupOrders.length === 0) return null;
               const isCollapsed = collapsed[group.key];
               const Icon = group.icon;
               return (
-                <Card key={group.key} padding="none" className="overflow-hidden">
+                <Card
+                  key={group.key}
+                  padding="none"
+                  className="overflow-hidden"
+                >
                   <button
                     type="button"
-                    onClick={() => setCollapsed((c) => ({ ...c, [group.key]: !c[group.key] }))}
+                    onClick={() =>
+                      setCollapsed((c) => ({
+                        ...c,
+                        [group.key]: !c[group.key],
+                      }))
+                    }
                     aria-expanded={!isCollapsed}
                     className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left hover:bg-slate-50 sm:px-5"
                   >
@@ -282,11 +379,16 @@ function OrderBox({ order }: { order: Order }) {
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="truncate font-semibold text-slate-900">{order.customerName || "Guest"}</p>
+          <p className="truncate font-semibold text-slate-900">
+            {order.customerName || "Guest"}
+          </p>
           <p className="text-sm text-slate-500">{orderTypeLabel(order)}</p>
         </div>
         <span className="shrink-0 text-xs font-medium text-slate-400 tabular-nums">
-          {new Date(order.checkinTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+          {new Date(order.checkinTime).toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          })}
         </span>
       </div>
       <div className="flex items-center justify-between gap-2">
