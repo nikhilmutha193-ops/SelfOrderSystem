@@ -82,6 +82,7 @@ const orderLineSchema = z.object({
     .int({ error: "quantity must be a whole number" })
     .min(1, { error: "quantity must be at least 1" }),
   isJain: z.boolean().nullish(),
+  isPacked: z.boolean().nullish(),
   note: z
     .string()
     .nullish()
@@ -156,6 +157,8 @@ const reason = z
 
 export const reasonSchema = z.object({ reason });
 
+export const packedSchema = z.object({ packed: z.boolean({ error: "Choose whether the item is packed" }) });
+
 export const cancelOrderSchema = z.object({ reason: blankToUndefined(reason) });
 
 export const generateBillSchema = z.object({
@@ -201,6 +204,11 @@ export const manualDiscountSchema = z.object({
   type: z.enum(["percent", "flat"], { error: "Choose percent or flat" }),
   value: z.number({ error: "Enter a discount value" }).positive({ error: "Enter a discount value" }),
   reason,
+});
+
+export const extraChargeSchema = z.object({
+  key: z.string({ error: "Choose a charge" }).min(1, "Choose a charge").max(40),
+  applied: z.boolean({ error: "applied must be true or false" }),
 });
 
 export const serviceChargeSchema = z.object({ waived: z.boolean({ error: "waived must be true or false" }) });

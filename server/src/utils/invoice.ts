@@ -18,6 +18,7 @@ export interface InvoiceTotals {
   serviceChargePercent: number;
   serviceCharge: number;
   packagingCharge: number;
+  extraCharges: { name: string; amount: number }[];
   taxableAmount: number;
   taxLines: InvoiceTaxLine[];
   roundOff: number;
@@ -29,6 +30,12 @@ export interface PricingInput {
   manualDiscount?: Pick<IManualDiscount, "type" | "value"> | null;
   loyaltyDiscount?: number;
   serviceChargePercent?: number;
+  /** Named extra charges that apply to this bill. */
+  extraCharges?: { name: string; type: "fixed" | "percent"; value: number }[];
+  /** When set (flat packaging mode) this replaces the per-dish packaging charges. */
+  flatPackaging?: number;
+  /** Staff removed packaging from this bill. */
+  packagingWaived?: boolean;
 }
 
 export function manualDiscountAmount(
@@ -41,7 +48,7 @@ export function manualDiscountAmount(
 }
 
 export type InvoiceItem = Pick<IOrderItem, "status" | "total"> &
-  Partial<Pick<IOrderItem, "quantity" | "packagingCharge" | "complimentary">>;
+  Partial<Pick<IOrderItem, "quantity" | "packagingCharge" | "complimentary" | "isPacked">>;
 
 export function packagingTotal(items: InvoiceItem[]): number {
   return round2(
@@ -68,8 +75,20 @@ export function computeInvoiceTotals(
 
   const serviceChargePercent = Math.max(input.serviceChargePercent ?? 0, 0);
   const serviceCharge = round2(((rawSubtotal - discount) * serviceChargePercent) / 100);
-  const packagingCharge = packagingTotal(items);
-  const taxableAmount = round2(rawSubtotal - discount + serviceCharge + packagingCharge);
+  const packagingCharge = input.packagingWaived
+    ? 0
+    : input.flatPackaging !== undefined
+      ? round2(Math.max(input.flatPackaging, 0))
+      : packagingTotal(items);
+  const extraBase = round2(rawSubtotal - discount);
+  const extraCharges = (input.extraCharges ?? [])
+    .map((c) => ({
+      name: c.name,
+      amount: round2(c.type === "percent" ? (extraBase * Math.max(c.value, 0)) / 100 : Math.max(c.value, 0)),
+    }))
+    .filter((c) => c.amount > 0);
+  const extraTotal = round2(extraCharges.reduce((sum, c) => sum + c.amount, 0));
+  const taxableAmount = round2(rawSubtotal - discount + serviceCharge + packagingCharge + extraTotal);
 
   const taxLines: InvoiceTaxLine[] = taxRates.map((rate) => ({
     name: rate.name,
@@ -90,6 +109,7 @@ export function computeInvoiceTotals(
     serviceChargePercent,
     serviceCharge,
     packagingCharge,
+    extraCharges,
     taxableAmount,
     taxLines,
     roundOff: round2(grandTotal - exactTotal),

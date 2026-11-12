@@ -112,6 +112,9 @@ export default function PublicBill() {
             <Row label={`Service charge (${totals.serviceChargePercent}%)`} value={rupees(totals.serviceCharge!)} />
           )}
           {(totals.packagingCharge ?? 0) > 0 && <Row label="Packaging" value={rupees(totals.packagingCharge!)} />}
+          {(totals.extraCharges ?? []).map((c) => (
+            <Row key={c.name} label={c.name} value={rupees(c.amount)} />
+          ))}
           {totals.taxLines.map((t) => (
             <Row key={t.name} label={`${t.name} ${t.percent}%`} value={rupees(t.amount)} />
           ))}

@@ -25,11 +25,47 @@ type PricingRestaurant = Pick<IRestaurant, "taxRates" | "billingSettings"> | nul
 
 const CHANGED_ELSEWHERE = "This order was just updated by someone else. Refresh and try again.";
 
-export function pricingFor(
-  order: Pick<IOrder, "discountAmount" | "manualDiscount" | "serviceChargeWaived" | "loyaltyRedeem">,
+/** The extra charges that apply to an order: automatic ones for its type (unless removed) and ones staff added. */
+export function extraChargesFor(
+  order: Pick<IOrder, "orderType" | "extraChargeKeys" | "extraChargesOff">,
   restaurant: PricingRestaurant
+) {
+  const added = new Set(order.extraChargeKeys ?? []);
+  const removed = new Set(order.extraChargesOff ?? []);
+  return (restaurant?.billingSettings?.extraCharges ?? []).filter(
+    (c) =>
+      c.active &&
+      (added.has(c.key) || (c.autoApply && c.orderTypes.includes(order.orderType) && !removed.has(c.key)))
+  );
+}
+
+export function pricingFor(
+  order: Pick<
+    IOrder,
+    | "orderType"
+    | "discountAmount"
+    | "manualDiscount"
+    | "serviceChargeWaived"
+    | "packagingWaived"
+    | "loyaltyRedeem"
+    | "extraChargeKeys"
+    | "extraChargesOff"
+  >,
+  restaurant: PricingRestaurant,
+  items?: InvoiceItem[]
 ): PricingInput {
+  const billing = restaurant?.billingSettings;
+  // Flat packaging: one amount per order when it is takeaway/delivery or a dish was marked Pack.
+  const flat =
+    billing?.packagingMode === "flat" && items
+      ? order.orderType !== "dine-in" || items.some((i) => i.status !== "cancelled" && i.isPacked)
+        ? (billing.packagingFlatCharge ?? 0)
+        : 0
+      : undefined;
   return {
+    packagingWaived: !!order.packagingWaived,
+    extraCharges: extraChargesFor(order, restaurant).map(({ name, type, value }) => ({ name, type, value })),
+    ...(flat !== undefined && { flatPackaging: flat }),
     couponDiscount: order.discountAmount,
     manualDiscount: order.manualDiscount,
     loyaltyDiscount: order.loyaltyRedeem?.amount ?? 0,
@@ -38,7 +74,18 @@ export function pricingFor(
 }
 
 export function totalsForOrder(
-  order: Pick<IOrder, "bill" | "discountAmount" | "manualDiscount" | "serviceChargeWaived" | "loyaltyRedeem">,
+  order: Pick<
+    IOrder,
+    | "bill"
+    | "orderType"
+    | "discountAmount"
+    | "manualDiscount"
+    | "serviceChargeWaived"
+    | "packagingWaived"
+    | "loyaltyRedeem"
+    | "extraChargeKeys"
+    | "extraChargesOff"
+  >,
   items: InvoiceItem[],
   restaurant: PricingRestaurant
 ): InvoiceTotals {
@@ -53,13 +100,14 @@ export function totalsForOrder(
       serviceChargePercent: bill.serviceChargePercent ?? 0,
       serviceCharge: bill.serviceCharge ?? 0,
       packagingCharge: bill.packagingCharge ?? 0,
+      extraCharges: (bill.extraCharges ?? []).map(({ name, amount }) => ({ name, amount })),
       taxableAmount: bill.taxableAmount,
       taxLines: bill.taxLines.map(({ name, percent, base, amount }) => ({ name, percent, base, amount })),
       roundOff: bill.roundOff,
       grandTotal: bill.grandTotal,
     };
   }
-  return computeInvoiceTotals(items, restaurant?.taxRates ?? [], pricingFor(order, restaurant));
+  return computeInvoiceTotals(items, restaurant?.taxRates ?? [], pricingFor(order, restaurant, items));
 }
 
 export function snapshotFromTotals(
@@ -77,6 +125,7 @@ export function snapshotFromTotals(
     serviceChargePercent: totals.serviceChargePercent,
     serviceCharge: totals.serviceCharge,
     packagingCharge: totals.packagingCharge,
+    extraCharges: totals.extraCharges,
     couponCode,
     taxableAmount: totals.taxableAmount,
     taxLines: totals.taxLines,
@@ -157,7 +206,7 @@ async function billOpenOrder(ctx: RequestContext, repo: OrdersRepository, order:
   }
 
   const totals = computeInvoiceTotals(items, restaurant.taxRates, {
-    ...pricingFor(order, restaurant),
+    ...pricingFor(order, restaurant, items),
     couponDiscount,
   });
   const prefix = restaurant.invoiceSettings?.invoicePrefix || "INV";

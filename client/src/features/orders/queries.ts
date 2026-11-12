@@ -36,6 +36,16 @@ export function useOrders(filters: OrderFilters, options: { enabled?: boolean; r
   });
 }
 
+/** The guest's own orders in this table session, newest last. */
+export function useMyOrders(enabled: boolean, refetchInterval?: number) {
+  return useQuery({
+    queryKey: ["orders", "mine"],
+    queryFn: () => ordersApi.mine(),
+    enabled,
+    refetchInterval,
+  });
+}
+
 export function useOrder(orderId: string | undefined, refetchInterval?: number) {
   return useQuery({
     queryKey: orderKeys.detail(orderId ?? ""),
@@ -76,6 +86,12 @@ export function usePayOrder() {
 export function useCancelOrder() {
   return useOrderMutation(({ orderId, reason }: { orderId: string; reason?: string }) =>
     ordersApi.cancel(orderId, reason)
+  );
+}
+
+export function useSetItemPacked() {
+  return useOrderMutation(({ itemId, packed }: { itemId: string; packed: boolean }) =>
+    ordersApi.setPacked(itemId, packed)
   );
 }
 
@@ -162,6 +178,18 @@ export function useSetDiscount() {
 export function useSetServiceCharge() {
   return useOrderMutation(({ orderId, waived }: { orderId: string; waived: boolean }) =>
     ordersApi.setServiceCharge(orderId, waived)
+  );
+}
+
+export function useSetPackagingWaived() {
+  return useOrderMutation(({ orderId, waived }: { orderId: string; waived: boolean }) =>
+    ordersApi.setPackagingWaived(orderId, waived)
+  );
+}
+
+export function useSetExtraCharge() {
+  return useOrderMutation(({ orderId, key, applied }: { orderId: string; key: string; applied: boolean }) =>
+    ordersApi.setExtraCharge(orderId, key, applied)
   );
 }
 

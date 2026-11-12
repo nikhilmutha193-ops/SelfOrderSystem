@@ -64,6 +64,9 @@ import {
   useOrderCoupons,
   useRemoveCoupon,
   useReopenBill,
+  useSetExtraCharge,
+  useSetPackagingWaived,
+  useSetServiceCharge,
   useVoidBill,
 } from "../queries";
 import { orderStatusBadge, orderTypeLabel } from "../status";
@@ -117,6 +120,9 @@ export default function OrderDetail({
   const cancelOrder = useCancelOrder();
   const generateBill = useGenerateBill();
   const reopenBill = useReopenBill();
+  const serviceCharge = useSetServiceCharge();
+  const packagingCharge = useSetPackagingWaived();
+  const extraChargeMutation = useSetExtraCharge();
   const voidBill = useVoidBill();
   const applyCoupon = useApplyCoupon();
   const removeOrderCoupon = useRemoveCoupon();
@@ -174,6 +180,7 @@ export default function OrderDetail({
             quantity: l.quantity,
             note: l.note || undefined,
             isJain: l.isJain || undefined,
+            isPacked: l.isPacked || undefined,
             modifiers: l.modifiers.map(({ groupName, label }) => ({ groupName, label })),
           })),
         ],
@@ -330,6 +337,16 @@ export default function OrderDetail({
   if (!data) return <p className="text-sm text-slate-500">Loading...</p>;
 
   const { order, items, totals } = data;
+  const canEditCharges = order.status === "open";
+  const chargeBusy = serviceCharge.isPending || packagingCharge.isPending || extraChargeMutation.isPending;
+  async function runCharge(action: () => Promise<unknown>) {
+    setActionError(null);
+    try {
+      await action();
+    } catch (err) {
+      setActionError(extractErrorMessage(err));
+    }
+  }
   const prepMessage =
     order.status === "open"
       ? renderPrepMessage(data.prepMessageTemplate, order.estimatedReadyAt, items, data.prepBufferMinutes)
@@ -400,6 +417,7 @@ export default function OrderDetail({
                   >
                     {item.foodName}
                     {item.isJain && <span className="text-xs font-semibold text-emerald-700">Jain</span>}
+                    {item.isPacked && <Badge tone="blue">Pack</Badge>}
                     {item.complimentary && <Badge tone="green">On the house</Badge>}
                   </p>
                   {extras && <p className="truncate text-xs text-slate-500">{extras}</p>}
@@ -476,9 +494,9 @@ export default function OrderDetail({
                 <li key={l.id} className="flex items-start justify-between gap-2">
                   <span className="min-w-0 text-slate-800">
                     <span className="font-semibold">{l.quantity}×</span> {l.food.name}
-                    {(l.isJain || l.modifiers.length > 0 || l.note) && (
+                    {(l.isJain || l.isPacked || l.modifiers.length > 0 || l.note) && (
                       <span className="block text-xs text-slate-500">
-                        {[l.isJain ? "Jain" : "", ...l.modifiers.map((m) => m.label), l.note]
+                        {[l.isJain ? "Jain" : "", l.isPacked ? "Pack" : "", ...l.modifiers.map((m) => m.label), l.note]
                           .filter(Boolean)
                           .join(", ")}
                       </span>
@@ -508,6 +526,7 @@ export default function OrderDetail({
         </div>
       )}
       <DishDialog
+        allowPack
         food={customizing}
         onClose={() => setCustomizing(null)}
         onAdd={(food, payload: DishAddPayload) => {
@@ -519,6 +538,7 @@ export default function OrderDetail({
               quantity: payload.quantity,
               note: payload.note,
               isJain: payload.isJain,
+              isPacked: payload.isPacked,
               modifiers: payload.modifiers,
             },
           ]);
@@ -645,18 +665,39 @@ export default function OrderDetail({
             <dd className="tabular-nums">-₹{(totals.loyaltyDiscount ?? 0).toFixed(2)}</dd>
           </div>
         )}
-        {(totals.serviceCharge ?? 0) > 0 && (
-          <div className="flex justify-between text-slate-600">
-            <dt>Service charge ({totals.serviceChargePercent}%)</dt>
-            <dd className="tabular-nums">₹{(totals.serviceCharge ?? 0).toFixed(2)}</dd>
-          </div>
+        {((totals.serviceCharge ?? 0) > 0 || order.serviceChargeWaived) && (
+          <ChargeRow
+            label={`Service charge (${totals.serviceChargePercent ?? 0}%)`}
+            amount={order.serviceChargeWaived ? null : (totals.serviceCharge ?? 0)}
+            actionLabel={canEditCharges ? (order.serviceChargeWaived ? "Add back" : "Remove") : undefined}
+            busy={chargeBusy}
+            onAction={() => runCharge(() => serviceCharge.mutateAsync({ orderId: order._id, waived: !order.serviceChargeWaived }))}
+          />
         )}
-        {(totals.packagingCharge ?? 0) > 0 && (
-          <div className="flex justify-between text-slate-600">
-            <dt>Packaging</dt>
-            <dd className="tabular-nums">₹{(totals.packagingCharge ?? 0).toFixed(2)}</dd>
-          </div>
+        {((totals.packagingCharge ?? 0) > 0 || order.packagingWaived) && (
+          <ChargeRow
+            label="Packaging"
+            amount={order.packagingWaived ? null : (totals.packagingCharge ?? 0)}
+            actionLabel={canEditCharges ? (order.packagingWaived ? "Add back" : "Remove") : undefined}
+            busy={chargeBusy}
+            onAction={() => runCharge(() => packagingCharge.mutateAsync({ orderId: order._id, waived: !order.packagingWaived }))}
+          />
         )}
+        {canEditCharges
+          ? (data.extraChargeOptions ?? []).map((charge) => (
+              <ChargeRow
+                key={charge.key}
+                label={charge.name}
+                amount={charge.applied ? (totals.extraCharges ?? []).find((c) => c.name === charge.name)?.amount ?? 0 : null}
+                note={charge.applied ? undefined : charge.type === "percent" ? `${charge.value}%` : `₹${charge.value}`}
+                actionLabel={charge.applied ? "Remove" : "Add"}
+                busy={chargeBusy}
+                onAction={() =>
+                  runCharge(() => extraChargeMutation.mutateAsync({ orderId: order._id, key: charge.key, applied: !charge.applied }))
+                }
+              />
+            ))
+          : (totals.extraCharges ?? []).map((c) => <ChargeRow key={c.name} label={c.name} amount={c.amount} busy={false} />)}
         <div className="flex justify-between text-slate-600">
           <dt>Taxable value</dt>
           <dd className="tabular-nums">₹{totals.taxableAmount.toFixed(2)}</dd>
@@ -929,12 +970,50 @@ export default function OrderDetail({
   );
 }
 
+/** One charge line in the bill totals, with a small Remove / Add button while the order is open. */
+function ChargeRow({
+  label,
+  amount,
+  note,
+  actionLabel,
+  busy,
+  onAction,
+}: {
+  label: string;
+  /** null = the charge is off for this bill. */
+  amount: number | null;
+  note?: string;
+  actionLabel?: string;
+  busy: boolean;
+  onAction?: () => void;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-2 text-slate-600">
+      <dt className={`min-w-0 truncate ${amount === null ? "text-slate-400" : ""}`}>{label}</dt>
+      <dd className="flex shrink-0 items-center gap-2">
+        <span className="tabular-nums">{amount === null ? (note ?? "removed") : `₹${amount.toFixed(2)}`}</span>
+        {actionLabel && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onAction}
+            className="rounded-md border border-slate-300 px-2 py-0.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+          >
+            {actionLabel}
+          </button>
+        )}
+      </dd>
+    </div>
+  );
+}
+
 interface CustomLine {
   id: string;
   food: MenuFoodItem;
   quantity: number;
   note: string;
   isJain: boolean;
+  isPacked?: boolean;
   modifiers: SelectedModifier[];
 }
 

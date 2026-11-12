@@ -416,6 +416,13 @@ export async function streamInvoicePdf(
         ]);
         doc.y = ty + 2;
       }
+      for (const extra of totals.extraCharges ?? []) {
+        ty = drawRow(doc, x0, doc.y, [
+          { text: extra.name, width: totalsLabelWidth },
+          { text: extra.amount.toFixed(2), width: totalsAmountWidth, align: "right" },
+        ]);
+        doc.y = ty + 2;
+      }
 
       ty = drawRow(doc, x0, doc.y, [
         { text: "Taxable value", width: totalsLabelWidth },
@@ -632,7 +639,7 @@ export async function streamKotPdf(
     drawSeparator(doc, x0, usableWidth);
 
     items.forEach((item, idx) => {
-      const name = item.foodName + (showJainTag && item.isJain ? " (Jain)" : "");
+      const name = item.foodName + (showJainTag && item.isJain ? " (Jain)" : "") + (item.isPacked ? " (PACK)" : "");
       const rowCols: Column[] = showPrices
         ? [
             { text: String(idx + 1), width: colWidths[0] },

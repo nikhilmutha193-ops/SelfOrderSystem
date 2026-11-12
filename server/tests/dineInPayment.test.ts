@@ -1,8 +1,10 @@
 import { beforeAll, describe, expect, it } from "vitest";
 
+import Order from "../src/models/Order";
 import OrderItem from "../src/models/OrderItem";
 import Restaurant from "../src/models/Restaurant";
 import TableModel from "../src/models/Table";
+import { releaseServedPayFirstTables } from "../src/utils/tableReleaseScheduler";
 import { api, bearer, counterOrder, createWorld, loginAdmin, loginChef, seatTable, World } from "./fixtures";
 
 let world: World;
@@ -155,5 +157,79 @@ describe("paying when ordering", () => {
   it("keeps the release endpoint to staff with Orders access", async () => {
     const chefTry = await api().patch(`/api/pos/tables/${world.tableIds[2]}/release`).set(bearer(chef));
     expect(chefTry.status).toBe(403);
+  });
+});
+
+describe("ordering again after paying", () => {
+  it("lets a guest start a second order on the same table session and see both with their tokens", async () => {
+    await setDineInPayment("upfront");
+    const first = await seatTable(3);
+    await api()
+      .post(`/api/orders/${first.orderId}/items`)
+      .set(bearer(first.token))
+      .send({ items: [{ foodItemId: world.food.dosa, quantity: 1 }] });
+    expect((await pay(first.orderId)).status).toBe(200);
+
+    // Same sign-in: a new order starts for the next round.
+    const next = await api()
+      .post("/api/orders/dine-in")
+      .set(bearer(first.token))
+      .send({ customerName: "Asha", members: 2 });
+    expect(next.status).toBe(201);
+    expect(next.body.order._id).not.toBe(first.orderId);
+    const token2 = next.body.token as string;
+    await api()
+      .post(`/api/orders/${next.body.order._id}/items`)
+      .set(bearer(token2))
+      .send({ items: [{ foodItemId: world.food.vada, quantity: 1 }] });
+    await pay(next.body.order._id);
+
+    const mine = await api().get("/api/orders/session/mine").set(bearer(token2));
+    expect(mine.status).toBe(200);
+    expect(mine.body.map((o: { orderId: string }) => o.orderId)).toEqual([first.orderId, next.body.order._id]);
+    expect(mine.body.map((o: { current: boolean }) => o.current)).toEqual([false, true]);
+    const tokens = mine.body.map((o: { tokens: number[] }) => o.tokens[0]);
+    expect(tokens[0]).toBeDefined();
+    expect(tokens[1]).toBeGreaterThan(tokens[0]);
+
+    // The earlier order can still be opened from the new session token, but not by another table.
+    expect((await api().get(`/api/orders/${first.orderId}`).set(bearer(token2))).status).toBe(200);
+    const other = await seatTable(2);
+    expect((await api().get(`/api/orders/${first.orderId}`).set(bearer(other.token))).status).toBe(403);
+    await setDineInPayment("after");
+  });
+});
+
+describe("releasing a paid and served table", () => {
+  it("frees the table two minutes after every dish is paid for and served, not before", async () => {
+    await setDineInPayment("upfront");
+    const seat = await seatTable(2);
+    await api()
+      .post(`/api/orders/${seat.orderId}/items`)
+      .set(bearer(seat.token))
+      .send({ items: [{ foodItemId: world.food.dosa, quantity: 1 }] });
+    expect((await pay(seat.orderId)).status).toBe(200);
+
+    // Paid but not served yet: the table stays.
+    const old = new Date(Date.now() - 10 * 60 * 1000);
+    const backdate = async () => {
+      await OrderItem.collection.updateMany({}, { $set: { updatedAt: old } });
+      await Order.collection.updateMany({}, { $set: { updatedAt: old } });
+    };
+    await backdate();
+    await releaseServedPayFirstTables();
+    expect(await tableStatus(1)).toBe("occupied");
+
+    // Served just now: still inside the two minutes.
+    const [item] = await OrderItem.find({ orderId: seat.orderId });
+    await api().patch(`/api/orders/items/${item._id}/serve`).set(bearer(owner));
+    await releaseServedPayFirstTables();
+    expect(await tableStatus(1)).toBe("occupied");
+
+    // Served more than two minutes ago: released.
+    await backdate();
+    await releaseServedPayFirstTables();
+    expect(await tableStatus(1)).toBe("available");
+    await setDineInPayment("after");
   });
 });

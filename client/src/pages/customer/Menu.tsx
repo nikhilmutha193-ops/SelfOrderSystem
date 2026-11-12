@@ -13,7 +13,7 @@ import ChatFab from "../../features/chat/components/ChatFab";
 import QuickRequests from "../../features/chat/components/QuickRequests";
 import { useSendChatMessage } from "../../features/chat/queries";
 import { ordersApi } from "../../features/orders/api";
-import { useAddOrderItems, useOrder } from "../../features/orders/queries";
+import { useAddOrderItems, useMyOrders, useOrder } from "../../features/orders/queries";
 import { LANGS, loadLang, saveLang, tr, ui, type Lang } from "../../lib/i18n";
 import { newId } from "../../lib/id";
 import { suggestionsFor } from "../../lib/recommendations";
@@ -21,6 +21,8 @@ import type { CartLine, MenuCategory, MenuFoodItem, MenuRecommendations } from "
 import { useDineInPayment } from "../../lib/useDineInPayment";
 import { useGuestAccess } from "../../lib/useGuestAccess";
 import { TokenTrackDialog, useTokenTrackAllowed } from "../../components/TokenTrackDialog";
+import { ServedReleasePrompt } from "../../components/ServedReleasePrompt";
+import { useServiceFlow } from "../../lib/useServiceFlow";
 import { useTableSession } from "../../lib/useTableSession";
 import { api, clearStoredToken, extractErrorMessage, setActiveAuth, storeToken } from "../../shared/api/client";
 import { POLL } from "../../shared/api/queryClient";
@@ -113,7 +115,10 @@ export default function Menu() {
   const access = useGuestAccess();
   const addOrderItems = useAddOrderItems();
   const orderQuery = useOrder(orderId, POLL.guestInvoice);
-  const payFirst = useDineInPayment() === "upfront";
+  // The cafe flow is pay-first too (the public setting only holds the dine-in choice).
+  const dineInPayment = useDineInPayment();
+  const serviceFlow = useServiceFlow();
+  const payFirst = dineInPayment === "upfront" || serviceFlow === "cafe";
   // Paying when ordering: once an order is paid, the guest's next order is a new one.
   const paidOrder = payFirst && orderQuery.data?.order.status === "closed" ? orderQuery.data.order : null;
   const billReady = !!orderQuery.data && orderQuery.data.order.status !== "open" && !paidOrder;
@@ -129,7 +134,27 @@ export default function Menu() {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [optionsOpen, setOptionsOpen] = useState(false);
   const [trackOpen, setTrackOpen] = useState(false);
-  const canTrackToken = useTokenTrackAllowed() && via !== "token";
+  // Only for a table that has no order yet; once an order exists, "My order" already shows it.
+  // The table code is known from the sign-in, so it shows before the first order exists.
+  const ownTable = useQuery({
+    queryKey: ["guest", "table", tableId ?? ""],
+    queryFn: () => api.get<{ code: string | null }>("/tables/session").then((res) => res.data),
+    enabled: !!tableId,
+    staleTime: 5 * 60_000,
+  });
+  const myOrders = useMyOrders(!!orderId && via !== "token", POLL.guestInvoice).data;
+  const tableCode = orderQuery.data?.tableCode ?? ownTable.data?.code ?? null;
+  // Every round of this table session has its own token, so show them all.
+  const tokenNumbers = [
+    ...new Set([
+      ...(orderQuery.data?.items ?? [])
+        .filter((i) => i.status !== "cancelled" && i.tokenNumber != null)
+        .map((i) => i.tokenNumber as number),
+      ...(myOrders ?? []).filter((o) => o.status !== "cancelled").flatMap((o) => o.tokens),
+    ]),
+  ].sort((a, b) => a - b);
+  const tokenText = tokenNumbers.length ? `${tokenNumbers.length > 1 ? "Tokens" : "Token"} ${tokenNumbers.join(", ")}` : "";
+  const canTrackToken = useTokenTrackAllowed() && via !== "token" && !orderId;
   const [guestOpen, setGuestOpen] = useState(false);
   const [pendingRequest, setPendingRequest] = useState<string | null>(null);
   const sendChat = useSendChatMessage();
@@ -198,7 +223,7 @@ export default function Menu() {
   const cartCount = useMemo(() => cart.reduce((sum, l) => sum + l.quantity, 0), [cart]);
 
   // The "plain" line for a dish: no modifiers and no note. Customized picks live on their own lines.
-  const isPlain = (l: CartLine) => (!l.modifiers || l.modifiers.length === 0) && !l.note && !l.isJain;
+  const isPlain = (l: CartLine) => (!l.modifiers || l.modifiers.length === 0) && !l.note && !l.isJain && !l.isPacked;
 
   // Cart lines keep the English name; show them in the guest's language when the dish has a translation.
   function lineName(line: CartLine) {
@@ -255,6 +280,7 @@ export default function Menu() {
         modifiers: payload.modifiers,
         note: payload.note || undefined,
         isJain: payload.isJain || undefined,
+        isPacked: payload.isPacked || undefined,
       },
     ]);
   }
@@ -277,6 +303,7 @@ export default function Menu() {
         quantity: l.quantity,
         note: l.note,
         isJain: l.isJain || undefined,
+        isPacked: l.isPacked || undefined,
         modifiers: l.modifiers?.map((m) => ({
           groupName: m.groupName,
           label: m.label,
@@ -354,14 +381,10 @@ export default function Menu() {
     }
   }
 
-  // A quick request ("call waiter", ...) before the first order: chat needs an order, so collect the
-  // required details first, exactly as when placing an order.
+  // A quick request ("call waiter", ...) before the first order: chat needs an order, so one is started
+  // for the table without asking for personal details (those are only asked when placing an order).
   async function requestWithoutOrder(message: string) {
     setPendingRequest(message);
-    if (Object.values(access.required).some(Boolean)) {
-      setGuestOpen(true);
-      return;
-    }
     try {
       await startOrderAndPlace({ customerName: "Guest", members: 1 }, message);
     } catch (err) {
@@ -493,6 +516,7 @@ export default function Menu() {
   return (
     <div className="mx-auto max-w-3xl pb-32">
       <TokenTrackDialog forceOpen={trackOpen} onForceClose={() => setTrackOpen(false)} />
+      <ServedReleasePrompt />
       {billReady && (
         <div className="flex flex-wrap items-center justify-between gap-3 bg-blue-50 px-4 py-3 text-sm text-blue-900">
           <span>
@@ -514,6 +538,16 @@ export default function Menu() {
             <p className="text-xs text-slate-500">
               {access.showMenu ? ui(lang, "tapDish") : "Tell us how we are doing"}
             </p>
+            {(tableCode || tokenText) && (
+              <p className="mt-1 flex flex-wrap gap-1.5 text-xs font-semibold">
+                {tableCode && (
+                  <span className="rounded-md bg-slate-100 px-2 py-0.5 text-slate-700">Table {tableCode}</span>
+                )}
+                {tokenText && (
+                  <span className="rounded-md bg-orange-50 px-2 py-0.5 text-orange-800">{tokenText}</span>
+                )}
+              </p>
+            )}
           </div>
           <div className="relative flex items-center gap-2">
             {canTrackToken && (
@@ -819,6 +853,7 @@ export default function Menu() {
       </div>
 
       <DishDialog
+        allowPack
         food={detailFood}
         lang={lang}
         canOrder={access.placeOrder}
@@ -929,9 +964,9 @@ export default function Menu() {
                       <span className="truncate">
                         {lineName(line)} <span className="text-slate-400">x {line.quantity}</span>
                       </span>
-                      {(line.modifiers?.length || line.note || line.isJain) && (
+                      {(line.modifiers?.length || line.note || line.isJain || line.isPacked) && (
                         <span className="block truncate text-xs text-slate-400">
-                          {[line.isJain ? "Jain" : "", ...(line.modifiers?.map((m) => m.label) ?? []), line.note]
+                          {[line.isJain ? "Jain" : "", line.isPacked ? "Pack" : "", ...(line.modifiers?.map((m) => m.label) ?? []), line.note]
                             .filter(Boolean)
                             .join(", ")}
                         </span>
@@ -1012,9 +1047,9 @@ export default function Menu() {
                     <span className="block truncate font-medium">
                       {lineName(line)} <span className="font-normal text-slate-400">x {line.quantity}</span>
                     </span>
-                    {(line.modifiers?.length || line.note || line.isJain) && (
+                    {(line.modifiers?.length || line.note || line.isJain || line.isPacked) && (
                       <span className="block truncate text-xs text-slate-400">
-                        {[line.isJain ? "Jain" : "", ...(line.modifiers?.map((m) => m.label) ?? []), line.note]
+                        {[line.isJain ? "Jain" : "", line.isPacked ? "Pack" : "", ...(line.modifiers?.map((m) => m.label) ?? []), line.note]
                           .filter(Boolean)
                           .join(", ")}
                       </span>

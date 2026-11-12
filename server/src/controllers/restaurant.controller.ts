@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import { randomUUID } from "crypto";
 
 import { Types } from "mongoose";
 import { asyncHandler } from "../middleware/errorHandler";
@@ -6,6 +7,7 @@ import { IOrder } from "../models/Order";
 import { IOrderItem } from "../models/OrderItem";
 import Restaurant, {
   IBillingSettings,
+  IExtraCharge,
   IInvoiceSettings,
   IKotSettings,
   IQrSettings,
@@ -69,6 +71,31 @@ async function buildPreviewRestaurant(req: Request, overrides: Record<string, un
 /** Token sign-in follows the admin switch; until it is set, it is on in the cafe flow only. */
 export function tokenLoginAllowed(restaurant: Pick<IRestaurant, "tableLoginSettings" | "serviceFlow"> | null): boolean {
   return restaurant?.tableLoginSettings?.allowTokenLogin ?? restaurant?.serviceFlow === "cafe";
+}
+
+const ORDER_TYPES = ["dine-in", "takeaway", "delivery"];
+
+/** Validates the extra-charges list from Settings and gives new rows a stable key. */
+function cleanExtraCharges(raw: unknown): IExtraCharge[] {
+  if (!Array.isArray(raw)) throw new HttpError(400, "Extra charges must be a list");
+  if (raw.length > 10) throw new HttpError(400, "You can set up at most 10 extra charges");
+  const names = new Set<string>();
+  return raw.map((row) => {
+    const name = String(row?.name ?? "").trim();
+    if (!name || name.length > 40) throw new HttpError(400, "Each extra charge needs a name of up to 40 characters");
+    if (names.has(name.toLowerCase())) throw new HttpError(400, `"${name}" is listed twice`);
+    names.add(name.toLowerCase());
+    const type: "fixed" | "percent" = row?.type === "percent" ? "percent" : "fixed";
+    const value = Number(row?.value);
+    if (!Number.isFinite(value) || value < 0 || (type === "percent" ? value > 100 : value > 100000)) {
+      throw new HttpError(400, `Enter a valid amount for "${name}"`);
+    }
+    const orderTypes = Array.isArray(row?.orderTypes)
+      ? ([...new Set((row.orderTypes as unknown[]).map(String).filter((t) => ORDER_TYPES.includes(t)))] as IExtraCharge["orderTypes"])
+      : [];
+    const key = typeof row?.key === "string" && /^[A-Za-z0-9_-]{4,40}$/.test(row.key) ? row.key : randomUUID().slice(0, 8);
+    return { key, name, type, value, orderTypes, autoApply: !!row?.autoApply, active: row?.active !== false };
+  });
 }
 
 export const getRestaurantPublic = asyncHandler(async (req: Request, res: Response) => {
@@ -273,6 +300,19 @@ export const updateRestaurantSettings = asyncHandler(async (req: Request, res: R
   }
   if (billingSettings !== undefined) {
     const { serviceChargePercent, maxStaffDiscountPercent, upiVpa, upiPayeeName, dineInPayment } = billingSettings;
+    const { packagingMode, packagingFlatCharge } = billingSettings;
+    if (packagingMode !== undefined && packagingMode !== "perPlate" && packagingMode !== "flat") {
+      throw new HttpError(400, "Choose whether packaging is charged per plate or once per order");
+    }
+    if (
+      packagingFlatCharge !== undefined &&
+      (typeof packagingFlatCharge !== "number" || !(packagingFlatCharge >= 0) || packagingFlatCharge > 10000)
+    ) {
+      throw new HttpError(400, "Packaging charge must be between ₹0 and ₹10,000");
+    }
+    if (billingSettings.extraCharges !== undefined) {
+      billingSettings.extraCharges = cleanExtraCharges(billingSettings.extraCharges);
+    }
     if (dineInPayment !== undefined && dineInPayment !== "after" && dineInPayment !== "upfront") {
       throw new HttpError(400, "Choose whether dine-in guests pay after eating or when ordering");
     }

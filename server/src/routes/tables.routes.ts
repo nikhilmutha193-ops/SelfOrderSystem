@@ -3,6 +3,7 @@ import { Router } from "express";
 import {
   createTable,
   deleteTable,
+  getOwnTable,
   getTableLoginSettings,
   listAvailableTables,
   listCaptains,
@@ -19,6 +20,7 @@ const router = Router();
 
 router.get("/available", listAvailableTables);
 // Guest self-service: end my own not-yet-ordered table session (e.g. "Change table"/"Back").
+router.get("/session", requireAuth("table"), getOwnTable);
 router.patch("/session/release", requireAuth("table"), releaseOwnTableSession);
 
 router.get("/", requireAuth("admin"), requireModule("tables"), listTables);

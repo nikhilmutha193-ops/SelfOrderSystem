@@ -14,7 +14,7 @@ import { CustomerPanel } from "../../customers/components/CustomerPanel";
 import { kitchenApi, openPdfInTab } from "../../kitchen/api";
 import { ordersApi } from "../../orders/api";
 import SettleDialog from "../../orders/components/SettleDialog";
-import { orderKeys, refreshOrderData } from "../../orders/queries";
+import { orderKeys, refreshOrderData, useSetItemPacked } from "../../orders/queries";
 import { usePrintingStatus } from "../../printing/queries";
 import { MenuGrid } from "../components/MenuGrid";
 import { OfflineBar } from "../components/OfflineBar";
@@ -130,6 +130,7 @@ export default function Pos() {
       (billing?.dineInPayment === "upfront" &&
         (activeDetail ? activeDetail.order.orderType === "dine-in" : !!tableId && mode !== "takeaway")));
   const releaseTable = useReleasePosTable();
+  const setPacked = useSetItemPacked();
   const menu = pricedMenu(rawMenu, mode === "takeaway" ? { orderType: "takeaway" } : { orderType: "dine-in", areaId });
   const term = search.trim();
   const visibleItems = filterMenu(menu, search, category);
@@ -674,6 +675,11 @@ export default function Pos() {
             onCustomerName={setCustomerName}
             onDraftQuantity={cart.changeQuantity}
             onDraftRemove={cart.removeLine}
+            onTogglePacked={(item) =>
+              void run(async () => {
+                await setPacked.mutateAsync({ itemId: item._id, packed: !item.isPacked });
+              })
+            }
             onSaveKot={saveAndKot}
             onHold={(mode === "takeaway" || payFirst || cafe) && !offlineFlow ? hold : null}
             payFirst={payFirst}
@@ -712,11 +718,19 @@ export default function Pos() {
       )}
 
       <DishDialog
+        allowPack
         food={dishFor}
         onClose={() => setDishFor(null)}
         onAdd={(food, payload) => {
           const item = menu.items.find((i) => i._id === food._id);
-          if (item) cart.addLine(item, payload.quantity, payload.modifiers, payload.note.trim(), payload.isJain);
+          if (item) cart.addLine(
+              item,
+              payload.quantity,
+              payload.modifiers,
+              payload.note.trim(),
+              payload.isJain,
+              payload.isPacked,
+            );
           setDishFor(null);
         }}
       />

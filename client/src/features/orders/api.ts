@@ -1,5 +1,6 @@
 import { newId } from "../../lib/id";
 import type {
+  MyOrder,
   DeliveryProvider,
   InvoiceRegisterRow,
   ItemCancelReason,
@@ -35,6 +36,7 @@ export interface NewOrderLine {
   quantity: number;
   note?: string;
   isJain?: boolean;
+  isPacked?: boolean;
   modifiers?: { groupName: string; label: string }[];
 }
 
@@ -65,6 +67,7 @@ const once = () => ({ headers: { "Idempotency-Key": newId() } });
 export const ordersApi = {
   list: (filters: OrderFilters) => api.get<Order[]>("/orders", { params: filters }).then((res) => res.data),
   get: (orderId: string) => api.get<OrderDetailResponse>(`/orders/${orderId}`).then((res) => res.data),
+  mine: () => api.get<MyOrder[]>("/orders/session/mine").then((res) => res.data),
   invoice: (orderId: string) => api.get<OrderDetailResponse>(`/orders/${orderId}/invoice`).then((res) => res.data),
   invoicePdf: (orderId: string) =>
     api.get<Blob>(`/orders/${orderId}/invoice/pdf`, { responseType: "blob" }).then((res) => res.data),
@@ -112,6 +115,12 @@ export const ordersApi = {
   removeDiscount: (orderId: string) => api.delete<Order>(`/orders/${orderId}/discount`).then((res) => res.data),
   setServiceCharge: (orderId: string, waived: boolean) =>
     api.put<Order>(`/orders/${orderId}/service-charge`, { waived }).then((res) => res.data),
+  setPackagingWaived: (orderId: string, waived: boolean) =>
+    api.put<Order>(`/orders/${orderId}/packaging`, { waived }).then((res) => res.data),
+  setExtraCharge: (orderId: string, key: string, applied: boolean) =>
+    api.put(`/orders/${orderId}/extra-charges`, { key, applied }).then((res) => res.data),
+  setPacked: (itemId: string, packed: boolean) =>
+    api.patch<OrderItem>(`/orders/items/${itemId}/packed`, { packed }).then((res) => res.data),
   complimentary: (itemId: string, reason: string) =>
     api.patch<OrderItem>(`/orders/items/${itemId}/complimentary`, { reason }).then((res) => res.data),
   freeTables: () => api.get<{ _id: string; code: string }[]>("/tables/available").then((res) => res.data),

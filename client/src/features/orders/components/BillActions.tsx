@@ -1,4 +1,4 @@
-import { ArrowRightLeft, BadgePercent, Combine, HandCoins, Split, X } from "lucide-react";
+import { ArrowRightLeft, BadgePercent, Combine, Split, X } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -11,7 +11,6 @@ import {
   useMergeOrder,
   useOrders,
   useSetDiscount,
-  useSetServiceCharge,
   useSplitOrder,
   useTransferOrder,
 } from "../queries";
@@ -66,7 +65,7 @@ function ActionDialog({
 }
 
 export default function BillActions({ data }: { data: OrderDetailResponse }) {
-  const { order, items, totals } = data;
+  const { order, items } = data;
   const navigate = useNavigate();
   const [panel, setPanel] = useState<Panel>(null);
   const [error, setError] = useState<string | null>(null);
@@ -80,14 +79,12 @@ export default function BillActions({ data }: { data: OrderDetailResponse }) {
   const merge = useMergeOrder();
   const move = useTransferOrder();
   const discount = useSetDiscount();
-  const serviceCharge = useSetServiceCharge();
   const unpaid = useOrders({ status: "open" }, { enabled: panel === "merge" });
   const freeTables = useFreeTables(panel === "move");
 
   const isOpen = order.status === "open";
   const activeItems = items.filter((i) => i.status !== "cancelled");
   const canMove = order.orderType === "dine-in" && (order.status === "open" || order.status === "billed");
-  const hasServiceCharge = (totals.serviceChargePercent ?? 0) > 0 || !!order.serviceChargeWaived;
   if (!isOpen && !canMove) return null;
 
   function openPanel(next: Panel) {
@@ -140,18 +137,6 @@ export default function BillActions({ data }: { data: OrderDetailResponse }) {
             onClick={() => run(() => discount.mutateAsync({ orderId: order._id, input: null }))}
           >
             Remove discount
-          </Button>
-        )}
-        {isOpen && hasServiceCharge && (
-          <Button
-            variant="secondary"
-            size="sm"
-            icon={HandCoins}
-            onClick={() =>
-              run(() => serviceCharge.mutateAsync({ orderId: order._id, waived: !order.serviceChargeWaived }))
-            }
-          >
-            {order.serviceChargeWaived ? "Add service charge back" : "Remove service charge"}
           </Button>
         )}
       </div>

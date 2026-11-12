@@ -33,7 +33,7 @@ import { useKotQueue } from "../../kitchen/queries";
 import SettleDialog from "../../orders/components/SettleDialog";
 import { newId } from "../../../lib/id";
 import { ordersApi } from "../../orders/api";
-import { orderKeys } from "../../orders/queries";
+import { orderKeys, useSetItemPacked } from "../../orders/queries";
 import { draftUnitPrice } from "../../pos/api";
 import { MenuGrid } from "../../pos/components/MenuGrid";
 import { OrderPanel } from "../../pos/components/OrderPanel";
@@ -175,6 +175,7 @@ function CaptainApp() {
   const cafe = rawMenu.billing?.serviceFlow === "cafe";
   const floor = usePosFloor().data;
   const releasePosTable = useReleasePosTable();
+  const setPacked = useSetItemPacked();
   const tables = floor?.tables ?? NO_TABLES;
   const printing = usePrintingStatus().data;
   const canKitchen = can(profile, "kot");
@@ -697,6 +698,14 @@ function CaptainApp() {
               onCustomerName={() => {}}
               onDraftQuantity={cart.changeQuantity}
               onDraftRemove={cart.removeLine}
+              onTogglePacked={(item) =>
+                void run(async () => {
+                  await setPacked.mutateAsync({
+                    itemId: item._id,
+                    packed: !item.isPacked,
+                  });
+                })
+              }
               onSaveKot={sendKot}
               onHold={null}
               onBill={requestBill}
@@ -720,6 +729,7 @@ function CaptainApp() {
       )}
 
       <DishDialog
+        allowPack
         food={dishFor}
         onClose={() => setDishFor(null)}
         onAdd={(food, payload) => {
@@ -731,6 +741,7 @@ function CaptainApp() {
               payload.modifiers,
               payload.note.trim(),
               payload.isJain,
+              payload.isPacked,
             );
           setDishFor(null);
         }}

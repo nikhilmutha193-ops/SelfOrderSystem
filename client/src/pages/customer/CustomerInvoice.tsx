@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
+import { ServedReleasePrompt } from "../../components/ServedReleasePrompt";
 import { ReviewDialog } from "../../components/ReviewFab";
 import ChatFab from "../../features/chat/components/ChatFab";
 import { useSendChatMessage } from "../../features/chat/queries";
@@ -8,10 +9,13 @@ import { ordersApi } from "../../features/orders/api";
 import { refundState } from "../../features/orders/status";
 import {
   useApplyCoupon,
+  useMyOrders,
   useOrderInvoice,
   useRemoveCoupon,
 } from "../../features/orders/queries";
+import { MyOrdersCard } from "./MyOrdersCard";
 import { PayOnlineButton } from "../../features/payments/components/PayOnlineButton";
+import type { MyOrder } from "../../lib/types";
 import { renderPrepMessage } from "../../lib/prepTime";
 import { useGuestAccess } from "../../lib/useGuestAccess";
 import { useServiceFlow } from "../../lib/useServiceFlow";
@@ -88,8 +92,14 @@ function PickTableCard() {
   );
 }
 
+const NO_ORDERS: MyOrder[] = [];
+
 export default function CustomerInvoice() {
-  const { orderId, via } = useTableSession();
+  const { orderId: sessionOrderId, via } = useTableSession();
+  // An earlier round of this table session can be opened with ?order=<id>.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const orderId = searchParams.get("order") || sessionOrderId;
+  const myOrders = useMyOrders(!!sessionOrderId && via !== "token", POLL.guestInvoice).data ?? NO_ORDERS;
   const access = useGuestAccess();
   // Cafe flow: the order is paid at the counter first, then it goes to the kitchen and gets a token.
   const cafe = useServiceFlow() === "cafe";
@@ -255,6 +265,14 @@ export default function CustomerInvoice() {
         <h1 className="text-xl font-bold text-slate-800">Your order</h1>
         <Badge tone={statusBadge.tone}>{statusBadge.label}</Badge>
       </div>
+
+      <ServedReleasePrompt />
+
+      <MyOrdersCard
+        orders={myOrders}
+        viewingId={orderId ?? ""}
+        onSelect={(id) => setSearchParams(id === sessionOrderId ? {} : { order: id }, { replace: true })}
+      />
 
       {awaitingPayment && (
         <Card className="mb-4">
@@ -495,6 +513,12 @@ export default function CustomerInvoice() {
             <span>₹{(totals.packagingCharge ?? 0).toFixed(2)}</span>
           </div>
         )}
+        {(totals.extraCharges ?? []).map((c) => (
+          <div key={c.name} className="flex justify-between text-sm text-slate-600">
+            <span>{c.name}</span>
+            <span>₹{c.amount.toFixed(2)}</span>
+          </div>
+        ))}
         {totals.taxLines.map((t) => (
           <div
             key={t.name}

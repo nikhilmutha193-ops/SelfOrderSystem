@@ -15,6 +15,7 @@ export function gstSheets(report: GstReport) {
     { header: "Discount", value: (r) => r.discount, format: MONEY },
     { header: "Service charge", value: (r) => r.serviceCharge, format: MONEY },
     { header: "Packaging", value: (r) => r.packagingCharge, format: MONEY },
+    { header: "Other charges", value: (r) => r.otherCharges, format: MONEY },
     { header: "Taxable value", value: (r) => r.taxableValue, format: MONEY, width: 14 },
     ...taxNames.map((name): ExcelColumn<Invoice> => ({
       header: name,
@@ -37,6 +38,7 @@ export function gstSheets(report: GstReport) {
     { label: "Discounts", value: s.discounts },
     { label: "Service charge", value: s.serviceCharge },
     { label: "Packaging", value: s.packaging },
+    { label: "Other charges", value: s.otherCharges },
     { label: "Taxable value", value: s.taxableValue },
     { label: "Total GST", value: s.gst },
     { label: "Round off", value: s.roundOff },

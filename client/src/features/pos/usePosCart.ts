@@ -99,7 +99,8 @@ export function usePosCart() {
     quantity: number,
     modifiers: SelectedModifier[] = [],
     note = "",
-    isJain = false
+    isJain = false,
+    isPacked = false
   ) {
     setDraft((lines) => {
       const same = lines.find(
@@ -107,10 +108,11 @@ export function usePosCart() {
           l.item._id === item._id &&
           l.note === note &&
           !!l.isJain === isJain &&
+          !!l.isPacked === isPacked &&
           sameModifiers(l.modifiers, modifiers)
       );
       if (same) return lines.map((l) => (l === same ? { ...l, quantity: l.quantity + quantity } : l));
-      return [...lines, { key: newId(), item, quantity, modifiers, note, isJain }];
+      return [...lines, { key: newId(), item, quantity, modifiers, note, isJain, isPacked }];
     });
   }
 

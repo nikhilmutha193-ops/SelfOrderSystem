@@ -1,4 +1,4 @@
-import { Plus, Split, Trash2 } from "lucide-react";
+import { Plus, Split, Trash2, X } from "lucide-react";
 import { useState } from "react";
 
 import { cashSuggestions } from "../../../lib/cash";
@@ -6,10 +6,19 @@ import { useServiceFlow } from "../../../lib/useServiceFlow";
 import { TENDER_LABELS, type TenderMethod } from "../../../lib/types";
 import { extractErrorMessage } from "../../../shared/api/client";
 import { Dialog } from "../../../shared/ui/Dialog";
+import ReasonDialog from "../../../shared/ui/ReasonDialog";
 import { Button, ErrorText, Field, IconButton, Input } from "../../../shared/ui/ui";
 import UpiQr from "../../../shared/ui/UpiQr";
 import { useOrderCustomer } from "../../customers/queries";
-import { useSettleOrder } from "../queries";
+import {
+  useOrder,
+  useReopenBill,
+  useSetExtraCharge,
+  useSetItemPacked,
+  useSetPackagingWaived,
+  useSetServiceCharge,
+  useSettleOrder,
+} from "../queries";
 
 interface Line {
   method: TenderMethod;
@@ -40,7 +49,158 @@ function toNumber(value: string): number {
 
 export default function SettleDialog(props: SettleDialogProps) {
   if (!props.open) return null;
-  return <SettleForm {...props} />;
+  // The form starts from the bill total, so it starts over when a charge changes the total.
+  return <SettleForm key={props.total} {...props} />;
+}
+
+/**
+ * Lets staff take charges off the bill, or add them, before it is paid: service charge, packaging and the
+ * restaurant's extra charges. A billed order is locked, so it has to be reopened (with a reason) first.
+ */
+function ChargesPanel({ orderId }: { orderId: string }) {
+  const detail = useOrder(orderId).data;
+  const serviceCharge = useSetServiceCharge();
+  const packaging = useSetPackagingWaived();
+  const extraCharge = useSetExtraCharge();
+  const setPacked = useSetItemPacked();
+  const reopen = useReopenBill();
+  const [error, setError] = useState<string | null>(null);
+  const [reopening, setReopening] = useState(false);
+  if (!detail) return null;
+
+  const { order, items, totals } = detail;
+  const options = detail.extraChargeOptions ?? [];
+  const hasService = (totals.serviceChargePercent ?? 0) > 0 || !!order.serviceChargeWaived;
+  const unpacked = items.filter((i) => i.status !== "cancelled" && !i.isPacked);
+  const canAddPackaging =
+    !order.packagingWaived && (totals.packagingCharge ?? 0) === 0 && order.orderType === "dine-in" && unpacked.length > 0;
+  const hasPackaging = (totals.packagingCharge ?? 0) > 0 || !!order.packagingWaived;
+  const billed = order.status === "billed";
+  const busy = serviceCharge.isPending || packaging.isPending || extraCharge.isPending || setPacked.isPending;
+
+  if (order.status !== "open" && !billed) return null;
+  if (!hasService && !hasPackaging && !canAddPackaging && options.length === 0 && !billed) return null;
+
+  async function run(action: () => Promise<unknown>) {
+    setError(null);
+    try {
+      await action();
+    } catch (err) {
+      setError(extractErrorMessage(err));
+    }
+  }
+
+  const rupees = (n: number) => `₹${money(n)}`;
+  const row = (key: string, label: string, amount: string, button: React.ReactNode) => (
+    <div key={key} className="flex items-center justify-between gap-3 text-sm">
+      <span className="min-w-0 text-slate-700">
+        {label} <span className="tabular-nums text-slate-500">{amount}</span>
+      </span>
+      {button}
+    </div>
+  );
+
+  return (
+    <div className="flex flex-col gap-2 rounded-xl border border-slate-200 p-3" data-testid="settle-charges">
+      <p className="text-xs font-semibold tracking-wide text-slate-500 uppercase">Charges on this bill</p>
+      {billed ? (
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-sm text-slate-600">The bill is locked. Reopen it to add or remove charges.</p>
+          <Button type="button" size="sm" variant="secondary" onClick={() => setReopening(true)}>
+            Reopen bill
+          </Button>
+        </div>
+      ) : (
+        <>
+          {hasService &&
+            row(
+              "service",
+              `Service charge (${totals.serviceChargePercent ?? 0}%)`,
+              order.serviceChargeWaived ? "removed" : rupees(totals.serviceCharge ?? 0),
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                disabled={busy}
+                onClick={() => run(() => serviceCharge.mutateAsync({ orderId, waived: !order.serviceChargeWaived }))}
+              >
+                {order.serviceChargeWaived ? "Add back" : "Remove"}
+              </Button>,
+            )}
+          {hasPackaging &&
+            row(
+              "packaging",
+              "Packaging",
+              order.packagingWaived ? "removed" : rupees(totals.packagingCharge ?? 0),
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                disabled={busy}
+                onClick={() => run(() => packaging.mutateAsync({ orderId, waived: !order.packagingWaived }))}
+              >
+                {order.packagingWaived ? "Add back" : "Remove"}
+              </Button>,
+            )}
+          {canAddPackaging &&
+            row(
+              "pack-all",
+              "Packaging",
+              "none",
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                icon={Plus}
+                disabled={busy}
+                onClick={() =>
+                  run(async () => {
+                    for (const item of unpacked) await setPacked.mutateAsync({ itemId: item._id, packed: true });
+                  })
+                }
+              >
+                Pack everything
+              </Button>,
+            )}
+          {options.map((charge) =>
+            row(
+              charge.key,
+              charge.name,
+              charge.applied
+                ? rupees(totals.extraCharges?.find((c) => c.name === charge.name)?.amount ?? 0)
+                : charge.type === "percent"
+                  ? `${charge.value}%`
+                  : rupees(charge.value),
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                icon={charge.applied ? X : Plus}
+                disabled={busy}
+                onClick={() =>
+                  run(() => extraCharge.mutateAsync({ orderId, key: charge.key, applied: !charge.applied }))
+                }
+              >
+                {charge.applied ? "Remove" : "Add"}
+              </Button>,
+            ),
+          )}
+        </>
+      )}
+      <ErrorText>{error}</ErrorText>
+      <ReasonDialog
+        open={reopening}
+        title={`Reopen bill ${order.invoiceNumber ?? ""}?`}
+        description="The order unlocks so charges can change, and keeps the same invoice number. The reason goes in the audit log."
+        confirmLabel="Reopen bill"
+        onCancel={() => setReopening(false)}
+        onConfirm={async ({ note }) => {
+          await reopen.mutateAsync({ orderId, reason: note });
+          setReopening(false);
+        }}
+      />
+    </div>
+  );
 }
 
 function SettleForm({ orderId, total, invoiceNumber, upi, onClose }: SettleDialogProps) {
@@ -144,6 +304,8 @@ function SettleForm({ orderId, total, invoiceNumber, upi, onClose }: SettleDialo
       }
     >
       <div className="flex flex-col gap-4">
+        <ChargesPanel orderId={orderId} />
+
         <div className="flex items-center justify-between rounded-xl bg-slate-900 px-4 py-3 text-white">
           <span className="text-sm text-slate-300">Bill total</span>
           <span className="text-2xl font-bold tabular-nums">₹{money(total)}</span>

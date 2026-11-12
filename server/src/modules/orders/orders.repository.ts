@@ -53,6 +53,12 @@ export class OrdersRepository {
     });
   }
 
+  findOrdersBySession(sessionId: string) {
+    return Order.find(this.scoped<IOrder>({ sessionId, status: { $ne: "cancelled" } }))
+      .sort({ checkinTime: 1 })
+      .lean();
+  }
+
   findInvoices(filter: FilterQuery<IOrder>) {
     return Order.find(this.scoped<IOrder>(filter)).sort({ billedAt: 1, checkoutTime: 1, invoiceNumber: 1 }).lean();
   }
@@ -108,6 +114,14 @@ export class OrdersRepository {
     return OrderItem.findOneAndUpdate(
       this.scoped<IOrderItem>({ _id: itemId, status: { $ne: "cancelled" } }),
       { $set: { complimentary: true, complimentaryReason: reason, total: 0 } },
+      { new: true }
+    );
+  }
+
+  setItemPacked(itemId: Types.ObjectId, packed: boolean, packagingCharge: number) {
+    return OrderItem.findOneAndUpdate(
+      this.scoped<IOrderItem>({ _id: itemId, status: { $ne: "cancelled" } }),
+      { $set: { isPacked: packed, packagingCharge } },
       { new: true }
     );
   }

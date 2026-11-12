@@ -11,6 +11,8 @@ export interface DishAddPayload {
   note: string;
   modifiers: SelectedModifier[];
   isJain: boolean;
+  /** Staff only: pack this dish (parcel), which adds its packaging charge. */
+  isPacked?: boolean;
 }
 
 type Spice = "less" | "spicy";
@@ -23,7 +25,10 @@ export default function DishDialog({
   onClose,
   onAdd,
   canOrder = true,
+  allowPack = false,
 }: {
+  /** Staff screens (POS, captain) can mark a dish to be packed. */
+  allowPack?: boolean;
   /** False when the admin has turned ordering off for this guest: the dish is shown for information only. */
   canOrder?: boolean;
   food: MenuFoodItem | null;
@@ -34,6 +39,7 @@ export default function DishDialog({
   const [qty, setQty] = useState(1);
   const [note, setNote] = useState("");
   const [jain, setJain] = useState(false);
+  const [packed, setPacked] = useState(false);
   const [spice, setSpice] = useState<Spice | null>(null);
   // For single groups the value is one label; for multi it's a set of labels.
   const [single, setSingle] = useState<Record<string, string>>({});
@@ -47,6 +53,7 @@ export default function DishDialog({
     setQty(1);
     setNote("");
     setJain(false);
+    setPacked(false);
     setSpice(null);
     const s: Record<string, string> = {};
     for (const g of food.modifierGroups ?? []) {
@@ -100,7 +107,13 @@ export default function DishDialog({
     const comment = [spice && food.spiceAdjustable !== false ? SPICE_LABEL[spice] : "", note.trim()]
       .filter(Boolean)
       .join(" · ");
-    onAdd(food, { quantity: qty, note: comment, modifiers: selected, isJain: jainAllowed && jain });
+    onAdd(food, {
+      quantity: qty,
+      note: comment,
+      modifiers: selected,
+      isJain: jainAllowed && jain,
+      ...(allowPack && packed && { isPacked: true }),
+    });
     onClose();
   }
 
@@ -240,6 +253,31 @@ export default function DishDialog({
                       : "This dish can't be made Jain (it needs onion or garlic)."}
                   </p>
                 </div>
+                {allowPack && (
+                  <div>
+                    <p className="mb-1.5 text-sm font-semibold text-slate-800">Serving</p>
+                    <div className="grid grid-cols-2 gap-2" role="group" aria-label="Serve here or pack">
+                      {([false, true] as const).map((pack) => (
+                        <button
+                          key={String(pack)}
+                          type="button"
+                          aria-pressed={packed === pack}
+                          onClick={() => setPacked(pack)}
+                          className={`min-h-[40px] rounded-xl border px-3 text-sm font-semibold ${
+                            packed === pack
+                              ? "border-orange-500 bg-orange-50 text-orange-800"
+                              : "border-slate-200 text-slate-600"
+                          }`}
+                        >
+                          {pack ? "Pack" : "Serve here"}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Pack puts this dish in a parcel. Its packaging charge, if it has one, is added to the bill.
+                    </p>
+                  </div>
+                )}
                 {spiceAllowed && (
                   <div>
                     <p className="mb-1.5 text-sm font-semibold text-slate-800">Spice</p>

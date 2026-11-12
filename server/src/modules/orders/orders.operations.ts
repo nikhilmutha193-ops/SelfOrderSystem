@@ -4,7 +4,8 @@ import { HttpError } from "../../utils/httpError";
 import { round2 } from "../../utils/invoice";
 import { syncTableState } from "../../utils/tableState";
 import { getOwnedOrder } from "./orders.access";
-import { refreshCouponDiscount } from "./orders.billing";
+import { extraChargesFor, refreshCouponDiscount } from "./orders.billing";
+import { packagingFor } from "../pricing/pricing";
 import { OrdersRepository } from "./orders.repository";
 import { ManualDiscountInput, SplitInput } from "./orders.schema";
 
@@ -147,6 +148,59 @@ export async function setServiceCharge(ctx: RequestContext, orderId: string, wai
   await new OrdersRepository(ctx.restaurantId).saveOrder(order);
   await writeAudit(ctx, "order.serviceCharge", `${waived ? "Removed" : "Restored"} service charge on ${label(order)}`);
   return order;
+}
+
+/** Takes the packaging charge off an open order (or puts it back). */
+export async function setPackagingWaived(ctx: RequestContext, orderId: string, waived: boolean) {
+  const order = await getOwnedOrder(ctx, orderId);
+  requireOpen(order.status, "changed");
+  order.packagingWaived = waived;
+  await new OrdersRepository(ctx.restaurantId).saveOrder(order);
+  await writeAudit(ctx, "order.packaging", `${waived ? "Removed" : "Restored"} packaging charge on ${label(order)}`);
+  return order;
+}
+
+/** Adds or removes one of the restaurant's extra charges (delivery, cutlery...) on an open order. */
+export async function setExtraCharge(ctx: RequestContext, orderId: string, key: string, applied: boolean) {
+  const order = await getOwnedOrder(ctx, orderId);
+  requireOpen(order.status, "changed");
+  const repo = new OrdersRepository(ctx.restaurantId);
+  const restaurant = await repo.findRestaurant();
+  const charge = restaurant?.billingSettings?.extraCharges?.find((c) => c.key === key && c.active);
+  if (!charge) throw new HttpError(404, "That charge isn't available");
+
+  const automatic = charge.autoApply && charge.orderTypes.includes(order.orderType);
+  const without = (list?: string[]) => (list ?? []).filter((k) => k !== key);
+  if (automatic) {
+    order.extraChargesOff = applied ? without(order.extraChargesOff) : [...without(order.extraChargesOff), key];
+  } else {
+    order.extraChargeKeys = applied ? [...without(order.extraChargeKeys), key] : without(order.extraChargeKeys);
+  }
+  await repo.saveOrder(order);
+  await writeAudit(ctx, "order.extraCharge", `${applied ? "Added" : "Removed"} ${charge.name} on ${label(order)}`);
+  return { order, applied: extraChargesFor(order, restaurant).some((c) => c.key === key) };
+}
+
+/** Marks a line to be packed (or not) on an open order: it then carries the dish's packaging charge. */
+export async function setItemPacked(ctx: RequestContext, itemId: string, packed: boolean) {
+  const repo = new OrdersRepository(ctx.restaurantId);
+  const item = await repo.findItem(itemId);
+  if (!item || item.status === "cancelled") throw new HttpError(404, "Order item not found");
+  const order = await repo.findOrder(item.orderId.toString());
+  if (!order) throw new HttpError(404, "Order not found");
+  requireOpen(order.status, "changed");
+
+  // A takeaway or delivery order always carries the charge; on dine-in it follows the mark.
+  const [food] = item.foodItemId ? await repo.findActiveFoodItems([item.foodItemId.toString()]) : [];
+  const charge = packed || order.orderType !== "dine-in" ? packagingFor(food ?? {}, "takeaway") : 0;
+  const updated = await repo.setItemPacked(item._id, packed, charge);
+  await refreshCouponDiscount(repo, order);
+  await writeAudit(
+    ctx,
+    "orderItem.packed",
+    `${packed ? "Marked" : "Unmarked"} "${item.foodName}" x${item.quantity} to be packed`
+  );
+  return updated;
 }
 
 export async function markComplimentary(ctx: RequestContext, itemId: string, reason: string) {

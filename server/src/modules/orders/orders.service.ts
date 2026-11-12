@@ -12,7 +12,7 @@ import { computeInvoiceTotals } from "../../utils/invoice";
 import { signToken } from "../../utils/jwt";
 import { normalizePhone } from "../../utils/phone";
 import { getOwnedOrder, requireOwner } from "./orders.access";
-import { refreshCouponDiscount, totalsForOrder } from "./orders.billing";
+import { extraChargesFor, refreshCouponDiscount, totalsForOrder } from "./orders.billing";
 import { OrdersRepository } from "./orders.repository";
 import {
   AddItemsInput,
@@ -255,6 +255,8 @@ export async function addOrderItems(ctx: RequestContext, orderId: string, input:
   const created = [];
   for (const line of input.items) {
     const food = foodById.get(line.foodItemId)!;
+    // Staff, guests and kiosks can all ask for a dish to be packed (parcel).
+    const packed = !!line.isPacked;
 
     const chosen: { groupName: string; label: string; priceDelta: number }[] = [];
     for (const selection of line.modifiers ?? []) {
@@ -275,9 +277,10 @@ export async function addOrderItems(ctx: RequestContext, orderId: string, input:
       quantity: line.quantity,
       total: round2(unitPrice * line.quantity),
       isJain: !!line.isJain,
+      isPacked: packed,
       modifiers: chosen,
       note: line.note,
-      packagingCharge: packagingFor(food, order.orderType),
+      packagingCharge: packagingFor(food, packed ? "takeaway" : order.orderType),
       components,
       status: "pending",
       kotRound: null,
@@ -386,10 +389,21 @@ async function getOrderWithTotals(ctx: RequestContext, orderId: string, sortItem
   const items = await repo.findItems(order._id, { sorted: sortItems });
   const restaurant = await repo.findRestaurant();
   const totals = totalsForOrder(order, items, restaurant);
+  // Staff see which extra charges they can add or remove on this order.
+  const appliedKeys = new Set(extraChargesFor(order, restaurant).map((c) => c.key));
+  const extraChargeOptions =
+    ctx.auth.role === "admin" && order.status === "open"
+      ? (restaurant?.billingSettings?.extraCharges ?? [])
+          .filter((c) => c.active)
+          .map(({ key, name, type, value }) => ({ key, name, type, value, applied: appliedKeys.has(key) }))
+      : [];
+  const table = order.tableId ? await repo.findTable(order.tableId.toString()) : null;
   return {
     order,
     items,
     totals,
+    tableCode: table?.code ?? null,
+    extraChargeOptions,
     prepMessageTemplate: restaurant?.prepMessageTemplate || "",
     prepBufferMinutes: restaurant?.prepBufferMinutes ?? 2,
     guestOrderMode: restaurant?.kotSettings?.guestOrderMode ?? "auto",
@@ -401,6 +415,35 @@ async function getOrderWithTotals(ctx: RequestContext, orderId: string, sortItem
       upiPayeeName: restaurant?.billingSettings?.upiPayeeName || restaurant?.name || "",
     },
   };
+}
+
+/** The guest's own orders in this table session (one per round when each is paid first), with their tokens. */
+export async function listMyOrders(ctx: RequestContext) {
+  if (ctx.auth.role !== "table" || !ctx.auth.sessionId) return [];
+  const repo = new OrdersRepository(ctx.restaurantId);
+  const orders = await repo.findOrdersBySession(ctx.auth.sessionId);
+  const restaurant = await repo.findRestaurant();
+  const rows = await Promise.all(
+    orders.map(async (order) => {
+      const items = (await repo.findItems(order._id)).filter((i) => i.status !== "cancelled");
+      if (items.length === 0 && order._id.toString() !== ctx.auth.orderId) return null;
+      const tokens = [...new Set(items.map((i) => i.tokenNumber).filter((n): n is number => n != null))].sort(
+        (a, b) => a - b
+      );
+      return {
+        orderId: order._id.toString(),
+        status: order.status,
+        current: order._id.toString() === ctx.auth.orderId,
+        placedAt: order.checkinTime,
+        itemCount: items.reduce((sum, i) => sum + i.quantity, 0),
+        tokens,
+        ready: items.length > 0 && items.every((i) => i.status === "ready" || i.status === "served"),
+        served: items.length > 0 && items.every((i) => i.status === "served"),
+        total: totalsForOrder(order, items, restaurant).grandTotal,
+      };
+    })
+  );
+  return rows.filter((r): r is NonNullable<typeof r> => r !== null);
 }
 
 export function getOrder(ctx: RequestContext, orderId: string) {

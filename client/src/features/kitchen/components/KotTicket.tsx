@@ -362,6 +362,11 @@ export function KotTicket({
                         JAIN
                       </span>
                     )}
+                    {item.isPacked && (
+                      <span className="ml-1.5 rounded bg-sky-100 px-1.5 py-0.5 align-middle text-[10px] font-bold text-sky-800">
+                        PACK
+                      </span>
+                    )}
                   </p>
                   {extras && <p className="mt-0.5 text-sm leading-snug font-medium text-orange-700">↳ {extras}</p>}
                   {(item.components ?? []).length > 0 && (

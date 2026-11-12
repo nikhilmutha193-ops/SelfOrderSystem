@@ -215,7 +215,7 @@ export async function redeemPoints(ctx: RequestContext, orderId: string, points:
 
   const restaurant = await repo.findRestaurant("billingSettings taxRates");
   const items = await repo.findItems(order._id);
-  const totals = computeInvoiceTotals(items, [], { ...pricingFor(order, restaurant), loyaltyDiscount: 0 });
+  const totals = computeInvoiceTotals(items, [], { ...pricingFor(order, restaurant, items), loyaltyDiscount: 0 });
   const payable = round2(totals.subtotal - totals.discount);
   const amount = round2(points * settings.pointValue);
   if (amount > payable) {

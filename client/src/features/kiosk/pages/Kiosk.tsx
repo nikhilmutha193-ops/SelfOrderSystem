@@ -46,6 +46,7 @@ function sameLine(line: CartLine, foodId: string, payload: DishAddPayload) {
     line.foodItemId === foodId &&
     (line.note ?? "") === payload.note &&
     !!line.isJain === payload.isJain &&
+    !!line.isPacked === !!payload.isPacked &&
     JSON.stringify(line.modifiers ?? []) === JSON.stringify(payload.modifiers)
   );
 }
@@ -221,6 +222,7 @@ function KioskApp({ onUnpaired }: { onUnpaired: () => void }) {
           modifiers: payload.modifiers,
           note: payload.note || undefined,
           isJain: payload.isJain || undefined,
+          isPacked: payload.isPacked || undefined,
         },
       ];
     });
@@ -250,6 +252,7 @@ function KioskApp({ onUnpaired }: { onUnpaired: () => void }) {
             quantity: l.quantity,
             note: l.note,
             isJain: l.isJain,
+            isPacked: l.isPacked,
             modifiers: l.modifiers?.map(({ groupName, label }) => ({ groupName, label })),
           })),
         },
@@ -445,6 +448,7 @@ function KioskApp({ onUnpaired }: { onUnpaired: () => void }) {
       />
       {screen}
       <DishDialog
+        allowPack
         food={dishFor}
         lang={lang}
         onClose={() => setDishFor(null)}

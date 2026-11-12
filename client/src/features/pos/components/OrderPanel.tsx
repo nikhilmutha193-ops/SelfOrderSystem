@@ -1,6 +1,8 @@
 import { useState, type ReactNode } from "react";
 
 import type { OrderDetailResponse, OrderItem } from "../../../lib/types";
+import { extractErrorMessage } from "../../../shared/api/client";
+import { useSetExtraCharge, useSetPackagingWaived, useSetServiceCharge } from "../../orders/queries";
 import { refundState } from "../../orders/status";
 import { Badge, Button, Input } from "../../../shared/ui/ui";
 import { WhatsAppBillButton } from "../../customers/components/CustomerPanel";
@@ -15,13 +17,25 @@ function kitchenBadge(item: OrderItem, payFirst: boolean, cafe = false) {
   if (item.status === "ready") return <Badge tone="green">Ready</Badge>;
   if (item.status === "preparing") return <Badge tone="blue">Cooking</Badge>;
   if (item.kotRound != null)
-    return <Badge tone="amber">KOT {item.tokenNumber != null ? `T${item.tokenNumber}` : ""}</Badge>;
+    return (
+      <Badge tone="amber">
+        KOT {item.tokenNumber != null ? `T${item.tokenNumber}` : ""}
+      </Badge>
+    );
   // Cafe flow: an unsent item is simply waiting for payment.
   if (cafe) return <Badge tone="amber">Awaiting payment</Badge>;
   return <Badge tone="gray">{payFirst ? "Not paid yet" : "Not sent"}</Badge>;
 }
 
-function Row({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
+function Row({
+  label,
+  value,
+  strong,
+}: {
+  label: string;
+  value: string;
+  strong?: boolean;
+}) {
   return (
     <div
       className={`flex justify-between tabular-nums ${strong ? "text-base font-bold text-slate-900" : "text-slate-600"}`}
@@ -29,6 +43,105 @@ function Row({ label, value, strong }: { label: string; value: string; strong?: 
       <span>{label}</span>
       <span>{value}</span>
     </div>
+  );
+}
+
+/** Row with a small button on the right, for a charge cashiers can take off the bill or add. */
+function ChargeRow({
+  label,
+  value,
+  actionLabel,
+  busy,
+  onAction,
+}: {
+  label: string;
+  value: string;
+  actionLabel?: string;
+  busy: boolean;
+  onAction?: () => void;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-2 tabular-nums text-slate-600">
+      <span className="min-w-0 truncate">{label}</span>
+      <span className="flex shrink-0 items-center gap-2">
+        {value}
+        {actionLabel && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onAction}
+            className="rounded-md border border-slate-300 px-2 py-0.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+          >
+            {actionLabel}
+          </button>
+        )}
+      </span>
+    </div>
+  );
+}
+
+/** Service charge, packaging and the extra charges of a saved order, removable and addable while it is open. */
+function ChargeRows({ detail, editable }: { detail: OrderDetailResponse; editable: boolean }) {
+  const { order, totals } = detail;
+  const serviceCharge = useSetServiceCharge();
+  const packaging = useSetPackagingWaived();
+  const extra = useSetExtraCharge();
+  const [error, setError] = useState<string | null>(null);
+  const busy = serviceCharge.isPending || packaging.isPending || extra.isPending;
+
+  async function run(action: () => Promise<unknown>) {
+    setError(null);
+    try {
+      await action();
+    } catch (err) {
+      setError(extractErrorMessage(err));
+    }
+  }
+
+  return (
+    <>
+      {((totals.serviceCharge ?? 0) > 0 || order.serviceChargeWaived) && (
+        <ChargeRow
+          label="Service charge"
+          value={order.serviceChargeWaived ? "removed" : rupees(totals.serviceCharge ?? 0)}
+          actionLabel={editable ? (order.serviceChargeWaived ? "Add back" : "Remove") : undefined}
+          busy={busy}
+          onAction={() => run(() => serviceCharge.mutateAsync({ orderId: order._id, waived: !order.serviceChargeWaived }))}
+        />
+      )}
+      {((totals.packagingCharge ?? 0) > 0 || order.packagingWaived) && (
+        <ChargeRow
+          label="Packaging"
+          value={order.packagingWaived ? "removed" : rupees(totals.packagingCharge ?? 0)}
+          actionLabel={editable ? (order.packagingWaived ? "Add back" : "Remove") : undefined}
+          busy={busy}
+          onAction={() => run(() => packaging.mutateAsync({ orderId: order._id, waived: !order.packagingWaived }))}
+        />
+      )}
+      {editable
+        ? (detail.extraChargeOptions ?? []).map((charge) => (
+            <ChargeRow
+              key={charge.key}
+              label={charge.name}
+              value={
+                charge.applied
+                  ? rupees((totals.extraCharges ?? []).find((c) => c.name === charge.name)?.amount ?? 0)
+                  : charge.type === "percent"
+                    ? `${charge.value}%`
+                    : rupees(charge.value)
+              }
+              actionLabel={charge.applied ? "Remove" : "Add"}
+              busy={busy}
+              onAction={() =>
+                run(() => extra.mutateAsync({ orderId: order._id, key: charge.key, applied: !charge.applied }))
+              }
+            />
+          ))
+        : (totals.extraCharges ?? []).map((c) => (
+            <ChargeRow key={c.name} label={c.name} value={rupees(c.amount)} busy={false} />
+          ))}
+      {error && <p className="text-xs text-red-600">{error}</p>}
+    </>
   );
 }
 
@@ -42,6 +155,7 @@ export function OrderPanel({
   onCustomerName,
   onDraftQuantity,
   onDraftRemove,
+  onTogglePacked,
   onSaveKot,
   onHold,
   onBill,
@@ -63,6 +177,8 @@ export function OrderPanel({
   onCustomerName: (value: string) => void;
   onDraftQuantity: (key: string, delta: number) => void;
   onDraftRemove: (key: string) => void;
+  /** Staff can mark a saved line to be packed (or not) while the order is open. */
+  onTogglePacked?: (item: OrderItem) => void;
   onSaveKot: () => void;
   onHold: (() => void) | null;
   onBill: () => void;
@@ -80,24 +196,42 @@ export function OrderPanel({
   const [moreOpen, setMoreOpen] = useState(false);
   const order = detail?.order ?? null;
   const savedItems = detail?.items ?? [];
-  const draftSubtotal = draft.reduce((sum, line) => sum + draftUnitPrice(line) * line.quantity, 0);
-  const unsent = savedItems.filter((i) => i.kotRound == null && i.status !== "cancelled").length;
+  const draftSubtotal = draft.reduce(
+    (sum, line) => sum + draftUnitPrice(line) * line.quantity,
+    0,
+  );
+  const unsent = savedItems.filter(
+    (i) => i.kotRound == null && i.status !== "cancelled",
+  ).length;
   const isOpen = !order || order.status === "open";
   const nothing = savedItems.length === 0 && draft.length === 0;
   const totals = detail?.totals;
 
   return (
-    <aside className={`flex h-full min-h-0 shrink-0 flex-col border-slate-200 bg-white ${className}`}>
+    <aside
+      className={`flex h-full min-h-0 shrink-0 flex-col border-slate-200 bg-white ${className}`}
+    >
       <div className="border-b border-slate-200 px-3 py-2">
         <div className="flex items-center justify-between gap-2">
-          <h2 className="truncate text-lg font-bold text-slate-800" data-testid="pos-order-title">
+          <h2
+            className="truncate text-lg font-bold text-slate-800"
+            data-testid="pos-order-title"
+          >
             {title}
           </h2>
           {offline ? (
             <Badge tone="amber">Offline</Badge>
           ) : (
             order && (
-              <Badge tone={order.status === "billed" ? "blue" : order.status === "closed" ? "green" : "amber"}>
+              <Badge
+                tone={
+                  order.status === "billed"
+                    ? "blue"
+                    : order.status === "closed"
+                      ? "green"
+                      : "amber"
+                }
+              >
                 {order.status === "billed"
                   ? (order.invoiceNumber ?? "Billed")
                   : order.status === "closed"
@@ -125,16 +259,22 @@ export function OrderPanel({
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-3 py-2">
-        {nothing && <p className="py-8 text-center text-sm text-slate-400">{emptyText}</p>}
+        {nothing && (
+          <p className="py-8 text-center text-sm text-slate-400">{emptyText}</p>
+        )}
         <ul className="flex flex-col divide-y divide-slate-100">
           {savedItems.map((item) => (
             <li
               key={item._id}
               className={`flex items-start gap-2 py-2 text-sm ${item.status === "cancelled" ? "opacity-50" : ""}`}
             >
-              <span className="w-7 shrink-0 text-right font-semibold tabular-nums">{item.quantity}×</span>
+              <span className="w-7 shrink-0 text-right font-semibold tabular-nums">
+                {item.quantity}×
+              </span>
               <span className="min-w-0 flex-1">
-                <span className={`block truncate ${item.status === "cancelled" ? "line-through" : ""}`}>
+                <span
+                  className={`block truncate ${item.status === "cancelled" ? "line-through" : ""}`}
+                >
                   {item.foodName}
                 </span>
                 {(item.modifiers?.length ?? 0) > 0 && (
@@ -142,9 +282,23 @@ export function OrderPanel({
                     {item.modifiers!.map((m) => m.label).join(", ")}
                   </span>
                 )}
-                <span className="mt-0.5 block">{kitchenBadge(item, payFirst, cafe)}</span>
+                <span className="mt-0.5 flex flex-wrap items-center gap-1.5">
+                  {kitchenBadge(item, payFirst, cafe)}
+                  {item.isPacked && <Badge tone="blue">Pack</Badge>}
+                  {onTogglePacked && item.status !== "cancelled" && isOpen && (
+                    <button
+                      type="button"
+                      className="text-xs text-slate-500 underline"
+                      onClick={() => onTogglePacked(item)}
+                    >
+                      {item.isPacked ? "Unpack" : "Pack"}
+                    </button>
+                  )}
+                </span>
               </span>
-              <span className="shrink-0 tabular-nums">{rupees(item.total)}</span>
+              <span className="shrink-0 tabular-nums">
+                {rupees(item.total)}
+              </span>
             </li>
           ))}
           {draft.map((line) => (
@@ -162,7 +316,9 @@ export function OrderPanel({
                 >
                   −
                 </button>
-                <span className="w-6 text-center font-semibold tabular-nums">{line.quantity}</span>
+                <span className="w-6 text-center font-semibold tabular-nums">
+                  {line.quantity}
+                </span>
                 <button
                   type="button"
                   aria-label={`One more ${line.item.name}`}
@@ -174,9 +330,17 @@ export function OrderPanel({
               </span>
               <span className="min-w-0 flex-1">
                 <span className="block truncate">{line.item.name}</span>
-                {(line.modifiers.length > 0 || line.note || line.isJain) && (
+                {(line.modifiers.length > 0 ||
+                  line.note ||
+                  line.isJain ||
+                  line.isPacked) && (
                   <span className="block truncate text-xs text-slate-500">
-                    {[line.isJain ? "Jain" : "", ...line.modifiers.map((m) => m.label), line.note]
+                    {[
+                      line.isJain ? "Jain" : "",
+                      line.isPacked ? "Pack" : "",
+                      ...line.modifiers.map((m) => m.label),
+                      line.note,
+                    ]
                       .filter(Boolean)
                       .join(", ")}
                   </span>
@@ -184,7 +348,9 @@ export function OrderPanel({
                 <span className="text-xs font-medium text-orange-700">New</span>
               </span>
               <span className="flex shrink-0 flex-col items-end">
-                <span className="tabular-nums">{rupees(draftUnitPrice(line) * line.quantity)}</span>
+                <span className="tabular-nums">
+                  {rupees(draftUnitPrice(line) * line.quantity)}
+                </span>
                 <button
                   type="button"
                   className="text-xs text-red-600 hover:underline"
@@ -199,25 +365,47 @@ export function OrderPanel({
       </div>
 
       <div className="border-t border-slate-200 px-3 py-2 text-sm">
-        {draft.length > 0 && <Row label="New items" value={rupees(draftSubtotal)} />}
+        {draft.length > 0 && (
+          <Row label="New items" value={rupees(draftSubtotal)} />
+        )}
         {totals && savedItems.length > 0 && (
           <>
             <Row label="Subtotal" value={rupees(totals.subtotal)} />
-            {totals.discount > 0 && <Row label="Discount" value={`−${rupees(totals.discount)}`} />}
-            {(totals.serviceCharge ?? 0) > 0 && <Row label="Service charge" value={rupees(totals.serviceCharge!)} />}
-            {(totals.packagingCharge ?? 0) > 0 && <Row label="Packaging" value={rupees(totals.packagingCharge!)} />}
+            {totals.discount > 0 && (
+              <Row label="Discount" value={`−${rupees(totals.discount)}`} />
+            )}
+            {detail && (
+              <ChargeRows
+                detail={detail}
+                editable={isOpen && !offline && !!order}
+              />
+            )}
             {totals.taxLines.map((t) => (
-              <Row key={t.name} label={`${t.name} ${t.percent}%`} value={rupees(t.amount)} />
+              <Row
+                key={t.name}
+                label={`${t.name} ${t.percent}%`}
+                value={rupees(t.amount)}
+              />
             ))}
-            {totals.roundOff !== 0 && <Row label="Round off" value={rupees(totals.roundOff)} />}
+            {totals.roundOff !== 0 && (
+              <Row label="Round off" value={rupees(totals.roundOff)} />
+            )}
             {!offline && (
-              <Row label={draft.length > 0 ? "Saved total" : "Total"} value={rupees(totals.grandTotal)} strong />
+              <Row
+                label={draft.length > 0 ? "Saved total" : "Total"}
+                value={rupees(totals.grandTotal)}
+                strong
+              />
             )}
           </>
         )}
-        {offline && offlineTotal !== null && <Row label="Total with tax" value={rupees(offlineTotal)} strong />}
+        {offline && offlineTotal !== null && (
+          <Row label="Total with tax" value={rupees(offlineTotal)} strong />
+        )}
         {!offline && !totals && draft.length > 0 && (
-          <p className="text-xs text-slate-400">Tax is added when the order is saved.</p>
+          <p className="text-xs text-slate-400">
+            Tax is added when the order is saved.
+          </p>
         )}
       </div>
 
@@ -233,14 +421,17 @@ export function OrderPanel({
                   disabled={busy || nothing || order?.status === "closed"}
                   title="F10"
                 >
-                  Pay &amp; send KOT {!phone && <kbd className="text-[10px] opacity-70">F10</kbd>}
+                  Pay &amp; send KOT{" "}
+                  {!phone && <kbd className="text-[10px] opacity-70">F10</kbd>}
                 </Button>
                 {phone && (
                   <Button
                     variant="secondary"
                     className="col-span-2"
                     onClick={onSaveKot}
-                    disabled={busy || !isOpen || (draft.length === 0 && unsent === 0)}
+                    disabled={
+                      busy || !isOpen || (draft.length === 0 && unsent === 0)
+                    }
                   >
                     Send to the counter to pay there
                   </Button>
@@ -251,13 +442,20 @@ export function OrderPanel({
                 size="lg"
                 className="col-span-2"
                 onClick={onSaveKot}
-                disabled={busy || !isOpen || (draft.length === 0 && unsent === 0)}
+                disabled={
+                  busy || !isOpen || (draft.length === 0 && unsent === 0)
+                }
               >
                 Send order to the counter
               </Button>
             )}
             {onHold ? (
-              <Button variant="secondary" className="col-span-2" onClick={onHold} disabled={busy || draft.length === 0}>
+              <Button
+                variant="secondary"
+                className="col-span-2"
+                onClick={onHold}
+                disabled={busy || draft.length === 0}
+              >
                 Hold (pay later)
               </Button>
             ) : (
@@ -280,19 +478,35 @@ export function OrderPanel({
                 disabled={busy || nothing || order?.status === "closed"}
                 title="F8 or F10"
               >
-                Pay & send {!phone && <kbd className="text-[10px] opacity-70">F10</kbd>}
+                Pay & send{" "}
+                {!phone && <kbd className="text-[10px] opacity-70">F10</kbd>}
               </Button>
             ) : (
-              <Button onClick={onSaveKot} disabled={busy || !isOpen || (draft.length === 0 && unsent === 0)} title="F8">
-                {phone ? "Send KOT" : "Save & KOT"} {!phone && <kbd className="text-[10px] opacity-70">F8</kbd>}
+              <Button
+                onClick={onSaveKot}
+                disabled={
+                  busy || !isOpen || (draft.length === 0 && unsent === 0)
+                }
+                title="F8"
+              >
+                {phone ? "Send KOT" : "Save & KOT"}{" "}
+                {!phone && <kbd className="text-[10px] opacity-70">F8</kbd>}
               </Button>
             )}
             {onHold ? (
-              <Button variant="secondary" onClick={onHold} disabled={busy || draft.length === 0}>
+              <Button
+                variant="secondary"
+                onClick={onHold}
+                disabled={busy || draft.length === 0}
+              >
                 Hold
               </Button>
             ) : (
-              <Button variant="secondary" onClick={() => setMoreOpen((v) => !v)} disabled={!order || offline}>
+              <Button
+                variant="secondary"
+                onClick={() => setMoreOpen((v) => !v)}
+                disabled={!order || offline}
+              >
                 {moreOpen ? "Hide options" : "More"}
               </Button>
             )}
@@ -302,7 +516,11 @@ export function OrderPanel({
               disabled={busy || nothing || order?.status === "closed"}
               title="F9"
             >
-              {order?.status === "billed" ? "Reprint bill" : phone ? "Request bill" : "Bill"}{" "}
+              {order?.status === "billed"
+                ? "Reprint bill"
+                : phone
+                  ? "Request bill"
+                  : "Bill"}{" "}
               {!phone && <kbd className="text-[10px] opacity-70">F9</kbd>}
             </Button>
             {onSettle && !payFirst && (
@@ -332,7 +550,11 @@ export function OrderPanel({
             </div>
           )}
         {onHold && order && !offline && (
-          <Button variant="secondary" className="col-span-2" onClick={() => setMoreOpen((v) => !v)}>
+          <Button
+            variant="secondary"
+            className="col-span-2"
+            onClick={() => setMoreOpen((v) => !v)}
+          >
             {moreOpen ? "Hide options" : "Split, merge, discount…"}
           </Button>
         )}

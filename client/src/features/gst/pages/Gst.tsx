@@ -260,6 +260,7 @@ export default function Gst() {
                   ["Discounts", -data.summary.discounts],
                   ["Service charge", data.summary.serviceCharge],
                   ["Packaging", data.summary.packaging],
+                  ["Other charges", data.summary.otherCharges],
                   ["Taxable value", data.summary.taxableValue],
                   ["GST", data.summary.gst],
                   ["Round off", data.summary.roundOff],

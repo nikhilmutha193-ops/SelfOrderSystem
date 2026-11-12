@@ -22,7 +22,9 @@ import {
   mergeSchema,
   orderFilterQuery,
   orderIdParams,
+  packedSchema,
   reasonSchema,
+  extraChargeSchema,
   serviceChargeSchema,
   settleSchema,
   splitSchema,
@@ -108,6 +110,10 @@ export const exportOrdersCsv = asyncHandler(async (req: Request, res: Response) 
 export const exportOrdersPdf = asyncHandler(async (req: Request, res: Response) => {
   const query = parse(orderFilterQuery, req.query);
   await streamOrdersReportPdf(res, await buildOrdersPdfData(getContext(req), query));
+});
+
+export const listMyOrders = asyncHandler(async (req: Request, res: Response) => {
+  res.json(await ordersService.listMyOrders(getContext(req)));
 });
 
 export const getOrder = asyncHandler(async (req: Request, res: Response) => {
@@ -213,6 +219,24 @@ export const setServiceCharge = asyncHandler(async (req: Request, res: Response)
   const { orderId } = parse(orderIdParams, req.params);
   const { waived } = parse(serviceChargeSchema, req.body);
   res.json(await operations.setServiceCharge(getContext(req), orderId, waived));
+});
+
+export const setPackagingWaived = asyncHandler(async (req: Request, res: Response) => {
+  const { orderId } = parse(orderIdParams, req.params);
+  const { waived } = parse(serviceChargeSchema, req.body);
+  res.json(await operations.setPackagingWaived(getContext(req), orderId, waived));
+});
+
+export const setExtraCharge = asyncHandler(async (req: Request, res: Response) => {
+  const { orderId } = parse(orderIdParams, req.params);
+  const { key, applied } = parse(extraChargeSchema, req.body);
+  res.json(await operations.setExtraCharge(getContext(req), orderId, key, applied));
+});
+
+export const setItemPacked = asyncHandler(async (req: Request, res: Response) => {
+  const { itemId } = parse(itemIdParams, req.params);
+  const { packed } = parse(packedSchema, req.body);
+  res.json(await operations.setItemPacked(getContext(req), itemId, packed));
 });
 
 export const markComplimentary = asyncHandler(async (req: Request, res: Response) => {

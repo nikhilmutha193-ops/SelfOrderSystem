@@ -14,9 +14,11 @@ import {
   getInvoicePdf,
   getOrder,
   listInvoiceRegister,
+  listMyOrders,
   listOrderCoupons,
   listOrders,
   markComplimentary,
+  setItemPacked,
   mergeOrder,
   payOrder,
   printBill,
@@ -24,6 +26,8 @@ import {
   removeDiscount,
   reopenBill,
   setDiscount,
+  setExtraCharge,
+  setPackagingWaived,
   setServiceCharge,
   splitOrder,
   startCounterOrder,
@@ -48,6 +52,7 @@ router.get("/invoices", requireAuth("admin"), requireModule("orders"), listInvoi
 router.get("/report.csv", requireAuth("admin"), requireModule("orders"), exportOrdersCsv);
 router.get("/report.pdf", requireAuth("admin"), requireModule("orders"), exportOrdersPdf);
 
+router.get("/session/mine", requireAuth("table"), listMyOrders);
 router.get("/:orderId", requireAuth("table", "admin", "chef"), requireModule("orders"), getOrder);
 router.get("/:orderId/invoice", requireAuth("table", "admin"), requireModule("orders"), getInvoice);
 router.get("/:orderId/invoice/pdf", requireAuth("table", "admin"), requireModule("orders"), getInvoicePdf);
@@ -65,9 +70,12 @@ router.post("/:orderId/transfer", requireAuth("admin"), requireModule("orders"),
 router.put("/:orderId/discount", requireAuth("admin"), requireModule("orders"), setDiscount);
 router.delete("/:orderId/discount", requireAuth("admin"), requireModule("orders"), removeDiscount);
 router.put("/:orderId/service-charge", requireAuth("admin"), requireModule("orders"), setServiceCharge);
+router.put("/:orderId/packaging", requireAuth("admin"), requireModule("orders"), setPackagingWaived);
+router.put("/:orderId/extra-charges", requireAuth("admin"), requireModule("orders"), setExtraCharge);
 
 router.post("/:orderId/items", requireAuth("table", "admin"), requireModule("orders"), addOrderItems);
 router.patch("/items/:itemId/complimentary", requireAuth("admin"), requireModule("orders"), markComplimentary);
+router.patch("/items/:itemId/packed", requireAuth("admin"), requireModule("orders"), setItemPacked);
 router.patch("/items/:itemId/cancel", requireAuth("admin"), requireModule("orders"), cancelOrderItem);
 
 router.get("/:orderId/coupons", requireAuth("table", "admin"), requireModule("orders"), listOrderCoupons);

@@ -123,8 +123,25 @@ export interface IKioskSettings {
   idleSeconds: number;
 }
 
+/** A named extra charge on the bill (delivery, cutlery, parcel box...), fixed or a percent of the bill. */
+export interface IExtraCharge {
+  key: string;
+  name: string;
+  type: "fixed" | "percent";
+  value: number;
+  /** Order types it applies to when it is automatic. */
+  orderTypes: ("dine-in" | "takeaway" | "delivery")[];
+  /** Added to matching orders by itself; staff can still remove it from one order. */
+  autoApply: boolean;
+  active: boolean;
+}
+
 export interface IBillingSettings {
   serviceChargePercent: number;
+  /** `perPlate` uses each dish's own packaging charge; `flat` charges one amount per order. */
+  packagingMode: "perPlate" | "flat";
+  packagingFlatCharge: number;
+  extraCharges: IExtraCharge[];
   maxStaffDiscountPercent: number;
   upiVpa: string;
   upiPayeeName: string;
@@ -303,6 +320,25 @@ const invoiceSettingsSchema = new Schema<IInvoiceSettings>(
 const billingSettingsSchema = new Schema<IBillingSettings>(
   {
     serviceChargePercent: { type: Number, default: 0, min: 0, max: 20 },
+    packagingMode: { type: String, enum: ["perPlate", "flat"], default: "perPlate" },
+    packagingFlatCharge: { type: Number, default: 0, min: 0 },
+    extraCharges: {
+      type: [
+        new Schema<IExtraCharge>(
+          {
+            key: { type: String, required: true },
+            name: { type: String, required: true, trim: true, maxlength: 40 },
+            type: { type: String, enum: ["fixed", "percent"], default: "fixed" },
+            value: { type: Number, default: 0, min: 0 },
+            orderTypes: { type: [String], enum: ["dine-in", "takeaway", "delivery"], default: [] },
+            autoApply: { type: Boolean, default: false },
+            active: { type: Boolean, default: true },
+          },
+          { _id: false }
+        ),
+      ],
+      default: [],
+    },
     maxStaffDiscountPercent: { type: Number, default: 10, min: 0, max: 100 },
     upiVpa: { type: String, default: "", trim: true },
     upiPayeeName: { type: String, default: "", trim: true },

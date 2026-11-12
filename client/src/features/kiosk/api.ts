@@ -51,6 +51,7 @@ export interface KioskOrderLine {
   quantity: number;
   note?: string;
   isJain?: boolean;
+  isPacked?: boolean;
   modifiers?: Pick<SelectedModifier, "groupName" | "label">[];
 }
 

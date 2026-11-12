@@ -18,6 +18,8 @@ export interface IOrderItem {
   quantity: number;
   total: number;
   isJain: boolean;
+  /** Staff marked this line to be packed (parcel), even on a dine-in order: it carries the dish's packaging charge. */
+  isPacked?: boolean;
   modifiers: { groupName: string; label: string; priceDelta: number }[];
   note: string;
   status: OrderItemStatus;
@@ -51,6 +53,7 @@ const orderItemSchema = new Schema<IOrderItem>(
     quantity: { type: Number, required: true, min: 1 },
     total: { type: Number, required: true, min: 0 },
     isJain: { type: Boolean, default: false },
+    isPacked: { type: Boolean, default: false },
     refundedQty: { type: Number, default: 0, min: 0 },
     modifiers: {
       type: [new Schema({ groupName: String, label: String, priceDelta: Number }, { _id: false })],

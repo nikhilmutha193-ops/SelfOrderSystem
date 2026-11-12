@@ -24,6 +24,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
 
 import { currentFinancialYearLabel } from "../../features/orders/status";
+import { ExtraChargesCard } from "../../components/ExtraChargesCard";
 import { KotCategoryGroups } from "../../components/KotCategoryGroups";
 import { OnlinePaymentsCard } from "../../features/payments/components/OnlinePaymentsCard";
 import {
@@ -1489,6 +1490,7 @@ export default function RestaurantSettings() {
                   </Field>
                 </div>
               </Card>
+              <ExtraChargesCard settings={billingSettings} onChange={setBillingSettings} />
               <OnlinePaymentsCard publicUrl={publicUrl} />
             </>
           )}

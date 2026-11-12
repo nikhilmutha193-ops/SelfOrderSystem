@@ -802,7 +802,7 @@ export default function FoodItems() {
                   onChange={(e) => setDeliveryPrice(e.target.value)}
                 />
               </Field>
-              <Field label="Packaging (₹ per plate)" htmlFor="food-packaging" hint="Takeaway and delivery only.">
+              <Field label="Packaging (₹ per plate)" htmlFor="food-packaging" hint="Added on takeaway and delivery, and on any dine-in line marked Pack.">
                 <Input
                   id="food-packaging"
                   type="number"

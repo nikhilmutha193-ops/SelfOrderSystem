@@ -34,7 +34,7 @@ export interface KotTicket {
   round: number;
   stationName?: string;
   categoryName?: string;
-  items: Pick<IOrderItem, "foodName" | "quantity" | "modifiers" | "note" | "isJain" | "components">[];
+  items: Pick<IOrderItem, "foodName" | "quantity" | "modifiers" | "note" | "isJain" | "isPacked" | "components">[];
   printedAt: Date;
   paperWidth: 58 | 80;
   reprint?: boolean;
@@ -58,7 +58,8 @@ export function renderKot(ticket: KotTicket): Buffer {
 
   for (const item of ticket.items) {
     const jain = settings?.showJainTag !== false && item.isJain ? " (JAIN)" : "";
-    p.size(false).bold(true).wrapped(`${item.quantity} x ${item.foodName}${jain}`).bold(false);
+    const pack = item.isPacked ? " (PACK)" : "";
+    p.size(false).bold(true).wrapped(`${item.quantity} x ${item.foodName}${jain}${pack}`).bold(false);
     const extras = [...(item.modifiers ?? []).map((m) => m.label), item.note].filter(Boolean);
     if (extras.length) p.wrapped(`   > ${extras.join(", ")}`);
     for (const part of item.components ?? []) p.wrapped(`   - ${part.quantity * item.quantity} x ${part.name}`);
@@ -137,6 +138,7 @@ export function renderBill(ticket: BillTicket): Buffer {
   if ((totals.serviceCharge ?? 0) > 0)
     p.row(`Service charge ${totals.serviceChargePercent}%`, money(totals.serviceCharge));
   if ((totals.packagingCharge ?? 0) > 0) p.row("Packaging", money(totals.packagingCharge));
+  for (const extra of totals.extraCharges ?? []) p.row(extra.name, money(extra.amount));
   p.row("Taxable value", money(totals.taxableAmount));
   for (const tax of totals.taxLines) p.row(`${tax.name} ${tax.percent}%`, money(tax.amount));
   if (totals.roundOff !== 0) p.row("Round off", `${totals.roundOff > 0 ? "+" : ""}${money(totals.roundOff)}`);

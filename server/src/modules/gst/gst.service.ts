@@ -13,6 +13,7 @@ interface Totals {
   discounts: number;
   serviceCharge: number;
   packaging: number;
+  otherCharges: number;
   taxableValue: number;
   gst: number;
   roundOff: number;
@@ -25,6 +26,7 @@ const emptyTotals = (): Totals => ({
   discounts: 0,
   serviceCharge: 0,
   packaging: 0,
+  otherCharges: 0,
   taxableValue: 0,
   gst: 0,
   roundOff: 0,
@@ -88,6 +90,7 @@ export async function gstReport(ctx: RequestContext, input: GstReportInput) {
     const taxLines = bill.taxLines ?? [];
     const gst = round2(taxLines.reduce((sum, t) => sum + t.amount, 0));
     const rate = round2(taxLines.reduce((sum, t) => sum + t.percent, 0));
+    const extraTotal = (bill.extraCharges ?? []).reduce((sum, c) => sum + c.amount, 0);
 
     rows.push({
       orderId: order._id,
@@ -104,6 +107,7 @@ export async function gstReport(ctx: RequestContext, input: GstReportInput) {
       discount: round2(bill.discount ?? 0),
       serviceCharge: round2(bill.serviceCharge ?? 0),
       packagingCharge: round2(bill.packagingCharge ?? 0),
+      otherCharges: round2(extraTotal),
       taxableValue: round2(bill.taxableAmount),
       taxLines: taxLines.map((t) => ({ name: t.name, percent: t.percent, amount: round2(t.amount) })),
       gst,
@@ -120,6 +124,7 @@ export async function gstReport(ctx: RequestContext, input: GstReportInput) {
       t.discounts += bill.discount ?? 0;
       t.serviceCharge += bill.serviceCharge ?? 0;
       t.packaging += bill.packagingCharge ?? 0;
+      t.otherCharges += extraTotal;
       t.taxableValue += bill.taxableAmount;
       t.gst += gst;
       t.roundOff += bill.roundOff ?? 0;

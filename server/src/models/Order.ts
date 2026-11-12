@@ -52,6 +52,8 @@ export interface IBillSnapshot {
   serviceChargePercent?: number;
   serviceCharge?: number;
   packagingCharge?: number;
+  /** Named extra charges (delivery, cutlery...) as billed. */
+  extraCharges?: { name: string; amount: number }[];
   couponCode?: string;
   taxableAmount: number;
   taxLines: IBillTaxLine[];
@@ -104,6 +106,12 @@ export interface IOrder {
   customerId?: Types.ObjectId | null;
   loyaltyRedeem?: { points: number; amount: number } | null;
   serviceChargeWaived?: boolean;
+  /** Staff removed the packaging charge from this order. */
+  packagingWaived?: boolean;
+  /** Extra charges (by key) staff added to this order. */
+  extraChargeKeys?: string[];
+  /** Automatic extra charges (by key) staff removed from this order. */
+  extraChargesOff?: string[];
   /** Money already given back through refunds (see the Refund model). */
   refundedTotal?: number;
   priority?: OrderPriority;
@@ -160,6 +168,10 @@ const billSnapshotSchema = new Schema<IBillSnapshot>(
     serviceChargePercent: { type: Number, default: 0 },
     serviceCharge: { type: Number, default: 0 },
     packagingCharge: { type: Number, default: 0 },
+    extraCharges: {
+      type: [new Schema({ name: String, amount: Number }, { _id: false })],
+      default: [],
+    },
     couponCode: { type: String },
     taxableAmount: { type: Number, required: true },
     taxLines: {
@@ -222,6 +234,9 @@ const orderSchema = new Schema<IOrder>(
       default: null,
     },
     serviceChargeWaived: { type: Boolean, default: false },
+    packagingWaived: { type: Boolean, default: false },
+    extraChargeKeys: { type: [String], default: [] },
+    extraChargesOff: { type: [String], default: [] },
     refundedTotal: { type: Number, default: 0, min: 0 },
     priority: { type: String, enum: ["normal", "high", "rush"], default: "normal" },
     mergedInto: { type: Schema.Types.ObjectId, ref: "Order", default: null },

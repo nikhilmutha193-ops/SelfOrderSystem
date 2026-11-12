@@ -203,6 +203,13 @@ export const releaseTable = asyncHandler(async (req: Request, res: Response) => 
   res.json({ ...table!.toObject(), cancelledOrders, awaitingPayment: status === "awaiting_payment" });
 });
 
+/** The signed-in guest's own table, so the menu can show its number before an order exists. */
+export const getOwnTable = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.auth?.tableId) return res.json({ code: null });
+  const table = await TableModel.findOne({ _id: req.auth.tableId, restaurantId: req.restaurantId }).select("code");
+  res.json({ code: table?.code ?? null });
+});
+
 export const releaseOwnTableSession = asyncHandler(async (req: Request, res: Response) => {
   if (!req.auth?.tableId) throw new HttpError(400, "No table session to release");
 

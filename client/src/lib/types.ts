@@ -299,8 +299,24 @@ export interface ManualDiscount {
 /** "after": guests eat, then pay the bill. "upfront": each dine-in order is paid before it goes to the kitchen. */
 export type DineInPayment = "after" | "upfront";
 
+/** A named extra charge on the bill (delivery, cutlery, parcel box...). */
+export interface ExtraCharge {
+  key?: string;
+  name: string;
+  type: "fixed" | "percent";
+  value: number;
+  /** Order types it applies to when automatic. */
+  orderTypes: OrderType[];
+  autoApply: boolean;
+  active: boolean;
+}
+
 export interface BillingSettings {
   serviceChargePercent: number;
+  /** `perPlate` uses each dish's own packaging charge; `flat` charges one amount per order. */
+  packagingMode?: "perPlate" | "flat";
+  packagingFlatCharge?: number;
+  extraCharges?: ExtraCharge[];
   maxStaffDiscountPercent: number;
   upiVpa: string;
   upiPayeeName: string;
@@ -350,6 +366,7 @@ export interface Order {
   payments?: Payment[];
   manualDiscount?: ManualDiscount | null;
   serviceChargeWaived?: boolean;
+  packagingWaived?: boolean;
   customerId?: string | null;
   loyaltyRedeem?: { points: number; amount: number } | null;
   mergedInto?: string | null;
@@ -420,6 +437,8 @@ export interface OrderItem {
   quantity: number;
   total: number;
   isJain: boolean;
+  /** Staff marked the line to be packed (parcel), even on a dine-in order. */
+  isPacked?: boolean;
   status: OrderItemStatus;
   kotRound: number | null;
   tokenNumber: number | null;
@@ -452,16 +471,36 @@ export interface InvoiceTotals {
   serviceChargePercent?: number;
   serviceCharge?: number;
   packagingCharge?: number;
+  extraCharges?: { name: string; amount: number }[];
   taxableAmount: number;
   taxLines: InvoiceTaxLine[];
   roundOff: number;
   grandTotal: number;
 }
 
+/** One of the guest's own orders in this table session (see `GET /orders/session/mine`). */
+export interface MyOrder {
+  orderId: string;
+  status: OrderStatus;
+  /** The order the guest's sign-in is on now (the latest round). */
+  current: boolean;
+  placedAt: string;
+  itemCount: number;
+  tokens: number[];
+  ready: boolean;
+  /** Every dish has been served. */
+  served: boolean;
+  total: number;
+}
+
 export interface OrderDetailResponse {
   order: Order;
   items: OrderItem[];
   totals: InvoiceTotals;
+  /** The code of the order's table, when it has one. */
+  tableCode?: string | null;
+  /** Staff only, open orders: the extra charges they can add or remove on this order. */
+  extraChargeOptions?: { key: string; name: string; type: "fixed" | "percent"; value: number; applied: boolean }[];
   prepMessageTemplate?: string;
   prepBufferMinutes?: number;
   guestOrderMode?: GuestOrderMode;
@@ -524,6 +563,7 @@ export interface CartLine {
   modifiers?: SelectedModifier[];
   note?: string;
   isJain?: boolean;
+  isPacked?: boolean;
 }
 
 export interface ApiErrorBody {
@@ -1227,6 +1267,7 @@ export interface GstTotals {
   discounts: number;
   serviceCharge: number;
   packaging: number;
+  otherCharges: number;
   taxableValue: number;
   gst: number;
   roundOff: number;
@@ -1247,6 +1288,7 @@ export interface GstInvoiceRow {
   discount: number;
   serviceCharge: number;
   packagingCharge: number;
+  otherCharges: number;
   taxableValue: number;
   taxLines: { name: string; percent: number; amount: number }[];
   gst: number;

@@ -39,7 +39,7 @@ export function KioskReview({
           <ul className="flex flex-col gap-3">
             {cart.map((line) => {
               const food = foodById.get(line.foodItemId);
-              const extras = [...(line.modifiers?.map((m) => m.label) ?? []), line.isJain ? "Jain" : "", line.note ?? ""]
+              const extras = [...(line.modifiers?.map((m) => m.label) ?? []), line.isJain ? "Jain" : "", line.isPacked ? "Pack" : "", line.note ?? ""]
                 .filter(Boolean)
                 .join(", ");
               return (
