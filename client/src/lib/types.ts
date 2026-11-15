@@ -18,6 +18,8 @@ export interface GuestAccess {
   placeOrder: boolean;
   showMenu: boolean;
   showFeedback: boolean;
+  /** The "Rate us" button on the menu page (off by default). */
+  showRateUs: boolean;
 }
 
 export interface RequiredDetails {

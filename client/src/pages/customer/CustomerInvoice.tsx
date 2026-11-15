@@ -343,7 +343,7 @@ export default function CustomerInvoice() {
         </Card>
       )}
 
-      {cafe && tokens.length > 0 && (
+      {tokens.length > 0 && (
         <Card className="mb-4 text-center">
           <p className="text-xs font-semibold tracking-wide text-slate-500 uppercase">
             {tokens.length > 1 ? "Your tokens" : "Your token"}

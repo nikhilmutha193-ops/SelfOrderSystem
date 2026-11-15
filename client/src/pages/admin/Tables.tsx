@@ -81,8 +81,8 @@ const DEFAULT_LOGIN_DRAFT: LoginDraft = {
   showOrderNow: true,
   allowQrLogin: true,
   allowPinLogin: true,
-  qr: { placeOrder: true, showMenu: true, showFeedback: true },
-  manual: { placeOrder: true, showMenu: true, showFeedback: true },
+  qr: { placeOrder: true, showMenu: true, showFeedback: true, showRateUs: false },
+  manual: { placeOrder: true, showMenu: true, showFeedback: true, showRateUs: false },
   requiredDetails: { name: true, phone: false, members: true, birthday: false },
 };
 
@@ -677,6 +677,11 @@ export default function Tables() {
                   "showFeedback",
                   "Show the feedback form",
                   "Star rating and comment.",
+                ],
+                [
+                  "showRateUs",
+                  'Show the "Rate us" button',
+                  "The Rate us item in the menu page's options. Off by default.",
                 ],
               ] as const
             ).map(([field, title, hint]) => (

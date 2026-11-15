@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { useMyOrders } from "../features/orders/queries";
+import { useMyOrders, useOrder } from "../features/orders/queries";
 import { useDineInPayment } from "../lib/useDineInPayment";
 import { useServiceFlow } from "../lib/useServiceFlow";
 import { useTableSession } from "../lib/useTableSession";
@@ -24,7 +24,19 @@ export function ServedReleasePrompt() {
   const dineInPayment = useDineInPayment();
   const serviceFlow = useServiceFlow();
   const payFirst = dineInPayment === "upfront" || serviceFlow === "cafe";
-  const orders = useMyOrders(payFirst && !!orderId && !!tableId && via !== "token", POLL.guestInvoice).data;
+  const active = payFirst && !!orderId && !!tableId && via !== "token";
+  const mine = useMyOrders(active, POLL.guestInvoice);
+  const orders = mine.data;
+  // The current order is already polled by the guest pages. When it changes (an item served, the bill paid)
+  // the list of all rounds is fetched again at once instead of waiting for its own timer.
+  const current = useOrder(active ? orderId : undefined, POLL.guestInvoice).data;
+  const currentSignature = current
+    ? `${current.order.status}:${current.items.map((i) => i.status).join(",")}`
+    : "";
+  const { refetch } = mine;
+  useEffect(() => {
+    if (active && currentSignature) void refetch();
+  }, [active, currentSignature, refetch]);
   const [secondsLeft, setSecondsLeft] = useState(COUNTDOWN_SECONDS);
   const [dismissedFor, setDismissedFor] = useState<string | null>(null);
   const releasing = useRef(false);

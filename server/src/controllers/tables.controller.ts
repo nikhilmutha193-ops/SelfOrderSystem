@@ -71,8 +71,8 @@ export const updateTableLoginSettings = asyncHandler(async (req: Request, res: R
     allowPinLogin?: boolean;
     allowTokenLogin?: boolean;
     requiredDetails?: Partial<Record<"name" | "phone" | "members" | "birthday", boolean>>;
-    qr?: Partial<Record<"placeOrder" | "showMenu" | "showFeedback", boolean>>;
-    manual?: Partial<Record<"placeOrder" | "showMenu" | "showFeedback", boolean>>;
+    qr?: Partial<Record<"placeOrder" | "showMenu" | "showFeedback" | "showRateUs", boolean>>;
+    manual?: Partial<Record<"placeOrder" | "showMenu" | "showFeedback" | "showRateUs", boolean>>;
   };
   const restaurant = await Restaurant.findById(req.restaurantId);
   if (!restaurant) throw new HttpError(404, "Restaurant not found");
@@ -87,7 +87,7 @@ export const updateTableLoginSettings = asyncHandler(async (req: Request, res: R
   }
   for (const [key, patch] of [["qr", qr], ["manual", manual]] as const) {
     if (!patch) continue;
-    for (const field of ["placeOrder", "showMenu", "showFeedback"] as const) {
+    for (const field of ["placeOrder", "showMenu", "showFeedback", "showRateUs"] as const) {
       if (patch[field] !== undefined) settings[key][field] = !!patch[field];
     }
     // Guests can't order from a menu they can't see.

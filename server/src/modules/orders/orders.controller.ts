@@ -113,6 +113,8 @@ export const exportOrdersPdf = asyncHandler(async (req: Request, res: Response) 
 });
 
 export const listMyOrders = asyncHandler(async (req: Request, res: Response) => {
+  // A live status list: never answer from a browser or proxy cache.
+  res.set("Cache-Control", "no-store");
   res.json(await ordersService.listMyOrders(getContext(req)));
 });
 

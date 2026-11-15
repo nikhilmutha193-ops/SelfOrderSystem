@@ -21,6 +21,8 @@ export interface IGuestAccess {
   placeOrder: boolean;
   showMenu: boolean;
   showFeedback: boolean;
+  /** The "Rate us" button in the menu page's options. Off until the admin turns it on. */
+  showRateUs: boolean;
 }
 
 /**
@@ -250,6 +252,7 @@ const guestAccessSchema = new Schema<IGuestAccess>(
     placeOrder: { type: Boolean, default: true },
     showMenu: { type: Boolean, default: true },
     showFeedback: { type: Boolean, default: true },
+    showRateUs: { type: Boolean, default: false },
   },
   { _id: false }
 );

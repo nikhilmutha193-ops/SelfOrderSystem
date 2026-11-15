@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 
+import { useTableSession } from "../../lib/useTableSession";
 import type { DeliveryProvider, ItemCancelReason, PaymentMethod } from "../../lib/types";
 import {
   ordersApi,
@@ -38,11 +39,18 @@ export function useOrders(filters: OrderFilters, options: { enabled?: boolean; r
 
 /** The guest's own orders in this table session, newest last. */
 export function useMyOrders(enabled: boolean, refetchInterval?: number) {
+  // Scoped to the sign-in, so a new table login never shows the previous guest's orders or tokens.
+  const { sessionId, tableId, orderId } = useTableSession();
   return useQuery({
-    queryKey: ["orders", "mine"],
+    queryKey: ["orders", "mine", sessionId ?? `${tableId ?? ""}:${orderId ?? ""}`],
     queryFn: () => ordersApi.mine(),
     enabled,
     refetchInterval,
+    // Served/paid changes must reach the guest without a reload, even when the tab was in the background.
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnReconnect: true,
+    refetchIntervalInBackground: true,
   });
 }
 

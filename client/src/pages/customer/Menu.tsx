@@ -150,7 +150,7 @@ export default function Menu() {
       ...(orderQuery.data?.items ?? [])
         .filter((i) => i.status !== "cancelled" && i.tokenNumber != null)
         .map((i) => i.tokenNumber as number),
-      ...(myOrders ?? []).filter((o) => o.status !== "cancelled").flatMap((o) => o.tokens),
+      ...(orderId ? (myOrders ?? []) : []).filter((o) => o.status !== "cancelled").flatMap((o) => o.tokens),
     ]),
   ].sort((a, b) => a - b);
   const tokenText = tokenNumbers.length ? `${tokenNumbers.length > 1 ? "Tokens" : "Token"} ${tokenNumbers.join(", ")}` : "";
@@ -610,7 +610,7 @@ export default function Menu() {
                       <UserIcon className="h-[18px] w-[18px]" /> Add your details
                     </button>
                   )}
-                  {access.showFeedback && access.showMenu && (
+                  {access.showRateUs && access.showFeedback && access.showMenu && (
                     <button
                       type="button"
                       role="menuitem"

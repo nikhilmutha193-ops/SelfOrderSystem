@@ -219,11 +219,13 @@ describe("table guest access by sign-in method", () => {
       placeOrder: false,
       showMenu: true,
       showFeedback: true,
+      showRateUs: false,
     });
     expect(saved.body.qr).toEqual({
       placeOrder: true,
       showMenu: true,
       showFeedback: true,
+      showRateUs: false,
     });
 
     const session = await login("code");
