@@ -23,7 +23,26 @@ export function paidBeforeKitchen(
   order: Pick<IOrder, "orderType"> & Partial<Pick<IOrder, "source">>,
   restaurant: Partial<WithBilling> | null | undefined
 ) {
-  return order.source === "kiosk" || isCafeFlow(restaurant) || (order.orderType === "dine-in" && paysUpfront(restaurant));
+  return (
+    order.source === "kiosk" ||
+    isCafeFlow(restaurant) ||
+    (order.orderType === "dine-in" ? paysUpfront(restaurant) : !!restaurant?.billingSettings?.takeawayPayFirst)
+  );
+}
+
+/** Takeaway and counter orders are paid first (cafe flow, or the "takeaway and counter pay first" switch). */
+export function takeawayPaysFirst(restaurant: Partial<WithBilling> | null | undefined): boolean {
+  return isCafeFlow(restaurant) || !!restaurant?.billingSettings?.takeawayPayFirst;
+}
+
+export async function restaurantPaidBeforeKitchen(
+  restaurantId: Types.ObjectId | string,
+  orderType: IOrder["orderType"]
+): Promise<boolean> {
+  return paidBeforeKitchen(
+    { orderType },
+    await Restaurant.findById(restaurantId).select("billingSettings.dineInPayment billingSettings.takeawayPayFirst serviceFlow").lean()
+  );
 }
 
 export async function restaurantPaysUpfront(restaurantId: Types.ObjectId | string): Promise<boolean> {

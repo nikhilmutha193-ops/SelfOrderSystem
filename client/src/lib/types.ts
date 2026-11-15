@@ -322,7 +322,10 @@ export interface BillingSettings {
   maxStaffDiscountPercent: number;
   upiVpa: string;
   upiPayeeName: string;
+  /** Retired: "How you serve" decides whether dine-in guests pay first. */
   dineInPayment?: DineInPayment;
+  /** Takeaway and counter orders are paid first (always on in the cafe flow). */
+  takeawayPayFirst?: boolean;
 }
 
 export type DeliveryProvider = "Swiggy" | "Zomato" | "Uber-Eats" | "Other";
@@ -949,6 +952,7 @@ export interface PosBilling {
   serviceChargePercent: number;
   footerNote: string;
   dineInPayment?: DineInPayment;
+  takeawayPayFirst?: boolean;
   serviceFlow?: ServiceFlow;
 }
 

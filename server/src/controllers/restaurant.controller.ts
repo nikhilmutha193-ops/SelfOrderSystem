@@ -316,6 +316,9 @@ export const updateRestaurantSettings = asyncHandler(async (req: Request, res: R
     if (dineInPayment !== undefined && dineInPayment !== "after" && dineInPayment !== "upfront") {
       throw new HttpError(400, "Choose whether dine-in guests pay after eating or when ordering");
     }
+    if (billingSettings.takeawayPayFirst !== undefined && typeof billingSettings.takeawayPayFirst !== "boolean") {
+      throw new HttpError(400, "Takeaway and counter pay first must be on or off");
+    }
     if (
       serviceChargePercent !== undefined &&
       (typeof serviceChargePercent !== "number" || serviceChargePercent < 0 || serviceChargePercent > 20)
@@ -342,6 +345,8 @@ export const updateRestaurantSettings = asyncHandler(async (req: Request, res: R
       ...billingSettings,
       ...(upiVpa !== undefined && { upiVpa: String(upiVpa).trim() }),
     });
+    // "How you serve" now decides whether dine-in guests pay first, so the older separate setting is retired.
+    if (serviceFlow !== undefined) restaurant.billingSettings.dineInPayment = "after";
   }
   if (chatModeration !== undefined) {
     if (chatModeration.enabled !== undefined) restaurant.chatModeration.enabled = !!chatModeration.enabled;

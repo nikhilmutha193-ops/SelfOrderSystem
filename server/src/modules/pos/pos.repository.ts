@@ -80,7 +80,7 @@ export class PosRepository {
   billingInfo() {
     return Restaurant.findById(this.restaurantId)
       .select(
-        "name address gstin taxRates serviceFlow billingSettings.serviceChargePercent billingSettings.dineInPayment invoiceSettings.footerNote"
+        "name address gstin taxRates serviceFlow billingSettings.serviceChargePercent billingSettings.dineInPayment billingSettings.takeawayPayFirst invoiceSettings.footerNote"
       )
       .lean();
   }

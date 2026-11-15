@@ -147,7 +147,10 @@ export interface IBillingSettings {
   maxStaffDiscountPercent: number;
   upiVpa: string;
   upiPayeeName: string;
+  /** Retired: how you serve (cafe flow) now decides this. Only read for settings saved before. */
   dineInPayment: DineInPayment;
+  /** Takeaway and counter orders are paid first and reach the kitchen once paid (restaurant flow; cafe always does). */
+  takeawayPayFirst: boolean;
 }
 
 export interface ILoyaltySettings {
@@ -346,6 +349,7 @@ const billingSettingsSchema = new Schema<IBillingSettings>(
     upiVpa: { type: String, default: "", trim: true },
     upiPayeeName: { type: String, default: "", trim: true },
     dineInPayment: { type: String, enum: ["after", "upfront"], default: "after" },
+    takeawayPayFirst: { type: Boolean, default: false },
   },
   { _id: false }
 );

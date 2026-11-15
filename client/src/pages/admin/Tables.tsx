@@ -18,7 +18,6 @@ import { Link } from "react-router-dom";
 import { AreasCard } from "../../features/pricing/components/AreasCard";
 import { useAreas, useSetTableArea } from "../../features/pricing/queries";
 import { useCanEdit } from "../../lib/adminAuth";
-import { useDineInPayment } from "../../lib/useDineInPayment";
 import { useServiceFlow } from "../../lib/useServiceFlow";
 import type {
   GuestAccess,
@@ -217,8 +216,6 @@ export default function Tables() {
   const { areas } = useAreas();
   const setArea = useSetTableArea();
   const canEditTables = useCanEdit("tables");
-  // Tables have no captain when guests pay when ordering.
-  const showCaptains = useDineInPayment() !== "upfront";
   // Cafe flow: guests pay first, so no table is ever "waiting to pay".
   const cafe = useServiceFlow() === "cafe";
 
@@ -806,7 +803,7 @@ export default function Tables() {
                   <th>PIN</th>
                   <th>Status</th>
                   {areas.length > 0 && <th>Area</th>}
-                  {showCaptains && <th>Captain</th>}
+                  <th>Captain</th>
                   <th>Expires after</th>
                   <th className="text-right">Actions</th>
                 </tr>
@@ -877,29 +874,27 @@ export default function Tables() {
                         )}
                       </td>
                     )}
-                    {showCaptains && (
-                      <td>
-                        {table.isGuest ? (
-                          <span className="text-xs text-slate-400">—</span>
-                        ) : (
-                          <Select
-                            aria-label={`Captain for ${table.code}`}
-                            className="!w-36"
-                            value={table.captainId ?? ""}
-                            onChange={(e) =>
-                              assignCaptain(table, e.target.value)
-                            }
-                          >
-                            <option value="">Anyone</option>
-                            {captains.map((c) => (
-                              <option key={c._id} value={c._id}>
-                                {c.username}
-                              </option>
-                            ))}
-                          </Select>
-                        )}
-                      </td>
-                    )}
+                    <td>
+                      {table.isGuest ? (
+                        <span className="text-xs text-slate-400">—</span>
+                      ) : (
+                        <Select
+                          aria-label={`Captain for ${table.code}`}
+                          className="!w-36"
+                          value={table.captainId ?? ""}
+                          onChange={(e) =>
+                            assignCaptain(table, e.target.value)
+                          }
+                        >
+                          <option value="">Anyone</option>
+                          {captains.map((c) => (
+                            <option key={c._id} value={c._id}>
+                              {c.username}
+                            </option>
+                          ))}
+                        </Select>
+                      )}
+                    </td>
                     <td>
                       {table.isGuest ? (
                         <span className="text-xs text-slate-400">—</span>

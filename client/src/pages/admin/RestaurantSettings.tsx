@@ -88,6 +88,25 @@ const SECTIONS: { value: SectionKey; label: string; icon: LucideIcon }[] = [
   { value: "delivery", label: "Online delivery", icon: Truck },
 ];
 
+const RESTAURANT_POINTS = [
+  "Guests order in rounds from their table. Each round can go to the kitchen straight away, or wait for staff to accept it (Settings → Kitchen tickets).",
+  "The bill can only be made once every dish has been sent to the kitchen. Staff or the guest then pay at the end.",
+  "The table shows \"waiting to pay\" after the bill is made and frees up only when the bill is paid, or when staff release it.",
+  "The Captain app takes orders and sends KOTs, and captains can request the bill. The POS has Save & KOT, Bill and Settle.",
+  "The guest's order page shows the bill, a UPI QR and Pay now (when online payments are set up) once the bill is ready.",
+  "The KOT token is for the kitchen. The receipt does not carry it.",
+];
+
+const CAFE_POINTS = [
+  "Every order is paid first. Guest QR orders wait as \"awaiting payment\" and the kitchen gets them only when they are paid.",
+  "The guest's order page shows Pay now (Razorpay, when set up), a UPI QR and the counter option as soon as the order is placed.",
+  "Paying sends the KOT. The token is shown on the guest's page, on the receipt and on the pickup board.",
+  "The POS has one Pay & send KOT button (plus Hold). The Captain app takes payment itself with the UPI QR, cash, card or Razorpay, and its \"request bill\" is hidden.",
+  "The \"waiting to pay\" table states are hidden. A table stays seated after paying until staff release it, or it frees itself about 2 minutes after everything is served.",
+  "Guests can follow their order by token number without a table (Track my order).",
+  "A paid order is locked: more food starts a new order with its own token. Refund an item from the paid bill if it was cancelled.",
+];
+
 function ToggleRow({
   id,
   checked,
@@ -187,6 +206,7 @@ const DEFAULT_BILLING_SETTINGS: BillingSettings = {
   upiVpa: "",
   upiPayeeName: "",
   dineInPayment: "after",
+  takeawayPayFirst: false,
 };
 
 const DEFAULT_INVOICE_SETTINGS: InvoiceSettings = {
@@ -1158,7 +1178,7 @@ export default function RestaurantSettings() {
                     description="New items wait in the Kitchen Queue until someone prints the KOT."
                   />
                 </div>
-                {billingSettings.dineInPayment === "upfront" && (
+                {serviceFlow === "cafe" && (
                   <p className="mt-3 text-xs text-slate-500">
                     Guests pay when ordering (Billing), so their orders go to
                     the kitchen once paid, whichever you pick here.
@@ -1334,45 +1354,6 @@ export default function RestaurantSettings() {
             <>
               <Card>
                 <CardHeader
-                  title="When do dine-in guests pay?"
-                  description="Choose how your restaurant works. Takeaway can be paid either way."
-                />
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <ChoiceCard
-                    name="dine-in-payment"
-                    checked={billingSettings.dineInPayment !== "upfront"}
-                    onChange={() =>
-                      setBillingSettings((prev) => ({
-                        ...prev,
-                        dineInPayment: "after",
-                      }))
-                    }
-                    title="After eating"
-                    description="Guests order in rounds, then pay the bill. The table waits for payment before it frees up. Captains (waiters) can take orders."
-                  />
-                  <ChoiceCard
-                    name="dine-in-payment"
-                    checked={billingSettings.dineInPayment === "upfront"}
-                    onChange={() =>
-                      setBillingSettings((prev) => ({
-                        ...prev,
-                        dineInPayment: "upfront",
-                      }))
-                    }
-                    title="When ordering"
-                    description="Each order is paid first and only then goes to the kitchen. The table stays seated until staff release it. The captain app is not used."
-                  />
-                </div>
-                {billingSettings.dineInPayment === "upfront" && (
-                  <p className="mt-3 text-xs text-slate-500">
-                    Table QR orders wait until they're paid at the counter. Turn
-                    on table auto-release (Tables page) so tables free up even
-                    when nobody releases them.
-                  </p>
-                )}
-              </Card>
-              <Card>
-                <CardHeader
                   icon={Store}
                   title="How you serve"
                   description="When guests pay, and when the kitchen gets the order."
@@ -1393,22 +1374,45 @@ export default function RestaurantSettings() {
                     description="Take the order and collect payment first. The kitchen ticket prints the moment it is paid, and the receipt carries the token the guest collects by."
                   />
                 </div>
-                {serviceFlow === "cafe" && (
-                  <ul className="mt-3 list-disc space-y-1 pl-5 text-xs text-slate-500">
-                    <li>
-                      Guest QR orders wait as "awaiting payment" until staff
-                      take payment at the counter.
-                    </li>
-                    <li>
-                      The Captain app's "request bill" and the "waiting to pay"
-                      table states are hidden.
-                    </li>
-                    <li>
-                      Adding more to a paid order starts a new order. Refund an
-                      item from the paid bill if it was cancelled.
-                    </li>
-                  </ul>
+                {billingSettings.dineInPayment === "upfront" && serviceFlow === "restaurant" && (
+                  <Alert tone="warning" className="mt-3">
+                    This restaurant was set up so dine-in guests pay when ordering. That older option is now part of
+                    this choice: pick Cafe to keep paying first, or Restaurant to pay after eating. Saving applies
+                    your pick.
+                  </Alert>
                 )}
+                <div className="mt-3 divide-y divide-slate-100 rounded-xl border border-slate-200 px-3">
+                  <ToggleRow
+                    id="takeaway-pay-first"
+                    checked={serviceFlow === "cafe" || !!billingSettings.takeawayPayFirst}
+                    onChange={(v) => {
+                      if (serviceFlow !== "cafe") setBillingSettings((prev) => ({ ...prev, takeawayPayFirst: v }));
+                    }}
+                    label="Takeaway and counter orders pay first"
+                    description={
+                      serviceFlow === "cafe"
+                        ? "Always on in the Cafe flow: every order is paid before the kitchen gets it."
+                        : "Takeaway and counter orders are paid first and reach the kitchen once paid. Dine-in still pays after eating."
+                    }
+                  />
+                </div>
+                <div className="mt-3 rounded-xl bg-slate-50 p-3">
+                  <p className="text-xs font-semibold text-slate-700">
+                    {serviceFlow === "cafe" ? "What Cafe: pay first does" : "What Restaurant: pay after does"}
+                  </p>
+                  <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-slate-600">
+                    {(serviceFlow === "cafe" ? CAFE_POINTS : RESTAURANT_POINTS).map((point) => (
+                      <li key={point}>{point}</li>
+                    ))}
+                    {serviceFlow !== "cafe" && (
+                      <li>
+                        {billingSettings.takeawayPayFirst
+                          ? "Takeaway and counter orders are the exception: they are paid first and go to the kitchen once paid."
+                          : "Takeaway and counter orders follow the same pay-after steps (turn on the switch above to make them pay first)."}
+                      </li>
+                    )}
+                  </ul>
+                </div>
                 <p className="mt-3 text-xs text-slate-500">
                   Press Save settings at the bottom to apply the change.
                 </p>

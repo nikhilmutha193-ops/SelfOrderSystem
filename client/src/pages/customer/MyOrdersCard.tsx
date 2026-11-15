@@ -13,10 +13,13 @@ export function MyOrdersCard({
   orders,
   viewingId,
   onSelect,
+  payFirst = false,
 }: {
   orders: MyOrder[];
   viewingId: string;
   onSelect: (orderId: string) => void;
+  /** Orders are paid before the kitchen gets them, so an unpaid one is waiting for payment. */
+  payFirst?: boolean;
 }) {
   if (orders.length < 2) return null;
   return (
@@ -24,7 +27,8 @@ export function MyOrdersCard({
       <p className="mb-2 text-sm font-semibold text-slate-800">Your orders</p>
       <ul className="flex flex-col gap-2">
         {orders.map((o, index) => {
-          const status = STATUS[o.status];
+          const awaiting = payFirst && (o.status === "open" || o.status === "billed") && o.itemCount > 0;
+          const status = awaiting ? { tone: "amber" as const, label: "Awaiting payment" } : STATUS[o.status];
           const viewing = o.orderId === viewingId;
           return (
             <li key={o.orderId}>
@@ -52,6 +56,7 @@ export function MyOrdersCard({
                     </span>
                   )}
                   {o.ready && o.status !== "cancelled" && <Badge tone="green">Ready</Badge>}
+                  {awaiting && !viewing && <span className="text-xs font-semibold text-orange-700">Pay now →</span>}
                   <Badge tone={status.tone}>{status.label}</Badge>
                 </span>
               </button>

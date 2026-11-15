@@ -233,3 +233,53 @@ describe("releasing a paid and served table", () => {
     await setDineInPayment("after");
   });
 });
+
+describe("takeaway and counter pay first", () => {
+  const takeaway = (key: string) =>
+    api()
+      .post("/api/pos/orders")
+      .set({ ...bearer(owner), "Idempotency-Key": key })
+      .send({ orderType: "takeaway", sendToKitchen: true, items: [{ foodItemId: world.food.dosa, quantity: 1 }] });
+
+  it("holds a takeaway until it is paid when the switch is on, and keeps dine-in paying after", async () => {
+    await setDineInPayment("after");
+    await Restaurant.updateOne({ _id: world.restaurantId }, { $set: { "billingSettings.takeawayPayFirst": true } });
+
+    const held = await takeaway("takeaway-pay-first");
+    expect(held.status).toBe(201);
+    expect(held.body.kot).toBeNull();
+    expect(await queueOrderIds()).not.toContain(held.body.order._id);
+    expect((await pay(held.body.order._id)).status).toBe(200);
+    expect(await queueOrderIds()).toContain(held.body.order._id);
+
+    // Earlier tests may have left this table seated.
+    await api().patch(`/api/pos/tables/${world.tableIds[2]}/release`).set(bearer(owner));
+    const dineIn = await api()
+      .post("/api/pos/orders")
+      .set({ ...bearer(owner), "Idempotency-Key": "dine-in-still-after" })
+      .send({ orderType: "dine-in", tableId: world.tableIds[2], members: 2, sendToKitchen: true, items: [{ foodItemId: world.food.vada, quantity: 1 }] });
+    expect(dineIn.status).toBe(201);
+    expect(dineIn.body.kot).not.toBeNull();
+    await api().patch(`/api/pos/tables/${world.tableIds[2]}/release`).set(bearer(owner));
+  });
+
+  it("sends a takeaway to the kitchen straight away when the switch is off", async () => {
+    await Restaurant.updateOne({ _id: world.restaurantId }, { $set: { "billingSettings.takeawayPayFirst": false } });
+    const sent = await takeaway("takeaway-pay-after");
+    expect(sent.status).toBe(201);
+    expect(sent.body.kot).not.toBeNull();
+  });
+
+  it("clears the retired dine-in setting when how you serve is saved", async () => {
+    await setDineInPayment("upfront");
+    const res = await api()
+      .put("/api/restaurant/settings")
+      .set(bearer(owner))
+      .send({ serviceFlow: "restaurant", billingSettings: { takeawayPayFirst: true } });
+    expect(res.status).toBe(200);
+    const saved = await Restaurant.findById(world.restaurantId).lean();
+    expect(saved?.billingSettings?.dineInPayment).toBe("after");
+    expect(saved?.billingSettings?.takeawayPayFirst).toBe(true);
+    await Restaurant.updateOne({ _id: world.restaurantId }, { $set: { "billingSettings.takeawayPayFirst": false } });
+  });
+});

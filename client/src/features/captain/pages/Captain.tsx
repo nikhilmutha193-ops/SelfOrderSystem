@@ -13,7 +13,6 @@ import { useQueryClient } from "@tanstack/react-query";
 
 import DishDialog from "../../../components/DishDialog";
 import { can, useAdmin } from "../../../lib/adminAuth";
-import { useDineInPayment } from "../../../lib/useDineInPayment";
 import type {
   ChatConversation,
   KotQueueGroup,
@@ -125,36 +124,7 @@ function NoTabAccess({ page }: { page: string }) {
 }
 
 export default function Captain() {
-  const dineInPayment = useDineInPayment();
-  return dineInPayment === "upfront" ? (
-    <NotUsedWhenPayingFirst />
-  ) : (
-    <CaptainApp />
-  );
-}
-
-function NotUsedWhenPayingFirst() {
-  useStaffTheme();
-  return (
-    <div className="flex h-dvh flex-col bg-slate-100">
-      <header className="flex shrink-0 items-center gap-3 bg-slate-900 px-3 py-2.5 text-white">
-        <span className="flex flex-1 items-center gap-2 text-base font-bold">
-          <Smartphone
-            size={18}
-            className="text-orange-400"
-            aria-hidden="true"
-          />
-          Captain
-        </span>
-        <StaffSignOut to="/captain/login" />
-      </header>
-      <p className="mx-auto max-w-sm px-6 py-16 text-center text-sm text-slate-600">
-        The captain app isn't used here: guests pay when they order, at the
-        counter or from their phone. The owner can change this under Settings →
-        Billing.
-      </p>
-    </div>
-  );
+  return <CaptainApp />;
 }
 
 /** Stands in for a table id while the captain works on an order that has no table. */
@@ -171,8 +141,9 @@ function CaptainApp() {
   useCaptainManifest();
   const { profile } = useAdmin();
   const rawMenu = usePosMenu().data ?? NO_MENU;
-  // Cafe flow: guests pay at the counter first, so there is no bill to request and the kitchen waits for payment.
-  const cafe = rawMenu.billing?.serviceFlow === "cafe";
+  const cafeFlow = rawMenu.billing?.serviceFlow === "cafe";
+  const upfrontDineIn = rawMenu.billing?.dineInPayment === "upfront";
+  const takeawayPayFirst = !!rawMenu.billing?.takeawayPayFirst;
   const floor = usePosFloor().data;
   const releasePosTable = useReleasePosTable();
   const setPacked = useSetItemPacked();
@@ -224,6 +195,10 @@ function CaptainApp() {
   const unread = conversations.reduce((sum, c) => sum + c.unreadCount, 0);
   const table = tables.find((t) => t._id === tableId) ?? null;
   const isWalkIn = tableId === WALKIN;
+  // Pay first (cafe, or dine-in guests who pay when ordering): there is no bill to request, the captain takes the
+  // payment here (UPI QR, cash, card...) and the kitchen gets the order once it is paid. Takeaway follows its own
+  // "takeaway and counter pay first" switch unless the whole restaurant is a cafe.
+  const cafe = cafeFlow || (isWalkIn ? takeawayPayFirst : upfrontDineIn);
   const placeLabel = isWalkIn ? `Order ${walkRef}` : `Table ${table?.code}`;
   const walkIns = floor?.takeaways ?? NO_WALKINS;
   const areaId = table?.areaId ?? null;

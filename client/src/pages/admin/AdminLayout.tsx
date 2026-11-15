@@ -1,6 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import {
   Check,
+  ChevronDown,
+  FoldVertical,
+  UnfoldVertical,
   Ellipsis,
   HelpCircle,
   Menu,
@@ -21,6 +24,7 @@ import {
   isNavActive,
   MOBILE_TAB_LABELS,
   MOBILE_TABS,
+  NAV_SECTION_LABELS,
   visibleNav,
   type AdminNavGroup,
   type AdminNavItem,
@@ -30,7 +34,6 @@ import UserMenu from "../../app/shell/UserMenu";
 import NotificationCenter from "../../features/dashboard/components/NotificationCenter";
 import ActiveOrders from "../../features/orders/components/ActiveOrders";
 import { AdminProfileProvider, can, staffHome, useAdmin } from "../../lib/adminAuth";
-import { useDineInPayment } from "../../lib/useDineInPayment";
 import { activateStoredAuth, api, clearStoredToken, setActiveAuth } from "../../shared/api/client";
 import { useStaffTheme } from "../../shared/theme";
 import { TourProvider, useTour } from "../../shared/ui/PageTour";
@@ -156,6 +159,17 @@ function NavRow({
   );
 }
 
+const COLLAPSED_KEY = "selforder_admin_nav_collapsed";
+
+function readCollapsed(): Set<string> {
+  try {
+    const raw = JSON.parse(localStorage.getItem(COLLAPSED_KEY) ?? "[]");
+    return new Set(Array.isArray(raw) ? raw.filter((x): x is string => typeof x === "string") : []);
+  } catch {
+    return new Set();
+  }
+}
+
 function NavList({
   groups,
   pinned,
@@ -173,37 +187,109 @@ function NavList({
 }) {
   const { pathname, search } = useLocation();
   const labelClass = mode === "full" ? "" : mode === "rail" ? "sr-only" : "sr-only lg:not-sr-only";
-  const headingClass = mode === "full" ? "block" : mode === "rail" ? "hidden" : "hidden lg:block";
+  const headingRowClass = mode === "full" ? "flex" : mode === "rail" ? "hidden" : "hidden lg:flex";
   const dividerClass = mode === "full" ? "hidden" : mode === "rail" ? "block" : "block lg:hidden";
   const rowClass =
     mode === "full" ? "px-3" : mode === "rail" ? "justify-center" : "justify-center lg:justify-start lg:px-3";
   const pinnedSet = new Set(pinned.map((p) => p.to));
   const sections: AdminNavGroup[] =
     pinned.length > 0 && !editing ? [{ label: "Pinned", items: pinned }, ...groups] : groups;
+  const [collapsed, setCollapsed] = useState<Set<string>>(readCollapsed);
+  function save(next: Set<string>) {
+    try {
+      localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...next]));
+    } catch {
+      // Remembering the folds is a convenience only.
+    }
+    return next;
+  }
+  function toggle(id: string) {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (!next.delete(id)) next.add(id);
+      return save(next);
+    });
+  }
+  const foldable = groups.flatMap((g) => [...(g.section ? [`s:${g.section}`] : []), `g:${g.label}`]);
+  const allShut = foldable.length > 0 && foldable.every((id) => collapsed.has(id));
+  function toggleAll() {
+    setCollapsed(save(allShut ? new Set() : new Set(foldable)));
+  }
+  // Folding hides rows where the group headings show (the full sidebar); the icon rail keeps every icon.
+  const foldClass = mode === "full" ? "hidden" : mode === "rail" ? "" : "lg:hidden";
+  const chevron = (open: boolean) => (
+    <ChevronDown size={14} aria-hidden="true" className={`shrink-0 transition-transform ${open ? "" : "-rotate-90"}`} />
+  );
 
   return (
     <nav aria-label="Admin" className="flex flex-col gap-4">
-      {sections.map((group, gi) => (
-        <div key={group.label} className="flex flex-col gap-0.5">
-          <p className={`px-3 pb-1 text-[11px] font-semibold tracking-wider text-slate-400 uppercase ${headingClass}`}>
-            {group.label}
-          </p>
-          {gi > 0 && <div className={`mx-3 mb-2 border-t border-slate-200 ${dividerClass}`} />}
-          {group.items.map((item) => (
-            <NavRow
-              key={`${group.label}-${item.to}`}
-              item={item}
-              active={isNavActive(item, pathname, search)}
-              labelClass={labelClass}
-              rowClass={rowClass}
-              editing={editing}
-              pinned={pinnedSet.has(item.to)}
-              onTogglePin={onTogglePin}
-              onNavigate={onNavigate}
-            />
-          ))}
-        </div>
-      ))}
+      {foldable.length > 0 && (
+        <button
+          type="button"
+          onClick={toggleAll}
+          title={allShut ? "Expand all" : "Collapse all"}
+          aria-label={allShut ? "Expand all" : "Collapse all"}
+          className={`-mb-2 items-center justify-center self-end rounded-md p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-800 ${headingRowClass}`}
+        >
+          {allShut ? (
+            <UnfoldVertical size={16} aria-hidden="true" />
+          ) : (
+            <FoldVertical size={16} aria-hidden="true" />
+          )}
+        </button>
+      )}
+      {sections.map((group, gi) => {
+        const sectionId = group.section ? `s:${group.section}` : null;
+        const sectionShut = sectionId !== null && collapsed.has(sectionId);
+        const startsSection = !!group.section && group.section !== sections[gi - 1]?.section;
+        const groupShut = collapsed.has(`g:${group.label}`);
+        return (
+          <div
+            key={group.label}
+            className={`flex flex-col gap-0.5 ${sectionShut && !startsSection ? foldClass : ""}`}
+          >
+            {startsSection && sectionId && group.section && (
+              <button
+                type="button"
+                aria-expanded={!sectionShut}
+                onClick={() => toggle(sectionId)}
+                className={`mb-1 flex w-full items-center justify-between gap-2 rounded-md text-left bg-slate-100 px-3 py-1.5 text-xs font-bold tracking-wide text-slate-700 uppercase hover:bg-slate-200 ${headingRowClass}`}
+              >
+                {NAV_SECTION_LABELS[group.section]}
+                {chevron(!sectionShut)}
+              </button>
+            )}
+            {gi > 0 && <div className={`mx-3 mb-2 border-t border-slate-200 ${dividerClass}`} />}
+            {(
+              <div className={`flex flex-col gap-0.5 ${sectionShut ? foldClass : ""}`}>
+                <button
+                  type="button"
+                  aria-expanded={!groupShut}
+                  onClick={() => toggle(`g:${group.label}`)}
+                  className={`flex w-full items-center justify-between gap-2 px-3 pb-1 text-left text-[11px] font-semibold tracking-wider text-slate-400 uppercase hover:text-slate-600 ${headingRowClass}`}
+                >
+                  {group.label}
+                  {chevron(!groupShut)}
+                </button>
+                {group.items.map((item) => (
+                  <div key={`${group.label}-${item.to}`} className={groupShut ? foldClass : ""}>
+                    <NavRow
+                      item={item}
+                      active={isNavActive(item, pathname, search)}
+                      labelClass={labelClass}
+                      rowClass={rowClass}
+                      editing={editing}
+                      pinned={pinnedSet.has(item.to)}
+                      onTogglePin={onTogglePin}
+                      onNavigate={onNavigate}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
     </nav>
   );
 }
@@ -264,8 +350,7 @@ function Shell() {
   const [pins, setPins] = useState<string[]>(() => readStorage(PINS_KEY, parsePins, []));
   const tour = useTour();
 
-  const dineInPayment = useDineInPayment();
-  const groups = useMemo(() => visibleNav(profile, dineInPayment), [profile, dineInPayment]);
+  const groups = useMemo(() => visibleNav(profile), [profile]);
   const allItems = useMemo(() => groups.flatMap((g) => g.items), [groups]);
   const pinned = useMemo(
     () => pins.map((to) => allItems.find((i) => i.to === to)).filter((i): i is AdminNavItem => Boolean(i)),

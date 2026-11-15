@@ -39,7 +39,6 @@ import {
 } from "lucide-react";
 
 import { can, type AdminProfile, type ModuleKey } from "../lib/adminAuth";
-import type { DineInPayment } from "../lib/types";
 
 export interface AdminNavItem {
   to: string;
@@ -47,18 +46,26 @@ export interface AdminNavItem {
   module: ModuleKey | null;
   icon: LucideIcon;
   keywords?: string;
-  /** Hidden when dine-in guests pay when ordering (no waiters taking orders at the table). */
-  waiterService?: boolean;
 }
+
+/** The two halves of the admin: running orders day to day, and setting the restaurant up. */
+export type AdminNavSection = "order" | "restaurant";
+
+export const NAV_SECTION_LABELS: Record<AdminNavSection, string> = {
+  order: "Order management",
+  restaurant: "Restaurant management",
+};
 
 export interface AdminNavGroup {
   label: string;
+  section?: AdminNavSection;
   items: AdminNavItem[];
 }
 
 export const ADMIN_NAV: AdminNavGroup[] = [
   {
     label: "Overview",
+    section: "order",
     items: [
       {
         to: "/admin/dashboard",
@@ -78,6 +85,7 @@ export const ADMIN_NAV: AdminNavGroup[] = [
   },
   {
     label: "Service",
+    section: "order",
     items: [
       {
         to: "/pos",
@@ -92,7 +100,6 @@ export const ADMIN_NAV: AdminNavGroup[] = [
         module: "captain",
         icon: Smartphone,
         keywords: "waiter",
-        waiterService: true,
       },
       {
         to: "/admin/orders?type=dine-in",
@@ -132,6 +139,7 @@ export const ADMIN_NAV: AdminNavGroup[] = [
   },
   {
     label: "Billing & Cash",
+    section: "order",
     items: [
       {
         to: "/admin/invoices",
@@ -171,50 +179,8 @@ export const ADMIN_NAV: AdminNavGroup[] = [
     ],
   },
   {
-    label: "Menu",
-    items: [
-      {
-        to: "/admin/categories",
-        label: "Categories",
-        module: "categories",
-        icon: Layers,
-      },
-      {
-        to: "/admin/subcategories",
-        label: "Subcategories",
-        module: "subcategories",
-        icon: ListTree,
-      },
-      {
-        to: "/admin/food-items",
-        label: "Food Items",
-        module: "foodItems",
-        icon: UtensilsCrossed,
-        keywords: "dishes",
-      },
-    ],
-  },
-  {
-    label: "Floor",
-    items: [
-      { to: "/admin/tables", label: "Tables", module: "tables", icon: Table2 },
-      {
-        to: "/admin/qr-codes",
-        label: "QR Codes",
-        module: "qrCodes",
-        icon: QrCode,
-      },
-      {
-        to: "/admin/bookings",
-        label: "Table Bookings",
-        module: "bookings",
-        icon: CalendarClock,
-        keywords: "reservation reserve prebook",
-      },
-    ],
-  },
-  {
     label: "Guests",
+    section: "order",
     items: [
       {
         to: "/admin/customers",
@@ -240,7 +206,53 @@ export const ADMIN_NAV: AdminNavGroup[] = [
     ],
   },
   {
+    label: "Menu",
+    section: "restaurant",
+    items: [
+      {
+        to: "/admin/categories",
+        label: "Categories",
+        module: "categories",
+        icon: Layers,
+      },
+      {
+        to: "/admin/subcategories",
+        label: "Subcategories",
+        module: "subcategories",
+        icon: ListTree,
+      },
+      {
+        to: "/admin/food-items",
+        label: "Food Items",
+        module: "foodItems",
+        icon: UtensilsCrossed,
+        keywords: "dishes",
+      },
+    ],
+  },
+  {
+    label: "Floor",
+    section: "restaurant",
+    items: [
+      { to: "/admin/tables", label: "Tables", module: "tables", icon: Table2 },
+      {
+        to: "/admin/qr-codes",
+        label: "QR Codes",
+        module: "qrCodes",
+        icon: QrCode,
+      },
+      {
+        to: "/admin/bookings",
+        label: "Table Bookings",
+        module: "bookings",
+        icon: CalendarClock,
+        keywords: "reservation reserve prebook",
+      },
+    ],
+  },
+  {
     label: "Kitchen & Stock",
+    section: "restaurant",
     items: [
       {
         to: "/admin/inventory",
@@ -268,6 +280,7 @@ export const ADMIN_NAV: AdminNavGroup[] = [
   },
   {
     label: "Website",
+    section: "restaurant",
     items: [
       {
         to: "/admin/landing",
@@ -295,6 +308,7 @@ export const ADMIN_NAV: AdminNavGroup[] = [
   },
   {
     label: "Administration",
+    section: "restaurant",
     items: [
       {
         to: "/admin/settings",
@@ -374,16 +388,12 @@ const EXTRA_TITLES: { prefix: string; group: string; item: AdminNavItem }[] = [
   },
 ];
 
-export function visibleNav(
-  profile: AdminProfile | null,
-  dineInPayment: DineInPayment = "after",
-): AdminNavGroup[] {
+export function visibleNav(profile: AdminProfile | null): AdminNavGroup[] {
   return ADMIN_NAV.map((group) => ({
     ...group,
     items: group.items.filter(
       (item) =>
-        (item.module === null || can(profile, item.module)) &&
-        !(item.waiterService && dineInPayment === "upfront"),
+        item.module === null || can(profile, item.module),
     ),
   })).filter((group) => group.items.length > 0);
 }

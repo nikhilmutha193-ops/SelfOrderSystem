@@ -128,7 +128,9 @@ export default function Pos() {
     !offlineFlow &&
     (activeDetail?.order.source === "kiosk" ||
       (billing?.dineInPayment === "upfront" &&
-        (activeDetail ? activeDetail.order.orderType === "dine-in" : !!tableId && mode !== "takeaway")));
+        (activeDetail ? activeDetail.order.orderType === "dine-in" : !!tableId && mode !== "takeaway")) ||
+      (!!billing?.takeawayPayFirst &&
+        (activeDetail ? activeDetail.order.orderType !== "dine-in" : mode === "takeaway")));
   const releaseTable = useReleasePosTable();
   const setPacked = useSetItemPacked();
   const menu = pricedMenu(rawMenu, mode === "takeaway" ? { orderType: "takeaway" } : { orderType: "dine-in", areaId });

@@ -1,6 +1,7 @@
 import {
   ArrowLeft,
   Ban,
+  ChevronDown,
   CookingPot,
   FileText,
   Gift,
@@ -462,8 +463,7 @@ export default function OrderDetail({
       )}
 
       {order.status === "open" && (
-        <div className="mt-5 flex flex-col gap-3">
-          <h3 className="text-sm font-semibold text-slate-900">Add items</h3>
+        <Collapsible title="Add items" badge={cartCount > 0 ? `${cartCount} picked` : undefined} className="mt-5">
           {menu.length > 0 && (
             <Tabs
               size="sm"
@@ -523,7 +523,7 @@ export default function OrderDetail({
               </Button>
             </div>
           )}
-        </div>
+        </Collapsible>
       )}
       <DishDialog
         allowPack
@@ -550,7 +550,12 @@ export default function OrderDetail({
 
   const kotCard = (pendingCount > 0 || printedRounds.length > 0) && (
     <Card>
-      <CardHeader icon={CookingPot} title="Kitchen tickets" className="mb-3" />
+      <Collapsible
+        icon={CookingPot}
+        title="Kitchen tickets"
+        badge={pendingCount > 0 ? `${pendingCount} unsent` : undefined}
+        defaultOpen={pendingCount > 0}
+      >
       {pendingCount > 0 ? (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
           <span className="text-sm font-medium text-amber-900">
@@ -587,6 +592,7 @@ export default function OrderDetail({
           <p className="text-xs text-slate-400">Reprinting keeps the same token number.</p>
         </div>
       )}
+      </Collapsible>
     </Card>
   );
 
@@ -906,8 +912,9 @@ export default function OrderDetail({
           <BillActions data={data} />
           {order.status !== "cancelled" && (
             <Card>
-              <CardHeader title="Guest" description="Loyalty points and WhatsApp bills." className="mb-3" />
-              <CustomerPanel order={order} />
+              <Collapsible title="Guest" subtitle="Loyalty points and WhatsApp bills.">
+                <CustomerPanel order={order} />
+              </Collapsible>
             </Card>
           )}
         </div>
@@ -967,6 +974,52 @@ export default function OrderDetail({
         onConfirm={({ note }) => confirmBillDialog(note)}
       />
     </Wrapper>
+  );
+}
+
+/** A section of the order page that folds away so the page can stay on the items and the bill. */
+function Collapsible({
+  title,
+  subtitle,
+  icon: Icon,
+  badge,
+  defaultOpen = false,
+  className = "",
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  icon?: typeof CookingPot;
+  badge?: string;
+  defaultOpen?: boolean;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className={className}>
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between gap-3 text-left"
+      >
+        <span className="flex min-w-0 items-center gap-2">
+          {Icon && <Icon size={18} className="shrink-0 text-slate-500" aria-hidden="true" />}
+          <span className="min-w-0">
+            <span className="block text-sm font-semibold text-slate-900">{title}</span>
+            {subtitle && <span className="block truncate text-xs text-slate-500">{subtitle}</span>}
+          </span>
+          {badge && <Badge tone="amber">{badge}</Badge>}
+        </span>
+        <ChevronDown
+          size={18}
+          aria-hidden="true"
+          className={`shrink-0 text-slate-400 transition-transform ${open ? "rotate-180" : ""}`}
+        />
+      </button>
+      {open && <div className="mt-3 flex flex-col gap-3">{children}</div>}
+    </div>
   );
 }
 

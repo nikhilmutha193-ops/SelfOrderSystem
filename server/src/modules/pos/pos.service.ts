@@ -1,7 +1,7 @@
 import { RequestContext } from "../../core/context";
 import { IOrder } from "../../models/Order";
 import { writeAudit } from "../../utils/audit";
-import { paysUpfront, restaurantIsCafe, restaurantPaysUpfront } from "../../utils/dineInPayment";
+import { paysUpfront, restaurantIsCafe, restaurantPaidBeforeKitchen, takeawayPaysFirst } from "../../utils/dineInPayment";
 import { HttpError } from "../../utils/httpError";
 import { cancelUnsentOrdersForTables } from "../../utils/tableRelease";
 import { syncTableState } from "../../utils/tableState";
@@ -34,6 +34,7 @@ export async function getMenu(ctx: RequestContext) {
       taxRates: (restaurant?.taxRates ?? []).map((t) => ({ name: t.name, percent: t.percent })),
       serviceChargePercent: restaurant?.billingSettings?.serviceChargePercent ?? 0,
       dineInPayment: paysUpfront(restaurant) ? "upfront" : "after",
+      takeawayPayFirst: takeawayPaysFirst(restaurant),
       footerNote: restaurant?.invoiceSettings?.footerNote ?? "",
       serviceFlow: restaurant?.serviceFlow ?? "restaurant",
     },
@@ -210,11 +211,8 @@ export async function createOrder(ctx: RequestContext, input: CreatePosOrderInpu
       : await startCounterOrder(ctx, { ...customer, tableId: input.tableId });
 
   const items = await addOrderItems(ctx, order._id.toString(), { items: input.items });
-  // A dine-in table that pays when ordering is held until it is paid; payment sends the KOT.
-  const send =
-    input.sendToKitchen &&
-    !(await restaurantIsCafe(ctx.restaurantId)) &&
-    !(input.orderType === "dine-in" && (await restaurantPaysUpfront(ctx.restaurantId)));
+  // An order that is paid first (cafe flow, a pay-first table, takeaway and counter pay first) is held until it is paid; payment sends the KOT.
+  const send = input.sendToKitchen && !(await restaurantPaidBeforeKitchen(ctx.restaurantId, input.orderType));
   const kot = send ? await sendOrderToKitchen(ctx.restaurantId, order) : null;
   return {
     order,

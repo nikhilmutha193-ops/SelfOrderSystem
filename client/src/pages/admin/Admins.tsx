@@ -11,7 +11,6 @@ import {
   type ModuleKey,
   type PermissionLevel,
 } from "../../lib/adminAuth";
-import { useDineInPayment } from "../../lib/useDineInPayment";
 import { api, extractErrorMessage } from "../../shared/api/client";
 import { confirmDialog } from "../../shared/ui/confirm";
 import { usePageTour, type TourStep } from "../../shared/ui/PageTour";
@@ -33,10 +32,9 @@ import { ResetPasswordDialog } from "./ResetPasswordDialog";
 
 type Permissions = Partial<Record<ModuleKey, PermissionLevel>>;
 
-const PRESETS: { label: string; hint: string; permissions: Permissions; area: LoginArea; waiterService?: boolean }[] = [
+const PRESETS: { label: string; hint: string; permissions: Permissions; area: LoginArea }[] = [
   {
     label: "Captain (waiter)",
-    waiterService: true,
     area: "captain",
     hint: "Takes orders on the Captain app, serves ready items and answers guest requests.",
     permissions: { captain: "edit", orders: "edit", tables: "view", kot: "edit", messages: "edit" },
@@ -65,10 +63,9 @@ function PresetButtons({
   disabled?: boolean;
 }) {
   // No waiters take orders when guests pay when ordering.
-  const upfront = useDineInPayment() === "upfront";
   return (
     <div className="mb-3 flex flex-wrap gap-2">
-      {PRESETS.filter((preset) => !(upfront && preset.waiterService)).map((preset) => (
+      {PRESETS.map((preset) => (
         <Button
           key={preset.label}
           type="button"

@@ -1,3 +1,4 @@
+import { Plus } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
@@ -91,6 +92,14 @@ function PickTableCard() {
     </Card>
   );
 }
+
+/** Colour and wording of a token number, from how far the kitchen has got with its dishes. */
+const TOKEN_STATES = {
+  received: { step: 0, tile: "bg-amber-50", label: "Order received", text: "text-amber-500", pill: "bg-amber-100 text-amber-800" },
+  preparing: { step: 1, tile: "bg-blue-50", label: "Being prepared", text: "text-blue-600", pill: "bg-blue-100 text-blue-800" },
+  ready: { step: 2, tile: "bg-emerald-50", label: "Ready, collect now", text: "text-emerald-600", pill: "bg-emerald-100 text-emerald-800" },
+  served: { step: 3, tile: "bg-slate-50", label: "Served", text: "text-slate-400", pill: "bg-slate-100 text-slate-600" },
+} as const;
 
 const NO_ORDERS: MyOrder[] = [];
 
@@ -230,8 +239,7 @@ export default function CustomerInvoice() {
     data.guestOrderMode === "accept" &&
     activeItems.some((i) => i.kotRound == null);
   const awaitingPayment =
-    payFirst &&
-    !cafe &&
+    (payFirst || cafe) &&
     (order.status === "open" || order.status === "billed") &&
     activeItems.length > 0;
   const tokens = [
@@ -241,6 +249,22 @@ export default function CustomerInvoice() {
         .filter((n): n is number => n != null),
     ),
   ].sort((a, b) => a - b);
+  const tokenStates = tokens.map((token) => {
+    const own = activeItems.filter((i) => i.tokenNumber === token);
+    const every = (...states: string[]) => own.every((i) => states.includes(i.status));
+    const state = every("served")
+      ? TOKEN_STATES.served
+      : every("ready", "served")
+        ? TOKEN_STATES.ready
+        : own.some((i) => i.status === "preparing" || i.status === "ready" || i.status === "served")
+          ? TOKEN_STATES.preparing
+          : TOKEN_STATES.received;
+    const round = own.find((i) => i.kotRound != null)?.kotRound ?? null;
+    return { token, round, ...state };
+  });
+  // Served tokens drop out of the big tiles and are listed plainly under "Served".
+  const liveTokens = tokenStates.filter((t) => t.step < 3);
+  const servedTokens = tokenStates.filter((t) => t.step === 3);
   const orderComplete =
     order.status === "closed" ||
     order.status === "billed" ||
@@ -257,18 +281,28 @@ export default function CustomerInvoice() {
         ? { tone: "blue" as const, label: "Bill ready" }
         : order.status === "cancelled"
           ? { tone: "red" as const, label: "Cancelled" }
-          : { tone: "amber" as const, label: "Open" };
+          : awaitingPayment
+            ? { tone: "amber" as const, label: "Awaiting payment" }
+            : { tone: "amber" as const, label: "Open" };
 
   return (
     <div className="mx-auto max-w-2xl px-4 pt-6 pb-32">
       <div className="mb-4 flex items-center justify-between">
         <h1 className="text-xl font-bold text-slate-800">Your order</h1>
-        <Badge tone={statusBadge.tone}>{statusBadge.label}</Badge>
+        <div className="flex items-center gap-2">
+          <Badge tone={statusBadge.tone}>{statusBadge.label}</Badge>
+          {(order.status === "open" || (payFirst && order.status === "closed")) && (
+            <Button size="sm" icon={Plus} onClick={() => navigate("/order/menu")}>
+              Order more
+            </Button>
+          )}
+        </div>
       </div>
 
       <ServedReleasePrompt />
 
       <MyOrdersCard
+        payFirst={payFirst || cafe}
         orders={myOrders}
         viewingId={orderId ?? ""}
         onSelect={(id) => setSearchParams(id === sessionOrderId ? {} : { order: id }, { replace: true })}
@@ -343,16 +377,38 @@ export default function CustomerInvoice() {
         </Card>
       )}
 
-      {tokens.length > 0 && (
+      {liveTokens.length > 0 && (
         <Card className="mb-4 text-center">
           <p className="text-xs font-semibold tracking-wide text-slate-500 uppercase">
-            {tokens.length > 1 ? "Your tokens" : "Your token"}
+            {liveTokens.length > 1 ? "Your tokens" : "Your token"}
           </p>
-          <p className="mt-1 text-5xl font-extrabold text-orange-600 tabular-nums">
-            {tokens.join(" · ")}
-          </p>
-          <p className="mt-1 text-sm text-slate-600">
-            We will call this number when your order is ready.
+          <div
+            className={`mt-3 grid gap-3 ${liveTokens.length === 1 ? "grid-cols-1" : "grid-cols-1 sm:grid-cols-2"}`}
+          >
+            {liveTokens.map((t) => (
+              <div
+                key={t.token}
+                className={`flex flex-col items-center rounded-xl px-3 py-4 ${t.tile}`}
+              >
+                <p className={`text-5xl leading-none font-extrabold tabular-nums ${t.text}`}>{t.token}</p>
+                {t.round != null && <p className="mt-1 text-xs text-slate-500">Round {t.round}</p>}
+                <span className={`mt-2 rounded-full px-2.5 py-0.5 text-xs font-semibold ${t.pill}`}>{t.label}</span>
+              </div>
+            ))}
+          </div>
+          <p className="mt-2 text-sm text-slate-600">We will call this number when your order is ready.</p>
+        </Card>
+      )}
+      {servedTokens.length > 0 && (
+        <Card className="mb-4">
+          <p className="text-xs font-semibold tracking-wide text-slate-500 uppercase">Served</p>
+          <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-slate-600">
+            {servedTokens.map((t) => (
+              <span key={t.token} className="rounded-md bg-slate-100 px-2 py-0.5 font-semibold text-slate-700 tabular-nums">
+                {t.token}
+              </span>
+            ))}
+            <span className="text-xs text-slate-400">already served</span>
           </p>
         </Card>
       )}
@@ -363,28 +419,6 @@ export default function CustomerInvoice() {
         </p>
       )}
       {via === "token" && <PickTableCard />}
-
-      {cafe && order.status === "open" && activeItems.length > 0 && (
-        <Card className="mb-4">
-          <p className="text-sm font-medium text-blue-900">
-            Awaiting payment: please pay ₹{totals.grandTotal.toFixed(2)} at the
-            counter. Your order goes to the kitchen as soon as it is paid.
-          </p>
-          {data.payment?.upiVpa && (
-            <div className="mt-3">
-              <UpiQr
-                vpa={data.payment.upiVpa}
-                payee={data.payment.upiPayeeName}
-                amount={totals.grandTotal}
-                note="Order"
-              />
-              <p className="mt-2 text-center text-xs text-slate-500">
-                Show the payment confirmation to staff at the counter.
-              </p>
-            </div>
-          )}
-        </Card>
-      )}
 
       <Card className="mb-4">
         <p className="text-sm text-slate-600">Customer: {order.customerName}</p>
@@ -420,6 +454,11 @@ export default function CustomerInvoice() {
                 className="border-t border-slate-100 align-top"
               >
                 <td className="py-2 pr-2">
+                  {item.kotRound != null && (
+                    <span className="block text-[11px] leading-tight font-semibold text-orange-700">
+                      Round {item.kotRound}
+                    </span>
+                  )}
                   {item.foodName}
                   {(item.modifiers?.length || item.note) && (
                     <span className="mt-0.5 block text-xs text-slate-400">
@@ -549,7 +588,7 @@ export default function CustomerInvoice() {
         const dishes = Array.from(
           new Map(
             items
-              .filter((i) => i.status !== "cancelled")
+              .filter((i) => i.status === "served")
               .map((i) => [i.foodItemId, i.foodName]),
           ),
         );
@@ -559,6 +598,7 @@ export default function CustomerInvoice() {
             <h2 className="mb-2 text-sm font-semibold text-slate-700">
               Rate the dishes
             </h2>
+            <p className="mb-2 text-xs text-slate-500">Dishes you have been served.</p>
             <div className="flex flex-col gap-2">
               {dishes.map(([foodItemId, foodName]) => (
                 <div
@@ -631,7 +671,7 @@ export default function CustomerInvoice() {
         >
           {downloading ? "Preparing..." : "Download invoice"}
         </Button>
-        {access.showFeedback && (
+        {access.showFeedback && activeItems.length > 0 && pendingCount === 0 && (
           <Button variant="secondary" onClick={() => setFeedbackOpen(true)}>
             ★ Leave feedback
           </Button>

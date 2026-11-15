@@ -1,4 +1,5 @@
-import { Plus, Split, Trash2, X } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { CreditCard, Plus, Split, Trash2, X } from "lucide-react";
 import { useState } from "react";
 
 import { cashSuggestions } from "../../../lib/cash";
@@ -10,7 +11,11 @@ import ReasonDialog from "../../../shared/ui/ReasonDialog";
 import { Button, ErrorText, Field, IconButton, Input } from "../../../shared/ui/ui";
 import UpiQr from "../../../shared/ui/UpiQr";
 import { useOrderCustomer } from "../../customers/queries";
+import { paymentsApi } from "../../payments/api";
+import { brandThemeColor, openRazorpayCheckout } from "../../payments/razorpayCheckout";
+import { ordersApi } from "../api";
 import {
+  orderKeys,
   useOrder,
   useReopenBill,
   useSetExtraCharge,
@@ -203,6 +208,68 @@ function ChargesPanel({ orderId }: { orderId: string }) {
   );
 }
 
+/**
+ * Takes the whole bill through Razorpay Checkout (UPI, cards, net banking, wallets) from the staff's own device,
+ * when the restaurant has online payments set up. The server settles the order once Razorpay confirms.
+ */
+function RazorpayPanel({
+  orderId,
+  total,
+  disabled,
+  onPaid,
+}: {
+  orderId: string;
+  total: number;
+  disabled: boolean;
+  onPaid: () => void;
+}) {
+  const available = useOrder(orderId).data?.onlinePayment;
+  const queryClient = useQueryClient();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  if (!available) return null;
+
+  async function pay() {
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const checkout = await paymentsApi.checkout(orderId);
+      const outcome = await openRazorpayCheckout(checkout, brandThemeColor());
+      if (outcome.kind === "dismissed") return;
+      if (outcome.kind === "failed") {
+        setError(`${outcome.message} Nothing was charged.`);
+        return;
+      }
+      await paymentsApi.confirm(outcome.confirmation);
+      const fresh = await ordersApi.get(orderId);
+      queryClient.setQueryData(orderKeys.detail(orderId), fresh);
+      await queryClient.invalidateQueries({ queryKey: orderKeys.all });
+      if (fresh.order.status === "closed") onPaid();
+      else setNotice("Payment received. It is being confirmed, check Online payments if the order stays open.");
+    } catch (err) {
+      setError(extractErrorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-2 rounded-xl border border-orange-200 bg-orange-50/60 p-3">
+      <Button type="button" icon={CreditCard} loading={busy} disabled={disabled} onClick={pay}>
+        Pay ₹{money(total)} with Razorpay
+      </Button>
+      <p className="text-xs text-slate-600">
+        UPI QR, cards, net banking and wallets. The order is marked paid by itself. For cash or split payments use the
+        options below.
+      </p>
+      {notice && <p className="rounded-md bg-green-50 px-3 py-2 text-sm text-green-800">{notice}</p>}
+      <ErrorText>{error}</ErrorText>
+    </div>
+  );
+}
+
 function SettleForm({ orderId, total, invoiceNumber, upi, onClose }: SettleDialogProps) {
   const cafe = useServiceFlow() === "cafe";
   // Cafe flow: the guest pays before the food is made, usually on their phone, so the UPI QR is shown first.
@@ -305,6 +372,8 @@ function SettleForm({ orderId, total, invoiceNumber, upi, onClose }: SettleDialo
     >
       <div className="flex flex-col gap-4">
         <ChargesPanel orderId={orderId} />
+
+        <RazorpayPanel orderId={orderId} total={total} disabled={settle.isPending} onPaid={onClose} />
 
         <div className="flex items-center justify-between rounded-xl bg-slate-900 px-4 py-3 text-white">
           <span className="text-sm text-slate-300">Bill total</span>
