@@ -42,24 +42,34 @@ export class EscPos {
     return this.raw(GS, 0x21, large ? 0x11 : 0x00);
   }
 
+  /** small = the printer's narrow font B, large = double width and height, normal = the usual font A. */
+  textSize(size: "small" | "normal" | "large"): this {
+    return this.raw(ESC, 0x4d, size === "small" ? 1 : 0).raw(GS, 0x21, size === "large" ? 0x11 : 0x00);
+  }
+
+  /** How many characters fit on a line at this text size. */
+  columns(size: "small" | "normal" | "large"): number {
+    return size === "small" ? Math.floor((this.width * 4) / 3) : size === "large" ? Math.floor(this.width / 2) : this.width;
+  }
+
   wrapped(value: string, width = this.width): this {
     for (const chunk of wrap(value, width)) this.line(chunk);
     return this;
   }
 
-  row(left: string, right: string): this {
+  row(left: string, right: string, width = this.width): this {
     const rightText = toPrinterText(right);
-    const room = Math.max(this.width - rightText.length - 1, 8);
+    const room = Math.max(width - rightText.length - 1, 8);
     const lines = wrap(left, room);
     lines.forEach((chunk, i) => {
-      if (i === lines.length - 1) this.line(chunk.padEnd(this.width - rightText.length) + rightText);
+      if (i === lines.length - 1) this.line(chunk.padEnd(width - rightText.length) + rightText);
       else this.line(chunk);
     });
     return this;
   }
 
-  divider(char = "-"): this {
-    return this.line(char.repeat(this.width));
+  divider(char = "-", width = this.width): this {
+    return this.line(char.repeat(width));
   }
 
   feed(lines = 1): this {

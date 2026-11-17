@@ -4,7 +4,6 @@ import {
   Clock,
   CookingPot,
   Copy,
-  Eye,
   ImagePlus,
   Percent,
   Pipette,
@@ -40,6 +39,16 @@ import {
   type TaxRate,
 } from "../../lib/types";
 import { PUBLIC_RESTAURANT_KEY } from "../../lib/useDineInPayment";
+import { PrintLayoutEditor } from "../../features/printing/components/PrintLayoutEditor";
+import {
+  INVOICE_FONTS,
+  INVOICE_SHOW,
+  KOT_FONTS,
+  KOT_SHOW,
+  resolveInvoice,
+  resolveKot,
+  type PaperKey,
+} from "../../features/printing/layout";
 import { api, extractErrorMessage, uploadImage } from "../../shared/api/client";
 import {
   applyBrandColor,
@@ -200,6 +209,11 @@ const DEFAULT_KOT_SETTINGS: KotSettings = {
   tokenStart: 1,
 };
 
+/** Which layout tab to open first, from the paper size chosen for the print. */
+function paperKeyOf(size: PrintPaperSize): PaperKey {
+  return size === "thermal58" ? "p58" : size === "thermal80" ? "p80" : "page";
+}
+
 const DEFAULT_BILLING_SETTINGS: BillingSettings = {
   serviceChargePercent: 0,
   maxStaffDiscountPercent: 10,
@@ -207,12 +221,14 @@ const DEFAULT_BILLING_SETTINGS: BillingSettings = {
   upiPayeeName: "",
   dineInPayment: "after",
   takeawayPayFirst: false,
+  guestPayOptions: { online: true, upiQr: true, counter: true },
 };
 
 const DEFAULT_INVOICE_SETTINGS: InvoiceSettings = {
   invoicePrefix: "INV",
   placeOfSupply: "",
   showCustomerPhone: true,
+  maskCustomerPhone: false,
   footerNote: "Thank you for dining with us!",
   termsText: "",
   paperSize: "a5",
@@ -465,8 +481,6 @@ export default function RestaurantSettings() {
   const [serviceFlow, setServiceFlow] = useState<ServiceFlow>("restaurant");
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const [previewingKot, setPreviewingKot] = useState(false);
-  const [previewingInvoice, setPreviewingInvoice] = useState(false);
   const [aggSecret, setAggSecret] = useState("");
   const [aggBaseUrl, setAggBaseUrl] = useState("");
   const [rotatingSecret, setRotatingSecret] = useState(false);
@@ -613,55 +627,6 @@ export default function RestaurantSettings() {
       setError(extractErrorMessage(err));
     } finally {
       setUploadingFavicon(false);
-    }
-  }
-
-  async function previewKot() {
-    setError(null);
-    // Open synchronously so it isn't popup-blocked once the await below resolves.
-    const pdfTab = window.open("", "_blank");
-    setPreviewingKot(true);
-    try {
-      const res = await api.post(
-        "/restaurant/kot-preview",
-        { name, logoUrl, kotSettings },
-        { responseType: "blob" },
-      );
-      const url = URL.createObjectURL(res.data);
-      if (pdfTab) pdfTab.location.href = url;
-    } catch (err) {
-      pdfTab?.close();
-      setError(extractErrorMessage(err));
-    } finally {
-      setPreviewingKot(false);
-    }
-  }
-
-  async function previewInvoice() {
-    setError(null);
-    const pdfTab = window.open("", "_blank");
-    setPreviewingInvoice(true);
-    try {
-      const res = await api.post(
-        "/restaurant/invoice-preview",
-        {
-          name,
-          logoUrl,
-          address,
-          gstin,
-          fssaiLicense,
-          taxRates,
-          invoiceSettings,
-        },
-        { responseType: "blob" },
-      );
-      const url = URL.createObjectURL(res.data);
-      if (pdfTab) pdfTab.location.href = url;
-    } catch (err) {
-      pdfTab?.close();
-      setError(extractErrorMessage(err));
-    } finally {
-      setPreviewingInvoice(false);
     }
   }
 
@@ -1191,18 +1156,6 @@ export default function RestaurantSettings() {
                   icon={CookingPot}
                   title="Kitchen Order Ticket"
                   description="What's printed on tickets sent to the kitchen."
-                  actions={
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="secondary"
-                      icon={Eye}
-                      loading={previewingKot}
-                      onClick={previewKot}
-                    >
-                      Preview
-                    </Button>
-                  }
                 />
                 <div className="grid gap-4 sm:grid-cols-2">
                   <Field label="Paper size" htmlFor="kot-paper">
@@ -1269,41 +1222,6 @@ export default function RestaurantSettings() {
                 </div>
                 <div className="mt-4 divide-y divide-slate-100 border-t border-slate-100">
                   <ToggleRow
-                    id="kot-logo"
-                    checked={kotSettings.showLogo}
-                    onChange={(v) =>
-                      setKotSettings((prev) => ({ ...prev, showLogo: v }))
-                    }
-                    label="Show logo"
-                  />
-                  <ToggleRow
-                    id="kot-customer"
-                    checked={kotSettings.showCustomerName}
-                    onChange={(v) =>
-                      setKotSettings((prev) => ({
-                        ...prev,
-                        showCustomerName: v,
-                      }))
-                    }
-                    label="Show customer name"
-                  />
-                  <ToggleRow
-                    id="kot-table"
-                    checked={kotSettings.showTableInfo}
-                    onChange={(v) =>
-                      setKotSettings((prev) => ({ ...prev, showTableInfo: v }))
-                    }
-                    label="Show order and table info"
-                  />
-                  <ToggleRow
-                    id="kot-prices"
-                    checked={kotSettings.showPrices}
-                    onChange={(v) =>
-                      setKotSettings((prev) => ({ ...prev, showPrices: v }))
-                    }
-                    label="Show item prices"
-                  />
-                  <ToggleRow
                     id="kot-split-category"
                     checked={kotSettings.splitByCategory}
                     onChange={(v) =>
@@ -1346,6 +1264,18 @@ export default function RestaurantSettings() {
                     />
                   </Field>
                 </div>
+                <PrintLayoutEditor
+                  title="Ticket layout"
+                  description="Choose which details print on the kitchen ticket and how big each part is, for each paper."
+                  showFields={KOT_SHOW}
+                  fontFields={KOT_FONTS}
+                  layouts={kotSettings.layouts}
+                  resolve={(paper) => resolveKot(kotSettings, paper)}
+                  onChange={(layouts) => setKotSettings((prev) => ({ ...prev, layouts }))}
+                  previewPath="/restaurant/kot-preview"
+                  previewBody={() => ({ name, logoUrl, kotSettings })}
+                  initialPaper={paperKeyOf(kotSettings.paperSize)}
+                />
               </Card>
             </>
           )}
@@ -1412,6 +1342,44 @@ export default function RestaurantSettings() {
                       </li>
                     )}
                   </ul>
+                </div>
+                <p className="mt-3 text-xs text-slate-500">
+                  Press Save settings at the bottom to apply the change.
+                </p>
+              </Card>
+              <Card>
+                <CardHeader
+                  icon={Wallet}
+                  title="Guest payment options"
+                  description="Which ways guests see to pay their own order on their phone. Staff screens (POS, captain, orders) are not affected."
+                />
+                <div className="divide-y divide-slate-100">
+                  {(
+                    [
+                      ["online", "Pay online (Razorpay)", "UPI, cards, net banking and wallets. Needs online payments set up below."],
+                      ["upiQr", "UPI QR code", "Shows your UPI ID as a QR the guest scans, then shows the confirmation to staff."],
+                      ["counter", "Pay at the counter", "Shows the note that cash or card can be paid at the counter."],
+                    ] as const
+                  ).map(([key, label, description]) => (
+                    <ToggleRow
+                      key={key}
+                      id={`guest-pay-${key}`}
+                      checked={billingSettings.guestPayOptions?.[key] !== false}
+                      onChange={(v) =>
+                        setBillingSettings((prev) => ({
+                          ...prev,
+                          guestPayOptions: {
+                            online: prev.guestPayOptions?.online !== false,
+                            upiQr: prev.guestPayOptions?.upiQr !== false,
+                            counter: prev.guestPayOptions?.counter !== false,
+                            [key]: v,
+                          },
+                        }))
+                      }
+                      label={label}
+                      description={description}
+                    />
+                  ))}
                 </div>
                 <p className="mt-3 text-xs text-slate-500">
                   Press Save settings at the bottom to apply the change.
@@ -1505,18 +1473,6 @@ export default function RestaurantSettings() {
                 icon={ReceiptText}
                 title="Invoice"
                 description="What's printed on customer bills. GST and FSSAI numbers print automatically when set."
-                actions={
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="secondary"
-                    icon={Eye}
-                    loading={previewingInvoice}
-                    onClick={previewInvoice}
-                  >
-                    Preview
-                  </Button>
-                }
               />
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field
@@ -1622,34 +1578,16 @@ export default function RestaurantSettings() {
               </div>
               <div className="mt-4 divide-y divide-slate-100 border-t border-slate-100">
                 <ToggleRow
-                  id="invoice-logo"
-                  checked={invoiceSettings.showLogo}
-                  onChange={(v) =>
-                    setInvoiceSettings((prev) => ({ ...prev, showLogo: v }))
-                  }
-                  label="Show logo"
-                />
-                <ToggleRow
-                  id="invoice-phone"
-                  checked={invoiceSettings.showCustomerPhone}
+                  id="invoice-mask-phone"
+                  checked={!!invoiceSettings.maskCustomerPhone}
                   onChange={(v) =>
                     setInvoiceSettings((prev) => ({
                       ...prev,
-                      showCustomerPhone: v,
+                      maskCustomerPhone: v,
                     }))
                   }
-                  label="Show customer phone number"
-                />
-                <ToggleRow
-                  id="invoice-unit"
-                  checked={invoiceSettings.showUnitPrice}
-                  onChange={(v) =>
-                    setInvoiceSettings((prev) => ({
-                      ...prev,
-                      showUnitPrice: v,
-                    }))
-                  }
-                  label="Show unit price column"
+                  label="Hide the middle of the customer's mobile number"
+                  description="Bills, PDF invoices, printed bills and the shared bill link show 98XXXXXX10 instead of the full number. Staff screens still show the full number."
                 />
                 <ToggleRow
                   id="invoice-autoprint"
@@ -1664,6 +1602,18 @@ export default function RestaurantSettings() {
                   description="Sends the bill to the bill printer as soon as it's generated."
                 />
               </div>
+              <PrintLayoutEditor
+                title="Invoice layout"
+                description="Choose which details print on the bill and how big each part is, for each paper."
+                showFields={INVOICE_SHOW}
+                fontFields={INVOICE_FONTS}
+                layouts={invoiceSettings.layouts}
+                resolve={(paper) => resolveInvoice(invoiceSettings, paper)}
+                onChange={(layouts) => setInvoiceSettings((prev) => ({ ...prev, layouts }))}
+                previewPath="/restaurant/invoice-preview"
+                previewBody={() => ({ name, logoUrl, address, gstin, fssaiLicense, taxRates, invoiceSettings })}
+                initialPaper={paperKeyOf(invoiceSettings.paperSize)}
+              />
             </Card>
           )}
 

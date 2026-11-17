@@ -8,11 +8,20 @@ import QRCode from "qrcode";
 
 import { IOrder } from "../models/Order";
 import { IOrderItem } from "../models/OrderItem";
-import { IRestaurant, PrintFontSize, PrintPaperSize } from "../models/Restaurant";
+import { IRestaurant, PrintPaperSize } from "../models/Restaurant";
 import { InvoiceTotals } from "./invoice";
 import { kotTicketKey, kotTicketLabel } from "./kotGroups";
 import { DEFAULT_SAC } from "./invoiceNumber";
 import { orderTokenText } from "./orderToken";
+import { billPhone } from "./phone";
+import {
+  InvoiceFontKey,
+  KotFontKey,
+  paperKeyFor,
+  resolveInvoiceLayout,
+  resolveKotLayout,
+  TextSize,
+} from "./printLayout";
 import { describeError, logger } from "./logger";
 import { putObject, UPLOADS_DIR } from "./objectStore";
 
@@ -101,11 +110,7 @@ function isThermal(paperSize: PrintPaperSize): boolean {
   return paperSize === "thermal58" || paperSize === "thermal80";
 }
 
-const FONT_SCALE: Record<PrintFontSize, number> = {
-  compact: 0.85,
-  normal: 1,
-  large: 1.2,
-};
+const SIZE_SCALE: Record<TextSize, number> = { small: 0.85, normal: 1, large: 1.2 };
 
 async function renderToPaper(
   res: Response,
@@ -249,19 +254,21 @@ export function upiPaymentLink(vpa: string, payeeName: string, amount: number, n
 
 export async function streamInvoicePdf(
   res: Response,
-  data: { restaurant: IRestaurant; order: IOrder; items: IOrderItem[]; totals: InvoiceTotals }
+  data: { restaurant: IRestaurant; order: IOrder; items: IOrderItem[]; totals: InvoiceTotals; preview?: boolean }
 ) {
   const { restaurant, order, items, totals } = data;
   const settings = restaurant.invoiceSettings;
-  const fontSize: PrintFontSize = settings?.fontSize || "normal";
-  const scale = FONT_SCALE[fontSize];
-  const fz = (base: number) => Math.max(6, Math.round(base * scale));
   const paperSize = settings?.paperSize || "a5";
+  // Which details show, and how big each part is, for this paper (Settings -> Invoice -> Invoice layout).
+  const layout = resolveInvoiceLayout(settings, paperKeyFor(paperSize));
+  const show = layout.show;
+  const fz = (group: InvoiceFontKey, base: number) =>
+    Math.max(6, Math.round(base * SIZE_SCALE[layout.fonts[group]]));
 
-  const logo = settings?.showLogo ? await resolveLogoBuffer(restaurant.logoUrl) : null;
+  const logo = show.logo ? await resolveLogoBuffer(restaurant.logoUrl) : null;
   const upiVpa = restaurant.billingSettings?.upiVpa;
   const upiQr =
-    order.status === "billed" && upiVpa && order.invoiceNumber
+    show.upiQr && order.status === "billed" && upiVpa && order.invoiceNumber
       ? await QRCode.toBuffer(
           upiPaymentLink(
             upiVpa,
@@ -283,53 +290,80 @@ export async function streamInvoicePdf(
     (doc, x0, usableWidth) => {
       if (logo) drawLogo(doc, logo, x0, usableWidth);
 
-      doc.fontSize(fz(16)).text(restaurant.name, { align: "center" });
-      if (restaurant.address) doc.fontSize(fz(9)).text(restaurant.address, { align: "center" });
-      if (restaurant.gstin) doc.fontSize(fz(9)).text(`GSTIN: ${restaurant.gstin}`, { align: "center" });
-      if (restaurant.fssaiLicense)
-        doc.fontSize(fz(9)).text(`FSSAI Reg. No: ${restaurant.fssaiLicense}`, { align: "center" });
+      if (show.restaurantName) doc.fontSize(fz("header", 16)).text(restaurant.name, { align: "center" });
+      if (show.address && restaurant.address)
+        doc.fontSize(fz("header", 9)).text(restaurant.address, { align: "center" });
+      if (show.gstin && restaurant.gstin)
+        doc.fontSize(fz("header", 9)).text(`GSTIN: ${restaurant.gstin}`, { align: "center" });
+      if (show.fssai && restaurant.fssaiLicense)
+        doc.fontSize(fz("header", 9)).text(`FSSAI Reg. No: ${restaurant.fssaiLicense}`, { align: "center" });
       doc.moveDown(0.5);
-      doc.fontSize(fz(12)).text(invoiceTitle(order), { align: "center" });
+      doc.fontSize(fz("header", 12)).text(invoiceTitle(order), { align: "center" });
+      // The cafe token sits in the header, under the title, where the guest looks for it.
+      const tokenText = restaurant.serviceFlow === "cafe" ? orderTokenText(items) : "";
+      if (show.token && tokenText) {
+        doc.moveDown(0.2);
+        doc.font("Helvetica-Bold").fontSize(fz("header", 16)).text(tokenText.toUpperCase(), { align: "center" });
+        doc.font("Helvetica");
+      }
       doc.moveDown(0.5);
       drawSeparator(doc, x0, usableWidth, true);
 
-      doc.fontSize(fz(10));
-      if (order.invoiceNumber) doc.text(`Invoice No: ${order.invoiceNumber}`);
-      const tokenText = restaurant.serviceFlow === "cafe" ? orderTokenText(items) : "";
-      if (tokenText) doc.fontSize(fz(14)).text(tokenText.toUpperCase(), { align: "center" }).fontSize(fz(10));
+      doc.fontSize(fz("details", 10));
+      if (show.invoiceNumber && order.invoiceNumber) doc.text(`Invoice No: ${order.invoiceNumber}`);
       const billDate = order.billedAt ?? order.checkinTime;
-      doc.text(
-        `Date: ${new Date(billDate).toLocaleString("en-IN", { timeZone: restaurant.timezone || "Asia/Kolkata" })}`
-      );
-      doc.text(`Order: ${orderTypeText(order)}`);
-      doc.text(
-        `Customer: ${order.customerName}` +
-          (settings?.showCustomerPhone !== false && order.customerPhone ? `  (${order.customerPhone})` : "")
-      );
-      if (order.customerGstin) doc.text(`Customer GSTIN: ${order.customerGstin}`);
+      if (show.dateTime) {
+        doc.text(
+          `Date: ${new Date(billDate).toLocaleString("en-IN", { timeZone: restaurant.timezone || "Asia/Kolkata" })}`
+        );
+      }
+      if (show.orderType) doc.text(`Order: ${orderTypeText(order)}`);
+      if (show.customerName) {
+        doc.text(
+          `Customer: ${order.customerName}` +
+            (show.customerPhone && order.customerPhone ? `  (${billPhone(order.customerPhone, settings)})` : "")
+        );
+      } else if (show.customerPhone && order.customerPhone) {
+        doc.text(`Phone: ${billPhone(order.customerPhone, settings)}`);
+      }
+      if (show.customerGstin && order.customerGstin) doc.text(`Customer GSTIN: ${order.customerGstin}`);
       const placeOfSupply = order.bill?.placeOfSupply || settings?.placeOfSupply;
-      if (placeOfSupply) doc.text(`Place of supply: ${placeOfSupply}`);
-      doc.text(`SAC: ${order.bill?.sac || DEFAULT_SAC} (restaurant service)`);
+      if (show.placeOfSupply && placeOfSupply) doc.text(`Place of supply: ${placeOfSupply}`);
+      if (show.sac) doc.text(`SAC: ${order.bill?.sac || DEFAULT_SAC} (restaurant service)`);
       doc.moveDown(0.3);
       drawSeparator(doc, x0, usableWidth);
 
-      const showUnitPrice = settings?.showUnitPrice !== false;
-      const showJainTag = settings?.showJainTag !== false;
+      const showUnitPrice = show.unitPrice;
+      const showJainTag = show.tags;
 
+      // The dish column is only as wide as the longest dish name needs, so qty sits close to the name
+      // instead of far to the right; the other columns share what is left.
+      doc.fontSize(fz("items", 10));
+      const longestName = Math.max(
+        0,
+        ...items
+          .filter((i) => i.status !== "cancelled")
+          .map((i) =>
+            doc.widthOfString(
+              i.foodName + (showJainTag && i.isJain ? " (Jain)" : "") + (i.complimentary ? " (complimentary)" : "")
+            )
+          )
+      );
+      const itemWidth = Math.min(Math.max(longestName + 8, usableWidth * 0.3), usableWidth * 0.55);
+      const rest = usableWidth - itemWidth;
       const cols = showUnitPrice
         ? [
-            { key: "item", width: usableWidth * 0.4 },
-            { key: "qty", width: usableWidth * 0.15, align: "right" as const },
-            { key: "price", width: usableWidth * 0.2, align: "right" as const },
-            { key: "total", width: usableWidth * 0.25, align: "right" as const },
+            { key: "item", width: itemWidth },
+            { key: "qty", width: rest * 0.22, align: "right" as const },
+            { key: "price", width: rest * 0.38, align: "right" as const },
+            { key: "total", width: rest * 0.4, align: "right" as const },
           ]
         : [
-            { key: "item", width: usableWidth * 0.55 },
-            { key: "qty", width: usableWidth * 0.2, align: "right" as const },
-            { key: "total", width: usableWidth * 0.25, align: "right" as const },
+            { key: "item", width: itemWidth },
+            { key: "qty", width: rest * 0.3, align: "right" as const },
+            { key: "total", width: rest * 0.7, align: "right" as const },
           ];
 
-      doc.fontSize(fz(10));
       let y = drawRow(
         doc,
         x0,
@@ -372,7 +406,7 @@ export async function streamInvoicePdf(
       const totalsLabelWidth = usableWidth * 0.6;
       const totalsAmountWidth = usableWidth * 0.4;
 
-      doc.fontSize(fz(10));
+      doc.fontSize(fz("totals", 10));
       let ty = drawRow(doc, x0, doc.y, [
         { text: "Subtotal", width: totalsLabelWidth },
         { text: totals.subtotal.toFixed(2), width: totalsAmountWidth, align: "right" },
@@ -381,42 +415,42 @@ export async function streamInvoicePdf(
 
       const couponDiscount = totals.couponDiscount ?? totals.discount;
       const manualDiscount = totals.manualDiscount ?? 0;
-      if (couponDiscount > 0) {
+      if (show.discounts && couponDiscount > 0) {
         ty = drawRow(doc, x0, doc.y, [
           { text: order.couponCode ? `Coupon (${order.couponCode})` : "Discount", width: totalsLabelWidth },
           { text: `-${couponDiscount.toFixed(2)}`, width: totalsAmountWidth, align: "right" },
         ]);
         doc.y = ty + 2;
       }
-      if (manualDiscount > 0) {
+      if (show.discounts && manualDiscount > 0) {
         ty = drawRow(doc, x0, doc.y, [
           { text: "Discount", width: totalsLabelWidth },
           { text: `-${manualDiscount.toFixed(2)}`, width: totalsAmountWidth, align: "right" },
         ]);
         doc.y = ty + 2;
       }
-      if ((totals.loyaltyDiscount ?? 0) > 0) {
+      if (show.discounts && (totals.loyaltyDiscount ?? 0) > 0) {
         ty = drawRow(doc, x0, doc.y, [
           { text: "Loyalty points", width: totalsLabelWidth },
           { text: `-${totals.loyaltyDiscount.toFixed(2)}`, width: totalsAmountWidth, align: "right" },
         ]);
         doc.y = ty + 2;
       }
-      if ((totals.serviceCharge ?? 0) > 0) {
+      if (show.charges && (totals.serviceCharge ?? 0) > 0) {
         ty = drawRow(doc, x0, doc.y, [
           { text: `Service charge (${totals.serviceChargePercent}%)`, width: totalsLabelWidth },
           { text: totals.serviceCharge.toFixed(2), width: totalsAmountWidth, align: "right" },
         ]);
         doc.y = ty + 2;
       }
-      if ((totals.packagingCharge ?? 0) > 0) {
+      if (show.charges && (totals.packagingCharge ?? 0) > 0) {
         ty = drawRow(doc, x0, doc.y, [
           { text: "Packaging", width: totalsLabelWidth },
           { text: totals.packagingCharge.toFixed(2), width: totalsAmountWidth, align: "right" },
         ]);
         doc.y = ty + 2;
       }
-      for (const extra of totals.extraCharges ?? []) {
+      for (const extra of show.charges ? (totals.extraCharges ?? []) : []) {
         ty = drawRow(doc, x0, doc.y, [
           { text: extra.name, width: totalsLabelWidth },
           { text: extra.amount.toFixed(2), width: totalsAmountWidth, align: "right" },
@@ -424,13 +458,15 @@ export async function streamInvoicePdf(
         doc.y = ty + 2;
       }
 
-      ty = drawRow(doc, x0, doc.y, [
-        { text: "Taxable value", width: totalsLabelWidth },
-        { text: totals.taxableAmount.toFixed(2), width: totalsAmountWidth, align: "right" },
-      ]);
-      doc.y = ty + 2;
+      if (show.taxBreakdown) {
+        ty = drawRow(doc, x0, doc.y, [
+          { text: "Taxable value", width: totalsLabelWidth },
+          { text: totals.taxableAmount.toFixed(2), width: totalsAmountWidth, align: "right" },
+        ]);
+        doc.y = ty + 2;
+      }
 
-      for (const tax of totals.taxLines) {
+      for (const tax of show.taxBreakdown ? totals.taxLines : []) {
         ty = drawRow(doc, x0, doc.y, [
           { text: `${tax.name} (${tax.percent}%)`, width: totalsLabelWidth },
           { text: tax.amount.toFixed(2), width: totalsAmountWidth, align: "right" },
@@ -438,7 +474,7 @@ export async function streamInvoicePdf(
         doc.y = ty + 2;
       }
 
-      if (totals.roundOff !== 0) {
+      if (show.roundOff && totals.roundOff !== 0) {
         ty = drawRow(doc, x0, doc.y, [
           { text: "Round off", width: totalsLabelWidth },
           {
@@ -451,7 +487,7 @@ export async function streamInvoicePdf(
       }
 
       doc.moveDown(0.2);
-      doc.fontSize(fz(11));
+      doc.fontSize(fz("grandTotal", 11));
       ty = drawRow(
         doc,
         x0,
@@ -464,9 +500,9 @@ export async function streamInvoicePdf(
       );
       doc.y = ty;
 
-      if (order.payments?.length) {
+      if (show.payments && order.payments?.length) {
         doc.moveDown(0.3);
-        doc.fontSize(fz(9));
+        doc.fontSize(fz("totals", 9));
         for (const payment of order.payments) {
           const label =
             `Paid by ${PAYMENT_LABELS[payment.method] ?? payment.method}` +
@@ -491,7 +527,7 @@ export async function streamInvoicePdf(
         const size = Math.min(120, usableWidth * 0.6);
         doc.image(upiQr, x0 + (usableWidth - size) / 2, doc.y, { width: size, height: size });
         doc.y += size + 4;
-        doc.fontSize(fz(8)).text(`Scan to pay Rs. ${totals.grandTotal.toFixed(2)} with any UPI app`, x0, doc.y, {
+        doc.fontSize(fz("footer", 8)).text(`Scan to pay Rs. ${totals.grandTotal.toFixed(2)} with any UPI app`, x0, doc.y, {
           width: usableWidth,
           align: "center",
         });
@@ -500,14 +536,18 @@ export async function streamInvoicePdf(
       doc.moveDown(0.3);
       drawSeparator(doc, x0, usableWidth, true);
 
-      if (settings?.termsText) {
-        doc.fontSize(fz(8)).text(settings.termsText, { align: "left" });
+      if (show.terms && settings?.termsText) {
+        doc.fontSize(fz("footer", 8)).text(settings.termsText, { align: "left" });
         doc.moveDown(0.3);
       }
 
-      doc.fontSize(fz(9)).text(settings?.footerNote || "Thank you for dining with us!", { align: "center" });
+      if (show.footer) {
+        doc
+          .fontSize(fz("footer", 9))
+          .text(settings?.footerNote || "Thank you for dining with us!", { align: "center" });
+      }
     },
-    archive
+    data.preview ? undefined : archive
   );
 }
 
@@ -524,12 +564,13 @@ export async function streamKotPdf(
 ) {
   const { restaurant, order, round, items, tableCode, tokenNumber } = data;
   const settings = restaurant.kotSettings;
-  const fontSize: PrintFontSize = settings?.fontSize || "normal";
-  const scale = FONT_SCALE[fontSize];
-  const fz = (base: number) => Math.max(6, Math.round(base * scale));
   const paperSize = settings?.paperSize || "thermal80";
+  // Which details show, and how big each part is, for this paper (Settings -> Kitchen tickets -> Ticket layout).
+  const layout = resolveKotLayout(settings, paperKeyFor(paperSize));
+  const fz = (group: KotFontKey, base: number) =>
+    Math.max(6, Math.round(base * SIZE_SCALE[layout.fonts[group]]));
 
-  const logo = settings?.showLogo ? await resolveLogoBuffer(restaurant.logoUrl) : null;
+  const logo = layout.show.logo ? await resolveLogoBuffer(restaurant.logoUrl) : null;
 
   // With "split by category" every category is its own ticket on its own page, all with the same token.
   const sections: { category?: string; items: IOrderItem[] }[] = [];
@@ -563,28 +604,30 @@ export async function streamKotPdf(
   ) {
     if (logo) drawLogo(doc, logo, x0, usableWidth);
 
-    doc.fontSize(fz(14)).text(restaurant.name, { align: "center" });
-    doc
-      .fontSize(fz(12))
-      .text(`${settings?.headerText || "Kitchen Order Ticket"} - Round ${round}`, { align: "center" });
-    if (tokenNumber) {
+    if (layout.show.restaurantName) doc.fontSize(fz("header", 14)).text(restaurant.name, { align: "center" });
+    if (layout.show.header) {
+      doc
+        .fontSize(fz("header", 12))
+        .text(`${settings?.headerText || "Kitchen Order Ticket"} - Round ${round}`, { align: "center" });
+    }
+    if (tokenNumber && layout.show.token) {
       // The number the kitchen calls out - biggest thing on the ticket.
       doc.moveDown(0.2);
-      doc.font("Helvetica-Bold").fontSize(fz(20)).text(`TOKEN ${tokenNumber}`, { align: "center" });
+      doc.font("Helvetica-Bold").fontSize(fz("token", 20)).text(`TOKEN ${tokenNumber}`, { align: "center" });
       doc.font("Helvetica");
     }
-    if (category) {
+    if (category && layout.show.station) {
       doc.moveDown(0.2);
-      doc.font("Helvetica-Bold").fontSize(fz(13)).text(category.toUpperCase(), { align: "center" });
+      doc.font("Helvetica-Bold").fontSize(fz("header", 13)).text(category.toUpperCase(), { align: "center" });
       doc.font("Helvetica");
     }
     doc.moveDown(0.5);
     drawSeparator(doc, x0, usableWidth, true);
 
-    if (order.orderType !== "dine-in") {
+    if (order.orderType !== "dine-in" && layout.show.orderInfo) {
       doc
         .font("Helvetica-Bold")
-        .fontSize(fz(14))
+        .fontSize(fz("orderInfo", 14))
         .text(order.orderType === "takeaway" ? "*** TAKE AWAY - PACK ***" : "*** DELIVERY - PACK ***", {
           align: "center",
         });
@@ -592,28 +635,28 @@ export async function streamKotPdf(
       doc.moveDown(0.2);
     }
 
-    if (settings?.showTableInfo !== false) {
+    if (layout.show.orderInfo) {
       if (order.orderType === "dine-in") {
         doc
           .font("Helvetica-Bold")
-          .fontSize(fz(16))
+          .fontSize(fz("orderInfo", 16))
           .text(tableCode ? `Table: ${tableCode}` : "Dine-in", { align: "center" });
         doc.font("Helvetica");
         doc.moveDown(0.2);
       } else if (order.orderType === "delivery") {
-        doc.fontSize(fz(10)).text(`Order: Delivery (${order.deliveryProvider})`);
+        doc.fontSize(fz("orderInfo", 10)).text(`Order: Delivery (${order.deliveryProvider})`);
       }
     }
-    doc.fontSize(fz(10));
-    if (settings?.showCustomerName !== false) {
+    doc.fontSize(fz("orderInfo", 10));
+    if (layout.show.customerName) {
       doc.text(`Customer: ${order.customerName}`);
     }
-    doc.text(`Date: ${new Date().toLocaleString()}`);
+    if (layout.show.dateTime) doc.text(`Date: ${new Date().toLocaleString()}`);
     doc.moveDown(0.3);
     drawSeparator(doc, x0, usableWidth);
 
-    const showPrices = !!settings?.showPrices;
-    const showJainTag = settings?.showJainTag !== false;
+    const showPrices = layout.show.prices;
+    const showTags = layout.show.tags;
 
     const colWidths = showPrices
       ? [usableWidth * 0.1, usableWidth * 0.42, usableWidth * 0.15, usableWidth * 0.15, usableWidth * 0.18]
@@ -633,13 +676,14 @@ export async function streamKotPdf(
           { text: "Qty", width: colWidths[2], align: "right" },
         ];
 
-    doc.fontSize(fz(10));
+    doc.fontSize(fz("items", 10));
     let y = drawRow(doc, x0, doc.y, headerCols, true);
     doc.y = y + 3;
     drawSeparator(doc, x0, usableWidth);
 
     items.forEach((item, idx) => {
-      const name = item.foodName + (showJainTag && item.isJain ? " (Jain)" : "") + (item.isPacked ? " (PACK)" : "");
+      const name =
+        item.foodName + (showTags && item.isJain ? " (Jain)" : "") + (showTags && item.isPacked ? " (PACK)" : "");
       const rowCols: Column[] = showPrices
         ? [
             { text: String(idx + 1), width: colWidths[0] },
@@ -657,21 +701,21 @@ export async function streamKotPdf(
       doc.y = y + 3;
       // Customizations & kitchen note printed under the dish so the line cook sees them.
       const extras = [...(item.modifiers?.map((m) => m.label) ?? []), item.note].filter(Boolean).join(", ");
-      if (extras) {
+      if (extras && layout.show.notes) {
         doc
           .font("Helvetica-Bold")
-          .fontSize(fz(9))
+          .fontSize(fz("notes", 9))
           .text(`  → ${extras}`, x0 + colWidths[0], doc.y, { width: usableWidth - colWidths[0] });
-        doc.font("Helvetica").fontSize(fz(10));
+        doc.font("Helvetica").fontSize(fz("items", 10));
         doc.y += 2;
       }
-      for (const part of item.components ?? []) {
+      for (const part of layout.show.comboParts ? (item.components ?? []) : []) {
         doc
-          .fontSize(fz(9))
+          .fontSize(fz("notes", 9))
           .text(`  - ${part.quantity * item.quantity} x ${part.name}`, x0 + colWidths[0], doc.y, {
             width: usableWidth - colWidths[0],
           });
-        doc.fontSize(fz(10));
+        doc.fontSize(fz("items", 10));
         doc.y += 1;
       }
     });
@@ -679,8 +723,12 @@ export async function streamKotPdf(
     doc.moveDown(0.3);
     drawSeparator(doc, x0, usableWidth, true);
 
-    if (settings?.footerNote) {
-      doc.fontSize(fz(9)).text(settings.footerNote, { align: "center" });
+    if (layout.show.itemCount) {
+      const count = items.reduce((sum, i) => sum + i.quantity, 0);
+      doc.fontSize(fz("items", 9)).text(`${count} item${count === 1 ? "" : "s"}`, { align: "left" });
+    }
+    if (settings?.footerNote && layout.show.footer) {
+      doc.fontSize(fz("footer", 9)).text(settings.footerNote, { align: "center" });
     }
   }
 }

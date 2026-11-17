@@ -13,6 +13,7 @@ import Restaurant, {
   IQrSettings,
   IRestaurant,
   ITaxRate,
+  PrintPaperSize,
   SERVICE_FLOWS,
   ServiceFlow,
 } from "../models/Restaurant";
@@ -22,12 +23,42 @@ import { computeInvoiceTotals } from "../utils/invoice";
 import { financialYearLabel, INVOICE_PREFIX_PATTERN } from "../utils/invoiceNumber";
 import { seedLandingContent } from "../utils/landingSeed";
 import { resolveLogoBuffer, streamInvoicePdf, streamKotPdf } from "../utils/pdf";
+import { cleanLayouts, INVOICE_FONTS, INVOICE_SHOW, KOT_FONTS, KOT_SHOW, PaperKey } from "../utils/printLayout";
 
-const SAMPLE_ITEMS: Pick<IOrderItem, "foodName" | "isJain" | "quantity" | "unitPrice" | "total" | "status">[] = [
-  { foodName: "Paneer Butter Masala", isJain: false, quantity: 2, unitPrice: 220, total: 440, status: "pending" },
-  { foodName: "Dal Tadka (Jain)", isJain: true, quantity: 1, unitPrice: 150, total: 150, status: "pending" },
-  { foodName: "Butter Naan", isJain: false, quantity: 4, unitPrice: 35, total: 140, status: "pending" },
+const SAMPLE_ITEMS: Partial<IOrderItem>[] = [
+  {
+    foodName: "Paneer Butter Masala",
+    isJain: false,
+    quantity: 2,
+    unitPrice: 220,
+    total: 440,
+    status: "pending",
+    modifiers: [{ groupName: "Gravy", label: "Extra gravy", priceDelta: 0 }],
+    note: "Less spicy",
+  },
+  { foodName: "Dal Tadka", isJain: true, quantity: 1, unitPrice: 150, total: 150, status: "pending" },
+  { foodName: "Butter Naan", isJain: false, quantity: 4, unitPrice: 35, total: 140, status: "pending", isPacked: true },
+  {
+    foodName: "Thali Combo",
+    isJain: false,
+    quantity: 1,
+    unitPrice: 199,
+    total: 199,
+    status: "pending",
+    components: [
+      { name: "Veg Pulao", quantity: 1 },
+      { name: "Raita", quantity: 1 },
+    ] as IOrderItem["components"],
+  },
 ];
+
+/** Lets the settings preview show a chosen paper (58 mm, 80 mm or a page) before it is saved. */
+function previewPaperSize(paper: unknown, current: PrintPaperSize | undefined): PrintPaperSize | undefined {
+  if (paper === "p58") return "thermal58";
+  if (paper === "p80") return "thermal80";
+  if (paper === "page") return current === "a4" ? "a4" : "a5";
+  return undefined;
+}
 
 function buildSampleOrder(invoicePrefix?: string): IOrder {
   return {
@@ -280,7 +311,9 @@ export const updateRestaurantSettings = asyncHandler(async (req: Request, res: R
         return { categoryIds: ids as string[] };
       }) as never;
     }
+    if (kotSettings.layouts !== undefined) kotSettings.layouts = cleanLayouts(kotSettings.layouts, KOT_SHOW, KOT_FONTS);
     Object.assign(restaurant.kotSettings, kotSettings);
+    restaurant.markModified("kotSettings.layouts");
   }
   if (invoiceSettings !== undefined) {
     if (invoiceSettings.invoicePrefix !== undefined) {
@@ -293,10 +326,17 @@ export const updateRestaurantSettings = asyncHandler(async (req: Request, res: R
     if (invoiceSettings.placeOfSupply !== undefined && String(invoiceSettings.placeOfSupply).length > 60) {
       throw new HttpError(400, "Place of supply must be 60 characters or fewer");
     }
+    if (invoiceSettings.maskCustomerPhone !== undefined && typeof invoiceSettings.maskCustomerPhone !== "boolean") {
+      throw new HttpError(400, "Hiding the customer's phone number must be on or off");
+    }
     if (invoiceSettings.autoPrintBill !== undefined && typeof invoiceSettings.autoPrintBill !== "boolean") {
       throw new HttpError(400, "Automatic bill printing must be on or off");
     }
+    if (invoiceSettings.layouts !== undefined) {
+      invoiceSettings.layouts = cleanLayouts(invoiceSettings.layouts, INVOICE_SHOW, INVOICE_FONTS);
+    }
     Object.assign(restaurant.invoiceSettings, invoiceSettings);
+    restaurant.markModified("invoiceSettings.layouts");
   }
   if (billingSettings !== undefined) {
     const { serviceChargePercent, maxStaffDiscountPercent, upiVpa, upiPayeeName, dineInPayment } = billingSettings;
@@ -315,6 +355,19 @@ export const updateRestaurantSettings = asyncHandler(async (req: Request, res: R
     }
     if (dineInPayment !== undefined && dineInPayment !== "after" && dineInPayment !== "upfront") {
       throw new HttpError(400, "Choose whether dine-in guests pay after eating or when ordering");
+    }
+    if (billingSettings.guestPayOptions !== undefined) {
+      const options = billingSettings.guestPayOptions as Record<string, unknown>;
+      for (const key of ["online", "upiQr", "counter"]) {
+        if (options[key] !== undefined && typeof options[key] !== "boolean") {
+          throw new HttpError(400, "Guest payment options must be on or off");
+        }
+      }
+      billingSettings.guestPayOptions = {
+        online: options.online !== false,
+        upiQr: options.upiQr !== false,
+        counter: options.counter !== false,
+      };
     }
     if (billingSettings.takeawayPayFirst !== undefined && typeof billingSettings.takeawayPayFirst !== "boolean") {
       throw new HttpError(400, "Takeaway and counter pay first must be on or off");
@@ -372,19 +425,23 @@ export const updateRestaurantSettings = asyncHandler(async (req: Request, res: R
 });
 
 export const previewKotPdf = asyncHandler(async (req: Request, res: Response) => {
-  const { name, logoUrl, kotSettings } = req.body as {
+  const { name, logoUrl, kotSettings, paper } = req.body as {
     name?: string;
     logoUrl?: string;
     kotSettings?: Partial<IKotSettings>;
+    paper?: PaperKey;
   };
-  const restaurant = await buildPreviewRestaurant(req, { name, logoUrl, kotSettings });
+  const cleaned = kotSettings && { ...kotSettings, layouts: cleanLayouts(kotSettings.layouts, KOT_SHOW, KOT_FONTS) };
+  const restaurant = await buildPreviewRestaurant(req, { name, logoUrl, kotSettings: cleaned });
+  const paperSize = previewPaperSize(paper, restaurant.kotSettings?.paperSize);
+  if (paperSize) restaurant.kotSettings = { ...restaurant.kotSettings, paperSize };
   const order = buildSampleOrder();
   const items = SAMPLE_ITEMS as unknown as IOrderItem[];
-  await streamKotPdf(res, { restaurant, order, round: 1, items, tableCode: "5" });
+  await streamKotPdf(res, { restaurant, order, round: 1, items, tableCode: "5", tokenNumber: 12 });
 });
 
 export const previewInvoicePdf = asyncHandler(async (req: Request, res: Response) => {
-  const { name, logoUrl, address, gstin, fssaiLicense, taxRates, invoiceSettings } = req.body as {
+  const { name, logoUrl, address, gstin, fssaiLicense, taxRates, invoiceSettings, paper } = req.body as {
     name?: string;
     logoUrl?: string;
     address?: string;
@@ -392,6 +449,11 @@ export const previewInvoicePdf = asyncHandler(async (req: Request, res: Response
     fssaiLicense?: string;
     taxRates?: ITaxRate[];
     invoiceSettings?: Partial<IInvoiceSettings>;
+    paper?: PaperKey;
+  };
+  const cleaned = invoiceSettings && {
+    ...invoiceSettings,
+    layouts: cleanLayouts(invoiceSettings.layouts, INVOICE_SHOW, INVOICE_FONTS),
   };
   const restaurant = await buildPreviewRestaurant(req, {
     name,
@@ -400,12 +462,31 @@ export const previewInvoicePdf = asyncHandler(async (req: Request, res: Response
     gstin,
     fssaiLicense,
     taxRates,
-    invoiceSettings,
+    invoiceSettings: cleaned,
   });
-  const order = { ...buildSampleOrder(restaurant.invoiceSettings?.invoicePrefix), status: "closed" } as IOrder;
-  const items = SAMPLE_ITEMS as unknown as IOrderItem[];
-  const totals = computeInvoiceTotals(items, restaurant.taxRates || []);
-  await streamInvoicePdf(res, { restaurant, order, items, totals });
+  const paperSize = previewPaperSize(paper, restaurant.invoiceSettings?.paperSize);
+  if (paperSize) restaurant.invoiceSettings = { ...restaurant.invoiceSettings, paperSize };
+  // A billed sample with a coupon, charges and a payment, so every detail can be switched on and off in the preview.
+  const order = {
+    ...buildSampleOrder(restaurant.invoiceSettings?.invoicePrefix),
+    status: "billed",
+    couponCode: "WELCOME10",
+    customerGstin: "29ABCDE1234F1Z5",
+    payments: [{ method: "upi", amount: 0, reference: "UPI123456" }],
+  } as unknown as IOrder;
+  // Tokens print on bills in the cafe flow, so the sample is drawn as one, with a token on its dishes.
+  restaurant.serviceFlow = "cafe";
+  const items = SAMPLE_ITEMS.map((item) => ({ ...item, tokenNumber: 12 })) as unknown as IOrderItem[];
+  const totals = computeInvoiceTotals(items, restaurant.taxRates || [], {
+    couponDiscount: 20,
+    serviceChargePercent: 5,
+    extraCharges: [{ name: "Cutlery", type: "fixed", value: 5 }],
+  });
+  order.payments[0].amount = totals.grandTotal;
+  if (!restaurant.billingSettings?.upiVpa) {
+    restaurant.billingSettings = { ...restaurant.billingSettings, upiVpa: "restaurant@upi" };
+  }
+  await streamInvoicePdf(res, { restaurant, order, items, totals, preview: true });
 });
 
 export const seedLandingSampleContent = asyncHandler(async (req: Request, res: Response) => {

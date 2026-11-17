@@ -10,6 +10,11 @@ export function refundState(order: Pick<Order, "status" | "refundedTotal" | "pay
   return refunded >= paid - 0.01 ? "full" : "partial";
 }
 
+/** A dine-in order that is still waiting for its payment (open, or billed but not paid). */
+export function isUnpaidDineIn(order: Pick<Order, "orderType" | "status" | "voidedAt">): boolean {
+  return order.orderType === "dine-in" && !order.voidedAt && (order.status === "open" || order.status === "billed");
+}
+
 export function orderStatusBadge(
   order: Pick<Order, "status" | "voidedAt" | "refundedTotal" | "payments">,
 ): { tone: BadgeTone; label: string } {

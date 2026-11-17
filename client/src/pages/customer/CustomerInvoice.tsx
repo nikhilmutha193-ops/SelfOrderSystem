@@ -16,7 +16,7 @@ import {
 } from "../../features/orders/queries";
 import { MyOrdersCard } from "./MyOrdersCard";
 import { PayOnlineButton } from "../../features/payments/components/PayOnlineButton";
-import type { MyOrder } from "../../lib/types";
+import type { MyOrder, OrderDetailResponse } from "../../lib/types";
 import { renderPrepMessage } from "../../lib/prepTime";
 import { useGuestAccess } from "../../lib/useGuestAccess";
 import { useServiceFlow } from "../../lib/useServiceFlow";
@@ -102,6 +102,68 @@ const TOKEN_STATES = {
 } as const;
 
 const NO_ORDERS: MyOrder[] = [];
+
+/** The ways a guest can pay their own order, as the owner allows them (Billing settings → guest payment options). */
+function GuestPayCard({
+  data,
+  title,
+  note,
+  onCounter,
+  counterBusy = false,
+  counterDone = false,
+}: {
+  data: OrderDetailResponse;
+  title: string;
+  note: string;
+  /** Tells the staff the guest will pay at the counter (the same request as Checkout). */
+  onCounter?: () => void;
+  counterBusy?: boolean;
+  counterDone?: boolean;
+}) {
+  const { order, totals } = data;
+  const online = !!data.onlinePayment;
+  const upi = !!data.payment?.upiVpa;
+  const counter = data.payOptions?.counter !== false;
+  return (
+    <Card className="mb-4">
+      <p className="text-sm font-medium text-slate-800">{title}</p>
+      <p className="mt-1 text-2xl font-bold text-slate-900 tabular-nums">₹{totals.grandTotal.toFixed(2)}</p>
+      {online && (
+        <div className="mt-3">
+          <PayOnlineButton orderId={order._id} amount={totals.grandTotal} />
+        </div>
+      )}
+      {upi && data.payment && (
+        <div className="mt-3">
+          <UpiQr
+            vpa={data.payment.upiVpa}
+            payee={data.payment.upiPayeeName}
+            amount={totals.grandTotal}
+            note={order.invoiceNumber ?? "Order"}
+          />
+          <p className="mt-2 text-center text-xs text-slate-500">{note}</p>
+        </div>
+      )}
+      {counter && onCounter ? (
+        <div className="mt-3">
+          <Button
+            variant="secondary"
+            className="w-full sm:w-auto"
+            onClick={onCounter}
+            disabled={counterBusy || counterDone}
+          >
+            {counterBusy ? "Notifying..." : counterDone ? "Staff notified" : "Pay at the counter (cash or card)"}
+          </Button>
+        </div>
+      ) : (
+        counter && <p className="mt-3 text-xs text-slate-500">You can also pay cash or card at the counter.</p>
+      )}
+      {!online && !upi && !counter && (
+        <p className="mt-3 text-xs text-slate-500">Please ask the staff to take your payment.</p>
+      )}
+    </Card>
+  );
+}
 
 export default function CustomerInvoice() {
   const { orderId: sessionOrderId, via } = useTableSession();
@@ -309,72 +371,30 @@ export default function CustomerInvoice() {
       />
 
       {awaitingPayment && (
-        <Card className="mb-4">
-          {data.onlinePayment ? (
-            <>
-              <p className="mb-3 text-sm font-medium text-slate-800">
-                Pay now and your order goes straight to the kitchen.
-              </p>
-              <PayOnlineButton orderId={order._id} amount={totals.grandTotal} />
-              <p className="mt-3 text-xs text-slate-500">
-                Paying cash? Pay at the counter instead.
-              </p>
-            </>
-          ) : (
-            <p className="text-sm font-medium text-slate-800">
-              Pay ₹{totals.grandTotal.toFixed(2)} at the counter
-              {data.payment?.upiVpa ? " or scan to pay by UPI" : ""}. Your order
-              goes to the kitchen as soon as it's paid.
-            </p>
-          )}
-          {!data.onlinePayment && data.payment?.upiVpa && (
-            <div className="mt-3">
-              <UpiQr
-                vpa={data.payment.upiVpa}
-                payee={data.payment.upiPayeeName}
-                amount={totals.grandTotal}
-                note={order.invoiceNumber ?? "Order"}
-              />
-              <p className="mt-2 text-center text-xs text-slate-500">
-                Show the payment confirmation at the counter so they can send
-                your order.
-              </p>
-            </div>
-          )}
-        </Card>
+        <GuestPayCard
+          data={data}
+          title="Pay now and your order goes straight to the kitchen."
+          note="Show the payment confirmation at the counter so they can send your order."
+        />
       )}
 
       {order.status === "billed" && !payFirst && (
-        <Card className="mb-4">
-          <p className="text-sm text-blue-900">
-            Your bill{order.invoiceNumber ? ` ${order.invoiceNumber}` : ""} is
-            ready.{" "}
-            {data.onlinePayment
-              ? "Pay now from your phone, or at the counter."
-              : data.payment?.upiVpa
-                ? "Pay at the counter or scan to pay by UPI."
-                : "Please pay at the counter."}
-          </p>
-          {data.onlinePayment && (
-            <div className="mt-3">
-              <PayOnlineButton orderId={order._id} amount={totals.grandTotal} />
-            </div>
-          )}
-          {!data.onlinePayment && data.payment?.upiVpa && (
-            <div className="mt-3">
-              <UpiQr
-                vpa={data.payment.upiVpa}
-                payee={data.payment.upiPayeeName}
-                amount={totals.grandTotal}
-                note={order.invoiceNumber ?? "Bill"}
-              />
-              <p className="mt-2 text-center text-xs text-slate-500">
-                Show the payment confirmation to staff so they can close your
-                bill.
-              </p>
-            </div>
-          )}
-        </Card>
+        <GuestPayCard
+          data={data}
+          title={`Your bill${order.invoiceNumber ? ` ${order.invoiceNumber}` : ""} is ready. Choose how to pay.`}
+          note="Show the payment confirmation to staff so they can close your bill."
+        />
+      )}
+
+      {order.status === "open" && !payFirst && !cafe && pendingCount === 0 && activeItems.length > 0 && (
+        <GuestPayCard
+          data={data}
+          title="Everything has been served. Choose how to pay."
+          note="Show the payment confirmation to staff so they can close your bill."
+          onCounter={() => void requestCheckout()}
+          counterBusy={checkingOut}
+          counterDone={checkoutRequested}
+        />
       )}
 
       {liveTokens.length > 0 && (
@@ -383,16 +403,16 @@ export default function CustomerInvoice() {
             {liveTokens.length > 1 ? "Your tokens" : "Your token"}
           </p>
           <div
-            className={`mt-3 grid gap-3 ${liveTokens.length === 1 ? "grid-cols-1" : "grid-cols-1 sm:grid-cols-2"}`}
+            className={`mt-3 grid gap-2 ${liveTokens.length === 1 ? "grid-cols-1" : "grid-cols-2 sm:grid-cols-3"}`}
           >
             {liveTokens.map((t) => (
               <div
                 key={t.token}
-                className={`flex flex-col items-center rounded-xl px-3 py-4 ${t.tile}`}
+                className={`flex flex-col items-center rounded-xl px-2 py-3 ${liveTokens.length > 1 ? "odd:last:col-span-2 sm:odd:last:col-span-1" : ""} ${t.tile}`}
               >
-                <p className={`text-5xl leading-none font-extrabold tabular-nums ${t.text}`}>{t.token}</p>
+                <p className={`${liveTokens.length > 1 ? "text-4xl" : "text-5xl"} leading-none font-extrabold tabular-nums ${t.text}`}>{t.token}</p>
                 {t.round != null && <p className="mt-1 text-xs text-slate-500">Round {t.round}</p>}
-                <span className={`mt-2 rounded-full px-2.5 py-0.5 text-xs font-semibold ${t.pill}`}>{t.label}</span>
+                <span className={`mt-2 rounded-full px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap ${t.pill}`}>{t.label}</span>
               </div>
             ))}
           </div>

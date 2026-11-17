@@ -72,6 +72,10 @@ export class PaymentsRepository {
       .lean();
   }
 
+  findGuestPayOptions() {
+    return Restaurant.findById(this.restaurantId).select("billingSettings.guestPayOptions").lean();
+  }
+
   findRestaurantName() {
     return Restaurant.findById(this.restaurantId).select("name").lean();
   }

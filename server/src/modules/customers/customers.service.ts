@@ -13,7 +13,7 @@ import { DEFAULT_SAC } from "../../utils/invoiceNumber";
 import { orderTokenText } from "../../utils/orderToken";
 import { invoiceTitle, orderTypeText, PAYMENT_LABELS } from "../../utils/pdf";
 import { sendBirthdayGreetingsForRestaurant } from "../../utils/birthdaySmsScheduler";
-import { normalizePhone } from "../../utils/phone";
+import { billPhone, normalizePhone } from "../../utils/phone";
 import { sendSms } from "../../utils/sms";
 import { pricingFor, totalsForOrder } from "../orders/orders.billing";
 import { creditBalance } from "../credit/credit.service";
@@ -595,7 +595,7 @@ export async function publicBill(restaurantId: string, token: string) {
       title: invoiceTitle(order),
       billedAt: order.billedAt ?? order.checkinTime ?? order.createdAt,
       customerName: order.customerName,
-      customerPhone: settings?.showCustomerPhone !== false ? (order.customerPhone ?? "") : "",
+      customerPhone: settings?.showCustomerPhone !== false ? billPhone(order.customerPhone, settings) : "",
       customerGstin: order.customerGstin ?? "",
       token: restaurant.serviceFlow === "cafe" ? orderTokenText(items) : "",
       orderType: order.orderType,

@@ -1,3 +1,4 @@
+import type { PrintLayouts } from "../features/printing/layout";
 export type Role = "admin" | "chef" | "table";
 
 export interface TaxRate {
@@ -65,6 +66,8 @@ export interface KotSettings {
   /** Categories ticked together print on one ticket when the KOT is split by category. */
   categoryGroups?: KotCategoryGroup[];
   tokenStart: number;
+  /** Details shown and text sizes per paper (58 mm, 80 mm, page). */
+  layouts?: PrintLayouts;
 }
 
 export interface KotCategoryGroup {
@@ -75,6 +78,8 @@ export interface InvoiceSettings {
   invoicePrefix: string;
   placeOfSupply: string;
   showCustomerPhone: boolean;
+  /** Bills show the mobile number with the middle digits hidden, like 98XXXXXX10. */
+  maskCustomerPhone?: boolean;
   footerNote: string;
   termsText: string;
   paperSize: PrintPaperSize;
@@ -83,6 +88,8 @@ export interface InvoiceSettings {
   showUnitPrice: boolean;
   showJainTag: boolean;
   autoPrintBill: boolean;
+  /** Details shown and text sizes per paper (58 mm, 80 mm, page). */
+  layouts?: PrintLayouts;
 }
 
 export interface ChatModeration {
@@ -326,6 +333,8 @@ export interface BillingSettings {
   dineInPayment?: DineInPayment;
   /** Takeaway and counter orders are paid first (always on in the cafe flow). */
   takeawayPayFirst?: boolean;
+  /** Which ways a guest sees to pay their own order. */
+  guestPayOptions?: { online: boolean; upiQr: boolean; counter: boolean };
 }
 
 export type DeliveryProvider = "Swiggy" | "Zomato" | "Uber-Eats" | "Other";
@@ -512,6 +521,8 @@ export interface OrderDetailResponse {
   dineInPayment?: DineInPayment;
   /** The guest can pay this order online (Razorpay is set up and the order is unpaid). */
   onlinePayment?: boolean;
+  /** Pay options the owner allows a guest to see (counter payment note). */
+  payOptions?: { counter: boolean };
   payment?: { upiVpa: string; upiPayeeName: string };
 }
 
@@ -519,6 +530,8 @@ export interface KotQueueGroup {
   order: Order;
   items: OrderItem[];
   tokenNumber: number | null;
+  /** Set by the kitchen screen when an order's tokens are split into their own tickets. */
+  key?: string;
 }
 
 export interface DashboardSummary {

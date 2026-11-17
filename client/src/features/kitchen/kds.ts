@@ -37,6 +37,37 @@ export function sentAt(items: OrderItem[]): number | null {
   return times.length ? Math.min(...times) : null;
 }
 
+const PRIORITY_ORDER: Record<string, number> = { rush: 0, high: 1, normal: 2 };
+
+/**
+ * One ticket per table and token: an order that was sent in several rounds (or paid in several orders) shows
+ * each token as its own ticket, so the kitchen works them separately. Dishes not sent yet form their own ticket.
+ */
+export function splitByToken(groups: KotQueueGroup[]): KotQueueGroup[] {
+  const out: KotQueueGroup[] = [];
+  for (const group of groups) {
+    const byToken = new Map<number | "unsent", OrderItem[]>();
+    for (const item of group.items) {
+      const key = item.tokenNumber ?? "unsent";
+      byToken.set(key, [...(byToken.get(key) ?? []), item]);
+    }
+    for (const [token, items] of byToken) {
+      out.push({
+        order: group.order,
+        items,
+        tokenNumber: token === "unsent" ? null : token,
+        key: `${group.order._id}:${token}`,
+      });
+    }
+  }
+  return out.sort((a, b) => {
+    const pa = PRIORITY_ORDER[a.order.priority ?? "normal"] ?? 2;
+    const pb = PRIORITY_ORDER[b.order.priority ?? "normal"] ?? 2;
+    if (pa !== pb) return pa - pb;
+    return (a.tokenNumber ?? Number.MAX_SAFE_INTEGER) - (b.tokenNumber ?? Number.MAX_SAFE_INTEGER);
+  });
+}
+
 export function ticketUrgency(group: KotQueueGroup, now: number): Urgency {
   const sent = sentAt(group.items);
   if (sent == null) return "new";

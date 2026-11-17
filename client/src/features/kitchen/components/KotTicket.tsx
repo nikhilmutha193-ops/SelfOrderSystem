@@ -14,7 +14,7 @@ import {
   X,
   type LucideIcon,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 
 import type { KotQueueGroup, OrderItem, OrderPriority } from "../../../lib/types";
 import { Button, IconButton } from "../../../shared/ui/ui";
@@ -179,6 +179,8 @@ export interface TicketActions {
   serve: (item: OrderItem) => Promise<unknown>;
   cancel: (item: OrderItem) => void;
   cancelOrder: (order: KotQueueGroup["order"]) => void;
+  /** Cancels only this ticket's dishes, for a table that has other tokens on the same order. */
+  cancelToken: (group: KotQueueGroup) => void;
   bulk: (kind: "start" | "ready" | "serve", items: OrderItem[]) => Promise<unknown>;
   send: (orderId: string) => Promise<unknown> | void;
   reprint: (orderId: string, round: number) => void;
@@ -191,6 +193,7 @@ export function KotTicket({
   collapsed,
   onToggle,
   canCancel,
+  sharesOrder,
   actions,
 }: {
   group: KotQueueGroup;
@@ -198,6 +201,8 @@ export function KotTicket({
   collapsed: boolean;
   onToggle: () => void;
   canCancel: boolean;
+  /** Other tickets belong to the same order, so cancelling must not take them with it. */
+  sharesOrder: boolean;
   actions: TicketActions;
 }) {
   const now = useNow(15_000);
@@ -212,7 +217,14 @@ export function KotTicket({
   const KindIcon = KIND_ICON[label.kind] ?? Armchair;
   const visible = filter === "all" ? items : items.filter((i) => itemFilter(i) === filter);
   const hiddenCount = items.length - visible.length;
-  const panelId = `kot-ticket-${order._id}`;
+  // A table can have several tokens (a new round, or a new paid order): list each token's dishes together.
+  const allTokens = [...new Set(items.map((i) => i.tokenNumber).filter((n): n is number => n != null))].sort(
+    (a, b) => a - b,
+  );
+  const byToken = [...visible].sort(
+    (a, b) => (a.tokenNumber ?? Number.MAX_SAFE_INTEGER) - (b.tokenNumber ?? Number.MAX_SAFE_INTEGER),
+  );
+  const panelId = `kot-ticket-${group.key ?? order._id}`;
   const fresh = since != null && now - since < 2 * 60_000;
   const priority = (order.priority ?? "normal") as OrderPriority;
   const priorityStyle = PRIORITY_STYLE[priority];
@@ -260,6 +272,15 @@ export function KotTicket({
           <span className="min-w-0 flex-1 pt-0.5">
             <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
               <span className="text-base font-bold text-slate-900">{label.place}</span>
+              {allTokens.length > 1 &&
+                allTokens.map((n) => (
+                  <span
+                    key={n}
+                    className="rounded-md bg-slate-900 px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-white tabular-nums"
+                  >
+                    T{n}
+                  </span>
+                ))}
               {fresh && (
                 <span className="rounded-md bg-orange-100 px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-orange-700">
                   NEW
@@ -342,13 +363,20 @@ export function KotTicket({
 
       <div id={panelId} hidden={collapsed}>
         <ul className="border-t border-slate-100">
-          {visible.map((item) => {
+          {byToken.map((item, index) => {
+            const newToken = allTokens.length > 1 && (index === 0 || byToken[index - 1].tokenNumber !== item.tokenNumber);
             const state = itemFilter(item);
             const look = ITEM_STATE[state];
             const extras = [...(item.modifiers?.map((m) => m.label) ?? []), item.note].filter(Boolean).join(", ");
             return (
+              <Fragment key={item._id}>
+              {newToken && (
+                <li className="flex items-center gap-2 border-b border-slate-100 bg-slate-50 px-3 py-1.5 text-[11px] font-bold tracking-wide text-slate-600 uppercase">
+                  {item.tokenNumber != null ? `Token ${item.tokenNumber}` : "Not sent yet"}
+                  {item.kotRound != null && <span className="font-medium text-slate-400">Round {item.kotRound}</span>}
+                </li>
+              )}
               <li
-                key={item._id}
                 className={`flex items-start gap-3 border-b border-l-4 border-b-slate-100 py-2.5 pr-3 pl-3 last:border-b-0 ${look.border} ${look.row}`}
               >
                 <span className="w-8 shrink-0 pt-0.5 text-lg leading-none font-bold text-slate-900 tabular-nums">
@@ -432,6 +460,7 @@ export function KotTicket({
                   )}
                 </div>
               </li>
+              </Fragment>
             );
           })}
         </ul>
@@ -441,9 +470,17 @@ export function KotTicket({
               size="sm"
               variant="secondary"
               className="!text-red-600"
-              onClick={() => actions.cancelOrder(order)}
+              onClick={() =>
+                sharesOrder && order.status !== "closed" ? actions.cancelToken(group) : actions.cancelOrder(order)
+              }
             >
-              {order.status === "closed" ? "Refund order" : "Cancel order"}
+              {order.status === "closed"
+                ? "Refund order"
+                : sharesOrder
+                  ? tokenNumber != null
+                    ? `Cancel token ${tokenNumber}`
+                    : "Cancel unsent dishes"
+                  : "Cancel order"}
             </Button>
           </div>
         )}

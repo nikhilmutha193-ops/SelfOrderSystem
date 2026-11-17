@@ -80,6 +80,8 @@ export interface IKotSettings {
   categoryGroups?: { categoryIds: Types.ObjectId[] }[];
   /** First token number of each business day. */
   tokenStart: number;
+  /** Details shown and text sizes per paper (58 mm, 80 mm, page), see utils/printLayout.ts. */
+  layouts?: Record<string, unknown>;
 }
 
 export interface IInvoiceSettings {
@@ -87,6 +89,8 @@ export interface IInvoiceSettings {
   placeOfSupply: string;
   autoPrintBill: boolean;
   showCustomerPhone: boolean;
+  /** Bills show the customer's mobile number with the middle digits hidden. */
+  maskCustomerPhone: boolean;
   footerNote: string;
   termsText: string;
   paperSize: PrintPaperSize;
@@ -94,6 +98,8 @@ export interface IInvoiceSettings {
   showLogo: boolean;
   showUnitPrice: boolean;
   showJainTag: boolean;
+  /** Details shown and text sizes per paper (58 mm, 80 mm, page), see utils/printLayout.ts. */
+  layouts?: Record<string, unknown>;
 }
 
 export interface IBackupSchedule {
@@ -151,6 +157,8 @@ export interface IBillingSettings {
   dineInPayment: DineInPayment;
   /** Takeaway and counter orders are paid first and reach the kitchen once paid (restaurant flow; cafe always does). */
   takeawayPayFirst: boolean;
+  /** Which ways a guest sees to pay their own order (staff screens are not affected). */
+  guestPayOptions: { online: boolean; upiQr: boolean; counter: boolean };
 }
 
 export interface ILoyaltySettings {
@@ -302,6 +310,7 @@ const kotSettingsSchema = new Schema<IKotSettings>(
       default: [],
     },
     tokenStart: { type: Number, default: 1, min: 1, max: 99999 },
+    layouts: { type: Schema.Types.Mixed, default: () => ({}) },
   },
   { _id: false }
 );
@@ -312,6 +321,7 @@ const invoiceSettingsSchema = new Schema<IInvoiceSettings>(
     placeOfSupply: { type: String, default: "", trim: true },
     autoPrintBill: { type: Boolean, default: false },
     showCustomerPhone: { type: Boolean, default: true },
+    maskCustomerPhone: { type: Boolean, default: false },
     footerNote: { type: String, default: "Thank you for dining with us!" },
     termsText: { type: String, default: "" },
     paperSize: { type: String, enum: PRINT_PAPER_SIZES, default: "a5" },
@@ -319,6 +329,7 @@ const invoiceSettingsSchema = new Schema<IInvoiceSettings>(
     showLogo: { type: Boolean, default: true },
     showUnitPrice: { type: Boolean, default: true },
     showJainTag: { type: Boolean, default: true },
+    layouts: { type: Schema.Types.Mixed, default: () => ({}) },
   },
   { _id: false }
 );
@@ -350,6 +361,17 @@ const billingSettingsSchema = new Schema<IBillingSettings>(
     upiPayeeName: { type: String, default: "", trim: true },
     dineInPayment: { type: String, enum: ["after", "upfront"], default: "after" },
     takeawayPayFirst: { type: Boolean, default: false },
+    guestPayOptions: {
+      type: new Schema(
+        {
+          online: { type: Boolean, default: true },
+          upiQr: { type: Boolean, default: true },
+          counter: { type: Boolean, default: true },
+        },
+        { _id: false }
+      ),
+      default: () => ({}),
+    },
   },
   { _id: false }
 );

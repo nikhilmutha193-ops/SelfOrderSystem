@@ -102,6 +102,12 @@ export async function startCheckout(ctx: RequestContext, orderId: string) {
   if (order.status !== "open" && order.status !== "billed") throw new HttpError(409, "This order can't be paid");
 
   const repo = new PaymentsRepository(ctx.restaurantId);
+  if (ctx.auth.role === "table") {
+    const restaurant = await repo.findGuestPayOptions();
+    if (restaurant?.billingSettings?.guestPayOptions?.online === false) {
+      throw new HttpError(403, "Online payment isn't available for guests. Please pay at the counter.");
+    }
+  }
   const creds = await requireCredentials(repo, { enabled: true });
   const { totals, items } = await getOrder(ctx, orderId);
   if (!items.some((i) => i.status !== "cancelled")) throw new HttpError(409, "Add something to the order first");

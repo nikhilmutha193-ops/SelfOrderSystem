@@ -27,7 +27,7 @@ import {
 } from "../../../shared/ui/ui";
 import { ordersApi, type OrderFilters, type ReportFormat } from "../api";
 import { useArchiveOrders, useOrders } from "../queries";
-import { orderStatusBadge, orderTypeLabel } from "../status";
+import { isUnpaidDineIn, orderStatusBadge, orderTypeLabel } from "../status";
 
 export default function Orders() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -351,6 +351,7 @@ export default function Orders() {
                         <div className="flex items-center gap-2">
                           <span className="truncate font-medium text-slate-900">{order.customerName || "Guest"}</span>
                           <Badge tone={badge.tone}>{badge.label}</Badge>
+                          {isUnpaidDineIn(order) && <Badge tone="red">Unpaid</Badge>}
                         </div>
                         <p className="mt-0.5 truncate text-xs text-slate-500">
                           {orderTypeLabel(order)} ·{" "}
@@ -398,9 +399,12 @@ export default function Orders() {
                           })}
                         </td>
                         <td>
-                          <Badge tone={orderStatusBadge(order).tone} dot>
-                            {orderStatusBadge(order).label}
-                          </Badge>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <Badge tone={orderStatusBadge(order).tone} dot>
+                              {orderStatusBadge(order).label}
+                            </Badge>
+                            {isUnpaidDineIn(order) && <Badge tone="red">Unpaid</Badge>}
+                          </div>
                         </td>
                         <td className="text-slate-600 capitalize">{order.paymentMethod}</td>
                         <td className="text-right">

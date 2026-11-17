@@ -22,6 +22,7 @@ import {
   itemFilter,
   loadCollapsed,
   saveCollapsed,
+  splitByToken,
   ticketCounts,
   useColumnCount,
   type QueueFilter,
@@ -54,7 +55,8 @@ export default function KotQueueView({ canCancel }: { canCancel: boolean }) {
   const [chosenStation, setChosenStation] = useState<string | null>(null);
   const stationId = (chosenStation ?? myStation.data?.stationId ?? "") || undefined;
   const queue = useKotQueue(tableId, stationId);
-  const groups = queue.data ?? NO_GROUPS;
+  // One ticket per table and token, so a table with two tokens shows two tickets.
+  const groups = useMemo(() => splitByToken(queue.data ?? NO_GROUPS), [queue.data]);
   const [filter, setFilter] = useState<QueueFilter>("all");
   const [notice, setNotice] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -71,6 +73,7 @@ export default function KotQueueView({ canCancel }: { canCancel: boolean }) {
   const cancelItem = useCancelOrderItem();
   const cancelWholeOrder = useCancelOrder();
   const [cancellingOrder, setCancellingOrder] = useState<KotQueueGroup["order"] | null>(null);
+  const [cancellingToken, setCancellingToken] = useState<KotQueueGroup | null>(null);
   const printTicket = usePrintKot();
   const setPriority = useSetPriority();
 
@@ -159,6 +162,7 @@ export default function KotQueueView({ canCancel }: { canCancel: boolean }) {
     cancel: (item) => void cancelLine(item),
     // A paid order can only go back through a refund; an unpaid one is simply cancelled.
     cancelOrder: (order) => (order.status === "closed" ? setRefunding(order) : setCancellingOrder(order)),
+    cancelToken: (group) => setCancellingToken(group),
     bulk: (kind, items) =>
       run(async () => {
         const mutate =
@@ -185,7 +189,7 @@ export default function KotQueueView({ canCancel }: { canCancel: boolean }) {
 
   const shown = filter === "all" ? groups : groups.filter((g) => g.items.some((i) => itemFilter(i) === filter));
   const laidOut = balanceColumns(shown, columns, (g) =>
-    collapsed[g.order._id]
+    collapsed[g.key ?? g.order._id]
       ? 2
       : 3 + (filter === "all" ? g.items.length : g.items.filter((i) => itemFilter(i) === filter).length)
   );
@@ -251,7 +255,7 @@ export default function KotQueueView({ canCancel }: { canCancel: boolean }) {
                 label="Collapse all tickets"
                 onClick={() => {
                   const next = { ...collapsed };
-                  for (const g of groups) next[g.order._id] = true;
+                  for (const g of groups) next[g.key ?? g.order._id] = true;
                   updateCollapsed(next);
                 }}
               />
@@ -261,7 +265,7 @@ export default function KotQueueView({ canCancel }: { canCancel: boolean }) {
                 label="Expand all tickets"
                 onClick={() => {
                   const next = { ...collapsed };
-                  for (const g of groups) delete next[g.order._id];
+                  for (const g of groups) delete next[g.key ?? g.order._id];
                   updateCollapsed(next);
                 }}
               />
@@ -313,12 +317,13 @@ export default function KotQueueView({ canCancel }: { canCancel: boolean }) {
           <div key={index} className="flex min-w-0 flex-col gap-4">
             {column.map((group) => (
               <KotTicket
-                key={group.order._id}
+                key={group.key ?? group.order._id}
                 group={group}
                 filter={filter}
-                collapsed={Boolean(collapsed[group.order._id])}
-                onToggle={() => toggleTicket(group.order._id)}
+                collapsed={Boolean(collapsed[group.key ?? group.order._id])}
+                onToggle={() => toggleTicket(group.key ?? group.order._id)}
                 canCancel={canCancel}
+                sharesOrder={groups.some((g) => g !== group && g.order._id === group.order._id)}
                 actions={actions}
               />
             ))}
@@ -349,6 +354,26 @@ export default function KotQueueView({ canCancel }: { canCancel: boolean }) {
             reason: note ? `${label}: ${note}` : label,
           });
           setCancellingOrder(null);
+        }}
+      />
+      <ReasonDialog
+        open={cancellingToken !== null}
+        title={
+          cancellingToken?.tokenNumber != null
+            ? `Cancel token ${cancellingToken.tokenNumber}?`
+            : "Cancel the dishes not sent yet?"
+        }
+        description="Only this ticket's dishes are cancelled. The table's other tokens and the table itself stay as they are. The reason is recorded in the audit log."
+        confirmLabel="Cancel token"
+        danger
+        options={CANCEL_OPTIONS}
+        onCancel={() => setCancellingToken(null)}
+        onConfirm={async ({ option, note }) => {
+          for (const item of cancellingToken!.items) {
+            if (item.status === "cancelled" || item.status === "served") continue;
+            await cancelItem.mutateAsync({ itemId: item._id, reason: option, note: note || undefined });
+          }
+          setCancellingToken(null);
         }}
       />
       <ReasonDialog

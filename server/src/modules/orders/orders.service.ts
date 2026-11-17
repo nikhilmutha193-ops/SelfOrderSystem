@@ -398,6 +398,13 @@ async function getOrderWithTotals(ctx: RequestContext, orderId: string, sortItem
           .map(({ key, name, type, value }) => ({ key, name, type, value, applied: appliedKeys.has(key) }))
       : [];
   const table = order.tableId ? await repo.findTable(order.tableId.toString()) : null;
+  // The owner can hide pay options from guests; staff screens always see them.
+  const guestOnly = ctx.auth.role === "table";
+  const guestPay = {
+    online: restaurant?.billingSettings?.guestPayOptions?.online !== false,
+    upiQr: restaurant?.billingSettings?.guestPayOptions?.upiQr !== false,
+    counter: restaurant?.billingSettings?.guestPayOptions?.counter !== false,
+  };
   return {
     order,
     items,
@@ -408,12 +415,16 @@ async function getOrderWithTotals(ctx: RequestContext, orderId: string, sortItem
     prepBufferMinutes: restaurant?.prepBufferMinutes ?? 2,
     guestOrderMode: restaurant?.kotSettings?.guestOrderMode ?? "auto",
     dineInPayment: paysUpfront(restaurant) ? "upfront" : "after",
-    // Guests can pay this order themselves through the gateway (Razorpay).
-    onlinePayment: order.status === "open" || order.status === "billed" ? await onlinePaymentAvailable(ctx.restaurantId) : false,
+    // Guests can pay this order themselves through the gateway (Razorpay), unless the owner hid it from guests.
+    onlinePayment:
+      (order.status === "open" || order.status === "billed") && (!guestOnly || guestPay.online)
+        ? await onlinePaymentAvailable(ctx.restaurantId)
+        : false,
     payment: {
-      upiVpa: restaurant?.billingSettings?.upiVpa ?? "",
+      upiVpa: guestOnly && !guestPay.upiQr ? "" : (restaurant?.billingSettings?.upiVpa ?? ""),
       upiPayeeName: restaurant?.billingSettings?.upiPayeeName || restaurant?.name || "",
     },
+    payOptions: { counter: !guestOnly || guestPay.counter },
   };
 }
 
