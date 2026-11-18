@@ -333,12 +333,19 @@ export async function streamInvoicePdf(
       doc.moveDown(0.3);
       drawSeparator(doc, x0, usableWidth);
 
-      const showUnitPrice = show.unitPrice;
+      const wantUnitPrice = show.unitPrice;
       const showJainTag = show.tags;
 
-      // The dish column is only as wide as the longest dish name needs, so qty sits close to the name
-      // instead of far to the right; the other columns share what is left.
+      // The dish column is only as wide as the longest dish name needs, so qty sits close to the name instead of
+      // far to the right. Qty, price and total never get narrower than their heading and biggest number, so a
+      // heading like "Qty" never wraps; the rest of the width goes to the dish column.
       doc.fontSize(fz("items", 10));
+      const widest = (samples: string[], bold = false) => {
+        doc.font(bold ? "Helvetica-Bold" : "Helvetica");
+        const width = Math.max(...samples.map((sample) => doc.widthOfString(sample)));
+        doc.font("Helvetica");
+        return Math.ceil(width) + 4;
+      };
       const longestName = Math.max(
         0,
         ...items
@@ -349,19 +356,27 @@ export async function streamInvoicePdf(
             )
           )
       );
-      const itemWidth = Math.min(Math.max(longestName + 8, usableWidth * 0.3), usableWidth * 0.55);
-      const rest = usableWidth - itemWidth;
+      const qtyMin = Math.max(widest(["Qty"], true), widest(["99"]));
+      const priceMin = Math.max(widest(["Price"], true), widest(["9999.99"]));
+      const totalMin = Math.max(widest(["Total"], true), widest(["99999.99"]));
+      // On a narrow roll there is no room for a price column as well, so it is left out rather than
+      // pushing the total off the paper.
+      const showUnitPrice = wantUnitPrice && usableWidth - (qtyMin + priceMin + totalMin) >= usableWidth * 0.4;
+      const numbersMin = qtyMin + totalMin + (showUnitPrice ? priceMin : 0);
+      const itemMax = Math.max(usableWidth - numbersMin, usableWidth * 0.25);
+      const itemWidth = Math.min(Math.max(longestName + 8, usableWidth * 0.3), itemMax);
+      const extra = Math.max(usableWidth - itemWidth - numbersMin, 0);
       const cols = showUnitPrice
         ? [
             { key: "item", width: itemWidth },
-            { key: "qty", width: rest * 0.22, align: "right" as const },
-            { key: "price", width: rest * 0.38, align: "right" as const },
-            { key: "total", width: rest * 0.4, align: "right" as const },
+            { key: "qty", width: qtyMin + extra * 0.2, align: "right" as const },
+            { key: "price", width: priceMin + extra * 0.4, align: "right" as const },
+            { key: "total", width: totalMin + extra * 0.4, align: "right" as const },
           ]
         : [
             { key: "item", width: itemWidth },
-            { key: "qty", width: rest * 0.3, align: "right" as const },
-            { key: "total", width: rest * 0.7, align: "right" as const },
+            { key: "qty", width: qtyMin + extra * 0.3, align: "right" as const },
+            { key: "total", width: totalMin + extra * 0.7, align: "right" as const },
           ];
 
       let y = drawRow(

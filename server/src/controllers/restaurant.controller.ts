@@ -311,6 +311,22 @@ export const updateRestaurantSettings = asyncHandler(async (req: Request, res: R
         return { categoryIds: ids as string[] };
       }) as never;
     }
+    if (kotSettings.steps !== undefined) {
+      const steps = kotSettings.steps as Record<string, unknown>;
+      for (const key of ["preparing", "ready", "served"]) {
+        if (steps[key] !== undefined && typeof steps[key] !== "boolean") {
+          throw new HttpError(400, "Kitchen steps must be on or off");
+        }
+      }
+      kotSettings.steps = {
+        preparing: steps.preparing !== false,
+        ready: steps.ready !== false,
+        served: steps.served !== false,
+      };
+      if (!kotSettings.steps.ready && !kotSettings.steps.served) {
+        throw new HttpError(400, "Keep the Ready or the Served step on, or a dish would never finish");
+      }
+    }
     if (kotSettings.layouts !== undefined) kotSettings.layouts = cleanLayouts(kotSettings.layouts, KOT_SHOW, KOT_FONTS);
     Object.assign(restaurant.kotSettings, kotSettings);
     restaurant.markModified("kotSettings.layouts");
@@ -466,6 +482,10 @@ export const previewInvoicePdf = asyncHandler(async (req: Request, res: Response
   });
   const paperSize = previewPaperSize(paper, restaurant.invoiceSettings?.paperSize);
   if (paperSize) restaurant.invoiceSettings = { ...restaurant.invoiceSettings, paperSize };
+  // Sample numbers when none are set yet, so the GSTIN and FSSAI lines can be checked in the header.
+  if (!restaurant.address) restaurant.address = "123 Main Street, Your City";
+  if (!restaurant.gstin) restaurant.gstin = "29ABCDE1234F1Z5";
+  if (!restaurant.fssaiLicense) restaurant.fssaiLicense = "12345678901234";
   // A billed sample with a coupon, charges and a payment, so every detail can be switched on and off in the preview.
   const order = {
     ...buildSampleOrder(restaurant.invoiceSettings?.invoicePrefix),

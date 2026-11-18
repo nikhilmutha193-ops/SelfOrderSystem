@@ -57,6 +57,7 @@ export function splitByToken(groups: KotQueueGroup[]): KotQueueGroup[] {
         items,
         tokenNumber: token === "unsent" ? null : token,
         key: `${group.order._id}:${token}`,
+        steps: group.steps,
       });
     }
   }
@@ -66,6 +67,17 @@ export function splitByToken(groups: KotQueueGroup[]): KotQueueGroup[] {
     if (pa !== pb) return pa - pb;
     return (a.tokenNumber ?? Number.MAX_SAFE_INTEGER) - (b.tokenNumber ?? Number.MAX_SAFE_INTEGER);
   });
+}
+
+export const ALL_STEPS = { preparing: true, ready: true, served: true } as const;
+
+/** What the next step is for a waiting or cooking dish, given the steps that are switched on. */
+export function nextStep(
+  from: "waiting" | "cooking",
+  steps: { preparing: boolean; ready: boolean },
+): "start" | "ready" | "serve" {
+  if (from === "waiting" && steps.preparing) return "start";
+  return steps.ready ? "ready" : "serve";
 }
 
 export function ticketUrgency(group: KotQueueGroup, now: number): Urgency {

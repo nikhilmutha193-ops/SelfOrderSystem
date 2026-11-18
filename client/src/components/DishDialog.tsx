@@ -26,7 +26,13 @@ export default function DishDialog({
   onAdd,
   canOrder = true,
   allowPack = false,
+  initial,
+  submitLabel = "Add",
 }: {
+  /** Editing a dish already in the cart: start from what was chosen before instead of the defaults. */
+  initial?: DishAddPayload;
+  /** The button text before the price ("Add" for a new dish, "Update" when editing). */
+  submitLabel?: string;
   /** Staff screens (POS, captain) can mark a dish to be packed. */
   allowPack?: boolean;
   /** False when the admin has turned ordering off for this guest: the dish is shown for information only. */
@@ -50,18 +56,35 @@ export default function DishDialog({
   // Reset selections whenever a new dish opens; default required single-groups to their first option.
   useEffect(() => {
     if (!food) return;
-    setQty(1);
-    setNote("");
-    setJain(false);
-    setPacked(false);
-    setSpice(null);
+    // The spice pick is saved at the front of the note ("Less spicy · no onions"); take it apart again.
+    const spiceFromNote = (Object.keys(SPICE_LABEL) as Spice[]).find(
+      (level) => initial && (initial.note === SPICE_LABEL[level] || initial.note.startsWith(`${SPICE_LABEL[level]} · `)),
+    );
+    setQty(initial?.quantity ?? 1);
+    setNote(
+      initial
+        ? spiceFromNote
+          ? initial.note.slice(SPICE_LABEL[spiceFromNote].length).replace(/^ · /, "")
+          : initial.note
+        : "",
+    );
+    setJain(initial?.isJain ?? false);
+    setPacked(initial?.isPacked ?? false);
+    setSpice(spiceFromNote ?? null);
     const s: Record<string, string> = {};
+    const m: Record<string, Set<string>> = {};
     for (const g of food.modifierGroups ?? []) {
-      if (g.type === "single" && g.required && g.options[0]) s[g.name] = g.options[0].label;
+      const chosen = (initial?.modifiers ?? []).filter((mod) => mod.groupName === g.name).map((mod) => mod.label);
+      if (g.type === "single") {
+        if (chosen[0]) s[g.name] = chosen[0];
+        else if (g.required && g.options[0]) s[g.name] = g.options[0].label;
+      } else if (chosen.length) {
+        m[g.name] = new Set(chosen);
+      }
     }
     setSingle(s);
-    setMulti({});
-  }, [food]);
+    setMulti(m);
+  }, [food, initial]);
 
   useEffect(() => {
     if (!food) return;
@@ -353,7 +376,7 @@ export default function DishDialog({
                   disabled={missingRequired}
                   className="flex h-12 flex-1 items-center justify-center rounded-xl bg-orange-600 text-base font-bold tracking-wide text-white shadow-sm hover:bg-orange-700 disabled:opacity-50"
                 >
-                  Add · ₹{(unitPrice * qty).toFixed(2)}
+                  {submitLabel} · ₹{(unitPrice * qty).toFixed(2)}
                 </button>
               </div>
               {missingRequired && (

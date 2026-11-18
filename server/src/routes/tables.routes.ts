@@ -11,6 +11,7 @@ import {
   releaseOwnTableSession,
   releaseTable,
   setTableCaptain,
+  setTableStatus,
   updateTable,
   updateTableLoginSettings,
 } from "../controllers/tables.controller";
@@ -32,6 +33,7 @@ router.put("/:id/captain", requireAuth("admin"), requireModule("tables"), setTab
 router.post("/", requireAuth("admin"), requireModule("tables"), createTable);
 router.put("/:id", requireAuth("admin"), requireModule("tables"), updateTable);
 router.patch("/:id/release", requireAuth("admin"), requireModule("tables"), releaseTable);
+router.patch("/:id/status", requireAuth("admin"), requireModule("tables"), setTableStatus);
 router.delete("/:id", requireAuth("admin"), requireModule("tables"), deleteTable);
 
 export default router;

@@ -21,6 +21,9 @@ export interface IPayment {
   method: TenderMethod;
   amount: number;
   reference?: string;
+  /** UPI: the payer's mobile number, or the key of a screenshot kept in private storage (one of them is required). */
+  payerPhone?: string;
+  proofKey?: string;
   tendered?: number;
   change?: number;
   receivedBy?: string;
@@ -139,6 +142,8 @@ const paymentSchema = new Schema<IPayment>(
     method: { type: String, enum: TENDER_METHODS, required: true },
     amount: { type: Number, required: true, min: 0 },
     reference: { type: String, trim: true },
+    payerPhone: { type: String, trim: true },
+    proofKey: { type: String, trim: true },
     tendered: { type: Number, min: 0 },
     change: { type: Number, min: 0 },
     receivedBy: { type: String },

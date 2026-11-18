@@ -117,17 +117,29 @@ const money = z
   .positive({ error: "Payment amounts must be more than zero" })
   .max(10_000_000, { error: "That amount is too large" });
 
+const upiProof = {
+  payerPhone: blankToUndefined(z.string().trim().max(20, { error: "Enter a valid mobile number" })),
+  proofKey: blankToUndefined(
+    z
+      .string()
+      .trim()
+      .regex(/^[A-Za-z0-9-]{10,80}\.(jpe?g|png|webp|gif)$/, { error: "That payment screenshot isn't valid" })
+  ),
+};
+
 export const paymentLine = z.object({
   method: tenderMethod,
   amount: money,
   reference: blankToUndefined(z.string().trim().max(60, { error: "Keep the reference under 60 characters" })),
   tendered: z.number({ error: "Cash received must be a number" }).min(0).optional(),
+  ...upiProof,
 });
 
 export const settleSchema = z
   .object({
     paymentMethod: tenderMethod.optional(),
     payments: z.array(paymentLine).min(1, { error: "Add at least one payment" }).max(10).optional(),
+    ...upiProof,
   })
   .refine((body) => body.paymentMethod || body.payments, {
     error: "A valid paymentMethod (cash, upi, card, online, wallet, credit) is required",

@@ -82,7 +82,7 @@ describe("cafe flow: pay first, then the kitchen", () => {
     const paid = await api()
       .patch(`/api/orders/${id}/pay`)
       .set(bearer(owner))
-      .send({ paymentMethod: "upi" });
+      .send({ paymentMethod: "upi", payerPhone: "9876543210" });
     expect(paid.status).toBe(200);
     expect(paid.body.status).toBe("closed");
 

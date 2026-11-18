@@ -9,6 +9,7 @@ import { streamInvoicePdf, streamOrdersReportPdf } from "../../utils/pdf";
 import { enqueueBill } from "../printing/printing.service";
 import * as billing from "./orders.billing";
 import * as operations from "./orders.operations";
+import * as proof from "./orders.proof";
 import { buildOrdersCsv, buildOrdersPdfData, listInvoices, reportFilename } from "./orders.report";
 import {
   addItemsSchema,
@@ -170,7 +171,21 @@ export const voidBill = asyncHandler(async (req: Request, res: Response) => {
 export const payOrder = asyncHandler(async (req: Request, res: Response) => {
   const { orderId } = parse(orderIdParams, req.params);
   const input = parse(settleSchema, req.body);
-  res.json(await billing.settleOrder(getContext(req), orderId, input));
+  // Payments taken on the Settle screen need proof of a UPI payment (see settleOrder).
+  res.json(await billing.settleOrder(getContext(req), orderId, input, { requireUpiProof: true }));
+});
+
+export const uploadPaymentProof = asyncHandler(async (req: Request, res: Response) => {
+  const { orderId } = parse(orderIdParams, req.params);
+  res.status(201).json(await proof.savePaymentProof(getContext(req), orderId, req.file));
+});
+
+export const getPaymentProof = asyncHandler(async (req: Request, res: Response) => {
+  const { orderId } = parse(orderIdParams, req.params);
+  const { data, type } = await proof.readPaymentProof(getContext(req), orderId, String(req.params.name ?? ""));
+  res.setHeader("Content-Type", type);
+  res.setHeader("Cache-Control", "private, max-age=300");
+  res.send(data);
 });
 
 export const cancelOrder = asyncHandler(async (req: Request, res: Response) => {

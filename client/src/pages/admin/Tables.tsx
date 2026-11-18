@@ -24,6 +24,7 @@ import type {
   RequiredDetails,
   TableLoginSettings,
   TableRow,
+  TableStatus,
 } from "../../lib/types";
 import { api, extractErrorMessage } from "../../shared/api/client";
 import { confirmDialog } from "../../shared/ui/confirm";
@@ -169,6 +170,12 @@ function EditTableDialog({
     </Dialog>
   );
 }
+
+const STATUS_CHOICE: Record<TableStatus, string> = {
+  available: "Free",
+  occupied: "Seated",
+  awaiting_payment: "Waiting to pay",
+};
 
 export default function Tables() {
   const [tables, setTables] = useState<TableRow[]>([]);
@@ -408,6 +415,25 @@ export default function Tables() {
     setError(null);
     try {
       await api.delete(`/tables/${table._id}`);
+      load();
+    } catch (err) {
+      setError(extractErrorMessage(err));
+    }
+  }
+
+  async function changeStatus(table: TableRow, status: TableStatus) {
+    if (status === "available") {
+      const confirmed = await confirmDialog({
+        title: `Free table ${table.code}?`,
+        message:
+          "Orders that were never sent to the kitchen are cancelled and the guest's sign-in ends. If cooked food is still unpaid, the table stays on Waiting to pay.",
+        confirmLabel: "Free table",
+      });
+      if (!confirmed) return;
+    }
+    setError(null);
+    try {
+      await api.patch(`/tables/${table._id}/status`, { status });
       load();
     } catch (err) {
       setError(extractErrorMessage(err));
@@ -713,8 +739,9 @@ export default function Tables() {
             Details asked before the first order
           </h3>
           <p className="text-xs text-slate-500">
-            Only ticked details are asked. Name and members are required; phone
-            and date of birth are optional for the guest.
+            Only ticked details are asked, and a guest can always skip them: a
+            skipped name becomes a short unique one like Guest K7M2, so their
+            orders can still be told apart.
           </p>
           <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
             {(
@@ -843,6 +870,23 @@ export default function Tables() {
                                 ? "Free"
                                 : "Seated"}
                           </Badge>
+                          {canEditTables && (table.allowedStatuses?.length ?? 0) > 0 && (
+                            <Select
+                              aria-label={`Change status of ${table.code}`}
+                              className="!w-40"
+                              value=""
+                              onChange={(e) => {
+                                if (e.target.value) void changeStatus(table, e.target.value as TableStatus);
+                              }}
+                            >
+                              <option value="">Change status…</option>
+                              {table.allowedStatuses!.map((status) => (
+                                <option key={status} value={status}>
+                                  {STATUS_CHOICE[status]}
+                                </option>
+                              ))}
+                            </Select>
+                          )}
                           {table.status !== "available" &&
                             elapsedSince(table.occupiedAt) && (
                               <span className="inline-flex items-center gap-1 text-xs text-slate-500">

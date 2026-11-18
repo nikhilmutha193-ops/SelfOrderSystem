@@ -45,7 +45,7 @@ describe("tables stay blocked until the bill is paid", () => {
     const stale = await api().get(`/api/orders/${seat.orderId}`).set(bearer(seat.token));
     expect(stale.status).toBe(401);
 
-    await api().patch(`/api/orders/${seat.orderId}/pay`).set(bearer(owner)).send({ paymentMethod: "upi" });
+    await api().patch(`/api/orders/${seat.orderId}/pay`).set(bearer(owner)).send({ paymentMethod: "upi", payerPhone: "9876543210" });
     expect(await tableStatus(1)).toBe("available");
   });
 

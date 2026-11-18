@@ -1,6 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { CreditCard, Plus, Split, Trash2, X } from "lucide-react";
-import { useState } from "react";
+import { Camera, CreditCard, ImageUp, Plus, Split, Trash2, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
 import { cashSuggestions } from "../../../lib/cash";
 import { useServiceFlow } from "../../../lib/useServiceFlow";
@@ -30,6 +30,37 @@ interface Line {
   amount: string;
   reference: string;
   tendered: string;
+  /** UPI: the payer's mobile number, or a screenshot of the payment, is required. */
+  payerPhone: string;
+  proofKey: string;
+  /** Local preview of the screenshot just uploaded. */
+  proofPreview: string;
+}
+
+const emptyLine = (method: TenderMethod, amount: string): Line => ({
+  method,
+  amount,
+  reference: "",
+  tendered: "",
+  payerPhone: "",
+  proofKey: "",
+  proofPreview: "",
+});
+
+/** A usable mobile number: 10 digits (optionally with 0 or 91 in front). */
+function validMobile(value: string): boolean {
+  const digits = value.replace(/\D/g, "");
+  return /^[6-9]\d{9}$/.test(digits) || /^0[6-9]\d{9}$/.test(digits) || /^91[6-9]\d{9}$/.test(digits);
+}
+
+/** The number to record for a UPI line: the one typed, else the customer's number already on the order. */
+function payerNumber(line: Line, guestPhone: string): string {
+  return line.payerPhone.trim() || (validMobile(guestPhone) ? guestPhone : "");
+}
+
+/** A UPI line is complete once it has a mobile number (typed, or the customer's on the order) or a screenshot. */
+function upiProofMissing(line: Line, guestPhone: string): boolean {
+  return line.method === "upi" && !line.proofKey && !validMobile(payerNumber(line, guestPhone));
 }
 
 interface SettleDialogProps {
@@ -270,16 +301,153 @@ function RazorpayPanel({
   );
 }
 
+/**
+ * A UPI payment is taken on trust unless it is recorded: the payer's mobile number or a screenshot of the
+ * payment (taken with the camera or uploaded) has to be added before the bill can be marked paid.
+ */
+function UpiProof({
+  orderId,
+  guestPhone,
+  line,
+  index,
+  onChange,
+}: {
+  orderId: string;
+  /** The customer's number already on the order, used when none is typed here. */
+  guestPhone: string;
+  line: Line;
+  index: number;
+  onChange: (patch: Partial<Line>) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const cameraInput = useRef<HTMLInputElement>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const preview = line.proofPreview;
+
+  useEffect(
+    () => () => {
+      if (preview) URL.revokeObjectURL(preview);
+    },
+    [preview],
+  );
+
+  async function pick(file: File | undefined) {
+    if (!file) return;
+    setError(null);
+    setBusy(true);
+    try {
+      const proofKey = await ordersApi.uploadPaymentProof(orderId, file);
+      onChange({ proofKey, proofPreview: URL.createObjectURL(file) });
+    } catch (err) {
+      setError(extractErrorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const missing = upiProofMissing(line, guestPhone);
+  const usingGuest = !line.payerPhone.trim() && validMobile(guestPhone);
+  return (
+    <div
+      className={`flex flex-col gap-3 rounded-lg border p-3 ${missing ? "border-amber-300 bg-amber-50/60" : "border-emerald-200 bg-emerald-50/50"}`}
+      data-testid="upi-proof"
+    >
+      <p className="text-sm font-semibold text-slate-800">
+        Record this UPI payment{" "}
+        <span className="font-normal text-slate-600">
+          {usingGuest ? "(the customer's number on the order is used)" : "(required: a mobile number or a screenshot)"}
+        </span>
+      </p>
+      <Field label="Payer's mobile number" htmlFor={`settle-payer-${index}`}>
+        <Input
+          id={`settle-payer-${index}`}
+          type="tel"
+          inputMode="numeric"
+          autoComplete="off"
+          placeholder={usingGuest ? guestPhone : "10-digit mobile number"}
+          value={line.payerPhone}
+          onChange={(e) => onChange({ payerPhone: e.target.value })}
+        />
+      </Field>
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          ref={cameraInput}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          className="hidden"
+          onChange={(e) => {
+            void pick(e.target.files?.[0]);
+            e.target.value = "";
+          }}
+        />
+        <input
+          ref={fileInput}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => {
+            void pick(e.target.files?.[0]);
+            e.target.value = "";
+          }}
+        />
+        <Button
+          type="button"
+          size="sm"
+          variant="secondary"
+          icon={Camera}
+          loading={busy}
+          onClick={() => cameraInput.current?.click()}
+        >
+          Take photo
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="secondary"
+          icon={ImageUp}
+          loading={busy}
+          onClick={() => fileInput.current?.click()}
+        >
+          Upload screenshot
+        </Button>
+        {line.proofKey && (
+          <span className="inline-flex items-center gap-2 text-sm text-emerald-800">
+            {preview && (
+              <img src={preview} alt="Payment screenshot" className="h-12 w-12 rounded-md border border-slate-200 object-cover" />
+            )}
+            Screenshot added
+            <button
+              type="button"
+              className="text-xs font-medium text-red-600 hover:underline"
+              onClick={() => onChange({ proofKey: "", proofPreview: "" })}
+            >
+              Remove
+            </button>
+          </span>
+        )}
+      </div>
+      {line.payerPhone.trim() !== "" && !validMobile(line.payerPhone) && !line.proofKey && (
+        <p className="text-xs text-red-600">Enter a valid 10-digit mobile number, or add a screenshot instead.</p>
+      )}
+      <ErrorText>{error}</ErrorText>
+    </div>
+  );
+}
+
 function SettleForm({ orderId, total, invoiceNumber, upi, onClose }: SettleDialogProps) {
   const cafe = useServiceFlow() === "cafe";
   // Cafe flow: the guest pays before the food is made, usually on their phone, so the UPI QR is shown first.
   const [lines, setLines] = useState<Line[]>([
-    { method: cafe && upi?.upiVpa ? "upi" : "cash", amount: money(total), reference: "", tendered: "" },
+    emptyLine(cafe && upi?.upiVpa ? "upi" : "cash", money(total)),
   ]);
   const [splitCount, setSplitCount] = useState("2");
   const [error, setError] = useState<string | null>(null);
   const settle = useSettleOrder();
   const orderCustomer = useOrderCustomer(orderId).data;
+  // The mobile number the guest already gave on this order.
+  const guestPhone = useOrder(orderId).data?.order.customerPhone ?? "";
 
   const paid = lines.reduce((sum, l) => sum + toNumber(l.amount), 0);
   const remaining = Math.round((total - paid) * 100) / 100;
@@ -296,12 +464,7 @@ function SettleForm({ orderId, total, invoiceNumber, upi, onClose }: SettleDialo
   function addLine() {
     setLines((prev) => [
       ...prev,
-      {
-        method: "upi",
-        amount: money(Math.max(remaining, 0)),
-        reference: "",
-        tendered: "",
-      },
+      emptyLine("upi", money(Math.max(remaining, 0))),
     ]);
   }
 
@@ -310,12 +473,7 @@ function SettleForm({ orderId, total, invoiceNumber, upi, onClose }: SettleDialo
     const share = Math.floor((total / n) * 100) / 100;
     const last = Math.round((total - share * (n - 1)) * 100) / 100;
     setLines(
-      Array.from({ length: n }, (_, i) => ({
-        method: lines[i]?.method ?? "cash",
-        amount: money(i === n - 1 ? last : share),
-        reference: "",
-        tendered: "",
-      })),
+      Array.from({ length: n }, (_, i) => emptyLine(lines[i]?.method ?? "cash", money(i === n - 1 ? last : share))),
     );
   }
 
@@ -328,12 +486,18 @@ function SettleForm({ orderId, total, invoiceNumber, upi, onClose }: SettleDialo
       );
       return;
     }
+    if (lines.some((l) => upiProofMissing(l, guestPhone))) {
+      setError("For a UPI payment add the payer's mobile number or a screenshot of the payment");
+      return;
+    }
     try {
       await settle.mutateAsync({
         orderId,
         payments: lines.map((l) => ({
           method: l.method,
           amount: toNumber(l.amount),
+          ...(l.method === "upi" && payerNumber(l, guestPhone) && { payerPhone: payerNumber(l, guestPhone) }),
+          ...(l.method === "upi" && l.proofKey && { proofKey: l.proofKey }),
           ...(l.reference.trim() && { reference: l.reference.trim() }),
           ...(l.method === "cash" && l.tendered.trim() && { tendered: toNumber(l.tendered) }),
         })),
@@ -344,7 +508,7 @@ function SettleForm({ orderId, total, invoiceNumber, upi, onClose }: SettleDialo
     }
   }
 
-  const settled = Math.abs(remaining) < 0.001;
+  const settled = Math.abs(remaining) < 0.001 && !lines.some((l) => upiProofMissing(l, guestPhone));
 
   return (
     <Dialog
@@ -455,6 +619,15 @@ function SettleForm({ orderId, total, invoiceNumber, upi, onClose }: SettleDialo
                   </Field>
                 )}
               </div>
+              {line.method === "upi" && (
+                <UpiProof
+                  orderId={orderId}
+                  guestPhone={guestPhone}
+                  line={line}
+                  index={index}
+                  onChange={(patch) => update(index, patch)}
+                />
+              )}
               {line.method === "cash" && toNumber(line.amount) > 0 && (
                 <div className="flex flex-wrap gap-1.5">
                   {cashSuggestions(toNumber(line.amount)).map((v) => (

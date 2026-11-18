@@ -6,9 +6,12 @@ import Admin from "../models/Admin";
 import Order from "../models/Order";
 import Restaurant from "../models/Restaurant";
 import TableModel from "../models/Table";
+import { writeAudit } from "../utils/audit";
+import { restaurantIsCafe } from "../utils/dineInPayment";
 import { HttpError } from "../utils/httpError";
 import { hashPassword } from "../utils/password";
 import { cancelUnsentOrdersForTables } from "../utils/tableRelease";
+import { allowedTableStatuses } from "../utils/tableStatus";
 import { syncTableState } from "../utils/tableState";
 import { encryptTableToken } from "../utils/tableToken";
 
@@ -18,9 +21,12 @@ function validId(id: string) {
 
 export const listTables = asyncHandler(async (req: Request, res: Response) => {
   const tables = await TableModel.find({ restaurantId: req.restaurantId }).select("-passwordHash").sort({ code: 1 });
+  const unpaid = await unpaidOrdersByTable(req.restaurantId!);
+  const cafe = await restaurantIsCafe(req.restaurantId!);
   const withTokens = tables.map((table) => ({
     ...table.toObject(),
     qrToken: encryptTableToken(table._id.toString(), req.restaurantId!),
+    allowedStatuses: allowedTableStatuses(table, unpaid.get(table._id.toString()) ?? 0, { cafe }),
   }));
   res.json(withTokens);
 });
@@ -201,6 +207,56 @@ export const releaseTable = asyncHandler(async (req: Request, res: Response) => 
   const table = await TableModel.findById(existing._id).select("-passwordHash");
 
   res.json({ ...table!.toObject(), cancelledOrders, awaitingPayment: status === "awaiting_payment" });
+});
+
+/** How many unpaid (open or billed) orders each table has, by table id. */
+async function unpaidOrdersByTable(restaurantId: string): Promise<Map<string, number>> {
+  const rows = await Order.aggregate<{ _id: Types.ObjectId; count: number }>([
+    { $match: { restaurantId: new Types.ObjectId(restaurantId), status: { $in: ["open", "billed"] }, tableId: { $ne: null } } },
+    { $group: { _id: "$tableId", count: { $sum: 1 } } },
+  ]);
+  return new Map(rows.map((row) => [row._id.toString(), row.count]));
+}
+
+const STATUS_LABELS: Record<string, string> = { available: "Free", occupied: "Seated", awaiting_payment: "Waiting to pay" };
+
+/** Staff change a table's status by hand, but only to a status the table's orders allow. */
+export const setTableStatus = asyncHandler(async (req: Request, res: Response) => {
+  validId(req.params.id);
+  const { status } = req.body as { status?: unknown };
+  const target = String(status ?? "");
+  const table = await TableModel.findOne({ _id: req.params.id, restaurantId: req.restaurantId });
+  if (!table) throw new HttpError(404, "Table not found");
+
+  const unpaid = (await unpaidOrdersByTable(req.restaurantId!)).get(table._id.toString()) ?? 0;
+  const allowed = allowedTableStatuses(table, unpaid, { cafe: await restaurantIsCafe(req.restaurantId!) });
+  if (!(allowed as string[]).includes(target)) {
+    throw new HttpError(
+      409,
+      allowed.length
+        ? `This table can't go from ${STATUS_LABELS[table.status]} to ${STATUS_LABELS[target] ?? target}. It can be set to: ${allowed.map((s) => STATUS_LABELS[s]).join(", ")}.`
+        : "This table's status can't be changed by hand."
+    );
+  }
+
+  let cancelledOrders = 0;
+  if (target === "available") {
+    // Same as releasing it: unsent orders are cancelled, and cooked unpaid food keeps it Waiting to pay.
+    cancelledOrders = await cancelUnsentOrdersForTables([table._id]);
+    await syncTableState(table._id, { endSession: true });
+  } else {
+    await TableModel.updateOne(
+      { _id: table._id },
+      { $set: { status: target, ...(!table.occupiedAt && { occupiedAt: new Date() }) } }
+    );
+  }
+  const updated = await TableModel.findById(table._id).select("-passwordHash");
+  await writeAudit(
+    req,
+    "table.status",
+    `Table ${table.code}: ${STATUS_LABELS[table.status]} to ${STATUS_LABELS[updated!.status]}`
+  );
+  res.json({ ...updated!.toObject(), cancelledOrders, awaitingPayment: updated!.status === "awaiting_payment" });
 });
 
 /** The signed-in guest's own table, so the menu can show its number before an order exists. */

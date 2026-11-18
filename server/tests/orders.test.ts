@@ -178,7 +178,7 @@ describe("coupons, paying and cancelling", () => {
         .set(bearer(owner))
         .send({ items: [{ foodItemId: world.food.vada, quantity: 1 }] });
       await api().post(`/api/orders/${created.body._id}/kot/print`).set(bearer(owner));
-      await api().patch(`/api/orders/${created.body._id}/pay`).set(bearer(owner)).send({ paymentMethod: "upi" });
+      await api().patch(`/api/orders/${created.body._id}/pay`).set(bearer(owner)).send({ paymentMethod: "upi", payerPhone: "9876543210" });
       await api().patch(`/api/orders/${created.body._id}/pay`).set(bearer(owner)).send({ paymentMethod: "card" });
     } finally {
       stops.forEach((stop) => stop());

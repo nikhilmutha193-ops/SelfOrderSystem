@@ -50,7 +50,7 @@ describe("print layouts", () => {
 
     for (const [path, body] of [
       ["kot-preview", { paper: "p58", kotSettings: { layouts: { p58: { show: { token: false } } } } }],
-      ["invoice-preview", { paper: "p80", invoiceSettings: { layouts: { p80: { show: { payments: false } } } } }],
+      ["invoice-preview", { paper: "p58", invoiceSettings: { layouts: { p58: { show: { payments: false } } } } }],
     ] as const) {
       const res = await api().post(`/api/restaurant/${path}`).set(bearer(owner)).send(body).buffer(true).parse((r, cb) => {
         const chunks: Buffer[] = [];

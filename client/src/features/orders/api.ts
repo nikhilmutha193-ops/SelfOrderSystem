@@ -1,3 +1,4 @@
+import { compressImage } from "../../lib/imageCompress";
 import { newId } from "../../lib/id";
 import type {
   MyOrder,
@@ -47,6 +48,9 @@ export interface PaymentLine {
   amount: number;
   reference?: string;
   tendered?: number;
+  /** UPI: the payer's mobile number or a screenshot of the payment (one is required). */
+  payerPhone?: string;
+  proofKey?: string;
 }
 
 export interface DiscountInput {
@@ -102,6 +106,18 @@ export const ordersApi = {
     api.post<Order>(`/orders/${orderId}/void`, { reason }).then((res) => res.data),
   pay: (orderId: string, paymentMethod: PaymentMethod) =>
     api.patch<Order>(`/orders/${orderId}/pay`, { paymentMethod }).then((res) => res.data),
+  /** Keeps a screenshot of a UPI payment (private storage) and returns its key to send when settling. */
+  uploadPaymentProof: async (orderId: string, file: File) => {
+    const formData = new FormData();
+    formData.append("image", await compressImage(file));
+    return api
+      .post<{ proofKey: string }>(`/orders/${orderId}/payment-proof`, formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      })
+      .then((res) => res.data.proofKey);
+  },
+  paymentProofBlob: (orderId: string, proofKey: string) =>
+    api.get<Blob>(`/orders/${orderId}/payment-proof/${proofKey}`, { responseType: "blob" }).then((res) => res.data),
   settle: (orderId: string, payments: PaymentLine[]) =>
     api.patch<Order>(`/orders/${orderId}/pay`, { payments }).then((res) => res.data),
   split: (orderId: string, itemIds: string[]) =>

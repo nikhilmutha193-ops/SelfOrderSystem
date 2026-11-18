@@ -1,5 +1,6 @@
 import { useState } from "react";
 
+import { guestAlias } from "../lib/guestName";
 import type { RequiredDetails } from "../lib/types";
 import { Button, ErrorText, Input } from "../shared/ui/ui";
 
@@ -26,7 +27,10 @@ const MONTHS = [
   "December",
 ];
 
-/** Asks for the details the admin turned on. Name and members are required; phone and birthday never are. */
+/**
+ * Asks for the details the admin turned on. Every one can be skipped: a guest who skips (or leaves the name
+ * empty) gets a short unique name like "Guest K7M2", so their orders can still be told apart.
+ */
 export function GuestDetailsDialog({
   open,
   required,
@@ -49,13 +53,16 @@ export function GuestDetailsDialog({
 
   if (!open) return null;
 
-  async function submit(e: React.FormEvent) {
+  async function submit(e: React.FormEvent, skip = false) {
     e.preventDefault();
-    const customerName = name.trim() || "Guest";
-    if (required.name && !name.trim()) return setError("Please enter your name");
+    const customerName = (!skip && name.trim()) || guestAlias();
     setSaving(true);
     setError(null);
     try {
+      if (skip) {
+        await onSubmit({ customerName, members: 1 });
+        return;
+      }
       await onSubmit({
         customerName,
         members: required.members ? members : 1,
@@ -79,8 +86,20 @@ export function GuestDetailsDialog({
         onClick={(e) => e.stopPropagation()}
         className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-pop"
       >
-        <h2 className="text-lg font-bold text-slate-900">Before we place your order</h2>
-        <p className="mt-1 text-sm text-slate-500">Tell us who the order is for.</p>
+        <div className="flex items-start justify-between gap-3">
+          <h2 className="text-lg font-bold text-slate-900">Before we place your order</h2>
+          <button
+            type="button"
+            disabled={saving}
+            onClick={(e) => void submit(e as unknown as React.FormEvent, true)}
+            className="-mt-1 -mr-2 shrink-0 rounded-lg px-3 py-1.5 text-sm font-semibold text-orange-700 hover:bg-orange-50 disabled:opacity-50"
+          >
+            Skip
+          </button>
+        </div>
+        <p className="mt-1 text-sm text-slate-500">
+          Tell us who the order is for, or tap Skip and we'll note it as a guest number.
+        </p>
 
         {required.name && (
           <>
@@ -212,6 +231,7 @@ export function GuestDetailsDialog({
             {saving ? "Placing..." : "Place order"}
           </Button>
         </div>
+
       </form>
     </div>
   );

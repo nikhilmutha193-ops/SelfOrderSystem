@@ -27,7 +27,7 @@ describe("cash shifts", () => {
     const cashOrder = await counterOrder(owner, [{ foodItemId: world.food.dosa, quantity: 1 }]);
     await settle(cashOrder, [{ method: "cash", amount: 126, tendered: 200 }]);
     const upiOrder = await counterOrder(owner, [{ foodItemId: world.food.vada, quantity: 1 }]);
-    await settle(upiOrder, [{ method: "upi", amount: 63 }]);
+    await settle(upiOrder, [{ method: "upi", amount: 63, payerPhone: "9876543210" }]);
 
     await api()
       .post("/api/shifts/current/cash")

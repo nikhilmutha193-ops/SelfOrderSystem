@@ -53,6 +53,7 @@ services:
     volumes:
       - uploads_data:/app/uploads
       - backups_data:/app/backups
+      - proofs_data:/app/proofs
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:5000/health"]
       interval: 10s
@@ -99,4 +100,5 @@ volumes:
   mongo_data:
   uploads_data:
   backups_data:
+  proofs_data:
   client_tls:

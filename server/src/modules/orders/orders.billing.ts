@@ -267,8 +267,22 @@ export async function reopenBill(ctx: RequestContext, orderId: string, reason: s
   return order;
 }
 
-function buildPayments(ctx: RequestContext, input: SettleInput, total: number): IPayment[] {
-  const lines = input.payments ?? (input.paymentMethod ? [{ method: input.paymentMethod, amount: total }] : []);
+/** A UPI payment taken at the till needs the payer's mobile number or a screenshot, so it can be checked later. */
+const UPI_PROOF_REQUIRED = "For a UPI payment add the payer's mobile number or a screenshot of the payment";
+
+function buildPayments(
+  ctx: RequestContext,
+  order: Pick<IOrder, "_id" | "customerPhone">,
+  input: SettleInput,
+  total: number,
+  options: { requireUpiProof?: boolean } = {}
+): IPayment[] {
+  const lines: (Partial<Pick<IPayment, "payerPhone" | "proofKey" | "reference" | "tendered">> & {
+    method: IPayment["method"];
+    amount: number;
+  })[] = input.payments ?? (input.paymentMethod
+    ? [{ method: input.paymentMethod, amount: total, payerPhone: input.payerPhone, proofKey: input.proofKey }]
+    : []);
   if (lines.length === 0) throw new HttpError(400, "Add at least one payment");
 
   const sum = round2(lines.reduce((acc, line) => acc + line.amount, 0));
@@ -276,15 +290,33 @@ function buildPayments(ctx: RequestContext, input: SettleInput, total: number): 
     throw new HttpError(400, `Payments add up to ₹${sum.toFixed(2)} but the bill is ₹${total.toFixed(2)}`);
   }
 
+  const orderId = order._id.toString();
+  // The number the guest already gave for this order stands in when none is typed for the UPI payment.
+  const guestPhone = normalizePhone(order.customerPhone);
   const now = new Date();
   return lines.map((line) => {
     if (line.method === "cash" && line.tendered !== undefined && line.tendered < line.amount) {
       throw new HttpError(400, "Cash received is less than the cash amount");
     }
+    let payerPhone: string | undefined;
+    if (line.method === "upi") {
+      if (line.payerPhone) {
+        const normalized = normalizePhone(line.payerPhone);
+        if (!normalized) throw new HttpError(400, "Enter a valid mobile number for the UPI payment");
+        payerPhone = normalized;
+      }
+      if (line.proofKey && !line.proofKey.startsWith(`${orderId}-`)) {
+        throw new HttpError(400, "That payment screenshot belongs to another order");
+      }
+      if (!payerPhone && !line.proofKey && guestPhone) payerPhone = guestPhone;
+      if (options.requireUpiProof && !payerPhone && !line.proofKey) throw new HttpError(400, UPI_PROOF_REQUIRED);
+    }
     return {
       method: line.method,
       amount: round2(line.amount),
       ...(line.reference && { reference: line.reference }),
+      ...(payerPhone && { payerPhone }),
+      ...(line.method === "upi" && line.proofKey && { proofKey: line.proofKey }),
       ...(line.method === "cash" &&
         line.tendered !== undefined && { tendered: line.tendered, change: round2(line.tendered - line.amount) }),
       receivedBy: ctx.auth.id,
@@ -299,7 +331,16 @@ function summarizeMethod(payments: IPayment[]): PaymentMethod {
   return methods.size === 1 ? payments[0].method : "split";
 }
 
-export async function settleOrder(ctx: RequestContext, orderId: string, input: SettleInput) {
+/**
+ * Settles a bill. `requireUpiProof` is set for payments staff take by hand (the Settle screen); payments that
+ * come from somewhere else (the online gateway, offline sales synced later) have their own record.
+ */
+export async function settleOrder(
+  ctx: RequestContext,
+  orderId: string,
+  input: SettleInput,
+  options: { requireUpiProof?: boolean } = {}
+) {
   const order = await getOwnedOrder(ctx, orderId);
   const repo = new OrdersRepository(ctx.restaurantId);
   const wantsCredit = input.paymentMethod === "credit" || (input.payments ?? []).some((p) => p.method === "credit");
@@ -307,7 +348,7 @@ export async function settleOrder(ctx: RequestContext, orderId: string, input: S
   if (order.status === "open") await billOpenOrder(ctx, repo, order, {});
   if (order.status !== "billed" || !order.bill) throw new HttpError(409, "This order is not open");
 
-  const payments = buildPayments(ctx, input, order.bill.grandTotal);
+  const payments = buildPayments(ctx, order, input, order.bill.grandTotal, options);
   const onAccount = payments.filter((p) => p.method === "credit").reduce((sum, p) => sum + p.amount, 0);
   if (onAccount > 0) await assertCreditAllowed(ctx.restaurantId, order, onAccount);
   const changes: Partial<IOrder> = {

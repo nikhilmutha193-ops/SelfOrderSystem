@@ -15,11 +15,12 @@ export const FOLDERS = {
   awards: "Awards",
   invoices: "Invoices",
   backups: "Backups",
+  proofs: "PaymentProofs",
 } as const;
 
 export const PUBLIC_FOLDERS = ["banner", "logo", "product", "team", "awards"] as const;
 
-const PRIVATE_FOLDERS: ReadonlySet<Folder> = new Set(["invoices", "backups"]);
+const PRIVATE_FOLDERS: ReadonlySet<Folder> = new Set(["invoices", "backups", "proofs"]);
 
 export const UPLOADS_DIR = path.join(__dirname, "..", "..", "uploads");
 
@@ -27,9 +28,12 @@ export const BACKUPS_DIR = path.join(__dirname, "..", "..", "backups");
 
 export const INVOICES_DIR = path.join(__dirname, "..", "..", "invoices");
 
+export const PROOFS_DIR = path.join(__dirname, "..", "..", "proofs");
+
 function localRoot(folder: Folder): string {
   if (folder === "backups") return BACKUPS_DIR;
   if (folder === "invoices") return INVOICES_DIR;
+  if (folder === "proofs") return PROOFS_DIR;
   return UPLOADS_DIR;
 }
 

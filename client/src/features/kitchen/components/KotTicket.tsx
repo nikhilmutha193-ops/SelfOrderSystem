@@ -19,8 +19,10 @@ import { Fragment, useEffect, useRef, useState } from "react";
 import type { KotQueueGroup, OrderItem, OrderPriority } from "../../../lib/types";
 import { Button, IconButton } from "../../../shared/ui/ui";
 import {
+  ALL_STEPS,
   formatElapsed,
   itemFilter,
+  nextStep,
   orderLabel,
   printedRounds,
   sentAt,
@@ -173,6 +175,12 @@ function TicketMenu({
   );
 }
 
+const BULK = {
+  start: { label: "Start all", single: "Start", icon: Flame, variant: "secondary" },
+  ready: { label: "All ready", single: "Ready", icon: Check, variant: "success" },
+  serve: { label: "Serve all", single: "Serve", icon: HandPlatter, variant: "primary" },
+} as const;
+
 export interface TicketActions {
   start: (item: OrderItem) => Promise<unknown>;
   ready: (item: OrderItem) => Promise<unknown>;
@@ -239,6 +247,7 @@ export function KotTicket({
     }
   }
 
+  const steps = group.steps ?? ALL_STEPS;
   const waitingItems = items.filter((i) => itemFilter(i) === "waiting");
   const cookingItems = items.filter((i) => itemFilter(i) === "cooking");
   const readyItems = items.filter((i) => itemFilter(i) === "ready");
@@ -409,28 +418,22 @@ export function KotTicket({
                   <p className={`mt-1 text-[11px] font-bold tracking-wide uppercase ${look.text}`}>{look.label}</p>
                 </div>
                 <div className="flex shrink-0 items-center gap-1 self-center">
-                  {state === "waiting" && (
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      icon={Flame}
-                      loading={busy === `start-${item._id}`}
-                      onClick={() => act(`start-${item._id}`, () => actions.start(item))}
-                    >
-                      Start
-                    </Button>
-                  )}
-                  {state === "cooking" && (
-                    <Button
-                      size="sm"
-                      variant="success"
-                      icon={Check}
-                      loading={busy === `ready-${item._id}`}
-                      onClick={() => act(`ready-${item._id}`, () => actions.ready(item))}
-                    >
-                      Ready
-                    </Button>
-                  )}
+                  {(state === "waiting" || state === "cooking") &&
+                    (() => {
+                      const step = nextStep(state, steps);
+                      const look = BULK[step];
+                      return (
+                        <Button
+                          size="sm"
+                          variant={look.variant}
+                          icon={look.icon}
+                          loading={busy === `${step}-${item._id}`}
+                          onClick={() => act(`${step}-${item._id}`, () => actions[step === "start" ? "start" : step === "ready" ? "ready" : "serve"](item))}
+                        >
+                          {look.single}
+                        </Button>
+                      );
+                    })()}
                   {state === "ready" && (
                     <Button
                       size="sm"
@@ -441,7 +444,7 @@ export function KotTicket({
                       Serve
                     </Button>
                   )}
-                  {(state === "waiting" || state === "cooking") && (
+                  {(state === "waiting" || state === "cooking") && nextStep(state, steps) !== "serve" && (
                     <IconButton
                       size="sm"
                       icon={HandPlatter}
@@ -506,25 +509,29 @@ export function KotTicket({
             {waitingItems.length > 0 && (
               <Button
                 size="sm"
-                variant="secondary"
-                icon={Flame}
+                variant={BULK[nextStep("waiting", steps)].variant}
+                icon={BULK[nextStep("waiting", steps)].icon}
                 className="flex-1"
-                loading={busy === "bulk-start"}
-                onClick={() => act("bulk-start", () => actions.bulk("start", waitingItems))}
+                loading={busy === `bulk-${nextStep("waiting", steps)}`}
+                onClick={() =>
+                  act(`bulk-${nextStep("waiting", steps)}`, () => actions.bulk(nextStep("waiting", steps), waitingItems))
+                }
               >
-                Start all
+                {BULK[nextStep("waiting", steps)].label}
               </Button>
             )}
             {cookingItems.length > 0 && (
               <Button
                 size="sm"
-                variant="success"
-                icon={Check}
+                variant={BULK[nextStep("cooking", steps)].variant}
+                icon={BULK[nextStep("cooking", steps)].icon}
                 className="flex-1"
-                loading={busy === "bulk-ready"}
-                onClick={() => act("bulk-ready", () => actions.bulk("ready", cookingItems))}
+                loading={busy === `bulk-${nextStep("cooking", steps)}`}
+                onClick={() =>
+                  act(`bulk-${nextStep("cooking", steps)}`, () => actions.bulk(nextStep("cooking", steps), cookingItems))
+                }
               >
-                All ready
+                {BULK[nextStep("cooking", steps)].label}
               </Button>
             )}
             {readyItems.length > 0 && (

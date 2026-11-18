@@ -5,6 +5,7 @@ import {
   CookingPot,
   Copy,
   ImagePlus,
+  ListChecks,
   Percent,
   Pipette,
   Plus,
@@ -1149,6 +1150,69 @@ export default function RestaurantSettings() {
                     the kitchen once paid, whichever you pick here.
                   </p>
                 )}
+              </Card>
+
+              <Card>
+                <CardHeader
+                  icon={ListChecks}
+                  title="Kitchen steps"
+                  description="The steps a dish goes through after the KOT is sent. Switch off a step you don't use and the kitchen screen skips it."
+                />
+                {(() => {
+                  const steps = {
+                    preparing: kotSettings.steps?.preparing !== false,
+                    ready: kotSettings.steps?.ready !== false,
+                    served: kotSettings.steps?.served !== false,
+                  };
+                  const setStep = (key: "preparing" | "ready" | "served", value: boolean) =>
+                    setKotSettings((prev) => ({ ...prev, steps: { ...steps, [key]: value } }));
+                  const flow = [
+                    "Waiting",
+                    ...(steps.preparing ? ["Cooking"] : []),
+                    ...(steps.ready ? ["Ready"] : []),
+                    ...(steps.served ? ["Served"] : []),
+                  ];
+                  return (
+                    <>
+                      <p className="mb-3 rounded-lg bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700">
+                        {flow.join("  →  ")}
+                        {!steps.served && <span className="font-normal text-slate-500"> (Ready finishes the dish)</span>}
+                      </p>
+                      <div className="divide-y divide-slate-100">
+                        <ToggleRow
+                          id="kot-step-preparing"
+                          checked={steps.preparing}
+                          onChange={(v) => setStep("preparing", v)}
+                          label="Cooking step"
+                          description="The Start button. Off: a sent dish goes straight to Ready (or Served)."
+                        />
+                        <ToggleRow
+                          id="kot-step-ready"
+                          checked={steps.ready}
+                          onChange={(v) => {
+                            if (!v && !steps.served) return;
+                            setStep("ready", v);
+                          }}
+                          label="Ready step"
+                          description="The Ready button, shown to the guest as ready to collect. Off: cooking goes straight to Served."
+                        />
+                        <ToggleRow
+                          id="kot-step-served"
+                          checked={steps.served}
+                          onChange={(v) => {
+                            if (!v && !steps.ready) return;
+                            setStep("served", v);
+                          }}
+                          label="Served step"
+                          description="The Serve button. Off: marking a dish Ready also serves it, so nobody has to tap Serve."
+                        />
+                      </div>
+                      <p className="mt-3 text-xs text-slate-500">
+                        Keep Ready or Served on, or a dish could never finish. Press Save settings to apply.
+                      </p>
+                    </>
+                  );
+                })()}
               </Card>
 
               <Card>

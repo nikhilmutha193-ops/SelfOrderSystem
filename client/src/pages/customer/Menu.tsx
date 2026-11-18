@@ -125,6 +125,8 @@ export default function Menu() {
   const navigate = useNavigate();
   const [menu, setMenu] = useState<MenuCategory[]>([]);
   const [cart, setCart] = useState<CartLine[]>([]);
+  // A cart line the guest is changing (spice, Jain, notes, add-ons...) before placing the order.
+  const [editingLineId, setEditingLineId] = useState<string | null>(null);
   const [showCart, setShowCart] = useState(false);
   const [detailFood, setDetailFood] = useState<MenuFoodItem | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -289,6 +291,43 @@ export default function Menu() {
     if (!access.placeOrder) return;
     if ((food.modifierGroups?.length ?? 0) > 0) setDetailFood(food);
     else incrementCart(food);
+  }
+
+  const editingLine = cart.find((l) => l.lineId === editingLineId) ?? null;
+  const editingFood = editingLine ? (foodById.get(editingLine.foodItemId) ?? null) : null;
+  const editingInitial = useMemo(
+    () =>
+      editingLine
+        ? {
+            quantity: editingLine.quantity,
+            note: editingLine.note ?? "",
+            modifiers: editingLine.modifiers ?? [],
+            isJain: !!editingLine.isJain,
+            isPacked: !!editingLine.isPacked,
+          }
+        : undefined,
+    // Only the line being edited matters; cart changes elsewhere must not reset the dialog.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [editingLineId],
+  );
+
+  function updateLine(food: MenuFoodItem, payload: DishAddPayload) {
+    const unitPrice = food.price + payload.modifiers.reduce((s, m) => s + m.priceDelta, 0);
+    setCart((prev) =>
+      prev.map((l) =>
+        l.lineId === editingLineId
+          ? {
+              ...l,
+              price: unitPrice,
+              quantity: payload.quantity,
+              modifiers: payload.modifiers,
+              note: payload.note || undefined,
+              isJain: payload.isJain || undefined,
+              isPacked: payload.isPacked || undefined,
+            }
+          : l,
+      ),
+    );
   }
 
   function removeLine(idx: number) {
@@ -861,6 +900,17 @@ export default function Menu() {
         onClose={() => setDetailFood(null)}
       />
 
+      <DishDialog
+        allowPack
+        food={editingFood}
+        initial={editingInitial}
+        submitLabel="Update"
+        lang={lang}
+        canOrder={access.placeOrder}
+        onAdd={updateLine}
+        onClose={() => setEditingLineId(null)}
+      />
+
       <GuestDetailsDialog
         open={guestOpen}
         required={access.required}
@@ -975,6 +1025,15 @@ export default function Menu() {
                     <span className="font-semibold tabular-nums text-slate-800">
                       ₹{(line.price * line.quantity).toFixed(2)}
                     </span>
+                    {foodById.has(line.foodItemId) && (
+                      <button
+                        className="shrink-0 px-1 text-xs font-semibold text-orange-700"
+                        aria-label={`Customize ${lineName(line)}`}
+                        onClick={() => setEditingLineId(line.lineId)}
+                      >
+                        Edit
+                      </button>
+                    )}
                     <button
                       className="flex h-9 w-9 items-center justify-center text-red-600"
                       aria-label={`Remove ${lineName(line)}`}
@@ -1014,7 +1073,8 @@ export default function Menu() {
         </div>
       )}
 
-      {reviewOpen && (
+      {/* Hidden while a dish is being edited, so the two popups never sit on top of each other. */}
+      {reviewOpen && !editingLineId && (
         <div
           className="fixed inset-0 z-40 flex items-end justify-center bg-black/40 p-4 sm:items-center"
           onClick={() => !confirming && setReviewOpen(false)}
@@ -1058,6 +1118,16 @@ export default function Menu() {
                   <span className="shrink-0 font-semibold tabular-nums text-slate-800">
                     ₹{(line.price * line.quantity).toFixed(2)}
                   </span>
+                  {foodById.has(line.foodItemId) && (
+                    <button
+                      className="shrink-0 px-1 text-xs font-semibold text-orange-700 disabled:opacity-50"
+                      aria-label={`Customize ${lineName(line)}`}
+                      onClick={() => setEditingLineId(line.lineId)}
+                      disabled={confirming}
+                    >
+                      Edit
+                    </button>
+                  )}
                   <button
                     className="flex h-8 w-8 shrink-0 items-center justify-center text-red-600"
                     aria-label={`Remove ${lineName(line)}`}

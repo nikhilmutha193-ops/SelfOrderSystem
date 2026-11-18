@@ -82,6 +82,8 @@ export interface IKotSettings {
   tokenStart: number;
   /** Details shown and text sizes per paper (58 mm, 80 mm, page), see utils/printLayout.ts. */
   layouts?: Record<string, unknown>;
+  /** Steps a dish goes through in the kitchen. Switching one off skips it (see utils/kotSteps.ts). */
+  steps?: { preparing: boolean; ready: boolean; served: boolean };
 }
 
 export interface IInvoiceSettings {
@@ -311,6 +313,17 @@ const kotSettingsSchema = new Schema<IKotSettings>(
     },
     tokenStart: { type: Number, default: 1, min: 1, max: 99999 },
     layouts: { type: Schema.Types.Mixed, default: () => ({}) },
+    steps: {
+      type: new Schema(
+        {
+          preparing: { type: Boolean, default: true },
+          ready: { type: Boolean, default: true },
+          served: { type: Boolean, default: true },
+        },
+        { _id: false }
+      ),
+      default: () => ({}),
+    },
   },
   { _id: false }
 );

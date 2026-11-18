@@ -19,7 +19,7 @@ describe("settling with several payments", () => {
     const res = await pay(orderId, {
       payments: [
         { method: "cash", amount: 100, tendered: 200 },
-        { method: "upi", amount: 152, reference: "UTR12345" },
+        { method: "upi", amount: 152, reference: "UTR12345", payerPhone: "9876543210" },
       ],
     });
     expect(res.status).toBe(200);

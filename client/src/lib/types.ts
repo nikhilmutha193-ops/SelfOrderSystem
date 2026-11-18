@@ -68,6 +68,15 @@ export interface KotSettings {
   tokenStart: number;
   /** Details shown and text sizes per paper (58 mm, 80 mm, page). */
   layouts?: PrintLayouts;
+  /** Which kitchen steps are used; a step that is off is skipped. */
+  steps?: KotSteps;
+}
+
+/** Cooking, Ready and Served: switching one off skips it. Ready and Served cannot both be off. */
+export interface KotSteps {
+  preparing: boolean;
+  ready: boolean;
+  served: boolean;
 }
 
 export interface KotCategoryGroup {
@@ -246,6 +255,8 @@ export interface TableRow {
   autoReleaseMinutes?: number | null;
   captainId?: string | null;
   areaId?: string | null;
+  /** The statuses staff may set by hand right now, given the table's orders. */
+  allowedStatuses?: TableStatus[];
 }
 
 export interface Area {
@@ -293,6 +304,9 @@ export interface Payment {
   method: TenderMethod;
   amount: number;
   reference?: string;
+  /** UPI: the payer's mobile number and/or the key of a saved screenshot. */
+  payerPhone?: string;
+  proofKey?: string;
   tendered?: number;
   change?: number;
   receivedByName?: string;
@@ -532,6 +546,8 @@ export interface KotQueueGroup {
   tokenNumber: number | null;
   /** Set by the kitchen screen when an order's tokens are split into their own tickets. */
   key?: string;
+  /** The kitchen steps in use, sent with every queue group. */
+  steps?: KotSteps;
 }
 
 export interface DashboardSummary {

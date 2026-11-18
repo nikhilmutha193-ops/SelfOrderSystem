@@ -80,7 +80,7 @@ describe("offline POS sync", () => {
     const settle = await api()
       .patch(`/api/orders/${res.body.orderId}/pay`)
       .set(bearer(owner))
-      .send({ paymentMethod: "upi" });
+      .send({ paymentMethod: "upi", payerPhone: "9876543210" });
     expect(settle.status).toBe(200);
     expect((await TableModel.findById(tableId).lean())?.status).toBe("available");
   });

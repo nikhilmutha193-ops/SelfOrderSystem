@@ -1,6 +1,7 @@
 import { Router } from "express";
 
 import { requireAuth, requireModule } from "../../middleware/auth";
+import { uploadImage } from "../../middleware/upload";
 import {
   addOrderItems,
   applyCoupon,
@@ -13,6 +14,7 @@ import {
   getInvoice,
   getInvoicePdf,
   getOrder,
+  getPaymentProof,
   listInvoiceRegister,
   listMyOrders,
   listOrderCoupons,
@@ -21,6 +23,7 @@ import {
   setItemPacked,
   mergeOrder,
   payOrder,
+  uploadPaymentProof,
   printBill,
   removeCoupon,
   removeDiscount,
@@ -61,6 +64,9 @@ router.post("/:orderId/bill/print", requireAuth("admin"), requireModule("orders"
 router.post("/:orderId/reopen", requireAuth("admin"), requireModule("orders"), reopenBill);
 router.post("/:orderId/void", requireAuth("admin"), requireModule("orders"), voidBill);
 router.patch("/:orderId/pay", requireAuth("admin"), requireModule("orders"), payOrder);
+// A screenshot of a UPI payment, kept in private storage; the order then names it when it is settled.
+router.post("/:orderId/payment-proof", requireAuth("admin"), requireModule("orders"), uploadImage, uploadPaymentProof);
+router.get("/:orderId/payment-proof/:name", requireAuth("admin"), requireModule("orders"), getPaymentProof);
 router.patch("/:orderId/cancel", requireAuth("admin"), requireModule("orders"), cancelOrder);
 router.patch("/:orderId/customer", requireAuth("table", "admin"), requireModule("orders"), updateOrderCustomer);
 

@@ -194,11 +194,17 @@ export default function KotQueueView({ canCancel }: { canCancel: boolean }) {
       : 3 + (filter === "all" ? g.items.length : g.items.filter((i) => itemFilter(i) === filter).length)
   );
 
+  // A step switched off in Settings has no tab of its own (unless a dish is still sitting in it).
+  const steps = groups.find((g) => g.steps)?.steps;
   const filterItems: { value: QueueFilter; label: string; count?: number }[] = [
     { value: "all", label: "All tickets", count: groups.length },
     { value: "waiting", label: "Waiting", count: totals.waiting },
-    { value: "cooking", label: "Cooking", count: totals.cooking },
-    { value: "ready", label: "Ready", count: totals.ready },
+    ...(steps?.preparing === false && totals.cooking === 0 && filter !== "cooking"
+      ? []
+      : [{ value: "cooking" as const, label: "Cooking", count: totals.cooking }]),
+    ...((steps?.ready === false || steps?.served === false) && totals.ready === 0 && filter !== "ready"
+      ? []
+      : [{ value: "ready" as const, label: "Ready", count: totals.ready }]),
   ];
   if (totals.unsent > 0 || filter === "unsent") {
     filterItems.push({ value: "unsent", label: "Not sent", count: totals.unsent });

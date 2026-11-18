@@ -340,6 +340,18 @@ export default function OrderDetail({
   const { order, items, totals } = data;
   const canEditCharges = order.status === "open";
   const chargeBusy = serviceCharge.isPending || packagingCharge.isPending || extraChargeMutation.isPending;
+  /** Opens a saved UPI payment screenshot (private, so it is fetched with the staff login). */
+  async function openProof(proofKey: string) {
+    const tab = window.open("", "_blank");
+    try {
+      const blob = await ordersApi.paymentProofBlob(order._id, proofKey);
+      if (tab) tab.location.href = URL.createObjectURL(blob);
+    } catch (err) {
+      tab?.close();
+      setActionError(extractErrorMessage(err));
+    }
+  }
+
   async function runCharge(action: () => Promise<unknown>) {
     setActionError(null);
     try {
@@ -736,7 +748,17 @@ export default function OrderDetail({
               <span className="min-w-0">
                 Paid by {TENDER_LABELS[p.method]}
                 {p.reference ? ` (${p.reference})` : ""}
+                {p.payerPhone ? ` · ${p.payerPhone.replace(/^91(\d{10})$/, "+91 $1")}` : ""}
                 {p.change ? ` · change ₹${p.change.toFixed(2)}` : ""}
+                {p.proofKey && (
+                  <button
+                    type="button"
+                    className="ml-2 text-xs font-medium text-orange-700 hover:underline"
+                    onClick={() => void openProof(p.proofKey!)}
+                  >
+                    View screenshot
+                  </button>
+                )}
               </span>
               <span className="tabular-nums">₹{p.amount.toFixed(2)}</span>
             </div>

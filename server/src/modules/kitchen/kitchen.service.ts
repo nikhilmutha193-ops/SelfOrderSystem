@@ -4,6 +4,7 @@ import { IOrder, OrderPriority } from "../../models/Order";
 import { isCafeFlow, paidBeforeKitchen, paysUpfront } from "../../utils/dineInPayment";
 import { HttpError } from "../../utils/httpError";
 import { nextTokenNumber } from "../../utils/kotQueue";
+import { kotStepsOf } from "../../utils/kotSteps";
 import { getOwnedOrder } from "../orders/orders.service";
 import { enqueueBill, enqueueKot } from "../printing/printing.service";
 import { KitchenRepository } from "./kitchen.repository";
@@ -13,7 +14,8 @@ const PRIORITY_RANK: Record<string, number> = { rush: 0, high: 1, normal: 2 };
 export async function getKotQueue(ctx: RequestContext, tableId?: string, stationId?: string) {
   const repo = new KitchenRepository(ctx.restaurantId);
   const orders = await repo.findKitchenOrdersWithTable(tableId);
-  const restaurant = await repo.findRestaurant("billingSettings serviceFlow");
+  const restaurant = await repo.findRestaurant("billingSettings serviceFlow kotSettings.steps");
+  const steps = kotStepsOf(restaurant?.kotSettings);
   // Unpaid orders that are paid before cooking aren't the kitchen's yet.
   const waitingForPayment = new Set(
     orders.filter((o) => paidBeforeKitchen(o, restaurant)).map((o) => o._id.toString())
@@ -36,7 +38,7 @@ export async function getKotQueue(ctx: RequestContext, tableId?: string, station
     .map((order) => {
       const orderItems = itemsByOrder.get(order._id.toString()) ?? [];
       const numbers = orderItems.map((i) => i.tokenNumber).filter((n): n is number => typeof n === "number");
-      return { order, items: orderItems, tokenNumber: numbers.length ? Math.min(...numbers) : null };
+      return { order, items: orderItems, tokenNumber: numbers.length ? Math.min(...numbers) : null, steps };
     })
     .filter((group) => group.items.length > 0)
     .sort((a, b) => {
@@ -159,8 +161,16 @@ export async function getKotPdfData(ctx: RequestContext, orderId: string, round:
   return { restaurant, order, round, items, tableCode, tokenNumber: items[0]?.tokenNumber ?? null };
 }
 
+async function stepsFor(repo: KitchenRepository) {
+  return kotStepsOf((await repo.findRestaurant("kotSettings.steps"))?.kotSettings);
+}
+
 export async function startPreparingItem(ctx: RequestContext, itemId: string) {
-  const item = await new KitchenRepository(ctx.restaurantId).transitionItem(
+  const repo = new KitchenRepository(ctx.restaurantId);
+  if (!(await stepsFor(repo)).preparing) {
+    throw new HttpError(409, "The Cooking step is turned off. Mark the dish ready or served instead.");
+  }
+  const item = await repo.transitionItem(
     itemId,
     { status: "pending", kotRound: { $ne: null } },
     { status: "preparing" }
@@ -170,12 +180,16 @@ export async function startPreparingItem(ctx: RequestContext, itemId: string) {
 }
 
 export async function markItemReady(ctx: RequestContext, itemId: string) {
-  const item = await new KitchenRepository(ctx.restaurantId).transitionItem(
-    itemId,
-    { status: "preparing" },
-    { status: "ready", readyAt: new Date() }
-  );
-  if (!item) throw new HttpError(404, "Item is not currently preparing");
+  const repo = new KitchenRepository(ctx.restaurantId);
+  const steps = await stepsFor(repo);
+  if (!steps.ready) throw new HttpError(409, "The Ready step is turned off. Mark the dish served instead.");
+  // Without a Cooking step a dish can be marked ready as soon as it is sent; without a Served step ready is the last step.
+  const from = steps.preparing ? { status: "preparing" as const } : { status: { $in: ["pending", "preparing"] }, kotRound: { $ne: null } };
+  const item = await repo.transitionItem(itemId, from, {
+    status: steps.served ? "ready" : "served",
+    readyAt: new Date(),
+  });
+  if (!item) throw new HttpError(404, steps.preparing ? "Item is not currently preparing" : "Item is not waiting in the kitchen");
   return item;
 }
 
