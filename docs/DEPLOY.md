@@ -171,6 +171,55 @@ R2 has no real folders: each one is an empty object whose name ends in `/`, whic
 Files saved before this layout keep working (their saved addresses do not change, and the server falls back to the old location when it
 reads or deletes them). Do not set `R2_PRIVATE_BUCKET` to the same bucket as `R2_BUCKET`: private files must stay off the public bucket.
 
+## Keeping the data safe
+
+Everything that matters is in **one place: MongoDB's data folder** (plus the uploaded files). The containers themselves hold nothing, so you can
+stop, remove and recreate them freely.
+
+| Command | Data safe? |
+|---|---|
+| `docker compose ... down`, `up -d`, `restart`, `up --build`, `--force-recreate` | Yes. The volume stays and is reattached. |
+| `docker compose ... down -v` | **No.** `-v` deletes the volumes. |
+| `docker volume rm selfordersystem_mongo_data` | **No.** |
+| `docker volume prune` or `docker system prune --volumes` | **No** if the stack is stopped: a volume no container uses counts as unused and is deleted. |
+| Deleting the project folder | Yes for volumes (they live under `/var/lib/docker`), **no** for a data folder inside the project. |
+
+### Option A: keep the default Docker volume
+It already survives every recreate. Just never use `-v` or the prune commands above, and keep backups (section 6).
+See where it is: `docker volume inspect selfordersystem_mongo_data --format '{{.Mountpoint}}'`.
+
+### Option B: a normal folder on the server (recommended for real data)
+A folder is not touched by any Docker clean-up command, is easy to back up and to move, and is visible with `ls`.
+
+```sh
+sudo mkdir -p /opt/selforder-data/mongo
+sudo chown -R 999:999 /opt/selforder-data/mongo     # 999 is the "mongodb" user inside the image
+echo 'MONGO_DATA_DIR=/opt/selforder-data/mongo' >> /root/SelfOrderSystem/.env
+```
+
+The folder must be owned by user 999 because the database runs as that user. A new, empty folder gives a new, empty database.
+
+**Moving an existing database from the Docker volume into the folder** (about a minute of downtime):
+
+```sh
+cd /root/SelfOrderSystem
+docker compose -f docker-compose.prod.yml down                 # no -v
+sudo mkdir -p /opt/selforder-data/mongo
+# copy the data out of the volume
+docker run --rm -v selfordersystem_mongo_data:/from -v /opt/selforder-data/mongo:/to alpine sh -c 'cp -a /from/. /to/'
+sudo chown -R 999:999 /opt/selforder-data/mongo
+echo 'MONGO_DATA_DIR=/opt/selforder-data/mongo' >> .env
+docker compose -f docker-compose.prod.yml up -d
+```
+
+Check the restaurant and its orders are there, and only then (after a few days and a backup) remove the old volume with `docker volume rm selfordersystem_mongo_data`.
+
+### The uploaded files
+Images, invoices, backups and payment screenshots are in the volumes `uploads_data`, `invoices_data`, `backups_data` and `proofs_data`. They behave the same way. With Cloudflare R2 set up (see below) images and private files are outside the server entirely, which is the safest option.
+
+### Whatever you choose: back up
+A volume or folder protects against recreating containers, not against a lost disk, a wrong command or a deleted server. Take the nightly backup (section 6) and copy it off the server.
+
 ## 6. Backups
 
 - **In the app:** Admin > Backup and Restore has a daily backup and a restore (data only).
@@ -224,6 +273,8 @@ Admin > Printers and Stations, and it reaches the server over the internet. See 
 | `JWT_SECRET` or `CLIENT_ORIGIN` "is required" when starting | Fill them in `.env`. |
 | Every request says "No restaurant found for key" | `RESTAURANT_KEY` does not match a seeded restaurant. Run the seed once. |
 | The API stays "unhealthy" | `./scripts/deploy.sh logs`. Usually a wrong `MONGO_URI`, or MongoDB is still starting. |
+| `docker top` shows MongoDB's `docker-entrypoint.sh` at 99% CPU, the log is empty and port 27017 refuses connections | The image's start-up script hangs on some servers. `docker-compose.prod.yml` runs `mongod` directly (`entrypoint: ["mongod"]`, `user: mongodb`); add those two lines to the `mongo` service if your copy is older. |
+| The `mongo` container never becomes healthy (`Illegal instruction` in its logs) | The VPS CPU has no AVX, which MongoDB 5 and newer need. Set `MONGO_IMAGE=mongo:4.4` in `.env`, or use Atlas. |
 | Billing fails with a transaction error | The database is not a replica set. Use the bundled `mongo` service or Atlas. |
 | Caddy cannot get a certificate | DNS does not point at the server yet, or port 80 or 443 is blocked. |
 | Guests are rate limited together | `TRUST_PROXY_HOPS` is wrong: 1 without Caddy, 2 with it. |

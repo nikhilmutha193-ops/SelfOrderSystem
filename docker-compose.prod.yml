@@ -23,13 +23,28 @@ services:
   # allows on a replica set. The healthcheck starts the set the first time the container runs.
   # To use MongoDB Atlas instead, set MONGO_URI in .env and remove this service and the depends_on lines.
   mongo:
-    image: mongo:7
+    # MongoDB 5 and newer need a CPU with AVX. If `grep -c avx /proc/cpuinfo` prints 0 on your VPS, set MONGO_IMAGE=mongo:4.4 in .env.
+    image: ${MONGO_IMAGE:-mongo:7}
     restart: always
     init: true
+    # A normal open-files limit. Many Linux servers hand containers a limit of about a billion, and MongoDB's start-up
+    # script then spins at 100% CPU for minutes without ever starting mongod (the container never becomes healthy).
+    ulimits:
+      nofile:
+        soft: 64000
+        hard: 64000
     hostname: mongo
+    # Run mongod directly instead of through the image's docker-entrypoint.sh. On some servers (seen with Docker 29)
+    # that script spins at 100% CPU and never starts MongoDB, so the container never becomes healthy. Nothing in the
+    # script is needed here: the volume is already owned by the mongodb user, and the replica set is started by the
+    # healthcheck below.
+    entrypoint: ["mongod"]
+    user: mongodb
     command: ["--replSet", "rs0", "--bind_ip_all"]
     volumes:
-      - mongo_data:/data/db
+      # A Docker volume called mongo_data by default. Set MONGO_DATA_DIR in .env to a folder on the server (for example
+      # /opt/selforder-data/mongo) to keep the database in a normal folder instead; see docs/DEPLOY.md, "Keeping the data safe".
+      - ${MONGO_DATA_DIR:-mongo_data}:/data/db
     healthcheck:
       test: >
         mongosh --quiet --eval "try { rs.status().ok } catch (e) { rs.initiate().ok }"
@@ -43,6 +58,8 @@ services:
     image: ${IMAGE_REGISTRY:-selforder}/server:${IMAGE_TAG:-latest}
     build:
       context: ./server
+      args:
+        APP_VERSION: ${IMAGE_TAG:-dev}
     restart: always
     init: true
     depends_on:
@@ -97,6 +114,8 @@ services:
     image: ${IMAGE_REGISTRY:-selforder}/client:${IMAGE_TAG:-latest}
     build:
       context: ./client
+      args:
+        APP_VERSION: ${IMAGE_TAG:-dev}
     restart: always
     init: true
     depends_on:

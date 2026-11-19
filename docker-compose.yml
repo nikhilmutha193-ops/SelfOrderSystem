@@ -7,6 +7,12 @@ services:
     image: mongo:7
     restart: unless-stopped
     hostname: mongo
+    # A normal open-files limit. Many Linux servers hand containers a limit of about a billion, and MongoDB's start-up
+    # script then spins at 100% CPU for minutes without ever starting mongod (the container never becomes healthy).
+    ulimits:
+      nofile:
+        soft: 64000
+        hard: 64000
     command: ["--replSet", "rs0", "--bind_ip_all"]
     volumes:
       - mongo_data:/data/db

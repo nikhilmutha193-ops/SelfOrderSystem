@@ -3,7 +3,8 @@
 #
 #   ./scripts/deploy.sh first     first install: build, start, create the sample restaurant
 #   ./scripts/deploy.sh update    pull the new code, rebuild and restart (data is kept)
-#   ./scripts/deploy.sh status    show the containers and their health
+#   ./scripts/deploy.sh status    show the containers, their health and the running version
+#   ./scripts/deploy.sh version  compare the code's version with the one that is running
 #   ./scripts/deploy.sh logs      follow the logs (Ctrl+C to stop)
 #   ./scripts/deploy.sh backup    save the database and uploaded files into ./backup-<date>/
 #   ./scripts/deploy.sh stop      stop everything (data is kept)
@@ -22,7 +23,17 @@ FILES="-f docker-compose.prod.yml"
 if [ "${HTTPS:-0}" = "1" ]; then
   FILES="$FILES -f docker-compose.https.yml"
 fi
+# Name the images after the project version (VERSION file) unless .env already pins a tag (the GitHub deploy does).
+if ! grep -q '^IMAGE_TAG=' .env && [ -f VERSION ]; then
+  IMAGE_TAG="$(tr -d ' \r\n' < VERSION)"
+  export IMAGE_TAG
+fi
 compose() { docker compose $FILES "$@"; }
+
+# The version the API reports about itself.
+running_version() {
+  compose exec -T server wget -qO- http://localhost:5000/health 2>/dev/null | sed -n 's/.*"version":"\([^"]*\)".*/\1/p'
+}
 
 wait_healthy() {
   echo "Waiting for the API to be healthy..."
@@ -50,10 +61,15 @@ case "${1:-}" in
     compose up -d --build
     wait_healthy
     docker image prune -f >/dev/null
-    echo "Updated."
+    echo "Updated. Now running version $(running_version)."
     ;;
   status)
     compose ps
+    echo "Running version: $(running_version)"
+    ;;
+  version)
+    echo "Code on this server (VERSION file): $(cat VERSION 2>/dev/null || echo unknown)"
+    echo "Running API:                        $(running_version)"
     ;;
   logs)
     compose logs -f --tail=100
@@ -75,7 +91,7 @@ case "${1:-}" in
     compose down
     ;;
   *)
-    sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//'
     exit 1
     ;;
 esac

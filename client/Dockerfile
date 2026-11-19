@@ -11,6 +11,8 @@ RUN npm run build
 
 # ---- serve ----
 FROM nginx:1.27-alpine
+ARG APP_VERSION=dev
+LABEL org.opencontainers.image.version=$APP_VERSION
 # openssl generates the self-signed TLS cert (see docker-entrypoint-tls.sh) that lets the site
 # be reached over HTTPS - a "secure context", which browsers require before exposing camera
 # access for the in-page QR scanner.

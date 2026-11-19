@@ -1,3 +1,5 @@
+import fs from "fs";
+import path from "path";
 import "dotenv/config";
 
 import cors from "cors";
@@ -103,6 +105,16 @@ app.use(
 );
 app.use(sanitizeRequest); // strip Mongo operators from body/query/params before any route uses them
 
+// The version in package.json (kept in step with the project VERSION by scripts/release.js), so anyone can see
+// which build is running: GET /health.
+const appVersion: string = (() => {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(__dirname, "..", "package.json"), "utf8")).version ?? "unknown";
+  } catch {
+    return "unknown";
+  }
+})();
+
 app.get("/health", async (_req, res) => {
   try {
     await connectDb(); // a cold serverless instance has no connection yet
@@ -113,6 +125,7 @@ app.get("/health", async (_req, res) => {
   res.status(dbConnected ? 200 : 503).json({
     status: dbConnected ? "ok" : "error",
     db: dbConnected ? "connected" : "disconnected",
+    version: appVersion,
   });
 });
 

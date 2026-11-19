@@ -231,6 +231,7 @@ Every file is grouped under a base path named after `RESTAURANT_KEY`: `<RESTAURA
 - Shared shapes live in `client/src/lib/types.ts` and are hand-mirrored from the server models. Update them when you change a model.
 
 ## Versions and releases
+- **Seeing which version runs:** `GET /health` returns `version` (from `server/package.json`), the admin account menu shows "Version x.y.z" (Vite `__APP_VERSION__` from `client/package.json`), images carry the label `org.opencontainers.image.version`, and `scripts/deploy.sh` names the images after `VERSION` (unless `.env` pins `IMAGE_TAG`) and reports the running version after `update`, `status` and `version`. A new release only reaches a server after its containers are rebuilt and restarted (`./scripts/deploy.sh update`, or the GitHub deploy).
 - One project version lives in the root `VERSION` file; `client/package.json` and `server/package.json` (and their lockfiles) follow it. `CHANGELOG.md` has one entry per release.
 - `node scripts/release.js patch|minor|major` bumps all of them and writes the changelog entry from the commit subjects since the last `v*` tag. It only changes files, so review them. With `--commit` it commits them as `release: vX.Y.Z` and creates the annotated tag `vX.Y.Z`. It never pushes (`git push && git push origin vX.Y.Z` yourself). Use patch for fixes, minor for new features, major for breaking changes.
 - Write commit subjects that read well in the changelog (for example `fix: token chip stale after a new login`, `feat: Rate us switch`).

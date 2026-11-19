@@ -85,6 +85,7 @@ export default function UserMenu({ onLogout }: { onLogout: () => void }) {
               Sign out
             </button>
           </div>
+          <p className="border-t border-slate-100 px-4 py-2 text-xs text-slate-400">Version {__APP_VERSION__}</p>
         </div>
       )}
     </div>
