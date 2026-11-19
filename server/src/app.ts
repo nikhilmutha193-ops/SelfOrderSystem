@@ -83,15 +83,23 @@ const allowedOrigins = (process.env.CLIENT_ORIGIN || "*")
   .split(",")
   .map((o) => o.trim())
   .filter(Boolean);
+const hostnameOf = (value: string | undefined): string => {
+  try {
+    return new URL(value?.includes("://") ? value : `http://${value ?? ""}`).hostname.toLowerCase();
+  } catch {
+    return "";
+  }
+};
 app.use(
-  cors({
-    origin: (origin, cb) => {
-      // Non-browser clients (curl, server-to-server) send no Origin - allow them.
-      if (!origin || allowedOrigins.includes("*") || allowedOrigins.includes(origin)) {
-        return cb(null, true);
-      }
-      cb(new Error("Not allowed by CORS"));
-    },
+  cors((req, cb) => {
+    const origin = req.headers.origin;
+    // Non-browser clients (curl, server-to-server) send no Origin - allow them.
+    // A page served from the address the request was sent to (the site's own nginx forwards its Host) is the same
+    // site, so it works with a bare IP or any domain even when CLIENT_ORIGIN doesn't list it.
+    const sameSite = !!origin && hostnameOf(origin) !== "" && hostnameOf(origin) === hostnameOf(req.headers.host);
+    const allowed = !origin || allowedOrigins.includes("*") || allowedOrigins.includes(origin) || sameSite;
+    // A refused origin gets no CORS headers (the browser blocks it) instead of a 500 error.
+    cb(null, { origin: allowed });
   })
 );
 app.use(
