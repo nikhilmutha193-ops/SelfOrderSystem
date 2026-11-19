@@ -295,6 +295,7 @@ export const tableLogin = asyncHandler(async (req: Request, res: Response) => {
       const openOrder = await Order.findOne({
         tableId: table._id,
         status: { $in: ["open", "billed"] },
+        payAtCounter: { $ne: true },
       }).sort({
         createdAt: -1,
       });

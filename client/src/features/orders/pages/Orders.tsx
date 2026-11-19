@@ -27,17 +27,24 @@ import {
 } from "../../../shared/ui/ui";
 import { ordersApi, type OrderFilters, type ReportFormat } from "../api";
 import { useArchiveOrders, useOrders } from "../queries";
+import { useDineInPayment } from "../../../lib/useDineInPayment";
+import { useServiceFlow } from "../../../lib/useServiceFlow";
 import { isUnpaidDineIn, orderStatusBadge, orderTypeLabel } from "../status";
 
 export default function Orders() {
   const [searchParams, setSearchParams] = useSearchParams();
   const type = (searchParams.get("type") as OrderType) || "";
   const status = (searchParams.get("status") as OrderStatus) || "";
+  const tableId = searchParams.get("tableId") || "";
   const today = searchParams.get("today") === "true";
   const from = searchParams.get("from") || "";
   const to = searchParams.get("to") || "";
 
   const { profile } = useAdmin();
+  // When guests pay first, an unpaid order is due from the start; otherwise only once everything is served.
+  const serviceFlow = useServiceFlow();
+  const dineInPayment = useDineInPayment();
+  const payFirst = serviceFlow === "cafe" || dineInPayment === "upfront";
   const [actionError, setActionError] = useState<string | null>(null);
   const [downloading, setDownloading] = useState<ReportFormat | null>(null);
   const ordersQuery = useOrders(currentParams());
@@ -52,6 +59,7 @@ export default function Orders() {
     const params: OrderFilters = {};
     if (type) params.type = type;
     if (status) params.status = status;
+    if (tableId) params.tableId = tableId;
     if (today) params.today = "true";
     else {
       if (from) params.from = from;
@@ -262,6 +270,18 @@ export default function Orders() {
 
       <Card>
         <div className="flex flex-col gap-4">
+          {tableId && (
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700">
+              <span>Showing the orders of one table only.</span>
+              <button
+                type="button"
+                className="font-medium text-orange-700 hover:underline"
+                onClick={() => updateParam("tableId", "")}
+              >
+                Show all tables
+              </button>
+            </div>
+          )}
           <div data-tour="orders-type-tabs">
             <Tabs
               value={type || "all"}
@@ -351,7 +371,8 @@ export default function Orders() {
                         <div className="flex items-center gap-2">
                           <span className="truncate font-medium text-slate-900">{order.customerName || "Guest"}</span>
                           <Badge tone={badge.tone}>{badge.label}</Badge>
-                          {isUnpaidDineIn(order) && <Badge tone="red">Unpaid</Badge>}
+                          {isUnpaidDineIn(order, payFirst) && <Badge tone="red">Unpaid</Badge>}
+                          {order.payAtCounter && <Badge tone="amber">Pay at counter</Badge>}
                         </div>
                         <p className="mt-0.5 truncate text-xs text-slate-500">
                           {orderTypeLabel(order)} ·{" "}
@@ -403,11 +424,20 @@ export default function Orders() {
                             <Badge tone={orderStatusBadge(order).tone} dot>
                               {orderStatusBadge(order).label}
                             </Badge>
-                            {isUnpaidDineIn(order) && <Badge tone="red">Unpaid</Badge>}
+                            {isUnpaidDineIn(order, payFirst) && <Badge tone="red">Unpaid</Badge>}
+                            {order.payAtCounter && <Badge tone="amber">Pay at counter</Badge>}
                           </div>
                         </td>
                         <td className="text-slate-600 capitalize">{order.paymentMethod}</td>
                         <td className="text-right">
+                          {order.payAtCounter && (order.status === "open" || order.status === "billed") && (
+                            <Link
+                              className={`${buttonClass("secondary", "sm")} mr-1`}
+                              to={`/admin/orders/${order._id}?settle=1`}
+                            >
+                              Settle
+                            </Link>
+                          )}
                           <Link className={buttonClass("ghost", "sm")} to={`/admin/orders/${order._id}`}>
                             View
                             <ChevronRight size={14} aria-hidden="true" />

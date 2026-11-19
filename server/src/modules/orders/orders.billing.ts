@@ -168,7 +168,9 @@ async function transition(
   }
 }
 
-async function syncOrderTable(order: Pick<IOrder, "orderType" | "tableId">): Promise<void> {
+async function syncOrderTable(order: Pick<IOrder, "orderType" | "tableId"> & Partial<Pick<IOrder, "payAtCounter">>): Promise<void> {
+  // A bill left for the counter no longer belongs to the table's seating, which may be someone else's by now.
+  if (order.payAtCounter) return;
   if (order.orderType === "dine-in" && order.tableId) await syncTableState(order.tableId);
 }
 

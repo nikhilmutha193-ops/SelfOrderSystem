@@ -62,6 +62,7 @@ export async function buildOrderFilter(
 ): Promise<FilterQuery<IOrder>> {
   const filter: FilterQuery<IOrder> = {};
   if (query.type) filter.orderType = query.type;
+  if (query.tableId) filter.tableId = new Types.ObjectId(query.tableId);
   if (query.status === "unpaid") filter.status = { $in: ["open", "billed"] };
   else if (query.status) filter.status = query.status;
   if (!options.includeArchived) filter.archivedAt = null;

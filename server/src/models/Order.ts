@@ -117,6 +117,9 @@ export interface IOrder {
   extraChargesOff?: string[];
   /** Money already given back through refunds (see the Refund model). */
   refundedTotal?: number;
+  /** The guest left the table and the bill is settled at the counter (POS or Admin). The table no longer waits for it. */
+  payAtCounter?: boolean;
+  payAtCounterAt?: Date;
   priority?: OrderPriority;
   mergedInto?: Types.ObjectId | null;
   splitFrom?: Types.ObjectId | null;
@@ -243,6 +246,8 @@ const orderSchema = new Schema<IOrder>(
     extraChargeKeys: { type: [String], default: [] },
     extraChargesOff: { type: [String], default: [] },
     refundedTotal: { type: Number, default: 0, min: 0 },
+    payAtCounter: { type: Boolean, default: false },
+    payAtCounterAt: { type: Date },
     priority: { type: String, enum: ["normal", "high", "rush"], default: "normal" },
     mergedInto: { type: Schema.Types.ObjectId, ref: "Order", default: null },
     kiosk: {

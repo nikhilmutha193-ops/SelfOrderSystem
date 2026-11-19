@@ -111,7 +111,7 @@ export class PosRepository {
         archivedAt: null,
       })
     )
-      .select("orderType tableId customerName status invoiceNumber createdAt bill.grandTotal source kiosk")
+      .select("orderType tableId customerName status invoiceNumber createdAt bill.grandTotal source kiosk payAtCounter")
       .sort({ createdAt: 1 })
       .lean();
   }

@@ -18,7 +18,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import DishDialog, { type DishAddPayload } from "../../../components/DishDialog";
 import { BestsellerTag, FoodTypeIcon, RatingChip } from "../../../components/FoodBadges";
@@ -98,6 +98,9 @@ export default function OrderDetail({
   const [customizing, setCustomizing] = useState<MenuFoodItem | null>(null);
   const [refundOpen, setRefundOpen] = useState(false);
   const [settleOpen, setSettleOpen] = useState(false);
+  // "Settle" on the orders list opens this page with the payment dialog already up.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const wantsSettle = searchParams.get("settle") === "1";
   const [editCustomerOpen, setEditCustomerOpen] = useState(false);
   const [complimentaryItem, setComplimentaryItem] = useState<{
     id: string;
@@ -149,6 +152,18 @@ export default function OrderDetail({
   const cartTotal =
     Object.entries(cart).reduce((sum, [id, q]) => sum + (foodById.get(id)?.price ?? 0) * q, 0) +
     custom.reduce((sum, l) => sum + (l.food.price + l.modifiers.reduce((s, m) => s + m.priceDelta, 0)) * l.quantity, 0);
+
+  const unpaidNow = data?.order.status === "open" || data?.order.status === "billed";
+  useEffect(() => {
+    if (!wantsSettle || !data) return;
+    if (unpaidNow) setSettleOpen(true);
+    // The link is used once: drop it so closing the dialog doesn't reopen it.
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete("settle");
+      return next;
+    }, { replace: true });
+  }, [wantsSettle, data, unpaidNow, setSearchParams]);
 
   // If a selected category disappears (menu edited), fall back to the All tab.
   useEffect(() => {

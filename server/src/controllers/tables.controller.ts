@@ -4,6 +4,7 @@ import { Types } from "mongoose";
 import { asyncHandler } from "../middleware/errorHandler";
 import Admin from "../models/Admin";
 import Order from "../models/Order";
+import OrderItem from "../models/OrderItem";
 import Restaurant from "../models/Restaurant";
 import TableModel from "../models/Table";
 import { writeAudit } from "../utils/audit";
@@ -12,7 +13,7 @@ import { HttpError } from "../utils/httpError";
 import { hashPassword } from "../utils/password";
 import { cancelUnsentOrdersForTables } from "../utils/tableRelease";
 import { allowedTableStatuses } from "../utils/tableStatus";
-import { syncTableState } from "../utils/tableState";
+import { detachUnpaidOrders, syncTableState } from "../utils/tableState";
 import { encryptTableToken } from "../utils/tableToken";
 
 function validId(id: string) {
@@ -212,7 +213,14 @@ export const releaseTable = asyncHandler(async (req: Request, res: Response) => 
 /** How many unpaid (open or billed) orders each table has, by table id. */
 async function unpaidOrdersByTable(restaurantId: string): Promise<Map<string, number>> {
   const rows = await Order.aggregate<{ _id: Types.ObjectId; count: number }>([
-    { $match: { restaurantId: new Types.ObjectId(restaurantId), status: { $in: ["open", "billed"] }, tableId: { $ne: null } } },
+    {
+      $match: {
+        restaurantId: new Types.ObjectId(restaurantId),
+        status: { $in: ["open", "billed"] },
+        tableId: { $ne: null },
+        payAtCounter: { $ne: true },
+      },
+    },
     { $group: { _id: "$tableId", count: { $sum: 1 } } },
   ]);
   return new Map(rows.map((row) => [row._id.toString(), row.count]));
@@ -241,8 +249,10 @@ export const setTableStatus = asyncHandler(async (req: Request, res: Response) =
 
   let cancelledOrders = 0;
   if (target === "available") {
-    // Same as releasing it: unsent orders are cancelled, and cooked unpaid food keeps it Waiting to pay.
+    // Unsent orders are cancelled; what was served and not paid stays as a bill to settle at the counter (POS or
+    // Admin), so the table itself is free for the next guests.
     cancelledOrders = await cancelUnsentOrdersForTables([table._id]);
+    await detachUnpaidOrders(table._id);
     await syncTableState(table._id, { endSession: true });
   } else {
     await TableModel.updateOne(
@@ -275,6 +285,28 @@ export const releaseOwnTableSession = asyncHandler(async (req: Request, res: Res
     sessionId: req.auth.sessionId,
   });
   if (!table) return res.json({ released: false });
+
+  // Once an order is placed the table is the restaurant's to release, not the guest's: it still has food or a
+  // bill on it. A guest who is done uses Checkout; the one way out here is when everything is paid and served.
+  const sessionOrders = await Order.find({
+    tableId: table._id,
+    sessionId: table.sessionId,
+    status: { $ne: "cancelled" },
+  }).select("_id status");
+  const dishes = await OrderItem.find({
+    orderId: { $in: sessionOrders.map((o) => o._id) },
+    status: { $ne: "cancelled" },
+  }).select("orderId status");
+  const stillOpen = sessionOrders.some((order) => {
+    const own = dishes.filter((item) => item.orderId.equals(order._id));
+    return own.length > 0 && (order.status !== "closed" || own.some((item) => item.status !== "served"));
+  });
+  if (stillOpen) {
+    throw new HttpError(
+      409,
+      "You can't leave the table once an order is placed. Use Checkout when you're done, or ask the staff."
+    );
+  }
 
   await cancelUnsentOrdersForTables([table._id]);
   const status = await syncTableState(table._id, { endSession: true });

@@ -17,6 +17,8 @@ import { api } from "../../shared/api/client";
 export interface OrderFilters {
   type?: string;
   status?: string;
+  /** Only this table's orders (the Tables page's Settle uses it with status "unpaid"). */
+  tableId?: string;
   today?: "true";
   from?: string;
   to?: string;
@@ -118,6 +120,9 @@ export const ordersApi = {
   },
   paymentProofBlob: (orderId: string, proofKey: string) =>
     api.get<Blob>(`/orders/${orderId}/payment-proof/${proofKey}`, { responseType: "blob" }).then((res) => res.data),
+  /** The guest asks to pay at the counter: their table is released and the bill stays open for staff. */
+  payAtCounter: (orderId: string) =>
+    api.post<{ released: boolean }>(`/orders/${orderId}/pay-at-counter`).then((res) => res.data),
   settle: (orderId: string, payments: PaymentLine[]) =>
     api.patch<Order>(`/orders/${orderId}/pay`, { payments }).then((res) => res.data),
   split: (orderId: string, itemIds: string[]) =>

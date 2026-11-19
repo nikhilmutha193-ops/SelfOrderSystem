@@ -10,9 +10,19 @@ export function refundState(order: Pick<Order, "status" | "refundedTotal" | "pay
   return refunded >= paid - 0.01 ? "full" : "partial";
 }
 
-/** A dine-in order that is still waiting for its payment (open, or billed but not paid). */
-export function isUnpaidDineIn(order: Pick<Order, "orderType" | "status" | "voidedAt">): boolean {
-  return order.orderType === "dine-in" && !order.voidedAt && (order.status === "open" || order.status === "billed");
+/**
+ * A dine-in order that is waiting for its payment. Paying after eating, that only counts once every dish has been
+ * served (until then the guest is still eating and nothing is due); when guests pay first, any unpaid order counts.
+ */
+export function isUnpaidDineIn(
+  order: Pick<Order, "orderType" | "status" | "voidedAt" | "kitchen">,
+  payFirst = false,
+): boolean {
+  if (order.orderType !== "dine-in" || order.voidedAt) return false;
+  if (order.status !== "open" && order.status !== "billed") return false;
+  if (payFirst) return true;
+  const kitchen = order.kitchen;
+  return !!kitchen && kitchen.active > 0 && kitchen.served >= kitchen.active;
 }
 
 export function orderStatusBadge(

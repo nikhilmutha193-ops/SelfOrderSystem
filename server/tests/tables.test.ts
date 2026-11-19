@@ -36,10 +36,15 @@ describe("tables stay blocked until the bill is paid", () => {
     expect(await tableStatus(0)).toBe("available");
   });
 
-  it("keeps a table awaiting payment when the guest leaves with cooked, unpaid food", async () => {
+  it("keeps a table awaiting payment when staff release it with cooked, unpaid food", async () => {
     const seat = await cookedOrder(2);
-    const left = await api().patch("/api/tables/session/release").set(bearer(seat.token));
-    expect(left.body).toEqual({ released: true, awaitingPayment: true });
+    // The guest cannot leave once an order is placed...
+    const refused = await api().patch("/api/tables/session/release").set(bearer(seat.token));
+    expect(refused.status).toBe(409);
+    expect(await tableStatus(1)).toBe("occupied");
+    // ...staff release it, and it keeps waiting for payment.
+    const left = await api().patch(`/api/tables/${world.tableIds[1]}/release`).set(bearer(owner));
+    expect(left.body).toMatchObject({ status: "awaiting_payment", awaitingPayment: true });
     expect(await tableStatus(1)).toBe("awaiting_payment");
 
     const stale = await api().get(`/api/orders/${seat.orderId}`).set(bearer(seat.token));

@@ -2,12 +2,34 @@ import { RequestContext } from "../../core/context";
 import { writeAudit } from "../../utils/audit";
 import { HttpError } from "../../utils/httpError";
 import { round2 } from "../../utils/invoice";
-import { syncTableState } from "../../utils/tableState";
+import { detachUnpaidOrders, syncTableState } from "../../utils/tableState";
 import { getOwnedOrder } from "./orders.access";
 import { extraChargesFor, refreshCouponDiscount } from "./orders.billing";
 import { packagingFor } from "../pricing/pricing";
 import { OrdersRepository } from "./orders.repository";
 import { ManualDiscountInput, SplitInput } from "./orders.schema";
+
+/**
+ * A guest finishes at the table and will pay at the counter: their bill stays open for the POS and Admin to settle,
+ * and the table is released for the next guests. Staff already know from the checkout message the guest sends.
+ */
+export async function requestCounterPayment(ctx: RequestContext, orderId: string) {
+  const order = await getOwnedOrder(ctx, orderId);
+  if (ctx.auth.role !== "table") throw new HttpError(403, "Only the guest can ask to pay at the counter");
+  if (order.status !== "open" && order.status !== "billed") throw new HttpError(409, "This order is no longer waiting for payment");
+  const repo = new OrdersRepository(ctx.restaurantId);
+  if (!(await repo.findItems(order._id)).some((i) => i.status !== "cancelled")) {
+    throw new HttpError(409, "There is nothing on this order to pay for");
+  }
+  if (order.orderType !== "dine-in" || !order.tableId) return { released: false };
+
+  const table = order.tableId;
+  await detachUnpaidOrders(table);
+  // Other guests' unpaid orders on the same table session are left to them; the table is freed only when none are left.
+  const status = await syncTableState(table, { endSession: true });
+  await writeAudit(ctx, "order.payAtCounter", `Guest ${order.customerName || "Guest"} will pay at the counter`);
+  return { released: status === "available" };
+}
 
 function requireOpen(status: string, action: string) {
   if (status !== "open") throw new HttpError(409, `Only an open order can be ${action}. Reopen the bill first.`);

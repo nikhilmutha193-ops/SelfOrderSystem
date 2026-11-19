@@ -222,6 +222,8 @@ export default function CustomerInvoice() {
         orderId,
         message: "We'd like to checkout please - we'll pay at the counter.",
       });
+      // After the message, because releasing the table ends this guest's sign-in.
+      await ordersApi.payAtCounter(orderId);
       setCheckoutRequested(true);
       setTimeout(logout, 4000);
     } catch (err) {
@@ -654,8 +656,8 @@ export default function CustomerInvoice() {
 
       {checkoutRequested && (
         <p className="mb-3 rounded-md bg-green-50 px-3 py-2 text-sm text-green-800">
-          Staff have been notified. Please pay at the counter - your bill is
-          ready. Signing you out...
+          Staff have been notified. Please pay at the counter - your table is
+          free now and your bill is waiting there. Signing you out...
         </p>
       )}
 

@@ -161,7 +161,7 @@ export class OrdersRepository {
   }
 
   hasUnpaidOrders(tableId: Types.ObjectId) {
-    return Order.exists(this.scoped<IOrder>({ tableId, status: { $in: ["open", "billed"] } }));
+    return Order.exists(this.scoped<IOrder>({ tableId, status: { $in: ["open", "billed"] }, payAtCounter: { $ne: true } }));
   }
 
   findActiveFoodItems(foodItemIds: string[]) {

@@ -28,7 +28,7 @@ function tableTone(table: PosTable, minutes: number | null) {
 }
 
 function tableLabel(table: PosTable) {
-  if (table.status === "awaiting_payment") return "Bill printed";
+  if (table.status === "awaiting_payment") return "Waiting to pay";
   if (table.status === "occupied") return table.isGuest ? "Open" : "Occupied";
   return table.isGuest ? "Walk-in" : "Free";
 }

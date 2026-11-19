@@ -162,7 +162,7 @@ export function CashierBoard({
         </span>
         <span className="rounded-lg border border-blue-300 bg-blue-50 py-1.5 text-blue-900">
           <b className="block text-base tabular-nums">{billCount}</b>
-          {cafe ? "To pay" : "Bill printed"}
+          {cafe ? "To pay" : "Waiting to pay"}
         </span>
         <span className="rounded-lg border border-orange-300 bg-orange-50 py-1.5 text-orange-900">
           <b className="block text-base tabular-nums">{rupees(outstanding)}</b>To collect
@@ -174,7 +174,7 @@ export function CashierBoard({
           [
             ["all", "All"],
             ["running", "Running"],
-            ["bill", "Bill printed"],
+            ["bill", "Waiting to pay"],
           ] as const
         ).map(([value, label]) => (
           <button
@@ -213,7 +213,7 @@ export function CashierBoard({
                 cafe
                   ? "Awaiting payment"
                   : table.status === "awaiting_payment"
-                    ? "Bill printed"
+                    ? "Waiting to pay"
                     : payFirst
                       ? "To pay"
                       : "Running"
@@ -232,7 +232,7 @@ export function CashierBoard({
         <section className="flex flex-col gap-2">
           <h3 className="flex items-center gap-1.5 text-xs font-semibold tracking-wide text-slate-500 uppercase">
             <ShoppingBag size={13} aria-hidden="true" />
-            Takeaway
+            Takeaway and bills to pay at the counter
           </h3>
           <div className="grid grid-cols-[repeat(auto-fill,minmax(210px,1fr))] gap-3">
             {takeaways.map((order) => (
@@ -240,15 +240,23 @@ export function CashierBoard({
                 key={order._id}
                 selected={!tableId && orderId === order._id}
                 onClick={() => onSelectTakeaway(order)}
-                title={order.customerName || "Takeaway"}
+                title={
+                  order.payAtCounter && order.tableCode
+                    ? `Table ${order.tableCode} · ${order.customerName || "Guest"}`
+                    : order.customerName || "Takeaway"
+                }
                 subtitle={
                   order.invoiceNumber ??
-                  (order.source === "kiosk"
-                    ? `Kiosk · ${order.orderType === "takeaway" ? "take away" : "eat here"}`
-                    : "Takeaway order")
+                  (order.payAtCounter
+                    ? "Left the table, pays at the counter"
+                    : order.source === "kiosk"
+                      ? `Kiosk · ${order.orderType === "takeaway" ? "take away" : "eat here"}`
+                      : "Takeaway order")
                 }
                 status={
-                  cafe
+                  order.payAtCounter
+                    ? "Pay at counter"
+                    : cafe
                     ? "Awaiting payment"
                     : order.status === "billed"
                       ? "Bill printed"

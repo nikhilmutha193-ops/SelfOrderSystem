@@ -1,6 +1,9 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 
 import { ordersApi } from "../features/orders/api";
+import { orderKeys } from "../features/orders/queries";
+import { isGuestAlias } from "../lib/guestName";
 import { api, extractErrorMessage } from "../shared/api/client";
 import { BirthdayFields } from "../shared/ui/BirthdayFields";
 import { Button, ErrorText, Input } from "../shared/ui/ui";
@@ -13,6 +16,7 @@ export function EditDetailsDialog({
   open,
   onClose,
   orderId,
+  defaultName = "",
   defaultPhone = "",
   defaultBirthday = "",
   defaultMarketingConsent = false,
@@ -20,6 +24,8 @@ export function EditDetailsDialog({
   open: boolean;
   onClose: () => void;
   orderId: string;
+  /** The name on the order now. A skipped name ("Guest K7M2") is shown as a placeholder, so the guest can replace it. */
+  defaultName?: string;
   defaultPhone?: string;
   /** "MM-DD" already on this order, e.g. given at sign-in without a phone number - the only place
    *  it's recorded until a phone exists to save it against a Customer. */
@@ -28,6 +34,9 @@ export function EditDetailsDialog({
    *  re-asking, same "only add what's missing" rule as phone/birthday. */
   defaultMarketingConsent?: boolean;
 }) {
+  const queryClient = useQueryClient();
+  const aliasName = isGuestAlias(defaultName);
+  const [name, setName] = useState(aliasName ? "" : defaultName);
   const [phone, setPhone] = useState(defaultPhone);
   const [birthDay, setBirthDay] = useState("");
   const [birthMonth, setBirthMonth] = useState("");
@@ -40,6 +49,10 @@ export function EditDetailsDialog({
   useEffect(() => {
     if (open) setPhone((p) => p || defaultPhone);
   }, [open, defaultPhone]);
+
+  useEffect(() => {
+    if (open) setName(isGuestAlias(defaultName) ? "" : defaultName);
+  }, [open, defaultName]);
 
   useEffect(() => {
     if (!open || !defaultBirthday) return;
@@ -72,18 +85,23 @@ export function EditDetailsDialog({
     e.preventDefault();
     setError(null);
     const trimmed = phone.trim();
-    if (!trimmed && !(birthDay && birthMonth)) {
-      setError("Add a phone number or a birthday first");
+    // Only a changed name is sent; it replaces the generated "Guest K7M2" one.
+    const newName = name.trim() && name.trim() !== defaultName.trim() ? name.trim() : "";
+    if (!newName && !trimmed && !(birthDay && birthMonth)) {
+      setError("Add your name, a phone number or a birthday first");
       return;
     }
     setSaving(true);
     try {
       await ordersApi.updateCustomer(orderId, {
+        ...(newName && { customerName: newName }),
         ...(trimmed && { customerPhone: `+91 ${trimmed}` }),
         ...(birthDay && birthMonth && { customerBirthday: `${birthMonth}-${birthDay}` }),
         ...(marketingConsent && { customerMarketingConsent: true }),
       });
       setSaved(true);
+      // So the new name shows on the menu page and everywhere else straight away.
+      await queryClient.invalidateQueries({ queryKey: orderKeys.all });
     } catch (err) {
       setError(extractErrorMessage(err));
     } finally {
@@ -119,7 +137,22 @@ export function EditDetailsDialog({
         ) : (
           <form onSubmit={submit} className="flex flex-col gap-3">
             <h2 className="text-lg font-semibold text-slate-900">Add your details</h2>
-            <p className="text-sm text-slate-500">Didn't share your phone or birthday earlier? Add them now.</p>
+            <p className="text-sm text-slate-500">
+              {aliasName
+                ? `You skipped your details, so this order is noted as ${defaultName}. Add your name and anything else now.`
+                : "Didn't share your phone or birthday earlier? Add them now."}
+            </p>
+            <label className="text-sm font-medium text-slate-700">
+              Your name
+              <Input
+                className="mt-1"
+                autoComplete="name"
+                maxLength={60}
+                placeholder={aliasName ? defaultName : "e.g. Ananya"}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
+            </label>
             <label className="text-sm font-medium text-slate-700">
               Phone number
               <Input

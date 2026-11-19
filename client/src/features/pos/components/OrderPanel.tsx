@@ -166,6 +166,7 @@ export function OrderPanel({
   offline = false,
   offlineTotal = null,
   cafe = false,
+  settleBlock = null,
   className = "w-[340px] border-l lg:w-[390px]",
 }: {
   title: string;
@@ -191,6 +192,11 @@ export function OrderPanel({
   offlineTotal?: number | null;
   /** Cafe flow: pay first. One Pay & send KOT button; no separate KOT or bill buttons. */
   cafe?: boolean;
+  /**
+   * Paying after eating: the bill can't be settled until every dish is served. `waiting` counts the dishes not served
+   * yet; `canServe` says whether the sent ones can be marked served from here (the rest still have to be sent).
+   */
+  settleBlock?: { waiting: number; unsent: number; onServeAll: (() => void) | null } | null;
   className?: string;
 }) {
   const [moreOpen, setMoreOpen] = useState(false);
@@ -527,11 +533,27 @@ export function OrderPanel({
               <Button
                 className="!bg-green-600 hover:!bg-green-700"
                 onClick={onSettle}
-                disabled={busy || nothing || order?.status === "closed"}
-                title="F10"
+                disabled={busy || nothing || order?.status === "closed" || !!settleBlock}
+                title={settleBlock ? "Serve every dish first" : "F10"}
               >
                 Settle <kbd className="text-[10px] opacity-70">F10</kbd>
               </Button>
+            )}
+            {settleBlock && (
+              <div
+                className="col-span-2 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900"
+                data-testid="serve-first"
+              >
+                <span>
+                  {settleBlock.waiting} dish{settleBlock.waiting === 1 ? "" : "es"} not served yet.
+                  {settleBlock.unsent > 0 ? " Send the new ones to the kitchen first." : " Settle once everything is served."}
+                </span>
+                {settleBlock.onServeAll && (
+                  <Button size="sm" variant="secondary" disabled={busy} onClick={settleBlock.onServeAll}>
+                    Mark all served
+                  </Button>
+                )}
+              </div>
             )}
           </>
         )}

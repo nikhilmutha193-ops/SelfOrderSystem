@@ -175,6 +175,11 @@ export const payOrder = asyncHandler(async (req: Request, res: Response) => {
   res.json(await billing.settleOrder(getContext(req), orderId, input, { requireUpiProof: true }));
 });
 
+export const payAtCounter = asyncHandler(async (req: Request, res: Response) => {
+  const { orderId } = parse(orderIdParams, req.params);
+  res.json(await operations.requestCounterPayment(getContext(req), orderId));
+});
+
 export const uploadPaymentProof = asyncHandler(async (req: Request, res: Response) => {
   const { orderId } = parse(orderIdParams, req.params);
   res.status(201).json(await proof.savePaymentProof(getContext(req), orderId, req.file));

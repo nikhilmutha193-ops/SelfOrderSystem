@@ -1,3 +1,4 @@
+import axios from "axios";
 import { useQuery } from "@tanstack/react-query";
 import { Flame, Menu as MenuIcon, ScanLine, SlidersHorizontal } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -15,6 +16,7 @@ import { useSendChatMessage } from "../../features/chat/queries";
 import { ordersApi } from "../../features/orders/api";
 import { useAddOrderItems, useMyOrders, useOrder } from "../../features/orders/queries";
 import { LANGS, loadLang, saveLang, tr, ui, type Lang } from "../../lib/i18n";
+import { isGuestAlias } from "../../lib/guestName";
 import { newId } from "../../lib/id";
 import { suggestionsFor } from "../../lib/recommendations";
 import type { CartLine, MenuCategory, MenuFoodItem, MenuRecommendations } from "../../lib/types";
@@ -161,6 +163,10 @@ export default function Menu() {
   const [pendingRequest, setPendingRequest] = useState<string | null>(null);
   const sendChat = useSendChatMessage();
   const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false);
+  // Once a dish is ordered the table can't be left from here (see releaseOwnTableSession on the server).
+  const orderPlaced =
+    (myOrders ?? []).some((o) => o.status !== "cancelled" && o.itemCount > 0 && !(o.status === "closed" && o.served)) ||
+    (orderQuery.data?.items ?? []).some((i) => i.status !== "cancelled" && orderQuery.data?.order.status !== "closed");
   const [activeItemCount, setActiveItemCount] = useState<number | null>(null);
   const [leavingTable, setLeavingTable] = useState(false);
   const leavingRef = useRef(false);
@@ -467,7 +473,16 @@ export default function Menu() {
     if (tableId) {
       try {
         await api.patch("/tables/session/release");
-      } catch {}
+      } catch (err) {
+        // The table is refused (an order was placed meanwhile): stay signed in rather than abandon it.
+        if (axios.isAxiosError(err) && err.response?.status === 409) {
+          setError(extractErrorMessage(err));
+          setLeaveConfirmOpen(false);
+          setLeavingTable(false);
+          leavingRef.current = false;
+          return;
+        }
+      }
     }
     clearStoredToken("table");
     setActiveAuth(null);
@@ -646,7 +661,8 @@ export default function Menu() {
                       }}
                       className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm text-slate-700 hover:bg-slate-50"
                     >
-                      <UserIcon className="h-[18px] w-[18px]" /> Add your details
+                      <UserIcon className="h-[18px] w-[18px]" />{" "}
+                      {isGuestAlias(orderQuery.data?.order.customerName) ? "Add your name and details" : "Add your details"}
                     </button>
                   )}
                   {access.showRateUs && access.showFeedback && access.showMenu && (
@@ -662,17 +678,24 @@ export default function Menu() {
                       <StarOutlineIcon className="h-[18px] w-[18px]" /> Rate us
                     </button>
                   )}
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={() => {
-                      setOptionsOpen(false);
-                      openLeaveConfirm();
-                    }}
-                    className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm text-red-600 hover:bg-red-50"
-                  >
-                    <LeaveIcon className="h-[18px] w-[18px]" /> Leave table
-                  </button>
+                  {orderPlaced ? (
+                    <p className="px-3 py-2.5 text-xs text-slate-500">
+                      Your table stays with you once an order is placed. Use Checkout on your order page when you are
+                      done, or ask the staff.
+                    </p>
+                  ) : (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setOptionsOpen(false);
+                        openLeaveConfirm();
+                      }}
+                      className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm text-red-600 hover:bg-red-50"
+                    >
+                      <LeaveIcon className="h-[18px] w-[18px]" /> Leave table
+                    </button>
+                  )}
                 </div>
               </>
             )}
@@ -928,6 +951,7 @@ export default function Menu() {
           open={detailsOpen}
           onClose={() => setDetailsOpen(false)}
           orderId={orderId}
+          defaultName={orderQuery.data?.order.customerName ?? ""}
           defaultPhone={(orderQuery.data?.order.customerPhone ?? "").replace(/\D/g, "").slice(-10)}
           defaultBirthday={orderQuery.data?.order.customerBirthday ?? ""}
           defaultMarketingConsent={orderQuery.data?.order.customerMarketingConsent ?? false}

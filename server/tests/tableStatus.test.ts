@@ -57,3 +57,17 @@ describe("allowed table statuses", () => {
     expect(seat.orderId).toBeTruthy();
   });
 });
+
+describe("one table's unpaid orders", () => {
+  it("lists only that table's unpaid orders, so a table waiting to pay is settled from the table", async () => {
+    const seat = await seatTable(1);
+    const tableId = world.tableIds[0];
+    const mine = await api().get("/api/orders").query({ status: "unpaid", tableId }).set(bearer(owner));
+    expect(mine.status).toBe(200);
+    expect(mine.body.map((o: { _id: string }) => o._id)).toEqual([seat.orderId]);
+
+    const other = await api().get("/api/orders").query({ status: "unpaid", tableId: world.tableIds[1] }).set(bearer(owner));
+    expect(other.body.map((o: { _id: string }) => o._id)).not.toContain(seat.orderId);
+    expect((await api().get("/api/orders").query({ tableId: "nope" }).set(bearer(owner))).status).toBe(400);
+  });
+});

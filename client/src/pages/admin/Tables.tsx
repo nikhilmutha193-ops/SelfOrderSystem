@@ -13,10 +13,11 @@ import {
   Wallet,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 import { AreasCard } from "../../features/pricing/components/AreasCard";
 import { useAreas, useSetTableArea } from "../../features/pricing/queries";
+import { ordersApi } from "../../features/orders/api";
 import { useCanEdit } from "../../lib/adminAuth";
 import { useServiceFlow } from "../../lib/useServiceFlow";
 import type {
@@ -221,6 +222,7 @@ export default function Tables() {
   }, []);
 
   const { areas } = useAreas();
+  const navigate = useNavigate();
   const setArea = useSetTableArea();
   const canEditTables = useCanEdit("tables");
   // Cafe flow: guests pay first, so no table is ever "waiting to pay".
@@ -426,7 +428,7 @@ export default function Tables() {
       const confirmed = await confirmDialog({
         title: `Free table ${table.code}?`,
         message:
-          "Orders that were never sent to the kitchen are cancelled and the guest's sign-in ends. If cooked food is still unpaid, the table stays on Waiting to pay.",
+          "Orders that were never sent to the kitchen are cancelled and the guest's sign-in ends. A bill that is still unpaid stays open to be settled at the counter (POS or Admin), and the table is free for the next guests.",
         confirmLabel: "Free table",
       });
       if (!confirmed) return;
@@ -435,6 +437,23 @@ export default function Tables() {
     try {
       await api.patch(`/tables/${table._id}/status`, { status });
       load();
+    } catch (err) {
+      setError(extractErrorMessage(err));
+    }
+  }
+
+  /** A table waiting to pay is settled from the table itself: its unpaid order opens with payment ready. */
+  async function settleTable(table: TableRow) {
+    setError(null);
+    try {
+      const unpaid = await ordersApi.list({ status: "unpaid", tableId: table._id });
+      if (unpaid.length === 0) {
+        setError(`Table ${table.code} has no unpaid order. Free the table instead.`);
+      } else if (unpaid.length === 1) {
+        navigate(`/admin/orders/${unpaid[0]._id}?settle=1`);
+      } else {
+        navigate(`/admin/orders?status=unpaid&tableId=${table._id}`);
+      }
     } catch (err) {
       setError(extractErrorMessage(err));
     }
@@ -993,6 +1012,16 @@ export default function Tables() {
                     </td>
                     <td className="text-right">
                       <div className="flex justify-end gap-1 whitespace-nowrap">
+                        {table.status === "awaiting_payment" && !table.isGuest && (
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            icon={Wallet}
+                            onClick={() => void settleTable(table)}
+                          >
+                            Settle
+                          </Button>
+                        )}
                         {table.status === "occupied" && !table.isGuest && (
                           <Button
                             size="sm"

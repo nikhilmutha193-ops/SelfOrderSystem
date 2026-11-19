@@ -15,6 +15,7 @@ import { kitchenApi, openPdfInTab } from "../../kitchen/api";
 import { ordersApi } from "../../orders/api";
 import SettleDialog from "../../orders/components/SettleDialog";
 import { orderKeys, refreshOrderData, useSetItemPacked } from "../../orders/queries";
+import { useServeItem } from "../../kitchen/queries";
 import { usePrintingStatus } from "../../printing/queries";
 import { MenuGrid } from "../components/MenuGrid";
 import { OfflineBar } from "../components/OfflineBar";
@@ -133,6 +134,7 @@ export default function Pos() {
         (activeDetail ? activeDetail.order.orderType !== "dine-in" : mode === "takeaway")));
   const releaseTable = useReleasePosTable();
   const setPacked = useSetItemPacked();
+  const serveDish = useServeItem();
   const menu = pricedMenu(rawMenu, mode === "takeaway" ? { orderType: "takeaway" } : { orderType: "dine-in", areaId });
   const term = search.trim();
   const visibleItems = filterMenu(menu, search, category);
@@ -355,6 +357,10 @@ export default function Pos() {
 
   function settle() {
     if (offlineFlow) return offlineSettleOpen();
+    if (settleBlock) {
+      setMessage({ tone: "error", text: "Serve every dish before settling this bill." });
+      return;
+    }
     void run(async () => {
       // Cafe flow: save the order without a KOT. Paying it is what sends it to the kitchen.
       const { id } = await save(!payFirst && !cafe);
@@ -366,6 +372,34 @@ export default function Pos() {
       setSettleOpen(true);
     });
   }
+
+  /**
+   * Paying after eating, a dine-in bill is only settled once every dish is served, so a table never pays while food
+   * is still on its way. Dishes not sent to the kitchen yet have to be sent first; sent ones can be marked served here.
+   */
+  const draftCount = cart.draft.length;
+  const dishes = activeDetail?.items.filter((i) => i.status !== "cancelled") ?? [];
+  const unsentDishes = dishes.filter((i) => i.kotRound == null).length + draftCount;
+  const unservedDishes = dishes.filter((i) => i.status !== "served" && i.kotRound != null);
+  const settleBlock =
+    !payFirst &&
+    !cafe &&
+    !offlineFlow &&
+    activeDetail?.order.orderType === "dine-in" &&
+    (activeDetail.order.status === "open" || activeDetail.order.status === "billed") &&
+    unservedDishes.length + unsentDishes > 0
+      ? {
+          waiting: unservedDishes.length + unsentDishes,
+          unsent: unsentDishes,
+          onServeAll:
+            unservedDishes.length > 0
+              ? () =>
+                  void run(async () => {
+                    for (const dish of unservedDishes) await serveDish.mutateAsync(dish._id);
+                  })
+              : null,
+        }
+      : null;
 
   async function afterSettle() {
     setSettleOpen(false);
@@ -688,6 +722,7 @@ export default function Pos() {
             cafe={cafe}
             onBill={bill}
             onSettle={settle}
+            settleBlock={settleBlock}
             busy={busy || showTables || (cashier && !orderId)}
           />
         </div>

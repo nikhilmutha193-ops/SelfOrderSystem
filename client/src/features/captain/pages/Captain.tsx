@@ -214,6 +214,12 @@ function CaptainApp() {
     () => filterMenu(menu, search, category),
     [menu, search, category],
   );
+  // Pay after: guests who left without paying (table released, or the bill is ready) are settled right here,
+  // the same way the POS does it, so an unpaid table never needs a trip to the counter.
+  const unpaidLeft =
+    !cafe &&
+    !!cart.detail &&
+    (cart.detail.order.status === "billed" || (table?.status === "awaiting_payment" && cart.detail.order.status === "open"));
   const draftCount = cart.draft.reduce((sum, l) => sum + l.quantity, 0);
   const draftTotal = cart.draft.reduce(
     (sum, l) => sum + draftUnitPrice(l) * l.quantity,
@@ -355,7 +361,9 @@ function CaptainApp() {
     ];
     setMessage({
       tone: "ok",
-      text: `${placeLabel}: paid, sent to the kitchen${tokens.length ? ` as token T${tokens.join(", T")}` : ""}`,
+      text: cafe
+        ? `${placeLabel}: paid, sent to the kitchen${tokens.length ? ` as token T${tokens.join(", T")}` : ""}`
+        : `${placeLabel}: paid${fresh.order.invoiceNumber ? `, invoice ${fresh.order.invoiceNumber}` : ""}`,
     });
     backToTables();
   }
@@ -684,7 +692,7 @@ function CaptainApp() {
               onSaveKot={sendKot}
               onHold={null}
               onBill={requestBill}
-              onSettle={cafe ? payNow : null}
+              onSettle={cafe || unpaidLeft ? payNow : null}
               cafe={cafe}
               busy={busy}
             />
@@ -692,7 +700,7 @@ function CaptainApp() {
         </div>
       )}
 
-      {cafe && cart.detail && (
+      {(cafe || settleOpen) && cart.detail && (
         <SettleDialog
           open={settleOpen}
           orderId={cart.detail.order._id}

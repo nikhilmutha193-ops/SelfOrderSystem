@@ -103,6 +103,7 @@ export const orderFilterQuery = z.object({
   status: blankToUndefined(
     z.enum(["open", "billed", "unpaid", "closed", "cancelled"], { error: "Invalid order status" })
   ),
+  tableId: blankToUndefined(z.string().regex(/^[a-fA-F0-9]{24}$/, { error: "Invalid table" })),
   today: blankToUndefined(z.string()),
   from: blankToUndefined(businessDate),
   to: blankToUndefined(businessDate),

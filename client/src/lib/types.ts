@@ -395,6 +395,8 @@ export interface Order {
   manualDiscount?: ManualDiscount | null;
   serviceChargeWaived?: boolean;
   packagingWaived?: boolean;
+  /** The guest left the table to pay at the counter; the bill is settled in the POS or Admin. */
+  payAtCounter?: boolean;
   customerId?: string | null;
   loyaltyRedeem?: { points: number; amount: number } | null;
   mergedInto?: string | null;
@@ -1004,6 +1006,9 @@ export interface PosOrderSummary {
   unsent: number;
   ready: number;
   source?: Order["source"];
+  /** The guest left to pay at the counter: settled here, but no longer holding its table. */
+  payAtCounter?: boolean;
+  tableCode?: string | null;
 }
 
 export interface PosTable {

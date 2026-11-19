@@ -80,6 +80,7 @@ export async function getFloor(ctx: RequestContext) {
 
   // A kiosk order still being paid on the kiosk isn't the till's business until the guest picks "Pay at counter".
   const tillOrders = orders.filter((o) => !(o.source === "kiosk" && o.status === "open" && !o.kiosk?.payAtCounter));
+  const tableCode = new Map(tables.map((t) => [t._id.toString(), t.code]));
   const running = tillOrders.map((order) => {
     const summary = summaryOf.get(order._id.toString());
     return {
@@ -95,6 +96,9 @@ export async function getFloor(ctx: RequestContext) {
       unsent: summary?.unsent ?? 0,
       ready: summary?.ready ?? 0,
       source: order.source,
+      // A guest who left to pay at the counter: the bill is settled here, but it no longer holds its table.
+      payAtCounter: !!order.payAtCounter,
+      tableCode: order.tableId ? (tableCode.get(order.tableId.toString()) ?? null) : null,
     };
   });
 
@@ -108,9 +112,10 @@ export async function getFloor(ctx: RequestContext) {
       captainName: table.captainId ? (captainName.get(table.captainId.toString()) ?? null) : null,
       areaId: table.areaId ?? null,
       isGuest: !!table.isGuest,
-      orders: running.filter((o) => o.tableId?.toString() === table._id.toString()),
+      orders: running.filter((o) => o.tableId?.toString() === table._id.toString() && !o.payAtCounter),
     })),
-    takeaways: running.filter((o) => !o.tableId),
+    // Running takeaways, plus bills guests left to pay at the counter.
+    takeaways: running.filter((o) => !o.tableId || o.payAtCounter),
     areas: (restaurant?.areas ?? []).map((a) => ({ _id: a._id, name: a.name })),
   };
 }

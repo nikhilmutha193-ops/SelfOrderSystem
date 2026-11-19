@@ -22,6 +22,7 @@ import {
   markComplimentary,
   setItemPacked,
   mergeOrder,
+  payAtCounter,
   payOrder,
   uploadPaymentProof,
   printBill,
@@ -56,6 +57,7 @@ router.get("/report.csv", requireAuth("admin"), requireModule("orders"), exportO
 router.get("/report.pdf", requireAuth("admin"), requireModule("orders"), exportOrdersPdf);
 
 router.get("/session/mine", requireAuth("table"), listMyOrders);
+router.post("/:orderId/pay-at-counter", requireAuth("table"), payAtCounter);
 router.get("/:orderId", requireAuth("table", "admin", "chef"), requireModule("orders"), getOrder);
 router.get("/:orderId/invoice", requireAuth("table", "admin"), requireModule("orders"), getInvoice);
 router.get("/:orderId/invoice/pdf", requireAuth("table", "admin"), requireModule("orders"), getInvoicePdf);
