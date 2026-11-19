@@ -208,6 +208,7 @@ Domains that haven't been migrated still use `routes/*.routes.ts` → `controlle
 - Open question to raise before aggregator work: Swiggy/Zomato may pay GST on their orders themselves (section 9(5)), so those bills might need no tax.
 
 ### Storage (`utils/objectStore.ts`)
+Every file is grouped under a base path named after `RESTAURANT_KEY`: `<RESTAURANT_KEY>/Banner|Logo|Product Image|Team|Awards/...` in the public bucket and `<RESTAURANT_KEY>/Invoices|Backups|PaymentProofs/...` in the private one (local disk: `uploads/<key>/Banner/...`, `proofs/<key>/...`). `storageBase()` ignores a key with unsafe characters (old unprefixed layout). Files saved before this keep working: their stored URLs are unchanged and `getObject` / `deleteObject` fall back to the old key. `ensureStorageFolders()` creates the folders (empty `<prefix>/` marker objects on R2, directories on disk); it runs at server start and as `npm run storage:init` (in Docker: `docker compose -f docker-compose.prod.yml run --rm server node dist/utils/initStorage.js`). Without `R2_PRIVATE_BUCKET`, private folders are made on local disk only.
 `putObject/getObject/deleteObject(folder, name, ...)` write to Cloudflare R2 when `R2_*` env vars are set, otherwise to local `server/uploads/`, `backups/`, `invoices/`. Public folders (banner/logo/product/team/awards) go to the public bucket. `invoices` and `backups` go only to `R2_PRIVATE_BUCKET`, or stay on local disk if it is unset. Never route tenant data to the public bucket.
 
 ### Backups

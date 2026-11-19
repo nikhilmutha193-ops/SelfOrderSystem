@@ -150,6 +150,27 @@ To roll back, open Actions > Docker > Run workflow on an earlier commit, or set 
 
 > The private key is a password to your server. Create one just for deploys, never reuse your own, and never commit it.
 
+## Cloudflare R2 storage
+
+With the `R2_*` settings filled in, images and files go to Cloudflare R2 instead of Docker volumes, grouped under a folder named after
+your `RESTAURANT_KEY` so several restaurants or environments can share a bucket:
+
+| Bucket | Folders created |
+|---|---|
+| `R2_BUCKET` (public, served on `R2_PUBLIC_BASE_URL`) | `<RESTAURANT_KEY>/Banner`, `/Logo`, `/Product Image`, `/Team`, `/Awards` |
+| `R2_PRIVATE_BUCKET` (private) | `<RESTAURANT_KEY>/Invoices`, `/Backups`, `/PaymentProofs` |
+
+The folders are created for you each time the server starts. To create them by hand (for example before the first start):
+
+```sh
+docker compose -f docker-compose.prod.yml run --rm server node dist/utils/initStorage.js
+# or, in the server folder:  npm run storage:init
+```
+
+R2 has no real folders: each one is an empty object whose name ends in `/`, which the Cloudflare dashboard shows as a folder.
+Files saved before this layout keep working (their saved addresses do not change, and the server falls back to the old location when it
+reads or deletes them). Do not set `R2_PRIVATE_BUCKET` to the same bucket as `R2_BUCKET`: private files must stay off the public bucket.
+
 ## 6. Backups
 
 - **In the app:** Admin > Backup and Restore has a daily backup and a restore (data only).
