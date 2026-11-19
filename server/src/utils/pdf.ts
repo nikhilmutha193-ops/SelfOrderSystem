@@ -102,7 +102,7 @@ const FIXED_PAPER_HEIGHT: Partial<Record<PrintPaperSize, number>> = {
   a4: 842,
 };
 
-const THERMAL_MIN_HEIGHT = 160;
+const THERMAL_MIN_HEIGHT = 80;
 
 const THERMAL_MAX_HEIGHT = 2200;
 
@@ -120,25 +120,29 @@ async function renderToPaper(
   archive?: (pdf: Buffer) => Promise<void>
 ): Promise<void> {
   const width = PAPER_WIDTH[paperSize];
-  const margin = isThermal(paperSize) ? 12 : 30;
-  const usableWidth = width - margin * 2;
+  // A thermal roll prints edge to edge apart from the printer's own unprintable strip, so its margins are kept
+  // small; a page (A5, A4) keeps the usual margin.
+  const margins = isThermal(paperSize)
+    ? { top: 6, bottom: 6, left: 8, right: 8 }
+    : { top: 30, bottom: 30, left: 30, right: 30 };
+  const usableWidth = width - margins.left - margins.right;
 
   let height = FIXED_PAPER_HEIGHT[paperSize];
   if (height === undefined) {
-    const measureDoc = new PDFDocument({ size: [width, THERMAL_MAX_HEIGHT], margin, bufferPages: true });
+    const measureDoc = new PDFDocument({ size: [width, THERMAL_MAX_HEIGHT], margins, bufferPages: true });
     // A render over several pages (one ticket each) reports its tallest page; otherwise the last position counts.
-    const tallest = render(measureDoc, margin, usableWidth);
+    const tallest = render(measureDoc, margins.left, usableWidth);
     const used = typeof tallest === "number" ? tallest : measureDoc.y;
-    height = Math.min(THERMAL_MAX_HEIGHT, Math.max(THERMAL_MIN_HEIGHT, Math.ceil(used + margin)));
+    height = Math.min(THERMAL_MAX_HEIGHT, Math.max(THERMAL_MIN_HEIGHT, Math.ceil(used + margins.bottom)));
   }
 
   const pdf = await new Promise<Buffer>((resolve, reject) => {
-    const doc = new PDFDocument({ size: [width, height], margin });
+    const doc = new PDFDocument({ size: [width, height], margins });
     const chunks: Buffer[] = [];
     doc.on("data", (chunk: Buffer) => chunks.push(chunk));
     doc.on("end", () => resolve(Buffer.concat(chunks)));
     doc.on("error", reject);
-    render(doc, margin, usableWidth);
+    render(doc, margins.left, usableWidth);
     doc.end();
   });
 

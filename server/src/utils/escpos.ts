@@ -88,7 +88,8 @@ export class EscPos {
   }
 
   cut(): this {
-    return this.feed(3).raw(GS, 0x56, 0x42, 0x00);
+    // GS V 66 0 already feeds the paper up to the cutter, so only a little extra is fed before it.
+    return this.feed(1).raw(GS, 0x56, 0x42, 0x00);
   }
 
   openDrawer(): this {

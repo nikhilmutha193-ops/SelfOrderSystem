@@ -67,7 +67,10 @@ registerCreditHandlers();
 
 const app = express();
 
-app.set("trust proxy", 1);
+// How many reverse proxies sit in front of the API (the client container's nginx is one; a TLS proxy
+// such as Caddy in front of it makes two), so the real client address is read from X-Forwarded-For.
+const proxyHops = Number(process.env.TRUST_PROXY_HOPS);
+app.set("trust proxy", Number.isInteger(proxyHops) && proxyHops >= 0 ? proxyHops : 1);
 // Don't advertise the framework.
 app.disable("x-powered-by");
 

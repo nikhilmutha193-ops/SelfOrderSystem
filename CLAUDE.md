@@ -235,6 +235,7 @@ Domains that haven't been migrated still use `routes/*.routes.ts` → `controlle
 - Write commit subjects that read well in the changelog (for example `fix: token chip stale after a new login`, `feat: Rate us switch`).
 
 ## Deployment notes
+- Docker server: `docker-compose.prod.yml` is the production stack (MongoDB not published, restart always, capped logs, images from a registry via `IMAGE_REGISTRY`/`IMAGE_TAG` or built on the server), `docker-compose.https.yml` adds Caddy with a Let's Encrypt certificate for `DOMAIN` (then set `TRUST_PROXY_HOPS=2`; the API reads it in `app.ts`), `.env.production.example` is the settings template and `scripts/deploy.sh first|update|status|logs|backup|stop` runs it. Full guide in `docs/DEPLOY.md`; a fresh VPS is walked through in `docs/VPS_DEPLOY.md` with `scripts/vps-setup.sh` (Docker, firewall for SSH/80/443, fail2ban, swap, a deploy login). The public site forwards `/health` to the API for uptime monitors. Data volumes: `mongo_data`, `uploads_data`, `backups_data`, `invoices_data`, `proofs_data`, `client_tls`.
 - Vercel: `server/vercel.json` routes everything to `api/index.ts`; `client/vercel.json` does SPA rewrites and proxies `/uploads` to the server deployment; `client/.env.production` sets `VITE_API_BASE_URL`.
 - The aggregator (Swiggy/Zomato) webhook contract is documented in `server/docs/aggregator-webhook.md`.
 - The OAuth flow (`/api/oauth`) only accepts redirect URIs listed exactly in `OAUTH_ALLOWED_REDIRECT_URIS`.

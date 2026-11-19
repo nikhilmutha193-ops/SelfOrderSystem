@@ -8,3 +8,11 @@ build/
 server/invoices/
 .vercel
 .env*
+
+# Templates stay in git; real env files do not
+!.env.example
+!.env.production.example
+# Files the API writes at runtime
+server/proofs/
+server/backups/
+server/uploads/

@@ -1,0 +1,163 @@
+# Builds the Docker images, pushes them to GitHub's container registry (ghcr.io) and, if you switch it on,
+# deploys them to your VPS.
+#
+#   - Every push to master, and every tag like v1.2.0, runs the tests and builds both images.
+#   - Images are published as  ghcr.io/<owner>/selforder/server  and  ghcr.io/<owner>/selforder/client
+#     with the tags: latest (master), sha-<commit>, and the version (for v1.2.0 tags).
+#   - The deploy job runs only when the repository VARIABLE  DEPLOY_ENABLED  is set to  true.
+#
+# One-time setup is in docs/DEPLOY.md, section "Automatic deploys with GitHub Actions".
+
+name: Docker
+
+on:
+  push:
+    branches: [master]
+    tags: ["v*"]
+  workflow_dispatch:
+
+# A newer push cancels an older run that has not finished (never in the middle of a deploy).
+concurrency:
+  group: docker-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  test:
+    name: Test and build check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: |
+            server/package-lock.json
+            client/package-lock.json
+
+      - name: "Server: install, type-check and test"
+        working-directory: server
+        run: |
+          npm ci
+          npm run build
+          npm test
+
+      - name: "Client: install and build"
+        working-directory: client
+        run: |
+          npm ci
+          npm run build
+
+  images:
+    name: Build and push ${{ matrix.image }}
+    needs: test
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        image: [server, client]
+    outputs:
+      registry: ${{ steps.names.outputs.registry }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # Image names must be lowercase, and the owner name may not be.
+      - name: Work out the image name
+        id: names
+        run: |
+          owner=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          echo "registry=${REGISTRY}/${owner}/selforder" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Tags and labels
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.names.outputs.registry }}/${{ matrix.image }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,format=short
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ./${{ matrix.image }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+
+  deploy:
+    name: Deploy to the VPS
+    needs: images
+    # Off until you create the repository variable DEPLOY_ENABLED = true (Settings > Secrets and variables > Actions > Variables).
+    if: ${{ vars.DEPLOY_ENABLED == 'true' && github.event_name != 'pull_request' }}
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Short commit id
+        id: sha
+        run: echo "tag=sha-$(echo '${{ github.sha }}' | cut -c1-7)" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          IMAGE_REGISTRY: ${{ needs.images.outputs.registry }}
+          IMAGE_TAG: ${{ steps.sha.outputs.tag }}
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GHCR_READ_TOKEN }}
+          USE_HTTPS: ${{ vars.DEPLOY_HTTPS }}
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          envs: IMAGE_REGISTRY,IMAGE_TAG,GHCR_USER,GHCR_TOKEN,USE_HTTPS
+          script_stop: true
+          script: |
+            set -eu
+            cd /opt/selforder
+
+            # Keep the compose files and scripts current.
+            git pull --ff-only
+
+            # Remember which images this server runs, so a later manual `docker compose up` uses the same ones.
+            grep -v -E '^(IMAGE_REGISTRY|IMAGE_TAG)=' .env > .env.next || true
+            printf 'IMAGE_REGISTRY=%s\nIMAGE_TAG=%s\n' "$IMAGE_REGISTRY" "$IMAGE_TAG" >> .env.next
+            mv .env.next .env
+            chmod 600 .env
+
+            FILES="-f docker-compose.prod.yml"
+            if [ "${USE_HTTPS:-}" = "true" ]; then FILES="$FILES -f docker-compose.https.yml"; fi
+
+            echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+            docker compose $FILES pull server client
+            docker compose $FILES up -d --no-build
+
+            # Wait for the API to report healthy before calling it done.
+            for i in $(seq 1 40); do
+              state=$(docker inspect --format '{{.State.Health.Status}}' "$(docker compose $FILES ps -q server)" 2>/dev/null || echo starting)
+              [ "$state" = "healthy" ] && { echo "API healthy"; break; }
+              [ "$i" = "40" ] && { echo "API did not become healthy"; docker compose $FILES logs --tail=80 server; exit 1; }
+              sleep 3
+            done
+
+            docker image prune -f

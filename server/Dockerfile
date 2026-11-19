@@ -14,7 +14,8 @@ ENV NODE_ENV=production
 COPY package*.json ./
 RUN npm ci --omit=dev
 COPY --from=build /app/dist ./dist
-RUN mkdir -p uploads
+# Folders the API writes to; docker-compose mounts volumes on them so they survive a redeploy.
+RUN mkdir -p uploads backups invoices proofs
 
 EXPOSE 5000
 HEALTHCHECK --interval=10s --timeout=5s --retries=5 \

@@ -1,0 +1,10 @@
+# Used by docker-compose.https.yml. Caddy gets and renews a Let's Encrypt certificate for $DOMAIN
+# by itself, and passes everything to the app's web server (the "client" container).
+{$DOMAIN} {
+	encode gzip
+	# Backup restores can be up to 25 MB; the app's own server enforces the limit.
+	request_body {
+		max_size 30MB
+	}
+	reverse_proxy client:80
+}

@@ -1,0 +1,44 @@
+# Adds a trusted HTTPS certificate (automatic, from Let's Encrypt) on a real domain.
+#
+# Use it together with docker-compose.prod.yml:
+#
+#   docker compose -f docker-compose.prod.yml -f docker-compose.https.yml up -d --build
+#
+# Needs (set in .env):  DOMAIN=order.example.com   CLIENT_ORIGIN=https://order.example.com   TRUST_PROXY_HOPS=2
+# And: the domain's DNS record pointing at this server, with ports 80 and 443 open to the internet.
+#
+# Caddy takes over ports 80 and 443; the app's own web server then listens only on the server itself
+# (127.0.0.1:8080), so it can never be reached around Caddy. Needs Docker Compose 2.24 or newer (for !override).
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: always
+    depends_on:
+      - client
+    environment:
+      DOMAIN: ${DOMAIN:?Set DOMAIN in .env, for example order.example.com}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  client:
+    ports: !override
+      - "127.0.0.1:8080:80"
+
+  server:
+    environment:
+      TRUST_PROXY_HOPS: ${TRUST_PROXY_HOPS:-2}
+
+volumes:
+  caddy_data:
+  caddy_config:
