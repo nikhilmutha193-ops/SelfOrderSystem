@@ -19,6 +19,12 @@ fi
 
 FILES="-f docker-compose.prod.yml"
 if [ "${HTTPS:-0}" = "1" ]; then
+  # Caddy needs a real domain to get a certificate; a bare IP can't have one.
+  if ! grep -Eq '^DOMAIN=[^[:space:]#]+' .env; then
+    echo "HTTPS=1 needs DOMAIN=your.domain.com in .env (and CLIENT_ORIGIN=https://your.domain.com, TRUST_PROXY_HOPS=2)." >&2
+    echo "With only an IP address, run without HTTPS=1 and set TLS_EXTRA_SAN=IP:<your-ip> for the self-signed certificate on port 8443." >&2
+    exit 1
+  fi
   FILES="$FILES -f docker-compose.https.yml"
 fi
 # Name the images after the project version unless .env already pins a tag.
