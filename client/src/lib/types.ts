@@ -347,6 +347,8 @@ export interface BillingSettings {
   dineInPayment?: DineInPayment;
   /** Takeaway and counter orders are paid first (always on in the cafe flow). */
   takeawayPayFirst?: boolean;
+  /** False: the POS skips the table map and starts orders without a table. Default true. */
+  posUseTables?: boolean;
   /** Which ways a guest sees to pay their own order. */
   guestPayOptions?: { online: boolean; upiQr: boolean; counter: boolean };
 }
@@ -964,6 +966,7 @@ export interface PosMenuItem {
   price: number;
   categoryId: string;
   foodType?: FoodType;
+  imageUrl?: string;
   shortCode: string | null;
   isBestseller?: boolean;
   jainAvailable?: boolean;
@@ -984,6 +987,8 @@ export interface PosBilling {
   footerNote: string;
   dineInPayment?: DineInPayment;
   takeawayPayFirst?: boolean;
+  /** False: no table map in the POS; every order starts without a table. */
+  useTables?: boolean;
   serviceFlow?: ServiceFlow;
 }
 

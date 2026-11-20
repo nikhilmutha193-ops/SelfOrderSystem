@@ -159,6 +159,8 @@ export interface IBillingSettings {
   dineInPayment: DineInPayment;
   /** Takeaway and counter orders are paid first and reach the kitchen once paid (restaurant flow; cafe always does). */
   takeawayPayFirst: boolean;
+  /** False: the POS has no table map and starts every order without a table (counter service). Default true. */
+  posUseTables: boolean;
   /** Which ways a guest sees to pay their own order (staff screens are not affected). */
   guestPayOptions: { online: boolean; upiQr: boolean; counter: boolean };
 }
@@ -386,6 +388,7 @@ const billingSettingsSchema = new Schema<IBillingSettings>(
     upiPayeeName: { type: String, default: "", trim: true },
     dineInPayment: { type: String, enum: ["after", "upfront"], default: "after" },
     takeawayPayFirst: { type: Boolean, default: false },
+    posUseTables: { type: Boolean, default: true },
     guestPayOptions: {
       type: new Schema(
         {

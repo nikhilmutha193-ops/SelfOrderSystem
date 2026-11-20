@@ -41,6 +41,7 @@ import {
 import { kotHtml, printHtml, receiptHtml } from "../offlinePrint";
 import { usePosFloor, usePosMenu, useReleasePosTable } from "../queries";
 import { filterMenu, hasOptions, pricedMenu, usePosCart } from "../usePosCart";
+import type { DraftLine } from "../api";
 
 type Mode = "tables" | "takeaway" | "cashier";
 
@@ -78,6 +79,8 @@ export default function Pos() {
   const billing = rawMenu.billing;
   // Cafe flow: pay first, and the kitchen gets the order the moment it is paid.
   const cafe = billing?.serviceFlow === "cafe";
+  // Tables switched off in Settings: no table map, every order starts without a table (the "takeaway" mode below).
+  const tablesOff = billing?.useTables === false;
   const online = useOnlineStatus();
   const [forcedOffline, setForcedOffline] = useState<{ at: number; manual: boolean } | null>(null);
   const recovered =
@@ -98,6 +101,11 @@ export default function Pos() {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("all");
   const [dishFor, setDishFor] = useState<PosMenuItem | null>(null);
+  useEffect(() => {
+    if (tablesOff) setMode((m) => (m === "tables" ? "takeaway" : m));
+  }, [tablesOff]);
+  // A line already in the order being changed in the dish dialog (null when adding a new dish).
+  const [editLine, setEditLine] = useState<DraftLine | null>(null);
   const [settleOpen, setSettleOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{
@@ -129,13 +137,13 @@ export default function Pos() {
     !offlineFlow &&
     (activeDetail?.order.source === "kiosk" ||
       (billing?.dineInPayment === "upfront" &&
-        (activeDetail ? activeDetail.order.orderType === "dine-in" : !!tableId && mode !== "takeaway")) ||
+        (activeDetail ? activeDetail.order.orderType === "dine-in" : tablesOff ? mode === "takeaway" : !!tableId && mode !== "takeaway")) ||
       (!!billing?.takeawayPayFirst &&
-        (activeDetail ? activeDetail.order.orderType !== "dine-in" : mode === "takeaway")));
+        (activeDetail ? activeDetail.order.orderType !== "dine-in" : mode === "takeaway" && !tablesOff)));
   const releaseTable = useReleasePosTable();
   const setPacked = useSetItemPacked();
   const serveDish = useServeItem();
-  const menu = pricedMenu(rawMenu, mode === "takeaway" ? { orderType: "takeaway" } : { orderType: "dine-in", areaId });
+  const menu = pricedMenu(rawMenu, mode === "takeaway" && !tablesOff ? { orderType: "takeaway" } : { orderType: "dine-in", areaId });
   const term = search.trim();
   const visibleItems = filterMenu(menu, search, category);
 
@@ -273,7 +281,8 @@ export default function Pos() {
 
   const save = (send: boolean) =>
     cart.save(send, {
-      orderType: mode === "tables" ? "dine-in" : "takeaway",
+      // With tables off, "takeaway" mode places a dine-in order without a table (counter service).
+      orderType: mode === "tables" || tablesOff ? "dine-in" : "takeaway",
       tableId: mode === "tables" ? (tableId ?? undefined) : undefined,
       customerName: customerName.trim() || undefined,
     });
@@ -470,8 +479,10 @@ export default function Pos() {
             : "Pick a table to bill"
           : "Choose a table"
       : orderId
-        ? `Takeaway · ${activeDetail?.order.customerName ?? ""}`
-        : "New takeaway";
+        ? `${tablesOff ? "Order" : "Takeaway"} · ${activeDetail?.order.customerName ?? ""}`
+        : tablesOff
+          ? "New order"
+          : "New takeaway";
 
   const headerExtra =
     mode === "takeaway" ? (
@@ -527,7 +538,7 @@ export default function Pos() {
           </Link>
         )}
         <div className="flex rounded-lg bg-slate-800 p-1">
-          {(["tables", "takeaway", "cashier"] as const).map((m) => (
+          {(tablesOff ? (["takeaway", "cashier"] as const) : (["tables", "takeaway", "cashier"] as const)).map((m) => (
             <button
               key={m}
               type="button"
@@ -536,7 +547,7 @@ export default function Pos() {
                 mode === m ? "bg-orange-600 text-white" : "text-slate-300 hover:text-white"
               }`}
             >
-              {m === "tables" ? "Dine-in" : m === "takeaway" ? "Takeaway" : "Cashier"}
+              {m === "tables" ? "Dine-in" : m === "takeaway" ? (tablesOff ? "New order" : "Takeaway") : "Cashier"}
             </button>
           ))}
         </div>
@@ -711,6 +722,10 @@ export default function Pos() {
             onCustomerName={setCustomerName}
             onDraftQuantity={cart.changeQuantity}
             onDraftRemove={cart.removeLine}
+              onDraftEdit={(line) => {
+                setEditLine(line);
+                setDishFor(line.item);
+              }}
             onTogglePacked={(item) =>
               void run(async () => {
                 await setPacked.mutateAsync({ itemId: item._id, packed: !item.isPacked });
@@ -757,10 +772,35 @@ export default function Pos() {
       <DishDialog
         allowPack
         food={dishFor}
-        onClose={() => setDishFor(null)}
+        initial={
+          editLine
+            ? {
+                quantity: editLine.quantity,
+                note: editLine.note,
+                modifiers: editLine.modifiers,
+                isJain: !!editLine.isJain,
+                isPacked: editLine.isPacked,
+              }
+            : undefined
+        }
+        submitLabel={editLine ? "Update" : "Add"}
+        onClose={() => {
+          setDishFor(null);
+          setEditLine(null);
+        }}
         onAdd={(food, payload) => {
           const item = menu.items.find((i) => i._id === food._id);
-          if (item) cart.addLine(
+          if (item && editLine) {
+            cart.updateLine(
+              editLine.key,
+              payload.quantity,
+              payload.modifiers,
+              payload.note.trim(),
+              payload.isJain,
+              payload.isPacked
+            );
+            setEditLine(null);
+          } else if (item) cart.addLine(
               item,
               payload.quantity,
               payload.modifiers,

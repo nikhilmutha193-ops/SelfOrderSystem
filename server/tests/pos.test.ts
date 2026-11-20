@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, it } from "vitest";
 
 import Order from "../src/models/Order";
+import Restaurant from "../src/models/Restaurant";
 import OrderItem from "../src/models/OrderItem";
 import TableModel from "../src/models/Table";
 import { api, bearer, createWorld, loginAdmin, loginChef, World } from "./fixtures";
@@ -50,6 +51,8 @@ describe("POS menu", () => {
     const names = res.body.items.map((i: { name: string }) => i.name);
     expect(names).toEqual(["Filter Coffee", "Masala Dosa", "Medu Vada"]);
     expect(res.body.items[0]).toMatchObject({ shortCode: "FC", price: 100, modifierGroups: [{ name: "Size" }] });
+    // Every dish carries its picture address (empty when it has none) for the picture tiles.
+    for (const item of res.body.items) expect(typeof item.imageUrl).toBe("string");
 
     const again = await api()
       .get("/api/pos/menu")
@@ -199,5 +202,47 @@ describe("sending a bill on WhatsApp from the till", () => {
     const bad = await api().post(`/api/bills/${id}/share`).set(bearer(owner)).send({ phone: "12345" });
     expect(bad.status).toBe(400);
     expect(bad.body.message).toBe("Enter a valid 10-digit mobile number");
+  });
+});
+
+describe("POS without tables", () => {
+  const items = () => [{ foodItemId: world.food.dosa, quantity: 1 }];
+
+  it("starts a dine-in order without a table once tables are switched off, and says so on the menu", async () => {
+    expect((await api().get("/api/pos/menu").set(bearer(owner))).body.billing.useTables).toBe(true);
+    expect((await createPos({ orderType: "dine-in", items: items() })).status).toBe(400);
+
+    await Restaurant.updateOne({ _id: world.restaurantId }, { $set: { "billingSettings.posUseTables": false } });
+    try {
+      const menu = await api().get("/api/pos/menu").set(bearer(owner));
+      expect(menu.body.billing.useTables).toBe(false);
+
+      const res = await createPos({ orderType: "dine-in", items: items(), sendToKitchen: false });
+      expect(res.status).toBe(201);
+      const order = await Order.findById(res.body.order._id);
+      expect(order?.orderType).toBe("dine-in");
+      expect(order?.tableId).toBeFalsy();
+
+      // The running order shows up for the cashier like any order without a table.
+      const floor = await api().get("/api/pos/floor").set(bearer(owner));
+      expect(floor.body.takeaways.map((o: { _id: string }) => o._id)).toContain(res.body.order._id);
+    } finally {
+      await Restaurant.updateOne({ _id: world.restaurantId }, { $set: { "billingSettings.posUseTables": true } });
+    }
+  });
+
+  it("is a setting only the settings page can change, and it must be on or off", async () => {
+    const bad = await api()
+      .put("/api/restaurant/settings")
+      .set(bearer(owner))
+      .send({ billingSettings: { posUseTables: "no" } });
+    expect(bad.status).toBe(400);
+    const ok = await api()
+      .put("/api/restaurant/settings")
+      .set(bearer(owner))
+      .send({ billingSettings: { posUseTables: false } });
+    expect(ok.status).toBe(200);
+    expect((await api().get("/api/pos/menu").set(bearer(owner))).body.billing.useTables).toBe(false);
+    await api().put("/api/restaurant/settings").set(bearer(owner)).send({ billingSettings: { posUseTables: true } });
   });
 });

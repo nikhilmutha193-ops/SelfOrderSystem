@@ -1,7 +1,42 @@
-import { SlidersHorizontal } from "lucide-react";
+import { Image as ImageIcon, ImageOff, SlidersHorizontal } from "lucide-react";
+import { useState } from "react";
 
 import { FoodTypeIcon } from "../../../components/FoodBadges";
 import type { PosMenuItem } from "../../../lib/types";
+
+const IMAGES_KEY = "selforder_pos_menu_images";
+
+// Pictures on or off, remembered on this device (the grid is faster to scan without them on a small screen).
+function readShowImages(): boolean {
+  try {
+    return localStorage.getItem(IMAGES_KEY) !== "0";
+  } catch {
+    return true;
+  }
+}
+
+function Thumb({ item }: { item: PosMenuItem }) {
+  const [failed, setFailed] = useState(false);
+  if (item.imageUrl && !failed) {
+    return (
+      <img
+        src={item.imageUrl}
+        alt=""
+        loading="lazy"
+        onError={() => setFailed(true)}
+        className="h-16 w-16 shrink-0 rounded-md object-cover"
+      />
+    );
+  }
+  return (
+    <span
+      aria-hidden="true"
+      className="flex h-16 w-16 shrink-0 items-center justify-center rounded-md bg-slate-100 text-lg font-semibold text-slate-400"
+    >
+      {item.name.trim().charAt(0).toUpperCase()}
+    </span>
+  );
+}
 
 export function MenuGrid({
   categories,
@@ -25,6 +60,17 @@ export function MenuGrid({
   /** Opens the dish dialog (Regular or Jain, spice, comment) for any dish, not only ones with options. */
   onCustomize?: (item: PosMenuItem) => void;
 }) {
+  const [showImages, setShowImages] = useState(readShowImages);
+  function toggleImages() {
+    setShowImages((on) => {
+      try {
+        localStorage.setItem(IMAGES_KEY, on ? "0" : "1");
+      } catch {
+        // private mode: the choice just lasts until the page is reloaded
+      }
+      return !on;
+    });
+  }
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex gap-2 overflow-x-auto border-b border-slate-200 bg-white px-3 py-2">
@@ -42,20 +88,34 @@ export function MenuGrid({
             {c.name}
           </button>
         ))}
-        {quantity && (
+        <span className="ml-auto flex shrink-0 items-center gap-2">
+          {quantity && (
+            <button
+              type="button"
+              onClick={() => onQuantity("")}
+              title="Quantity for the next dish - tap to clear"
+              className="shrink-0 rounded-full bg-slate-900 px-3 py-2 font-mono text-sm font-semibold text-white"
+            >
+              ×{quantity} ✕
+            </button>
+          )}
           <button
             type="button"
-            onClick={() => onQuantity("")}
-            title="Quantity for the next dish - tap to clear"
-            className="ml-auto shrink-0 rounded-full bg-slate-900 px-3 py-2 font-mono text-sm font-semibold text-white"
+            onClick={toggleImages}
+            aria-pressed={showImages}
+            title={showImages ? "Hide dish pictures" : "Show dish pictures"}
+            className={`flex h-9 w-9 items-center justify-center rounded-full ${
+              showImages ? "bg-orange-100 text-orange-700" : "bg-slate-100 text-slate-500"
+            }`}
           >
-            ×{quantity} ✕
+            {showImages ? <ImageIcon size={18} aria-hidden="true" /> : <ImageOff size={18} aria-hidden="true" />}
+            <span className="sr-only">{showImages ? "Hide dish pictures" : "Show dish pictures"}</span>
           </button>
-        )}
+        </span>
       </div>
       <div className="flex min-h-0 flex-1">
         <div className="min-h-0 flex-1 overflow-y-auto p-3">
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-2">
+          <div className={`grid ${showImages ? "grid-cols-[repeat(auto-fill,minmax(210px,1fr))]" : "grid-cols-[repeat(auto-fill,minmax(150px,1fr))]"} gap-2`}>
             {items.map((item) => (
               <div
                 key={item._id}
@@ -65,8 +125,10 @@ export function MenuGrid({
                   type="button"
                   data-item={item.name}
                   onClick={() => onPick(item)}
-                  className="flex min-w-0 flex-1 flex-col justify-between p-2.5 text-left active:bg-orange-50"
+                  className="flex min-w-0 flex-1 items-center gap-2.5 p-2.5 text-left active:bg-orange-50"
                 >
+                  {showImages && <Thumb item={item} />}
+                  <span className="flex min-h-[64px] min-w-0 flex-1 flex-col justify-between">
                   <span className="flex items-start gap-1.5">
                     {item.foodType && <FoodTypeIcon type={item.foodType} />}
                     <span className="line-clamp-2 min-w-0 text-sm leading-tight font-medium break-words text-slate-800">
@@ -83,6 +145,7 @@ export function MenuGrid({
                       Combo: {item.components!.map((p) => p.name).join(", ")}
                     </span>
                   )}
+                  </span>
                 </button>
                 {onCustomize && (
                   <button

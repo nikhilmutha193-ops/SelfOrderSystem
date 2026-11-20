@@ -388,6 +388,9 @@ export const updateRestaurantSettings = asyncHandler(async (req: Request, res: R
     if (billingSettings.takeawayPayFirst !== undefined && typeof billingSettings.takeawayPayFirst !== "boolean") {
       throw new HttpError(400, "Takeaway and counter pay first must be on or off");
     }
+    if (billingSettings.posUseTables !== undefined && typeof billingSettings.posUseTables !== "boolean") {
+      throw new HttpError(400, "Using tables in the POS must be on or off");
+    }
     if (
       serviceChargePercent !== undefined &&
       (typeof serviceChargePercent !== "number" || serviceChargePercent < 0 || serviceChargePercent > 20)

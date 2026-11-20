@@ -13,6 +13,12 @@ import { CreatePosOrderInput, OfflineOrderInput } from "./pos.schema";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
+/** With "Use tables in the POS" off, a dine-in order without a table is a normal counter order. */
+async function posUsesTables(repo: PosRepository): Promise<boolean> {
+  const restaurant = await repo.billingInfo();
+  return restaurant?.billingSettings?.posUseTables !== false;
+}
+
 export async function getMenu(ctx: RequestContext) {
   const repo = new PosRepository(ctx.restaurantId);
   const [categories, subcategories, foods, restaurant] = await Promise.all([
@@ -35,6 +41,7 @@ export async function getMenu(ctx: RequestContext) {
       serviceChargePercent: restaurant?.billingSettings?.serviceChargePercent ?? 0,
       dineInPayment: paysUpfront(restaurant) ? "upfront" : "after",
       takeawayPayFirst: takeawayPaysFirst(restaurant),
+      useTables: restaurant?.billingSettings?.posUseTables !== false,
       footerNote: restaurant?.invoiceSettings?.footerNote ?? "",
       serviceFlow: restaurant?.serviceFlow ?? "restaurant",
     },
@@ -47,6 +54,7 @@ export async function getMenu(ctx: RequestContext) {
         price: f.price,
         categoryId: f.categoryId,
         foodType: f.foodType,
+        imageUrl: f.imageUrl ?? "",
         shortCode: f.shortCode ?? null,
         isBestseller: f.isBestseller,
         jainAvailable: f.jainAvailable !== false,
@@ -145,7 +153,9 @@ export async function syncOfflineOrder(ctx: RequestContext, input: OfflineOrderI
   if ((await repo.countActiveFoodItems(ids)) !== ids.length) {
     throw new HttpError(409, "A dish on this offline bill is no longer on the menu. Turn it back on, then sync again.");
   }
-  if (input.orderType === "dine-in" && !input.tableId) throw new HttpError(400, "Choose a table for a dine-in order");
+  if (input.orderType === "dine-in" && !input.tableId && (await posUsesTables(repo))) {
+    throw new HttpError(400, "Choose a table for a dine-in order");
+  }
 
   const customer = {
     customerName: input.customerName || (input.orderType === "takeaway" ? "Walk-in" : "Guest"),
@@ -203,7 +213,9 @@ export async function createOrder(ctx: RequestContext, input: CreatePosOrderInpu
   if ((await repo.countActiveFoodItems(ids)) !== ids.length) {
     throw new HttpError(404, "One of these items is no longer on the menu");
   }
-  if (input.orderType === "dine-in" && !input.tableId) throw new HttpError(400, "Choose a table for a dine-in order");
+  if (input.orderType === "dine-in" && !input.tableId && (await posUsesTables(repo))) {
+    throw new HttpError(400, "Choose a table for a dine-in order");
+  }
 
   const customer = {
     customerName: input.customerName || (input.orderType === "takeaway" ? "Walk-in" : "Guest"),

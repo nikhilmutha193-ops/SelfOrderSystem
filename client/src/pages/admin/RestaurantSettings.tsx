@@ -222,6 +222,7 @@ const DEFAULT_BILLING_SETTINGS: BillingSettings = {
   upiPayeeName: "",
   dineInPayment: "after",
   takeawayPayFirst: false,
+  posUseTables: true,
   guestPayOptions: { online: true, upiQr: true, counter: true },
 };
 
@@ -1387,6 +1388,17 @@ export default function RestaurantSettings() {
                       serviceFlow === "cafe"
                         ? "Always on in the Cafe flow: every order is paid before the kitchen gets it."
                         : "Takeaway and counter orders are paid first and reach the kitchen once paid. Dine-in still pays after eating."
+                    }
+                  />
+                  <ToggleRow
+                    id="pos-use-tables"
+                    checked={billingSettings.posUseTables !== false}
+                    onChange={(v) => setBillingSettings((prev) => ({ ...prev, posUseTables: v }))}
+                    label="Use tables in the POS"
+                    description={
+                      billingSettings.posUseTables !== false
+                        ? "The POS opens on the table map and dine-in orders are placed on a table."
+                        : "The POS skips the table map and opens straight to a new order without a table (counter service). Staff still see running orders under Cashier."
                     }
                   />
                 </div>

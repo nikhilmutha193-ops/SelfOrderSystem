@@ -124,6 +124,18 @@ export function usePosCart() {
     );
   }
 
+  /** Replaces what was chosen for a draft line (quantity, options, Jain, spice and comment, pack). */
+  function updateLine(
+    key: string,
+    quantity: number,
+    modifiers: SelectedModifier[],
+    note: string,
+    isJain = false,
+    isPacked = false
+  ) {
+    setDraft((lines) => lines.map((l) => (l.key === key ? { ...l, quantity, modifiers, note, isJain, isPacked } : l)));
+  }
+
   function removeLine(key: string) {
     setDraft((lines) => lines.filter((l) => l.key !== key));
   }
@@ -169,6 +181,7 @@ export function usePosCart() {
     open,
     addLine,
     changeQuantity,
+    updateLine,
     removeLine,
     save,
     bill,

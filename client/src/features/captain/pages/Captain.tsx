@@ -33,7 +33,7 @@ import SettleDialog from "../../orders/components/SettleDialog";
 import { newId } from "../../../lib/id";
 import { ordersApi } from "../../orders/api";
 import { orderKeys, useSetItemPacked } from "../../orders/queries";
-import { draftUnitPrice } from "../../pos/api";
+import { draftUnitPrice, type DraftLine } from "../../pos/api";
 import { MenuGrid } from "../../pos/components/MenuGrid";
 import { OrderPanel } from "../../pos/components/OrderPanel";
 import { TableMap } from "../../pos/components/TableMap";
@@ -170,6 +170,8 @@ function CaptainApp() {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("all");
   const [dishFor, setDishFor] = useState<PosMenuItem | null>(null);
+  // A line already in the order being changed in the dish dialog (null when adding a new dish).
+  const [editLine, setEditLine] = useState<DraftLine | null>(null);
   const [settleOpen, setSettleOpen] = useState(false);
   const queryClient = useQueryClient();
   const [busy, setBusy] = useState(false);
@@ -253,6 +255,13 @@ function CaptainApp() {
   function openTable(t: PosTable) {
     setMessage(null);
     if (t.orders.length === 0) {
+      // A walk-in table has no seated party to count, so go straight to the menu.
+      if (t.isGuest) {
+        setGuests(1);
+        setTableId(t._id);
+        cart.open(null);
+        return;
+      }
       setAskGuests(t);
       return;
     }
@@ -426,7 +435,7 @@ function CaptainApp() {
           {isWalkIn
             ? `No-table order · ${walkRef}`
             : table
-              ? `Table ${table.code}${cart.orderId ? "" : ` · ${guests} guests`}`
+              ? `Table ${table.code}${cart.orderId || table.isGuest ? "" : ` · ${guests} guests`}`
               : profile?.username}
         </span>
         {cafe && table && table.status !== "available" && (
@@ -681,6 +690,10 @@ function CaptainApp() {
               onCustomerName={() => {}}
               onDraftQuantity={cart.changeQuantity}
               onDraftRemove={cart.removeLine}
+              onDraftEdit={(line) => {
+                setEditLine(line);
+                setDishFor(line.item);
+              }}
               onTogglePacked={(item) =>
                 void run(async () => {
                   await setPacked.mutateAsync({
@@ -714,10 +727,35 @@ function CaptainApp() {
       <DishDialog
         allowPack
         food={dishFor}
-        onClose={() => setDishFor(null)}
+        initial={
+          editLine
+            ? {
+                quantity: editLine.quantity,
+                note: editLine.note,
+                modifiers: editLine.modifiers,
+                isJain: !!editLine.isJain,
+                isPacked: editLine.isPacked,
+              }
+            : undefined
+        }
+        submitLabel={editLine ? "Update" : "Add"}
+        onClose={() => {
+          setDishFor(null);
+          setEditLine(null);
+        }}
         onAdd={(food, payload) => {
           const item = menu.items.find((i) => i._id === food._id);
-          if (item)
+          if (item && editLine) {
+            cart.updateLine(
+              editLine.key,
+              payload.quantity,
+              payload.modifiers,
+              payload.note.trim(),
+              payload.isJain,
+              payload.isPacked,
+            );
+            setEditLine(null);
+          } else if (item) {
             cart.addLine(
               item,
               payload.quantity,
@@ -726,6 +764,7 @@ function CaptainApp() {
               payload.isJain,
               payload.isPacked,
             );
+          }
           setDishFor(null);
         }}
       />

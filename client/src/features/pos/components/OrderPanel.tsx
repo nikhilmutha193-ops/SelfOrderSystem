@@ -155,6 +155,7 @@ export function OrderPanel({
   onCustomerName,
   onDraftQuantity,
   onDraftRemove,
+  onDraftEdit,
   onTogglePacked,
   onSaveKot,
   onHold,
@@ -178,6 +179,8 @@ export function OrderPanel({
   onCustomerName: (value: string) => void;
   onDraftQuantity: (key: string, delta: number) => void;
   onDraftRemove: (key: string) => void;
+  /** Opens the dish dialog on a new line to change its options, Jain or spice, comment and quantity. */
+  onDraftEdit?: (line: DraftLine) => void;
   /** Staff can mark a saved line to be packed (or not) while the order is open. */
   onTogglePacked?: (item: OrderItem) => void;
   onSaveKot: () => void;
@@ -357,13 +360,25 @@ export function OrderPanel({
                 <span className="tabular-nums">
                   {rupees(draftUnitPrice(line) * line.quantity)}
                 </span>
-                <button
-                  type="button"
-                  className="text-xs text-red-600 hover:underline"
-                  onClick={() => onDraftRemove(line.key)}
-                >
-                  Remove
-                </button>
+                <span className="flex gap-3">
+                  {onDraftEdit && (
+                    <button
+                      type="button"
+                      aria-label={`Customize ${line.item.name}`}
+                      className="text-xs font-medium text-orange-700 hover:underline"
+                      onClick={() => onDraftEdit(line)}
+                    >
+                      Customize
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="text-xs text-red-600 hover:underline"
+                    onClick={() => onDraftRemove(line.key)}
+                  >
+                    Remove
+                  </button>
+                </span>
               </span>
             </li>
           ))}
