@@ -90,6 +90,7 @@ services:
       - invoices_data:/app/invoices
       - proofs_data:/app/proofs
       - config_data:/app/config-data
+      - ./downloads:/app/downloads:ro
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:5000/health"]
       interval: 15s

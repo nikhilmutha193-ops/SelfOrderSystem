@@ -54,6 +54,17 @@ describe("database connection (owner only)", () => {
     expect(JSON.stringify(res.body)).not.toMatch(/:[^@/*]+@/);
   });
 
+  it("shows the full connection string only with the owner's password", async () => {
+    const info = await api().get("/api/db-config").set(bearer(owner));
+    expect(info.body.masked).toBeTruthy();
+    expect((await api().post("/api/db-config/reveal").set(bearer(owner)).send({})).status).toBe(400);
+    expect((await api().post("/api/db-config/reveal").set(bearer(owner)).send({ password: "nope" })).status).toBe(403);
+    expect((await api().post("/api/db-config/reveal").set(bearer(manager)).send({ password: "Manager@123" })).status).toBe(403);
+    const ok = await api().post("/api/db-config/reveal").set(bearer(owner)).send({ password: "Owner@123" });
+    expect(ok.status).toBe(200);
+    expect(ok.body.uri).toBe(process.env.MONGO_URI);
+  });
+
   it("is closed to other admin logins", async () => {
     expect((await api().get("/api/db-config").set(bearer(manager))).status).toBe(403);
     expect(

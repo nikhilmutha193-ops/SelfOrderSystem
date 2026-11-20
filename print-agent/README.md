@@ -6,7 +6,7 @@ The server is never connected to the printers directly, so this works the same w
 
 ## Requirements
 
-- Node.js 18 or newer
+- Node.js 18 or newer, or the single-file `PrintAgent.exe` (see below), which needs no Node.js
 - An ESC/POS thermal printer (58 mm or 80 mm), either:
   - **Network**: connected by LAN or Wi-Fi with a fixed IP address. The agent sends to port 9100.
   - **Shared (USB)**: plugged into this Windows computer and shared in Windows (Printer properties > Sharing > "Share this printer"). Use the share name in the admin panel.
@@ -14,7 +14,7 @@ The server is never connected to the printers directly, so this works the same w
 ## Setup
 
 1. In the admin panel open **Printers & Stations** and click **Add computer**. Copy the 8-character pairing code (valid for 15 minutes).
-2. On the printing computer, copy this folder and run:
+2. On the printing computer, copy this folder (if you downloaded the .zip, right-click it and choose **Extract All** first; the scripts do not work from inside the zip) and run:
 
    ```
    node agent.js pair --server https://your-restaurant-server --code ABCD2345
@@ -28,6 +28,21 @@ The server is never connected to the printers directly, so this works the same w
    ```
 
 4. Back in **Printers & Stations**, add each printer, choose this computer, and click **Test** to print a test page.
+
+**No Node.js on that computer?** Use the single-file build, which carries its own Node.js, so nothing is installed or downloaded there. On any Windows computer that has Node.js 20 or newer (your own PC will do), run this once in the `print-agent` folder:
+
+```
+node build-exe.js
+```
+
+It writes the `dist` folder (`PrintAgent.exe`, about 90 MB, plus `pair.bat` and `start-agent.bat`). Copy that folder to the printing computer, then:
+
+```
+pair.bat https://your-restaurant-server ABCD2345
+start-agent.bat
+```
+
+(`PrintAgent.exe pair --server ... --code ...` and `PrintAgent.exe` do the same by hand.) The pairing is saved in `config.json` next to the exe. Rebuild and copy the exe again after the agent code changes.
 
 To start it automatically with Windows, create a shortcut to `start-agent.bat` in the Startup folder (`Win + R`, then `shell:startup`).
 

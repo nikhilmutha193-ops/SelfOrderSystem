@@ -34,6 +34,8 @@ export default function DatabaseConnection() {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [fullUri, setFullUri] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   async function load() {
     try {
@@ -87,6 +89,22 @@ export default function DatabaseConnection() {
       setNotice(`Copied ${total} records across ${Object.keys(res.data.copied).length} collections.`);
       setPassword("");
     });
+
+  const reveal = () =>
+    run("reveal", async () => {
+      setFullUri((await api.post<{ uri: string }>("/db-config/reveal", { password })).data.uri);
+      setPassword("");
+    });
+
+  async function copyUri() {
+    try {
+      await navigator.clipboard.writeText(fullUri ?? config?.masked ?? "");
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setError("Could not copy. Select the text and copy it by hand.");
+    }
+  }
 
   const switchTo = () =>
     run("switch", async () => {
@@ -149,11 +167,38 @@ export default function DatabaseConnection() {
         </dl>
       )}
 
+      {config?.masked && (
+        <div className="mb-4 flex flex-col gap-2">
+          <span className="text-sm font-medium text-slate-700">Current connection string</span>
+          <div className="flex flex-wrap items-center gap-2">
+            <code className="min-w-0 flex-1 break-all rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-xs text-slate-800">
+              {fullUri ?? config.masked}
+            </code>
+            <Button variant="secondary" onClick={copyUri}>
+              {copied ? "Copied" : "Copy"}
+            </Button>
+            {fullUri ? (
+              <Button variant="secondary" onClick={() => setFullUri(null)}>
+                Hide password
+              </Button>
+            ) : (
+              <Button variant="secondary" onClick={reveal} disabled={!password || busy !== null}>
+                {busy === "reveal" ? "Checking..." : "Show full string"}
+              </Button>
+            )}
+          </div>
+          <p className="text-xs text-slate-500">
+            The password is hidden. To see the full string, type your admin password below and press Show full string.
+            Every look is recorded in the audit log.
+          </p>
+        </div>
+      )}
+
       <p className="mb-3 text-sm text-slate-500">
         To move to another MongoDB server: paste its connection string, <strong>test</strong> it, <strong>copy</strong>{" "}
         this restaurant there, then <strong>switch</strong>. The new server must be a replica set (Atlas is). Use the
-        copy in the other direction to bring data here from another server. The connection string is stored encrypted on
-        the server and never shown again.
+        copy in the other direction to bring data here from another server. A connection string saved here is stored
+        encrypted on the server.
         {config && !config.canSwitch && " This host can't change the address; set MONGO_URI in its settings instead."}
       </p>
 

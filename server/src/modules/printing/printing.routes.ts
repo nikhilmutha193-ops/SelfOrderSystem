@@ -2,13 +2,19 @@ import { Router } from "express";
 
 import { requireAuth, requireModule } from "../../middleware/auth";
 import {
+  agentDownloads,
   agentJobResult,
   agentJobs,
   createAgent,
+  createAgentDownloadLink,
   createPrinter,
   createStation,
   deletePrinter,
   deleteStation,
+  downloadAgentApp,
+  downloadAgentFile,
+  downloadAgentExe,
+  downloadAgentZip,
   listAgents,
   listJobs,
   listPrinters,
@@ -32,11 +38,19 @@ printingRoutes.get("/status", requireAuth("admin", "chef"), status);
 printingRoutes.get("/my-station", requireAuth("admin", "chef"), myStation);
 printingRoutes.put("/chefs/:chefId/station", requireAuth("admin"), requireModule("chefs"), setChefStation);
 
+// The signed link from POST /agent/download-link is the login here (a plain browser download carries no header).
+printingRoutes.get("/agent/file/:kind", downloadAgentFile);
+
 printingRoutes.use(requireAuth("admin"), requireModule("printing"));
+printingRoutes.post("/agent/download-link", createAgentDownloadLink);
 printingRoutes.get("/stations", listStations);
 printingRoutes.post("/stations", createStation);
 printingRoutes.put("/stations/:id", renameStation);
 printingRoutes.delete("/stations/:id", deleteStation);
+printingRoutes.get("/agent/downloads", agentDownloads);
+printingRoutes.get("/agent/download/zip", downloadAgentZip);
+printingRoutes.get("/agent/download/app", downloadAgentApp);
+printingRoutes.get("/agent/download/exe", downloadAgentExe);
 printingRoutes.get("/agents", listAgents);
 printingRoutes.post("/agents", createAgent);
 printingRoutes.post("/agents/:id/pairing-code", renewPairingCode);

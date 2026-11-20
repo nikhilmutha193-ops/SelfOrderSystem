@@ -10,6 +10,7 @@ export const printingKeys = {
   myStation: ["printing", "myStation"] as const,
   stations: ["printing", "stations"] as const,
   agents: ["printing", "agents"] as const,
+  agentDownloads: ["printing", "agentDownloads"] as const,
   printers: ["printing", "printers"] as const,
   jobs: (status?: PrintJobStatus) => ["printing", "jobs", status ?? "all"] as const,
 };
@@ -34,6 +35,10 @@ export function useStations() {
 
 export function usePrintAgents() {
   return useQuery({ queryKey: printingKeys.agents, queryFn: printingApi.agents, refetchInterval: POLL.printing });
+}
+
+export function useAgentDownloads() {
+  return useQuery({ queryKey: printingKeys.agentDownloads, queryFn: printingApi.agentDownloads });
 }
 
 export function usePrinters() {

@@ -6,6 +6,7 @@ import { getContext } from "../../core/context";
 import { objectId, parse } from "../../core/validate";
 import { asyncHandler } from "../../middleware/errorHandler";
 import { IPrintAgent } from "../../models/PrintAgent";
+import { HttpError } from "../../utils/httpError";
 import {
   agentSchema,
   idParams,
@@ -15,6 +16,7 @@ import {
   printerSchema,
   stationSchema,
 } from "./printing.schema";
+import { agentAppZip, agentDownloadInfo, agentExePath, agentZip, signAgentDownload, verifyAgentDownload } from "./printing.downloads";
 import * as printing from "./printing.service";
 
 const chefStationSchema = z.object({ stationId: z.union([objectId("Invalid station"), z.null()]) });
@@ -140,4 +142,72 @@ export const agentJobResult = asyncHandler(async (req: Request, res: Response) =
   const { id } = parse(idParams, req.params);
   const result = parse(jobResultSchema, req.body);
   res.json(await printing.reportJobResult(req.restaurantId!, agentOf(res), id, result));
+});
+
+export const agentDownloads = asyncHandler(async (_req: Request, res: Response) => {
+  res.json(agentDownloadInfo());
+});
+
+export const downloadAgentZip = asyncHandler(async (_req: Request, res: Response) => {
+  res.setHeader("Content-Type", "application/zip");
+  res.setHeader("Content-Disposition", 'attachment; filename="print-agent.zip"');
+  res.send(agentZip());
+});
+
+export const downloadAgentExe = asyncHandler(async (_req: Request, res: Response) => {
+  const file = agentExePath();
+  if (!file) {
+    throw new HttpError(
+      404,
+      "PrintAgent.exe is not on this server. Build it with `node build-exe.js` in the print-agent folder and put it in the server's downloads folder."
+    );
+  }
+  res.download(file, "PrintAgent.exe");
+});
+
+/** The Windows app as PrintAgent.zip (the exe plus pair.bat and start-agent.bat): what the admin page offers. */
+export const downloadAgentApp = asyncHandler(async (_req: Request, res: Response) => {
+  const zip = await agentAppZip();
+  if (!zip) {
+    throw new HttpError(
+      404,
+      "PrintAgent.exe is not on this server. Build it with `node build-exe.js` in the print-agent folder and put it in the server's downloads folder."
+    );
+  }
+  res.setHeader("Content-Type", "application/zip");
+  res.setHeader("Content-Disposition", 'attachment; filename="PrintAgent.zip"');
+  res.send(zip);
+});
+
+const downloadKind = z.object({ kind: z.enum(["zip", "app"]) });
+
+/** Step 1 (signed in): get a short-lived link for the file. */
+export const createAgentDownloadLink = asyncHandler(async (req: Request, res: Response) => {
+  const { kind } = parse(downloadKind, req.body);
+  res.json({ url: `/printing/agent/file/${kind}?token=${signAgentDownload(kind, req.restaurantId!)}` });
+});
+
+/** Step 2: the browser opens the link and saves the file. The token is the login, so this route has no Bearer header. */
+export const downloadAgentFile = asyncHandler(async (req: Request, res: Response) => {
+  const { kind } = parse(downloadKind, req.params);
+  const token = typeof req.query.token === "string" ? req.query.token : "";
+  if (!verifyAgentDownload(token, kind, req.restaurantId!)) {
+    throw new HttpError(403, "This download link has expired. Go back and press the button again.");
+  }
+  if (kind === "zip") {
+    res.setHeader("Content-Type", "application/zip");
+    res.setHeader("Content-Disposition", 'attachment; filename="print-agent.zip"');
+    res.send(agentZip());
+    return;
+  }
+  const zip = await agentAppZip();
+  if (!zip) {
+    throw new HttpError(
+      404,
+      "PrintAgent.exe is not on this server. Build it with `node build-exe.js` in the print-agent folder and put it in the server's downloads folder."
+    );
+  }
+  res.setHeader("Content-Type", "application/zip");
+  res.setHeader("Content-Disposition", 'attachment; filename="PrintAgent.zip"');
+  res.send(zip);
 });

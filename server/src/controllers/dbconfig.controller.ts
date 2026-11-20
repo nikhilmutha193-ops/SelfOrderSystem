@@ -45,6 +45,16 @@ export const getDbConfig = asyncHandler(async (req: Request, res: Response) => {
   });
 });
 
+/** The full connection string in use, password included. Owner's password required, and every look is audited. */
+export const revealDbUri = asyncHandler(async (req: Request, res: Response) => {
+  await assertOwnerPassword(req, (req.body as { password?: unknown }).password);
+  const info = connectionInfo();
+  if (!info) throw new HttpError(503, "The server is not connected to a database");
+  await writeAudit(req, "db.reveal", "Viewed the full database connection string");
+  res.setHeader("Cache-Control", "no-store");
+  res.json({ uri: info.uri });
+});
+
 /** Connects to an address and says whether the app can run on it. Changes nothing. */
 export const testDbConnection = asyncHandler(async (req: Request, res: Response) => {
   assertOwner(req);

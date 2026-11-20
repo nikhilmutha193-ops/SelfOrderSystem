@@ -5,7 +5,18 @@ const net = require("net");
 const os = require("os");
 const path = require("path");
 
-const CONFIG_PATH = process.env.PRINT_AGENT_CONFIG || path.join(__dirname, "config.json");
+// Built into PrintAgent.exe (see build-exe.js) there is no Node.js to install: the exe carries its own. Then the
+// config sits next to the exe and the help texts name the exe instead of "node agent.js".
+const IS_EXE = (() => {
+  try {
+    return require("node:sea").isSea();
+  } catch {
+    return false; // plain Node (also older versions without node:sea)
+  }
+})();
+const RUN = IS_EXE ? "PrintAgent.exe" : "node agent.js";
+const HOME_DIR = IS_EXE ? path.dirname(process.execPath) : __dirname;
+const CONFIG_PATH = process.env.PRINT_AGENT_CONFIG || path.join(HOME_DIR, "config.json");
 const POLL_MS = 2000;
 const IDLE_BACKOFF_MS = 30000;
 const PRINTER_TIMEOUT_MS = 10000;
@@ -143,25 +154,25 @@ async function main(args) {
     const server = argValue(args, "--server");
     const code = argValue(args, "--code");
     if (!server || !code) {
-      console.log("Usage: node agent.js pair --server https://your-restaurant-server --code ABCD2345");
+      console.log(`Usage: ${RUN} pair --server https://your-restaurant-server --code ABCD2345`);
       process.exit(1);
     }
     const config = await pair(server, code);
     writeConfig(config);
-    log(`Paired as "${config.name}" for ${config.restaurantName}. Start printing with: node agent.js`);
+    log(`Paired as "${config.name}" for ${config.restaurantName}. Start printing with: ${RUN}`);
     return;
   }
   const config = readConfig();
   if (!config || !config.token) {
     console.log("This computer is not paired yet.");
     console.log("In Admin > Printers & Stations, add this computer, then run:");
-    console.log("  node agent.js pair --server https://your-restaurant-server --code <pairing code>");
+    console.log(`  ${RUN} pair --server https://your-restaurant-server --code <pairing code>`);
     process.exit(1);
   }
   await run(config);
 }
 
-if (require.main === module) {
+if (IS_EXE || require.main === module) {
   main(process.argv.slice(2)).catch((err) => {
     console.error(err.message);
     process.exit(1);

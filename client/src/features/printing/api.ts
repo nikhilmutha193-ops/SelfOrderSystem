@@ -10,7 +10,29 @@ import type {
 } from "../../lib/types";
 import { api } from "../../shared/api/client";
 
+export interface AgentDownloads {
+  zip: { filename: string; sizeBytes: number };
+  exe: { filename: string; available: boolean; sizeBytes: number };
+}
+
+/**
+ * Downloads through a short-lived link instead of fetching the file into the page: the browser itself saves it, which
+ * streams to disk and works for files of tens of megabytes (an in-page fetch of one failed with "Network Error").
+ */
+async function saveDownload(kind: "zip" | "app", filename: string) {
+  const { url } = (await api.post<{ url: string }>("/printing/agent/download-link", { kind })).data;
+  const link = document.createElement("a");
+  link.href = `${api.defaults.baseURL ?? "/api"}${url}`;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
+
 export const printingApi = {
+  agentDownloads: () => api.get<AgentDownloads>("/printing/agent/downloads").then((res) => res.data),
+  downloadAgentZip: () => saveDownload("zip", "print-agent.zip"),
+  downloadAgentExe: () => saveDownload("app", "PrintAgent.zip"),
   status: () => api.get<PrintingStatus>("/printing/status").then((res) => res.data),
   myStation: () =>
     api.get<{ stationId: string | null; stations: Station[] }>("/printing/my-station").then((res) => res.data),

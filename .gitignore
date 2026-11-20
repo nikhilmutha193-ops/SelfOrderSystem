@@ -16,3 +16,10 @@ server/invoices/
 server/proofs/
 server/backups/
 server/uploads/
+
+# The print agent exe is built with print-agent/build-exe.js
+print-agent/dist/
+print-agent/config.json
+
+# Built print agent (see downloads/README.md)
+downloads/*.exe

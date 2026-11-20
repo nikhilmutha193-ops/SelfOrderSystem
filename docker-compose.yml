@@ -61,6 +61,7 @@ services:
       - backups_data:/app/backups
       - proofs_data:/app/proofs
       - config_data:/app/config-data
+      - ./downloads:/app/downloads:ro
       - invoices_data:/app/invoices
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:5000/health"]

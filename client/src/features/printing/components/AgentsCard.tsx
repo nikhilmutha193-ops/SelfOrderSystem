@@ -1,10 +1,12 @@
+import { Download } from "lucide-react";
 import { useState } from "react";
 
 import type { PairingCode, PrintAgent } from "../../../lib/types";
 import { extractErrorMessage } from "../../../shared/api/client";
 import { confirmDialog } from "../../../shared/ui/confirm";
 import { Badge, Button, Card, ErrorText, Input } from "../../../shared/ui/ui";
-import { useCreateAgent, useRenewPairingCode, useRevokeAgent } from "../queries";
+import { printingApi } from "../api";
+import { useAgentDownloads, useCreateAgent, useRenewPairingCode, useRevokeAgent } from "../queries";
 
 function lastSeen(agent: PrintAgent) {
   if (agent.online) return "";
@@ -12,23 +14,94 @@ function lastSeen(agent: PrintAgent) {
   return `Last seen ${new Date(agent.lastSeenAt).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}`;
 }
 
+const mb = (bytes: number) => `${Math.max(1, Math.round(bytes / 1048576))} MB`;
+
+/** The two ways to get the agent onto the printing computer: the single-file Windows app, or the folder to run with Node.js. */
+function DownloadAgent({ onError }: { onError: (message: string | null) => void }) {
+  const { data } = useAgentDownloads();
+  const [busy, setBusy] = useState<"zip" | "exe" | null>(null);
+
+  async function get(kind: "zip" | "exe") {
+    onError(null);
+    setBusy(kind);
+    try {
+      await (kind === "zip" ? printingApi.downloadAgentZip() : printingApi.downloadAgentExe());
+    } catch (err) {
+      onError(extractErrorMessage(err));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  const exeReady = !!data?.exe.available;
+  return (
+    <div className="mb-4 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm" data-testid="agent-downloads">
+      <p className="font-medium text-slate-800">Get the print agent</p>
+      <p className="mt-0.5 text-slate-500">Download it, copy it to the printing computer, then pair it with a code below.</p>
+      <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="flex flex-col gap-1.5 rounded-md border border-slate-200 bg-white p-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Windows app</p>
+          <Button
+            variant="secondary"
+            icon={Download}
+            className="w-full justify-center"
+            disabled={!exeReady || busy !== null}
+            loading={busy === "exe"}
+            onClick={() => get("exe")}
+          >
+            Download PrintAgent.zip
+          </Button>
+          <p className="text-xs text-slate-500">
+            {exeReady
+              ? `No Node.js needed. Extract All, then run pair.bat (the exe inside is about ${mb(data!.exe.sizeBytes)}).`
+              : "Not on this server yet. Build it with node build-exe.js and copy it to the server's downloads folder (see downloads/README.md)."}
+          </p>
+        </div>
+        <div className="flex flex-col gap-1.5 rounded-md border border-slate-200 bg-white p-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Agent folder</p>
+          <Button
+            variant="secondary"
+            icon={Download}
+            className="w-full justify-center"
+            disabled={busy !== null}
+            loading={busy === "zip"}
+            onClick={() => get("zip")}
+          >
+            Download print-agent.zip
+          </Button>
+          <p className="text-xs text-slate-500">
+            Needs Node.js 18 or newer on that computer. Extract All before running anything in it.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function PairingBox({ pairing, onClose }: { pairing: PairingCode; onClose: () => void }) {
   const server = window.location.origin;
   const command = `node agent.js pair --server ${server} --code ${pairing.pairingCode}`;
+  const exeCommand = `PrintAgent.exe pair --server ${server} --code ${pairing.pairingCode}`;
   return (
     <div className="mt-3 rounded-md border border-orange-200 bg-orange-50 p-3 text-sm" data-testid="pairing-box">
       <p className="font-medium text-slate-800">Pair “{pairing.name}”</p>
       <p className="mt-1 text-slate-600">
-        On that computer, open the <code>print-agent</code> folder and run this within 15 minutes (until{" "}
+        On that computer, open the folder with the agent and run one of these within 15 minutes (until{" "}
         {new Date(pairing.expiresAt).toLocaleTimeString([], { timeStyle: "short" })}):
       </p>
       <p className="mt-2 text-center font-mono text-2xl font-bold tracking-[0.3em] text-slate-900">
         {pairing.pairingCode}
       </p>
-      <pre className="mt-2 overflow-x-auto rounded bg-slate-900 px-3 py-2 text-xs text-slate-100">{command}</pre>
-      <div className="mt-2 flex gap-2">
+      <p className="mt-2 text-xs font-medium text-slate-600">With PrintAgent.exe (no Node.js needed):</p>
+      <pre className="mt-1 overflow-x-auto rounded bg-slate-900 px-3 py-2 text-xs text-slate-100">{exeCommand}</pre>
+      <p className="mt-2 text-xs font-medium text-slate-600">With Node.js (the print-agent folder):</p>
+      <pre className="mt-1 overflow-x-auto rounded bg-slate-900 px-3 py-2 text-xs text-slate-100">{command}</pre>
+      <div className="mt-2 flex flex-wrap gap-2">
+        <Button variant="secondary" onClick={() => navigator.clipboard?.writeText(exeCommand)}>
+          Copy .exe command
+        </Button>
         <Button variant="secondary" onClick={() => navigator.clipboard?.writeText(command)}>
-          Copy command
+          Copy Node command
         </Button>
         <Button variant="secondary" onClick={onClose}>
           Done
@@ -62,6 +135,7 @@ export function AgentsCard({ agents, canEdit }: { agents: PrintAgent[]; canEdit:
         One computer in the restaurant runs the print agent and sends tickets to the printers. Keep it switched on
         during service.
       </p>
+      {canEdit && <DownloadAgent onError={setError} />}
       {agents.length === 0 ? (
         <p className="text-sm text-slate-400">No computer added yet.</p>
       ) : (

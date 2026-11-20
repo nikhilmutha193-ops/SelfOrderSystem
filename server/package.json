@@ -13,7 +13,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck:tests": "tsc -p tests/tsconfig.json",
-    "migrate:bills": "ts-node src/utils/backfillBills.ts"
+    "migrate:bills": "ts-node src/utils/backfillBills.ts",
+    "sync:agent": "node scripts/sync-agent.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1132.0",
