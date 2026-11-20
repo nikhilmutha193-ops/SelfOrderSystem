@@ -13,35 +13,44 @@
   position: relative;
   width: 100%;
   max-width: 480px;
-  max-height: 90vh;
-  overflow-y: auto;
   border-radius: var(--radius-lg);
   background-color: var(--color-surface);
   box-shadow: var(--shadow-lg);
 }
 
+/* Sits on the corner of the card, above the image, and never scrolls away. */
 .popup-banner__close {
   position: absolute;
-  top: var(--space-3);
-  right: var(--space-3);
+  z-index: 2;
+  top: -14px;
+  right: -14px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
-  border: 0;
-  background-color: rgba(255, 255, 255, 0.9);
-  color: var(--color-text);
-  font-size: 1.1rem;
+  border: 2px solid #fff;
+  background-color: #2b1d18;
+  color: #fff;
+  font-size: 1.2rem;
   line-height: 1;
   cursor: pointer;
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--shadow-md, 0 2px 8px rgba(0, 0, 0, 0.35));
+}
+
+@media (max-width: 520px) {
+  .popup-banner__close {
+    top: -10px;
+    right: -6px;
+  }
 }
 
 .popup-banner__image {
   display: block;
   width: 100%;
   height: auto;
+  max-height: 80vh;
+  object-fit: contain;
   border-radius: var(--radius-lg);
 }

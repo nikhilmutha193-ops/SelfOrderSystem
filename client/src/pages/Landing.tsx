@@ -90,6 +90,15 @@ export default function Landing() {
     return () => document.body.classList.remove("no-scroll");
   }, [showBanner]);
 
+  useEffect(() => {
+    if (!showBanner) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") dismissBanner();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [showBanner]);
+
   const editorSlides = data?.content?.hero?.slides?.filter((s) => s.desktopUrl) ?? [];
   const heroSlides = editorSlides.length
     ? editorSlides
@@ -654,7 +663,15 @@ export default function Landing() {
       </footer>
 
       {activeBanner && (
-        <div className="popup-banner" role="dialog" aria-modal="true" aria-label={activeBanner.title || "Offer"}>
+        <div
+          className="popup-banner"
+          role="dialog"
+          aria-modal="true"
+          aria-label={activeBanner.title || "Offer"}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) dismissBanner();
+          }}
+        >
           <div className="popup-banner__inner">
             <button type="button" className="popup-banner__close" onClick={dismissBanner} aria-label="Close">
               ✕

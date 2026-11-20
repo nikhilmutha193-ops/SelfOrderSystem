@@ -60,6 +60,7 @@ services:
       - uploads_data:/app/uploads
       - backups_data:/app/backups
       - proofs_data:/app/proofs
+      - config_data:/app/config-data
       - invoices_data:/app/invoices
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:5000/health"]
@@ -108,5 +109,6 @@ volumes:
   uploads_data:
   backups_data:
   proofs_data:
+  config_data:
   invoices_data:
   client_tls:

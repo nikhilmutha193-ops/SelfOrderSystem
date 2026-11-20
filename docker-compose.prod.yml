@@ -89,6 +89,7 @@ services:
       - backups_data:/app/backups
       - invoices_data:/app/invoices
       - proofs_data:/app/proofs
+      - config_data:/app/config-data
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:5000/health"]
       interval: 15s
@@ -137,4 +138,5 @@ volumes:
   backups_data:
   invoices_data:
   proofs_data:
+  config_data:
   client_tls:

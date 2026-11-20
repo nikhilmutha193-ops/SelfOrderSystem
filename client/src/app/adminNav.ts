@@ -35,6 +35,7 @@ import {
   Users,
   UtensilsCrossed,
   Wallet,
+  Wrench,
   type LucideIcon,
 } from "lucide-react";
 
@@ -46,6 +47,8 @@ export interface AdminNavItem {
   module: ModuleKey | null;
   icon: LucideIcon;
   keywords?: string;
+  /** Shown only to the owner login, whatever modules other logins are given. */
+  ownerOnly?: boolean;
 }
 
 /** The two halves of the admin: running orders day to day, and setting the restaurant up. */
@@ -331,6 +334,14 @@ export const ADMIN_NAV: AdminNavGroup[] = [
         icon: DatabaseBackup,
       },
       {
+        to: "/admin/maintenance",
+        label: "Maintenance Mode",
+        module: null,
+        ownerOnly: true,
+        icon: Wrench,
+        keywords: "under maintenance downtime offline closed site",
+      },
+      {
         to: "/admin/audit",
         label: "Audit Log",
         module: "audit",
@@ -393,7 +404,7 @@ export function visibleNav(profile: AdminProfile | null): AdminNavGroup[] {
     ...group,
     items: group.items.filter(
       (item) =>
-        item.module === null || can(profile, item.module),
+        (!item.ownerOnly || !!profile?.isOwner) && (item.module === null || can(profile, item.module)),
     ),
   })).filter((group) => group.items.length > 0);
 }

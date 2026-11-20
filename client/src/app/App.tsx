@@ -10,6 +10,7 @@ import { useSiteBranding } from "../lib/useSiteBranding";
 import ErrorBoundary from "../shared/ui/ErrorBoundary";
 import PageLoader from "../shared/ui/PageLoader";
 import RouteProgress from "../shared/ui/RouteProgress";
+import MaintenanceGate from "./MaintenanceGate";
 import ProtectedRoute from "./ProtectedRoute";
 import AppProviders from "./providers";
 
@@ -62,6 +63,7 @@ const Coupons = lazy(() => import("../pages/admin/Coupons"));
 const Reviews = lazy(() => import("../pages/admin/Reviews"));
 const Messages = lazy(() => import("../features/chat/pages/Messages"));
 const Backup = lazy(() => import("../pages/admin/Backup"));
+const Maintenance = lazy(() => import("../pages/admin/Maintenance"));
 const Admins = lazy(() => import("../pages/admin/Admins"));
 const Analytics = lazy(() => import("../pages/admin/Analytics"));
 const AuditLog = lazy(() => import("../pages/admin/AuditLog"));
@@ -81,6 +83,7 @@ export default function App() {
       <ErrorBoundary>
         <BrowserRouter>
           <RouteProgress />
+          <MaintenanceGate>
           <Suspense fallback={<PageLoader />}>
             <Routes>
               <Route path="/" element={<Landing />} />
@@ -391,6 +394,7 @@ export default function App() {
                     </RequireModule>
                   }
                 />
+                <Route path="maintenance" element={<Maintenance />} />
                 <Route
                   path="backup"
                   element={
@@ -448,6 +452,7 @@ export default function App() {
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </Suspense>
+          </MaintenanceGate>
         </BrowserRouter>
       </ErrorBoundary>
     </AppProviders>

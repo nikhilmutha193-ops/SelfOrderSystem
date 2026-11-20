@@ -5,6 +5,7 @@ import { api, extractErrorMessage } from "../../shared/api/client";
 import { confirmDialog } from "../../shared/ui/confirm";
 import { usePageTour, type TourStep } from "../../shared/ui/PageTour";
 import { Button, Card, ErrorText, Input, PageHeader, Switch } from "../../shared/ui/ui";
+import DatabaseConnection from "./DatabaseConnection";
 
 interface RestoreSummary {
   message: string;
@@ -540,6 +541,8 @@ export default function Backup() {
           </Button>
         </div>
       </Card>
+
+      {isOwner && <DatabaseConnection />}
 
       {isOwner && (
         <Card data-tour="backup-reset">

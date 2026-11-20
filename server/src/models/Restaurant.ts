@@ -196,6 +196,17 @@ export interface IBirthdaySmsSettings {
   template: string;
 }
 
+/** The "under maintenance" page: shown instead of the public site, guest, kiosk and chef pages while it is active. */
+export interface IMaintenance {
+  /** The switch. With no start and end it is on until switched off; with a window it applies only inside it. */
+  enabled: boolean;
+  startAt?: Date | null;
+  endAt?: Date | null;
+  title: string;
+  message: string;
+  imageUrl: string;
+}
+
 export interface IRestaurant {
   _id: Types.ObjectId;
   name: string;
@@ -233,6 +244,7 @@ export interface IRestaurant {
   areas: IArea[];
   birthdaySmsSettings: IBirthdaySmsSettings;
   backupSchedule: IBackupSchedule;
+  maintenance: IMaintenance;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -496,6 +508,24 @@ const restaurantSchema = new Schema<IRestaurant>(
       default: () => ({}),
     },
     backupSchedule: { type: backupScheduleSchema, default: () => ({}) },
+    maintenance: {
+      type: new Schema<IMaintenance>(
+        {
+          enabled: { type: Boolean, default: false },
+          startAt: { type: Date, default: null },
+          endAt: { type: Date, default: null },
+          title: { type: String, default: "We'll be back soon", maxlength: 100 },
+          message: {
+            type: String,
+            default: "We are doing some maintenance on our website. Please check back shortly.",
+            maxlength: 1000,
+          },
+          imageUrl: { type: String, default: "" },
+        },
+        { _id: false }
+      ),
+      default: () => ({}),
+    },
     chatModeration: { type: chatModerationSchema, default: () => ({}) },
     aggregatorWebhookSecret: { type: String, default: "" },
   },

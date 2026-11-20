@@ -12,6 +12,7 @@ import { errorHandler, notFoundHandler } from "./middleware/errorHandler";
 import { apiLimiter, authLimiter } from "./middleware/rateLimit";
 import { requestLogger } from "./middleware/requestLogger";
 import { sanitizeRequest } from "./middleware/sanitize";
+import { maintenanceGate } from "./middleware/maintenance";
 import { resolveTenant } from "./middleware/tenant";
 import { registerBookingHandlers } from "./modules/bookings/bookings.handlers";
 import bookingRoutes from "./modules/bookings/bookings.routes";
@@ -43,6 +44,8 @@ import analyticsRoutes from "./routes/analytics.routes";
 import authRoutes from "./routes/auth.routes";
 import awardRoutes from "./routes/award.routes";
 import backupRoutes from "./routes/backup.routes";
+import dbConfigRoutes from "./routes/dbconfig.routes";
+import maintenanceRoutes from "./routes/maintenance.routes";
 import catalogRoutes from "./routes/catalog.routes";
 import chefsRoutes from "./routes/chefs.routes";
 import couponRoutes from "./routes/coupon.routes";
@@ -150,6 +153,8 @@ app.use("/api", async (_req, res, next) => {
 
 app.use("/api", apiLimiter);
 app.use("/api", resolveTenant);
+app.use("/api", maintenanceGate); // while maintenance is on, only signed-in admins get through
+app.use("/api/maintenance", maintenanceRoutes);
 app.use("/api/auth", authLimiter, authRoutes);
 app.use("/api/menu/recommendations", recommendationRoutes);
 app.use("/api", catalogRoutes);
@@ -183,6 +188,7 @@ app.use("/api/coupons", couponRoutes);
 app.use("/api/landing", landingRoutes);
 app.use("/api/uploads", uploadRoutes);
 app.use("/api/backup", backupRoutes);
+app.use("/api/db-config", dbConfigRoutes);
 app.use("/api/admins", adminsRoutes);
 app.use("/api/gst", gstRoutes);
 app.use("/api/refunds", refundRoutes);

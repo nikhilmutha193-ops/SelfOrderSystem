@@ -1,7 +1,6 @@
 import { Request, Response } from "express";
 
 import { asyncHandler } from "../middleware/errorHandler";
-import Admin from "../models/Admin";
 import BackupRecord from "../models/BackupRecord";
 import Restaurant from "../models/Restaurant";
 import { writeAudit } from "../utils/audit";
@@ -17,7 +16,7 @@ import {
 } from "../utils/backupService";
 import { isValidDayEndTime } from "../utils/businessDay";
 import { HttpError } from "../utils/httpError";
-import { comparePassword } from "../utils/password";
+import { assertOwnerPassword } from "../utils/ownerConfirm";
 
 function sendAsAttachment(res: Response, filename: string, json: string) {
   res.setHeader("Content-Type", "application/json");
@@ -86,17 +85,11 @@ export const listCollections = asyncHandler(async (req: Request, res: Response) 
 });
 
 export const resetData = asyncHandler(async (req: Request, res: Response) => {
-  if (!req.admin?.isOwner) throw new HttpError(403, "Only the owner account can reset data");
   const { collections, password } = req.body as { collections?: unknown; password?: unknown };
   if (!Array.isArray(collections) || collections.some((c) => typeof c !== "string")) {
     throw new HttpError(400, "collections must be a list of names");
   }
-  if (typeof password !== "string" || !password) throw new HttpError(400, "Enter your admin password to confirm");
-  // 403, not 401: a 401 would make the app treat the session as expired and sign the owner out.
-  const admin = await Admin.findOne({ _id: req.auth?.id, restaurantId: req.restaurantId });
-  if (!admin || !(await comparePassword(password, admin.passwordHash))) {
-    throw new HttpError(403, "That password is not correct");
-  }
+  await assertOwnerPassword(req, password);
 
   // Keep a copy on the server first whenever the host can store one, so a mistake can be restored.
   let backupFilename: string | null = null;

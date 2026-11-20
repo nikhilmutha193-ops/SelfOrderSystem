@@ -19,7 +19,7 @@ COPY --from=build /app/dist ./dist
 # Stop the build here, with a clear message, if the compiled app is not in the image.
 RUN test -f dist/index.js || (echo 'dist/index.js is missing: the build step did not produce the app' >&2; exit 1)
 # Folders the API writes to; docker-compose mounts volumes on them so they survive a redeploy.
-RUN mkdir -p uploads backups invoices proofs
+RUN mkdir -p uploads backups invoices proofs config-data
 
 EXPOSE 5000
 HEALTHCHECK --interval=10s --timeout=5s --retries=5 \
