@@ -9,6 +9,8 @@ import {
   getBackupSchedule,
   importBackup,
   listBackups,
+  listCollections,
+  resetData,
   restoreFromRecord,
   updateBackupSchedule,
 } from "../controllers/backup.controller";
@@ -19,6 +21,9 @@ const router = Router();
 router.get("/capabilities", requireAuth("admin"), requireModule("backup"), getBackupCapabilities);
 router.get("/export", requireAuth("admin"), requireModule("backup"), exportBackup);
 router.post("/import", requireAuth("admin"), requireModule("backup"), importBackup);
+
+router.get("/collections", requireAuth("admin"), requireModule("backup"), listCollections);
+router.post("/reset", requireAuth("admin"), requireModule("backup"), resetData);
 
 router.get("/schedule", requireAuth("admin"), requireModule("backup"), getBackupSchedule);
 router.put("/schedule", requireAuth("admin"), requireModule("backup"), updateBackupSchedule);

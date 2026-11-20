@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, it } from "vitest";
 
 import Booking from "../src/models/Booking";
+import FoodItem from "../src/models/FoodItem";
 import FoodReview from "../src/models/FoodReview";
 import LandingContent from "../src/models/LandingContent";
 import { api, bearer, createWorld, loginAdmin, World } from "./fixtures";
@@ -59,5 +60,73 @@ describe("backups", () => {
     expect(back?.customerName).toBe("Backup Guest");
     expect(await FoodReview.countDocuments({ restaurantId })).toBe(reviewsBefore);
     expect(await LandingContent.countDocuments({ restaurantId })).toBe(1);
+  });
+});
+
+describe("resetting data", () => {
+  it("lists collections with their counts", async () => {
+    const res = await api().get("/api/backup/collections").set(bearer(owner));
+    expect(res.status).toBe(200);
+    const foodItems = res.body.find((c: { key: string }) => c.key === "foodItems");
+    expect(foodItems.count).toBeGreaterThan(0);
+    expect(foodItems.label).toBe("Dishes");
+  });
+
+  it("needs the admin password, and a wrong one deletes nothing", async () => {
+    const restaurantId = world.restaurantId;
+    await FoodReview.create({ restaurantId, foodItemId: world.food.coffee, rating: 3 });
+    const none = await api().post("/api/backup/reset").set(bearer(owner)).send({ collections: ["foodReviews"] });
+    expect(none.status).toBe(400);
+    const wrong = await api()
+      .post("/api/backup/reset")
+      .set(bearer(owner))
+      .send({ collections: ["foodReviews"], password: "not-it" });
+    expect(wrong.status).toBe(403);
+    expect(await FoodReview.countDocuments({ restaurantId })).toBeGreaterThan(0);
+  });
+
+  it("refuses unknown names and half-resets that would leave junk or repeat invoice numbers", async () => {
+    const send = (collections: string[]) =>
+      api().post("/api/backup/reset").set(bearer(owner)).send({ collections, password: "Owner@123" });
+    expect((await send(["nope"])).status).toBe(400);
+    expect((await send(["orders"])).status).toBe(400);
+    expect((await send(["invoiceCounters"])).status).toBe(400);
+    expect((await send([])).status).toBe(400);
+  });
+
+  it("empties only the chosen collection and keeps a backup first", async () => {
+    const restaurantId = world.restaurantId;
+    await FoodReview.create({ restaurantId, foodItemId: world.food.coffee, rating: 4 });
+    const dishesBefore = await FoodItem.countDocuments({ restaurantId });
+
+    const res = await api()
+      .post("/api/backup/reset")
+      .set(bearer(owner))
+      .send({ collections: ["foodReviews"], password: "Owner@123" });
+    expect(res.status).toBe(200);
+    expect(res.body.removed.foodReviews).toBeGreaterThan(0);
+    expect(res.body.backupFilename).toMatch(/^backup-/);
+    expect(await FoodReview.countDocuments({ restaurantId })).toBe(0);
+    expect(await FoodItem.countDocuments({ restaurantId })).toBe(dishesBefore);
+  });
+
+  it("can be undone by restoring the backup it saved", async () => {
+    const restaurantId = world.restaurantId;
+    await FoodReview.create({ restaurantId, foodItemId: world.food.coffee, rating: 5 });
+    const before = await FoodReview.countDocuments({ restaurantId });
+
+    const reset = await api()
+      .post("/api/backup/reset")
+      .set(bearer(owner))
+      .send({ collections: ["foodReviews"], password: "Owner@123" });
+    expect(reset.status).toBe(200);
+    expect(await FoodReview.countDocuments({ restaurantId })).toBe(0);
+
+    const list = await api().get("/api/backup").set(bearer(owner));
+    const saved = list.body.find((r: { filename: string }) => r.filename === reset.body.backupFilename);
+    expect(saved).toBeTruthy();
+    const restored = await api().post(`/api/backup/${saved._id}/restore`).set(bearer(owner));
+    expect(restored.status).toBe(200);
+    expect(await FoodReview.countDocuments({ restaurantId })).toBe(before);
   });
 });

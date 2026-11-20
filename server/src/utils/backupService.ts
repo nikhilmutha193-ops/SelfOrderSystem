@@ -84,6 +84,99 @@ const TENANT_MODELS: { key: string; model: Model<any> }[] = [
   { key: "refunds", model: Refund },
 ];
 
+/** What each backed-up collection holds, in words the Backup page shows next to its count. */
+const COLLECTION_LABELS: Record<string, string> = {
+  categories: "Menu categories",
+  subcategories: "Menu subcategories",
+  foodItems: "Dishes",
+  tables: "Tables",
+  chefs: "Chef logins",
+  team: "Team members (website)",
+  awards: "Awards (website)",
+  coupons: "Coupons",
+  couponRedemptions: "Coupon uses",
+  reviews: "Restaurant reviews",
+  orders: "Orders and bills",
+  orderItems: "Order items",
+  chatMessages: "Guest chat messages",
+  invoiceCounters: "Invoice number counters",
+  shifts: "Cash shifts",
+  dayCloses: "Day-close reports",
+  stations: "Kitchen stations",
+  displays: "Display slideshows",
+  printers: "Printers",
+  stockItems: "Stock items",
+  recipes: "Recipes",
+  stockMovements: "Stock movements",
+  vendors: "Vendors",
+  purchases: "Purchases",
+  stockCounts: "Stock counts",
+  customers: "Customers",
+  loyaltyEntries: "Loyalty points",
+  bookings: "Table bookings",
+  foodReviews: "Dish reviews",
+  landingContent: "Landing page content",
+  creditEntries: "Pay-later ledger",
+  promoBanners: "Promo banners",
+  smsTemplates: "SMS templates",
+  smsCampaigns: "SMS campaigns",
+  paymentAttempts: "Online payment attempts",
+  refunds: "Refunds",
+};
+
+export interface CollectionInfo {
+  key: string;
+  label: string;
+  count: number;
+}
+
+export async function describeCollections(restaurantId: Types.ObjectId | string): Promise<CollectionInfo[]> {
+  return Promise.all(
+    TENANT_MODELS.map(async ({ key, model }) => ({
+      key,
+      label: COLLECTION_LABELS[key] ?? key,
+      count: await model.countDocuments({ restaurantId }),
+    }))
+  );
+}
+
+/**
+ * Deletes everything in the chosen collections for this restaurant. Order items always go with their orders (an item
+ * without its order is junk), and the invoice counters only with the orders, because restarting them while old bills
+ * exist would reuse invoice numbers. Returns how many documents were removed per collection.
+ */
+export async function resetCollections(
+  restaurantId: Types.ObjectId | string,
+  keys: string[]
+): Promise<Record<string, number>> {
+  const known = new Set(TENANT_MODELS.map((m) => m.key));
+  const chosen = new Set(keys);
+  if (chosen.size === 0) throw new HttpError(400, "Choose at least one collection to reset");
+  for (const key of chosen) {
+    if (!known.has(key)) throw new HttpError(400, `Unknown collection: ${key}`);
+  }
+  if (chosen.has("orders") !== chosen.has("orderItems")) {
+    throw new HttpError(400, "Orders and order items must be reset together");
+  }
+  if (chosen.has("invoiceCounters") && !chosen.has("orders")) {
+    throw new HttpError(400, "Invoice number counters can only be reset together with the orders, or numbers would repeat");
+  }
+
+  const removed: Record<string, number> = {};
+  for (const { key, model } of TENANT_MODELS) {
+    if (!chosen.has(key)) continue;
+    removed[key] = (await model.deleteMany({ restaurantId })).deletedCount ?? 0;
+  }
+  // With the orders gone, no table should still look seated or waiting to pay.
+  if (chosen.has("orders") && !chosen.has("tables")) {
+    await TableModel.updateMany(
+      { restaurantId },
+      { $set: { status: "available", sessionId: null, occupiedAt: null } }
+    );
+  }
+  return removed;
+}
+
 async function buildBackupPayload(restaurantId: Types.ObjectId | string) {
   const restaurant = await Restaurant.findById(restaurantId).lean();
   if (!restaurant) throw new HttpError(404, "Restaurant not found");

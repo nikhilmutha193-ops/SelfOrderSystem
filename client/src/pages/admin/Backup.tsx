@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 
+import { useAdmin } from "../../lib/adminAuth";
 import { api, extractErrorMessage } from "../../shared/api/client";
 import { confirmDialog } from "../../shared/ui/confirm";
 import { usePageTour, type TourStep } from "../../shared/ui/PageTour";
@@ -16,6 +17,18 @@ interface BackupRecordDto {
   sizeBytes: number;
   trigger: "manual" | "scheduled";
   createdAt: string;
+}
+
+interface CollectionDto {
+  key: string;
+  label: string;
+  count: number;
+}
+
+interface ResetResult {
+  message: string;
+  removed: Record<string, number>;
+  backupFilename: string | null;
 }
 
 interface ScheduleDto {
@@ -43,6 +56,15 @@ async function downloadBlobResponse(res: { data: BlobPart; headers: Record<strin
 }
 
 export default function Backup() {
+  const { profile } = useAdmin();
+  const isOwner = !!profile?.isOwner;
+  const [collections, setCollections] = useState<CollectionDto[]>([]);
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [resetPassword, setResetPassword] = useState("");
+  const [resetting, setResetting] = useState(false);
+  const [resetError, setResetError] = useState<string | null>(null);
+  const [resetResult, setResetResult] = useState<ResetResult | null>(null);
+
   const [records, setRecords] = useState<BackupRecordDto[]>([]);
   const [loadingList, setLoadingList] = useState(true);
   const [listError, setListError] = useState<string | null>(null);
@@ -66,6 +88,58 @@ export default function Backup() {
   const [restoring, setRestoring] = useState(false);
   const [restoreError, setRestoreError] = useState<string | null>(null);
   const [restoreResult, setRestoreResult] = useState<RestoreSummary | null>(null);
+
+  async function loadCollections() {
+    try {
+      const res = await api.get<CollectionDto[]>("/backup/collections");
+      setCollections(res.data);
+    } catch {
+      // non-fatal - the reset card simply stays empty
+    }
+  }
+
+  // Orders and order items always go together, so ticking one ticks the other.
+  function togglePicked(key: string) {
+    setPicked((prev) => {
+      const next = new Set(prev);
+      const group = key === "orders" || key === "orderItems" ? ["orders", "orderItems"] : [key];
+      const on = !next.has(key);
+      for (const k of group) {
+        if (on) next.add(k);
+        else next.delete(k);
+      }
+      // The invoice counters make no sense once the orders are kept.
+      if (!next.has("orders")) next.delete("invoiceCounters");
+      return next;
+    });
+  }
+
+  async function resetSelected() {
+    if (picked.size === 0 || !resetPassword) return;
+    const names = collections.filter((c) => picked.has(c.key)).map((c) => c.label);
+    if (
+      !(await confirmDialog({
+        title: "Reset this data?",
+        message: `${names.join(", ")} will be emptied for good. Everything else stays.`,
+        confirmLabel: "Reset data",
+      }))
+    )
+      return;
+    setResetError(null);
+    setResetResult(null);
+    setResetting(true);
+    try {
+      const res = await api.post<ResetResult>("/backup/reset", { collections: [...picked], password: resetPassword });
+      setResetResult(res.data);
+      setPicked(new Set());
+      setResetPassword("");
+      await Promise.all([loadCollections(), loadRecords()]);
+    } catch (err) {
+      setResetError(extractErrorMessage(err));
+    } finally {
+      setResetting(false);
+    }
+  }
 
   async function loadRecords() {
     setLoadingList(true);
@@ -92,11 +166,12 @@ export default function Backup() {
   useEffect(() => {
     loadRecords();
     loadSchedule();
+    if (isOwner) loadCollections();
     api
       .get<{ serverStorage: boolean }>("/backup/capabilities")
       .then((res) => setServerStorage(res.data.serverStorage))
       .catch(() => setServerStorage(true)); // assume available; the button's own error still guards it
-  }, []);
+  }, [isOwner]);
 
   async function downloadNow() {
     setGenError(null);
@@ -465,6 +540,67 @@ export default function Backup() {
           </Button>
         </div>
       </Card>
+
+      {isOwner && (
+        <Card data-tour="backup-reset">
+          <h2 className="mb-3 text-base font-semibold text-slate-900">Reset data</h2>
+          <p className="mb-3 text-sm text-slate-500">
+            Permanently empty the collections you tick, for example to clear test orders before going live.
+            {serverStorage
+              ? " A backup is saved on the server first, so you can restore it from the list above."
+              : " This host can't keep a backup copy, so use Download backup above first."}{" "}
+            Orders and order items are reset together, and the invoice counters can only be reset with the orders.
+          </p>
+          <ErrorText>{resetError}</ErrorText>
+          {resetResult && (
+            <div className="mb-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm text-emerald-800">
+              <p className="font-medium">
+                Data reset{resetResult.backupFilename ? `. Backup saved as ${resetResult.backupFilename}.` : "."}
+              </p>
+              <ul className="mt-1 grid grid-cols-2 gap-x-4 gap-y-0.5 sm:grid-cols-3">
+                {Object.entries(resetResult.removed).map(([key, count]) => (
+                  <li key={key}>
+                    {key}: {count} removed
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          <div className="grid grid-cols-1 gap-x-4 gap-y-1 sm:grid-cols-2 lg:grid-cols-3">
+            {collections.map((c) => (
+              <label key={c.key} className="flex items-center gap-2 py-1 text-sm text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={picked.has(c.key)}
+                  onChange={() => togglePicked(c.key)}
+                  disabled={c.count === 0 && !picked.has(c.key)}
+                />
+                <span className="flex-1">{c.label}</span>
+                <span className="text-xs tabular-nums text-slate-400">{c.count}</span>
+              </label>
+            ))}
+          </div>
+          <div className="mt-4 flex flex-wrap items-end gap-3">
+            <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
+              Your admin password
+              <Input
+                type="password"
+                className="!w-56"
+                value={resetPassword}
+                onChange={(e) => setResetPassword(e.target.value)}
+                autoComplete="current-password"
+              />
+            </label>
+            <Button
+              variant="danger"
+              onClick={resetSelected}
+              disabled={picked.size === 0 || !resetPassword || resetting}
+            >
+              {resetting ? "Resetting..." : `Reset ${picked.size} selected`}
+            </Button>
+          </div>
+        </Card>
+      )}
     </div>
   );
 }

@@ -1,18 +1,23 @@
 import { Request, Response } from "express";
 
 import { asyncHandler } from "../middleware/errorHandler";
+import Admin from "../models/Admin";
 import BackupRecord from "../models/BackupRecord";
 import Restaurant from "../models/Restaurant";
+import { writeAudit } from "../utils/audit";
 import {
   applyBackupPayload,
   buildBackupJson,
   deleteBackupFile,
+  describeCollections,
   generateBackupFile,
   isBackupStorageAvailable,
   readBackupFile,
+  resetCollections,
 } from "../utils/backupService";
 import { isValidDayEndTime } from "../utils/businessDay";
 import { HttpError } from "../utils/httpError";
+import { comparePassword } from "../utils/password";
 
 function sendAsAttachment(res: Response, filename: string, json: string) {
   res.setHeader("Content-Type", "application/json");
@@ -76,7 +81,41 @@ export const importBackup = asyncHandler(async (req: Request, res: Response) => 
   res.json({ message: "Restore complete", summary });
 });
 
-export const getBackupSchedule = asyncHandler(async (req: Request, res: Response) => {
+export const listCollections = asyncHandler(async (req: Request, res: Response) => {
+  res.json(await describeCollections(req.restaurantId!));
+});
+
+export const resetData = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.admin?.isOwner) throw new HttpError(403, "Only the owner account can reset data");
+  const { collections, password } = req.body as { collections?: unknown; password?: unknown };
+  if (!Array.isArray(collections) || collections.some((c) => typeof c !== "string")) {
+    throw new HttpError(400, "collections must be a list of names");
+  }
+  if (typeof password !== "string" || !password) throw new HttpError(400, "Enter your admin password to confirm");
+  // 403, not 401: a 401 would make the app treat the session as expired and sign the owner out.
+  const admin = await Admin.findOne({ _id: req.auth?.id, restaurantId: req.restaurantId });
+  if (!admin || !(await comparePassword(password, admin.passwordHash))) {
+    throw new HttpError(403, "That password is not correct");
+  }
+
+  // Keep a copy on the server first whenever the host can store one, so a mistake can be restored.
+  let backupFilename: string | null = null;
+  if (isBackupStorageAvailable()) {
+    const { record } = await generateBackupFile(req.restaurantId!, "manual");
+    backupFilename = record.filename;
+  }
+  const removed = await resetCollections(req.restaurantId!, collections as string[]);
+  await writeAudit(
+    req,
+    "data.reset",
+    `Reset ${Object.entries(removed)
+      .map(([key, n]) => `${key} (${n})`)
+      .join(", ")}${backupFilename ? `; backup ${backupFilename}` : "; no backup saved"}`
+  );
+  res.json({ message: "Data reset", removed, backupFilename });
+});
+
+export const getBackupSchedule =asyncHandler(async (req: Request, res: Response) => {
   const restaurant = await Restaurant.findById(req.restaurantId);
   if (!restaurant) throw new HttpError(404, "Restaurant not found");
   res.json(restaurant.backupSchedule);
