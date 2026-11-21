@@ -53,7 +53,7 @@ function DownloadAgent({ onError }: { onError: (message: string | null) => void 
           </Button>
           <p className="text-xs text-slate-500">
             {exeReady
-              ? `No Node.js needed. Extract All, then run pair.bat (the exe inside is about ${mb(data!.exe.sizeBytes)}).`
+              ? `No Node.js needed. Extract All, open PrintAgent.exe, type the pairing code and press Set up and start (the exe is about ${mb(data!.exe.sizeBytes)}).`
               : "Not on this server yet. Build it with node build-exe.js and copy it to the server's downloads folder (see downloads/README.md)."}
           </p>
         </div>
@@ -70,7 +70,7 @@ function DownloadAgent({ onError }: { onError: (message: string | null) => void 
             Download print-agent.zip
           </Button>
           <p className="text-xs text-slate-500">
-            Needs Node.js 18 or newer on that computer. Extract All before running anything in it.
+            Needs Node.js 18 or newer on that computer. Extract All, then run node agent.js in the folder to open the same setup window.
           </p>
         </div>
       </div>
@@ -80,28 +80,33 @@ function DownloadAgent({ onError }: { onError: (message: string | null) => void 
 
 function PairingBox({ pairing, onClose }: { pairing: PairingCode; onClose: () => void }) {
   const server = window.location.origin;
-  const command = `node agent.js pair --server ${server} --code ${pairing.pairingCode}`;
+  // For people who prefer a command line: the same pairing, without the setup window.
   const exeCommand = `PrintAgent.exe pair --server ${server} --code ${pairing.pairingCode}`;
   return (
     <div className="mt-3 rounded-md border border-orange-200 bg-orange-50 p-3 text-sm" data-testid="pairing-box">
       <p className="font-medium text-slate-800">Pair “{pairing.name}”</p>
       <p className="mt-1 text-slate-600">
-        On that computer, open the folder with the agent and run one of these within 15 minutes (until{" "}
-        {new Date(pairing.expiresAt).toLocaleTimeString([], { timeStyle: "short" })}):
+        On that computer, open <b>PrintAgent.exe</b> and type this code within 15 minutes (until{" "}
+        {new Date(pairing.expiresAt).toLocaleTimeString([], { timeStyle: "short" })}), then press{" "}
+        <b>Set up and start</b>:
       </p>
       <p className="mt-2 text-center font-mono text-2xl font-bold tracking-[0.3em] text-slate-900">
         {pairing.pairingCode}
       </p>
-      <p className="mt-2 text-xs font-medium text-slate-600">With PrintAgent.exe (no Node.js needed):</p>
-      <pre className="mt-1 overflow-x-auto rounded bg-slate-900 px-3 py-2 text-xs text-slate-100">{exeCommand}</pre>
-      <p className="mt-2 text-xs font-medium text-slate-600">With Node.js (the print-agent folder):</p>
-      <pre className="mt-1 overflow-x-auto rounded bg-slate-900 px-3 py-2 text-xs text-slate-100">{command}</pre>
+      <p className="mt-2 text-center text-xs text-slate-600">
+        Server address (already filled in if you downloaded the app from here): <b>{server}</b>
+      </p>
+      <details className="mt-2 text-xs text-slate-600">
+        <summary className="cursor-pointer font-medium">Command line instead</summary>
+        <pre className="mt-1 overflow-x-auto rounded bg-slate-900 px-3 py-2 text-slate-100">{exeCommand}</pre>
+        <p className="mt-1">Pairs only. Start it with: PrintAgent.exe run</p>
+      </details>
       <div className="mt-2 flex flex-wrap gap-2">
-        <Button variant="secondary" onClick={() => navigator.clipboard?.writeText(exeCommand)}>
-          Copy .exe command
+        <Button variant="secondary" onClick={() => navigator.clipboard?.writeText(pairing.pairingCode)}>
+          Copy code
         </Button>
-        <Button variant="secondary" onClick={() => navigator.clipboard?.writeText(command)}>
-          Copy Node command
+        <Button variant="secondary" onClick={() => navigator.clipboard?.writeText(server)}>
+          Copy server address
         </Button>
         <Button variant="secondary" onClick={onClose}>
           Done

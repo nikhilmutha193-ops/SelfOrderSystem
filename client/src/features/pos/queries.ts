@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import type { PosFloor, PosMenu } from "../../lib/types";
+import type { PosFloor, PosMenu, PosToday } from "../../lib/types";
 import { POLL } from "../../shared/api/queryClient";
 import { refreshOrderData } from "../orders/queries";
 import { posApi } from "./api";
@@ -8,6 +8,7 @@ import { posApi } from "./api";
 export const posKeys = {
   menu: ["pos", "menu"] as const,
   floor: ["orders", "pos-floor"] as const,
+  today: ["orders", "pos-today"] as const,
 };
 
 const MENU_CACHE = "selforder_pos_menu_v1";
@@ -54,6 +55,16 @@ export function usePosFloor() {
     },
     initialData: () => readCache<PosFloor>(FLOOR_CACHE),
     initialDataUpdatedAt: 0,
+    refetchInterval: POLL.posFloor,
+  });
+}
+
+/** Today's billed and paid orders; polled only while the Cashier screen shows them. */
+export function usePosToday(enabled: boolean) {
+  return useQuery<PosToday>({
+    queryKey: posKeys.today,
+    queryFn: posApi.today,
+    enabled,
     refetchInterval: POLL.posFloor,
   });
 }

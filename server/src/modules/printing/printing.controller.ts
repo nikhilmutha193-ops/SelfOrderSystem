@@ -165,9 +165,14 @@ export const downloadAgentExe = asyncHandler(async (_req: Request, res: Response
   res.download(file, "PrintAgent.exe");
 });
 
-/** The Windows app as PrintAgent.zip (the exe plus pair.bat and start-agent.bat): what the admin page offers. */
-export const downloadAgentApp = asyncHandler(async (_req: Request, res: Response) => {
-  const zip = await agentAppZip();
+/** The address people use for this site (behind the proxies it is the public one), put in the app so it need not be typed. */
+function siteAddress(req: Request): string {
+  return `${req.protocol}://${req.get("host")}`;
+}
+
+/** The Windows app as PrintAgent.zip (the exe and this site's address): what the admin page offers. */
+export const downloadAgentApp = asyncHandler(async (req: Request, res: Response) => {
+  const zip = await agentAppZip(siteAddress(req));
   if (!zip) {
     throw new HttpError(
       404,
@@ -200,7 +205,7 @@ export const downloadAgentFile = asyncHandler(async (req: Request, res: Response
     res.send(agentZip());
     return;
   }
-  const zip = await agentAppZip();
+  const zip = await agentAppZip(siteAddress(req));
   if (!zip) {
     throw new HttpError(
       404,

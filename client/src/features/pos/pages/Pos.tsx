@@ -40,9 +40,10 @@ import {
   type OfflineTarget,
 } from "../offline";
 import { kotHtml, printHtml, receiptHtml } from "../offlinePrint";
-import { usePosFloor, usePosMenu, useReleasePosTable } from "../queries";
+import { posKeys, usePosFloor, usePosMenu, usePosToday, useReleasePosTable } from "../queries";
 import { filterMenu, hasOptions, pricedMenu, usePosCart } from "../usePosCart";
-import type { DraftLine } from "../api";
+import { posApi, type DraftLine } from "../api";
+import { usePrintSlips } from "../usePrintSlips";
 
 type Mode = "tables" | "takeaway" | "cashier";
 
@@ -145,6 +146,32 @@ export default function Pos() {
   const setPacked = useSetItemPacked();
   const cancelItem = useCancelOrderItem();
   const cancelOrder = useCancelOrder();
+  const slips = usePrintSlips(printing);
+  const todayQuery = usePosToday(mode === "cashier");
+  // The order that was just paid, so its invoice can be printed or sent before the screen moves on to the next order.
+  const [justPaid, setJustPaid] = useState<{ id: string; label: string; hasPhone: boolean } | null>(null);
+  const [slipBusyId, setSlipBusyId] = useState<string | null>(null);
+
+  // Another order or table picked, or a new one started: the paid footer is done with.
+  useEffect(() => {
+    if (justPaid && orderId !== justPaid.id) setJustPaid(null);
+  }, [orderId, justPaid]);
+
+  /** Print the invoice, or the KOT and the invoice as two slips. Called straight from a click (a PDF tab needs that). */
+  function printSlip(kind: "invoice" | "both", id: string) {
+    setSlipBusyId(id);
+    setMessage(null);
+    const job = kind === "invoice" ? slips.printInvoice(id) : slips.printBoth(id);
+    job
+      .then((text) => {
+        setMessage({ tone: "ok", text });
+        void queryClient.invalidateQueries({ queryKey: posKeys.today });
+        // The order's own "printed" flag changed too: the panel hides Print invoice once it was printed.
+        void refreshOrderData(queryClient);
+      })
+      .catch((err) => setMessage({ tone: "error", text: extractErrorMessage(err) }))
+      .finally(() => setSlipBusyId(null));
+  }
   const serveDish = useServeItem();
   const menu = pricedMenu(rawMenu, mode === "takeaway" && !tablesOff ? { orderType: "takeaway" } : { orderType: "dine-in", areaId });
   const term = search.trim();
@@ -181,11 +208,16 @@ export default function Pos() {
     setPanelOpen(true);
   }
 
-  function cashierTakeaway(o: PosOrderSummary) {
+  /** Opens any order (picked from the day's list, a takeaway or a bill left to pay) in the panel to bill or settle it. */
+  function cashierOrder(id: string) {
     setTableId(null);
-    cart.open(o._id);
+    cart.open(id);
     setMessage(null);
     setPanelOpen(true);
+  }
+
+  function cashierTakeaway(o: PosOrderSummary) {
+    cashierOrder(o._id);
   }
 
   function addDishesToSelected() {
@@ -391,6 +423,8 @@ export default function Pos() {
           setMessage({ tone: "ok", text: "Bill sent to the printer" });
         } else {
           await openPdfInTab(tab, () => ordersApi.invoicePdf(id));
+          // Opened to print from the browser: the cashier's list counts it as printed.
+          await posApi.invoicePrinted(id).catch(() => undefined);
         }
       } catch (err) {
         tab?.close();
@@ -399,7 +433,37 @@ export default function Pos() {
     });
   }
 
-  function settle() {
+  /** Send what is unsent to the kitchen, make the bill, then print the KOT and the invoice as two separate slips. */
+  function billAndPrintBoth() {
+    if (offlineFlow) return offlineFinish([]);
+    // Without a printer the two slips open as PDF tabs, which a browser only allows straight from the click.
+    const toPrinter = !!printing?.printersConfigured;
+    const tabs: [Window | null, Window | null] = toPrinter
+      ? [null, null]
+      : [window.open("", "_blank"), window.open("", "_blank")];
+    void run(async () => {
+      try {
+        const { id } = await save(!payFirst && !cafe);
+        if (!id) {
+          tabs.forEach((tab) => tab?.close());
+          return;
+        }
+        await cart.bill(id);
+        setMessage({ tone: "ok", text: await slips.printBoth(id, tabs) });
+        void queryClient.invalidateQueries({ queryKey: posKeys.today });
+      } catch (err) {
+        tabs.forEach((tab) => tab?.close());
+        throw err;
+      }
+    });
+  }
+
+  // Set by the "KOT + invoice" payment button: once the payment is taken, print the KOT and the invoice as two slips.
+  const printBothAfterPay = useRef(false);
+
+  function settle(withSlips: boolean = false) {
+    // Called as a click handler too, so only a real `true` counts.
+    printBothAfterPay.current = withSlips === true;
     if (offlineFlow) return offlineSettleOpen();
     if (settleBlock) {
       setMessage({ tone: "error", text: "Serve every dish before settling this bill." });
@@ -447,6 +511,8 @@ export default function Pos() {
 
   async function afterSettle() {
     setSettleOpen(false);
+    const wantSlips = printBothAfterPay.current;
+    printBothAfterPay.current = false;
     if (!orderId) return;
     const fresh = await ordersApi.get(orderId);
     if (fresh.order.status !== "closed") return;
@@ -463,7 +529,17 @@ export default function Pos() {
         sent ? ` · sent to the kitchen as token T${tokens.join(", T")}` : ""
       }`,
     });
-    reset(mode);
+    setJustPaid({
+      id: orderId,
+      label: fresh.order.invoiceNumber ?? fresh.order.customerName,
+      hasPhone: !!fresh.order.customerPhone?.replace(/\D/g, ""),
+    });
+    // The panel stays on the paid order, with its invoice buttons in the footer, until "New order" or another pick.
+    if (wantSlips) {
+      // A printer can be used from here; opening PDF tabs needs a click, so without one the footer button does it.
+      if (printing?.printersConfigured) printSlip("both", orderId);
+      else setMessage((m) => (m ? { ...m, text: `${m.text} · press KOT + invoice below to print the two slips` } : m));
+    }
   }
 
   const actions = useRef({ saveAndKot, bill, settle });
@@ -518,14 +594,18 @@ export default function Pos() {
     reset("tables");
   }
   const cashier = mode === "cashier";
+  // A picked order shows where it sits: its table, or takeaway / counter order.
+  const pickedOrder = activeDetail?.order;
+  const pickedTable = pickedOrder && typeof pickedOrder.tableId === "object" && pickedOrder.tableId ? pickedOrder.tableId.code : null;
+  const pickedTitle = `${pickedTable ? `Table ${pickedTable}` : pickedOrder?.orderType === "dine-in" ? "Order" : "Takeaway"} · ${pickedOrder?.customerName ?? ""}`;
   const title =
     mode === "tables" || cashier
       ? table
         ? `Table ${table.code}`
         : cashier
           ? orderId
-            ? `Takeaway · ${activeDetail?.order.customerName ?? ""}`
-            : "Pick a table to bill"
+            ? pickedTitle
+            : "Pick a table or an order to bill"
           : "Choose a table"
       : orderId
         ? `${tablesOff ? "Order" : "Takeaway"} · ${activeDetail?.order.customerName ?? ""}`
@@ -675,6 +755,9 @@ export default function Pos() {
               onSelectTable={cashierTable}
               onSelectTakeaway={cashierTakeaway}
               onAddDishes={resumeTakeaway}
+              today={todayQuery.data}
+              selectedOrderId={!tableId ? orderId : null}
+              onSelectToday={(o) => cashierOrder(o._id)}
               onCancelEmpty={(o) => void cancelEmptyOrder(o._id, o.customerName || "This order")}
               payFirst={billing?.dineInPayment === "upfront"}
               cafe={cafe}
@@ -722,7 +805,7 @@ export default function Pos() {
             title={title}
             emptyText={
               cashier
-                ? "Pick a table on the left to see its order and bill it."
+                ? "Pick a table or an order on the left to see it and bill it."
                 : showTables
                   ? "Tap a table to start or open its order."
                   : undefined
@@ -781,6 +864,21 @@ export default function Pos() {
                 setDishFor(line.item);
               }}
             onCancelItem={(item) => void removeSaved(item)}
+            onBillBoth={billAndPrintBoth}
+            onSettleBoth={() => settle(true)}
+            onPrintInvoice={() => orderId && printSlip("invoice", orderId)}
+            paid={
+              justPaid && orderId === justPaid.id
+                ? {
+                    onPrintInvoice: () => printSlip("invoice", justPaid.id),
+                    onPrintBoth: () => printSlip("both", justPaid.id),
+                    onNext: () => {
+                      setJustPaid(null);
+                      reset(mode);
+                    },
+                  }
+                : null
+            }
             onCancelOrder={() => orderId && void cancelEmptyOrder(orderId, activeDetail?.order.customerName || "This order")}
             onTogglePacked={(item) =>
               void run(async () => {
@@ -794,7 +892,7 @@ export default function Pos() {
             onBill={bill}
             onSettle={settle}
             settleBlock={settleBlock}
-            busy={busy || showTables || (cashier && !orderId)}
+            busy={busy || slipBusyId !== null || showTables || (cashier && !orderId)}
           />
         </div>
         {!panelOpen && (

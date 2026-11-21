@@ -3,7 +3,7 @@
 //
 //   node build-exe.js
 //
-// Then copy the dist folder (PrintAgent.exe, pair.bat, start-agent.bat) to the printing computer.
+// Then copy dist/PrintAgent.exe to the printing computer. Opening it shows the setup window: no other files are needed.
 const { execFileSync } = require("child_process");
 const fs = require("fs");
 const path = require("path");
@@ -27,7 +27,13 @@ const seaConfig = path.join(dist, "sea-config.json");
 fs.mkdirSync(dist, { recursive: true });
 fs.writeFileSync(
   seaConfig,
-  JSON.stringify({ main: path.join(root, "agent.js"), output: blob, disableExperimentalSEAWarning: true })
+  JSON.stringify({
+    main: path.join(root, "agent.js"),
+    output: blob,
+    disableExperimentalSEAWarning: true,
+    // The setup window's page travels inside the exe.
+    assets: { "setup-ui.html": path.join(root, "setup-ui.html") },
+  })
 );
 
 console.log("1/3 Bundling agent.js ...");
@@ -65,7 +71,6 @@ fs.rmSync(tools, { recursive: true, force: true });
 
 fs.rmSync(blob, { force: true });
 fs.rmSync(seaConfig, { force: true });
-for (const name of ["pair.bat", "start-agent.bat"]) fs.copyFileSync(path.join(root, name), path.join(dist, name));
 
 console.log(`\nDone: ${exe} (${Math.round(fs.statSync(exe).size / 1048576)} MB)`);
-console.log("Copy the dist folder to the printing computer, then run:  pair.bat https://your-server CODE");
+console.log("Copy PrintAgent.exe to the printing computer and open it: enter the pairing code and press Set up and start.");

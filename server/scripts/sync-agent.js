@@ -5,7 +5,7 @@
 const fs = require("fs");
 const path = require("path");
 
-const FILES = ["agent.js", "agent.d.ts", "package.json", "pair.bat", "start-agent.bat", "README.md"];
+const FILES = ["agent.js", "agent.d.ts", "package.json", "setup-ui.html", "README.md"];
 const source = path.join(__dirname, "..", "..", "print-agent");
 const target = path.join(__dirname, "..", "src", "utils", "agentFiles.generated.ts");
 

@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Print agent</title>
+<style>
+  :root { --ink:#0f172a; --muted:#64748b; --line:#e2e8f0; --bg:#f1f5f9; --card:#fff; --brand:#c2410c; --brand-d:#9a3412; --ok:#15803d; --warn:#b45309; --bad:#b91c1c; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:15px/1.45 "Segoe UI", system-ui, sans-serif; color:var(--ink); background:var(--bg); }
+  main { max-width:520px; margin:0 auto; padding:18px 16px 28px; display:flex; flex-direction:column; gap:14px; }
+  h1 { font-size:20px; margin:0; }
+  .sub { color:var(--muted); font-size:13px; margin:2px 0 0; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px; }
+  .status { display:flex; gap:12px; align-items:center; }
+  .dot { width:14px; height:14px; border-radius:50%; background:#94a3b8; flex:none; }
+  .dot.ok { background:var(--ok); } .dot.warn { background:var(--warn); } .dot.bad { background:var(--bad); }
+  .status b { display:block; font-size:16px; }
+  .status span { color:var(--muted); font-size:13px; }
+  label { display:block; font-weight:600; font-size:13px; margin:12px 0 4px; }
+  input { width:100%; font:inherit; padding:11px 12px; border:1px solid #cbd5e1; border-radius:10px; background:#fff; }
+  input:focus { outline:3px solid #fed7aa; border-color:var(--brand); }
+  #code { font-size:22px; letter-spacing:.25em; text-transform:uppercase; text-align:center; font-weight:700; }
+  button { font:inherit; font-weight:600; border:0; border-radius:10px; padding:11px 16px; cursor:pointer; background:var(--brand); color:#fff; }
+  button:hover { background:var(--brand-d); }
+  button:disabled { opacity:.55; cursor:default; }
+  button.ghost { background:#fff; color:var(--ink); border:1px solid #cbd5e1; }
+  button.ghost:hover { background:#f8fafc; }
+  button.danger { color:var(--bad); }
+  .big { width:100%; margin-top:16px; padding:13px; font-size:16px; }
+  .row { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+  dl { display:grid; grid-template-columns:auto 1fr; gap:6px 12px; margin:0; font-size:14px; }
+  dt { color:var(--muted); } dd { margin:0; word-break:break-all; }
+  .msg { margin-top:12px; padding:10px 12px; border-radius:10px; font-size:14px; }
+  .msg.bad { background:#fef2f2; color:var(--bad); border:1px solid #fecaca; }
+  .msg.good { background:#f0fdf4; color:var(--ok); border:1px solid #bbf7d0; }
+  .msg.info { background:#fff7ed; color:var(--brand-d); border:1px solid #fed7aa; }
+  .hint { color:var(--muted); font-size:12.5px; margin-top:8px; }
+  pre { margin:10px 0 0; max-height:170px; overflow:auto; background:#0f172a; color:#e2e8f0; padding:10px 12px; border-radius:10px; font:12px/1.5 Consolas, monospace; white-space:pre-wrap; word-break:break-word; }
+  details summary { cursor:pointer; font-weight:600; font-size:14px; }
+  [hidden] { display:none !important; }
+</style>
+</head>
+<body>
+<main>
+  <div>
+    <h1>SelfOrder print agent</h1>
+    <p class="sub">Prints kitchen tickets and bills on the printers connected to this computer.</p>
+  </div>
+
+  <section class="card" aria-live="polite">
+    <div class="status">
+      <span id="dot" class="dot"></span>
+      <div><b id="state-title">Checking...</b><span id="state-text"></span></div>
+    </div>
+    <dl id="facts" hidden>
+      <dt>Restaurant</dt><dd id="f-restaurant"></dd>
+      <dt>This computer</dt><dd id="f-name"></dd>
+      <dt>Server</dt><dd id="f-server"></dd>
+      <dt>Starts with Windows</dt><dd id="f-auto"></dd>
+    </dl>
+    <div class="row" id="controls" hidden>
+      <button class="ghost" id="restart">Restart</button>
+      <button class="ghost" id="stop">Stop</button>
+      <button class="ghost danger" id="remove">Don't start with Windows</button>
+      <button class="ghost" id="repair">Pair again</button>
+    </div>
+  </section>
+
+  <section class="card" id="setup" hidden>
+    <b id="setup-title">Set up this computer</b>
+    <p class="hint" style="margin-top:4px">In the website: <b>Admin &rsaquo; Printers &amp; Stations &rsaquo; Add computer</b>. It shows a code that is good for 15 minutes.</p>
+    <label for="server">Server address</label>
+    <input id="server" type="url" placeholder="https://your-restaurant.example" autocomplete="off" spellcheck="false">
+    <label for="code">Pairing code</label>
+    <input id="code" type="text" maxlength="16" placeholder="ABCD2345" autocomplete="off" spellcheck="false">
+    <button class="big" id="go">Set up and start</button>
+    <div id="progress" class="msg info" hidden></div>
+    <p class="hint">Windows will ask for permission once, so the agent can start by itself when the computer starts. Choose <b>Yes</b>.</p>
+  </section>
+
+  <div id="message" class="msg" hidden></div>
+
+  <section class="card" id="logbox" hidden>
+    <details>
+      <summary>What the agent is doing</summary>
+      <pre id="log"></pre>
+    </details>
+  </section>
+
+  <div class="row" style="justify-content:space-between;margin-top:0">
+    <span class="hint" id="next" hidden>Next: add your printer in Printers &amp; Stations on the website and press <b>Test</b>.</span>
+    <button class="ghost" id="close">Close</button>
+  </div>
+</main>
+
+<script>
+const KEY = new URLSearchParams(location.search).get("k");
+const $ = (id) => document.getElementById(id);
+let state = null, busy = false, showSetup = false, prefilled = false;
+
+async function api(route, body) {
+  const res = await fetch("/api/" + route + "?k=" + encodeURIComponent(KEY), {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.message || "Something went wrong");
+  return data;
+}
+
+function say(text, kind) {
+  const box = $("message");
+  box.hidden = !text; box.textContent = text || ""; box.className = "msg " + (kind || "info");
+}
+
+function ago(ms) {
+  const s = Math.max(0, Math.round((Date.now() - ms) / 1000));
+  return s < 5 ? "just now" : s < 90 ? s + " seconds ago" : Math.round(s / 60) + " minutes ago";
+}
+
+function render() {
+  const s = state; if (!s) return;
+  const dot = $("dot");
+  let title, text, kind = "";
+  if (!s.paired) { title = "Not set up yet"; text = "Enter the pairing code below."; }
+  else if (!s.running) { title = "Stopped"; text = "The agent is not running, so nothing prints. Press Restart."; kind = "warn"; }
+  else if (s.connected) { title = "Connected"; text = "Printing for " + (s.restaurantName || "your restaurant") + ". Last contact " + ago(s.lastPollAt) + "."; kind = "ok"; }
+  else { title = "Can't reach the server"; text = s.error || "It will keep trying."; kind = "bad"; }
+  dot.className = "dot " + kind;
+  $("state-title").textContent = title;
+  $("state-text").textContent = " " + text;
+
+  $("facts").hidden = !s.paired;
+  $("f-restaurant").textContent = s.restaurantName || "-";
+  $("f-name").textContent = s.name || "-";
+  $("f-server").textContent = s.server || "-";
+  $("f-auto").textContent = s.autostart ? "Yes" : "No";
+  $("controls").hidden = !s.paired || !s.windows;
+  $("remove").hidden = !s.autostart;
+
+  const open = !s.paired || showSetup;
+  $("setup").hidden = !open;
+  $("setup-title").textContent = s.paired ? "Pair again with a new code" : "Set up this computer";
+  if (open && !prefilled) { $("server").value = s.server || s.serverHint || "https://"; prefilled = true; }
+
+  $("logbox").hidden = !s.log.length;
+  $("log").textContent = s.log.join("\n");
+  $("next").hidden = !(s.running && s.connected);
+  for (const id of ["go", "restart", "stop", "remove", "repair"]) $(id).disabled = busy;
+}
+
+async function refresh() {
+  try { state = await (await fetch("/api/state?k=" + encodeURIComponent(KEY))).json(); render(); } catch { /* the app is closing */ }
+}
+
+async function act(route, body, working) {
+  busy = true; say(working, "info"); render();
+  try {
+    const result = await api(route, body);
+    if (result.state) state = result.state;
+    if (result.ok === false) say(result.message, "bad");
+    else if (route === "setup") { showSetup = false; say("All set. The agent is running and will start by itself with Windows.", "good"); }
+    else say("", "");
+  } catch (err) { say(err.message, "bad"); }
+  busy = false; await refresh();
+}
+
+$("go").onclick = () => act("setup", { server: $("server").value, code: $("code").value }, "Pairing, then starting. Windows may ask for permission: choose Yes...").then(() => { $("code").value = ""; });
+$("code").addEventListener("keydown", (e) => { if (e.key === "Enter") $("go").click(); });
+$("restart").onclick = () => act("start", {}, "Restarting. Windows may ask for permission: choose Yes...");
+$("stop").onclick = () => act("stop", {}, "Stopping. Windows may ask for permission: choose Yes...");
+$("remove").onclick = () => act("remove", {}, "Removing the automatic start. Windows may ask for permission: choose Yes...");
+$("repair").onclick = () => { showSetup = true; prefilled = false; render(); $("code").focus(); };
+$("close").onclick = async () => { try { await api("quit"); } catch {} window.close(); document.body.innerHTML = "<main><p class='sub'>You can close this window. The agent keeps running in the background.</p></main>"; };
+
+refresh(); setInterval(refresh, 2000); setInterval(() => api("ping").catch(() => {}), 5000);
+</script>
+</body>
+</html>

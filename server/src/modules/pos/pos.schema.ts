@@ -39,3 +39,4 @@ export const offlineOrderSchema = createPosOrderSchema.omit({ sendToKitchen: tru
 export type OfflineOrderInput = z.output<typeof offlineOrderSchema>;
 
 export const tableIdParams = z.object({ tableId: objectId("Invalid table id") });
+export const orderIdParams = z.object({ orderId: objectId("Invalid order id") });

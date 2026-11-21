@@ -4,7 +4,7 @@ import { getContext } from "../../core/context";
 import { idempotencyKey, runIdempotent } from "../../core/idempotency";
 import { parse } from "../../core/validate";
 import { asyncHandler } from "../../middleware/errorHandler";
-import { createPosOrderSchema, offlineOrderSchema, tableIdParams } from "./pos.schema";
+import { createPosOrderSchema, offlineOrderSchema, orderIdParams, tableIdParams } from "./pos.schema";
 import * as pos from "./pos.service";
 
 export const getMenu = asyncHandler(async (req: Request, res: Response) => {
@@ -39,4 +39,18 @@ export const createOrder = asyncHandler(async (req: Request, res: Response) => {
 export const releaseTable = asyncHandler(async (req: Request, res: Response) => {
   const { tableId } = parse(tableIdParams, req.params);
   res.json(await pos.releaseTable(getContext(req), tableId));
+});
+
+export const getToday = asyncHandler(async (req: Request, res: Response) => {
+  res.json(await pos.getToday(getContext(req)));
+});
+
+export const printBoth = asyncHandler(async (req: Request, res: Response) => {
+  const { orderId } = parse(orderIdParams, req.params);
+  res.json(await pos.printBoth(getContext(req), orderId));
+});
+
+export const markInvoicePrinted = asyncHandler(async (req: Request, res: Response) => {
+  const { orderId } = parse(orderIdParams, req.params);
+  res.json(await pos.markInvoicePrinted(getContext(req), orderId));
 });

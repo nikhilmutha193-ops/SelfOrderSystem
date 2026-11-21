@@ -1,7 +1,7 @@
-import { Clock, HandPlatter, Send, ShoppingBag } from "lucide-react";
+import { CheckCircle2, Clock, HandPlatter, Printer, Send, ShoppingBag } from "lucide-react";
 import { useMemo, useState } from "react";
 
-import type { PosOrderSummary, PosTable } from "../../../lib/types";
+import type { PosOrderSummary, PosTable, PosToday, PosTodayLine, PosTodayOrder } from "../../../lib/types";
 import { useNow } from "../../kitchen/kds";
 import { withGuestState } from "../guestTable";
 
@@ -106,6 +106,252 @@ function Card({
   );
 }
 
+type TodayFilter = "all" | "open" | "unpaid" | "paid" | "notPrinted" | "cancelled";
+
+const timeOf = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+const ORDER_BADGE: Record<string, { label: string; className: string }> = {
+  open: { label: "Open", className: "bg-amber-100 text-amber-900" },
+  billed: { label: "Bill printed, not paid", className: "bg-blue-100 text-blue-800" },
+  closed: { label: "Paid", className: "bg-green-100 text-green-800" },
+  cancelled: { label: "Cancelled", className: "bg-red-100 text-red-800" },
+};
+
+const TABLE_STATE: Record<string, { label: string; className: string }> = {
+  occupied: { label: "occupied", className: "bg-amber-50 text-amber-900 ring-amber-200" },
+  awaiting_payment: { label: "waiting to pay", className: "bg-blue-50 text-blue-800 ring-blue-200" },
+  available: { label: "free", className: "bg-slate-50 text-slate-600 ring-slate-200" },
+};
+
+function Chip({ className, children }: { className: string; children: React.ReactNode }) {
+  return <span className={`rounded-full px-2 py-0.5 ${className}`}>{children}</span>;
+}
+
+/** Where a dish is: not sent to the kitchen yet, waiting, being cooked, ready to serve, served or cancelled. */
+function dishState(line: PosTodayLine): { label: string; className: string } {
+  if (line.status === "cancelled") return { label: "Cancelled", className: "text-red-600" };
+  if (line.status === "served") return { label: "Served", className: "text-slate-500" };
+  if (line.status === "ready") return { label: "Ready to serve", className: "text-green-700" };
+  if (line.status === "preparing") return { label: "Cooking", className: "text-orange-700" };
+  return line.sent ? { label: "Waiting", className: "text-amber-700" } : { label: "Not sent", className: "text-slate-700" };
+}
+
+const TAG = "rounded bg-white px-1.5 py-0.5 text-[10px] font-semibold text-slate-600 ring-1 ring-slate-200";
+
+/** The dishes of an order with what was chosen for each: options, Jain, pack, spice and the guest's comment. */
+function DishLines({ lines }: { lines: PosTodayLine[] }) {
+  const [all, setAll] = useState(false);
+  const shown = all ? lines : lines.slice(0, 3);
+  if (lines.length === 0) return null;
+  return (
+    <div className="mt-2 rounded-lg bg-slate-50 px-2.5 py-1" data-testid="today-dishes">
+      <ul className="divide-y divide-slate-100">
+        {shown.map((line, index) => {
+          const state = dishState(line);
+          const tags = [
+            line.jain && "Jain",
+            line.pack && "Pack",
+            line.free && "Complimentary",
+            ...line.options,
+            line.combo.length > 0 && `Combo: ${line.combo.join(", ")}`,
+          ].filter(Boolean) as string[];
+          return (
+            <li key={index} className="py-1.5 text-xs">
+              <div className="flex items-baseline justify-between gap-2">
+                <span className={`min-w-0 font-semibold text-slate-800 ${line.status === "cancelled" ? "line-through opacity-60" : ""}`}>
+                  {line.quantity}× {line.name}
+                </span>
+                <span className={`shrink-0 text-[10px] font-bold uppercase ${state.className}`}>
+                  {line.token != null ? `T${line.token} · ` : ""}
+                  {state.label}
+                </span>
+              </div>
+              {tags.length > 0 && (
+                <div className="mt-0.5 flex flex-wrap gap-1">
+                  {tags.map((tag) => (
+                    <span key={tag} className={TAG}>
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              )}
+              {line.note && <p className="mt-0.5 text-[11px] text-slate-500 italic">“{line.note}”</p>}
+            </li>
+          );
+        })}
+      </ul>
+      {lines.length > 3 && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setAll((v) => !v);
+          }}
+          className="py-1 text-[11px] font-semibold text-orange-700 hover:underline"
+        >
+          {all ? "Show fewer" : `Show all ${lines.length} dishes`}
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** Every order of the day: its status, its table's state and how far its dishes got, with print and share buttons. */
+function TodayOrders({
+  today,
+  selectedId,
+  onSelect,
+}: {
+  today: PosToday;
+  selectedId: string | null;
+  onSelect: (order: PosTodayOrder) => void;
+}) {
+  const [filter, setFilter] = useState<TodayFilter>("all");
+  const hasInvoice = (o: PosTodayOrder) => !!o.invoiceNumber && (o.status === "billed" || o.status === "closed");
+  const count = (test: (o: PosTodayOrder) => boolean) => today.orders.filter(test).length;
+  const shown = today.orders.filter(
+    (o) =>
+      filter === "all" ||
+      (filter === "open"
+        ? o.status === "open"
+        : filter === "unpaid"
+          ? o.status === "billed"
+          : filter === "paid"
+            ? o.status === "closed"
+            : filter === "cancelled"
+              ? o.status === "cancelled"
+              : hasInvoice(o) && !o.invoicePrintedAt)
+  );
+  const total = shown.filter((o) => o.status !== "cancelled").reduce((sum, o) => sum + o.total, 0);
+  return (
+    <section className="flex flex-col gap-2" data-testid="today-orders">
+      <h3 className="flex items-center gap-1.5 text-xs font-semibold tracking-wide text-slate-500 uppercase">
+        <Printer size={13} aria-hidden="true" />
+        Today's orders and invoices
+      </h3>
+      <p className="-mt-1 text-xs text-slate-500">Tap an order to open it and bill, settle or reprint it.</p>
+      <div className="flex flex-wrap items-center gap-1.5">
+        {(
+          [
+            ["all", `All ${today.orders.length}`],
+            ["open", `Open ${count((o) => o.status === "open")}`],
+            ["unpaid", `Bill, not paid ${count((o) => o.status === "billed")}`],
+            ["paid", `Paid ${count((o) => o.status === "closed")}`],
+            ["notPrinted", `Invoice not printed ${today.notPrinted}`],
+            ["cancelled", `Cancelled ${count((o) => o.status === "cancelled")}`],
+          ] as const
+        ).map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            onClick={() => setFilter(value)}
+            aria-pressed={filter === value}
+            className={`rounded-full border px-3 py-1 text-xs font-medium ${
+              filter === value ? "border-orange-600 bg-orange-600 text-white" : "border-slate-300 bg-white text-slate-700"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+        <span className="ml-auto text-xs text-slate-500 tabular-nums">
+          {shown.length} shown · {rupees(total)}
+        </span>
+      </div>
+      {shown.length === 0 ? (
+        <p className="py-4 text-center text-sm text-slate-500">
+          {today.orders.length === 0 ? "No orders yet today." : "Nothing in this view."}
+        </p>
+      ) : (
+        <ul className="flex flex-col gap-2">
+          {shown.map((o) => {
+            const status = ORDER_BADGE[o.status] ?? ORDER_BADGE.open;
+            const table = o.tableStatus ? TABLE_STATE[o.tableStatus] : null;
+            const it = o.items;
+            const place = o.tableCode ? `Table ${o.tableCode}` : o.orderType === "takeaway" ? "Takeaway" : "Counter";
+            const pickable = o.status !== "cancelled";
+            const selected = selectedId === o._id;
+            return (
+              <li
+                key={o._id}
+                {...(pickable && {
+                  role: "button",
+                  tabIndex: 0,
+                  "aria-pressed": selected,
+                  "aria-label": `Open ${o.invoiceNumber ?? "order"} ${o.customerName}`,
+                  onClick: () => onSelect(o),
+                  onKeyDown: (e: React.KeyboardEvent) => {
+                    if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) {
+                      e.preventDefault();
+                      onSelect(o);
+                    }
+                  },
+                })}
+                className={`rounded-xl border-2 p-3 shadow-sm transition ${
+                  selected
+                    ? "border-orange-500 bg-orange-50 ring-2 ring-orange-200"
+                    : "border-slate-200 bg-white"
+                } ${pickable ? "cursor-pointer hover:border-orange-300" : "opacity-80"}`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-slate-900">
+                      <span className="truncate">{o.invoiceNumber ?? "Not billed yet"}</span>
+                      {o.tokens.map((token) => (
+                        <span key={token} className="rounded bg-slate-900 px-1.5 py-0.5 text-[11px] font-bold text-white">
+                          Token T{token}
+                        </span>
+                      ))}
+                    </p>
+                    <p className="truncate text-xs text-slate-500">
+                      {[place, o.customerName].filter(Boolean).join(" · ")} · {timeOf(o.at)}
+                    </p>
+                  </div>
+                  <p className="shrink-0 text-lg font-bold text-slate-900 tabular-nums">{rupees(o.total)}</p>
+                </div>
+
+                <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] font-semibold">
+                  <Chip className={status.className}>
+                    {status.label}
+                    {o.status === "closed" && o.paymentMethod && o.paymentMethod !== "pending" ? ` · ${o.paymentMethod}` : ""}
+                  </Chip>
+                  {table && (
+                    <span className={`rounded-full px-2 py-0.5 ring-1 ring-inset ${table.className}`}>
+                      Table {o.tableCode} {table.label}
+                    </span>
+                  )}
+                  {hasInvoice(o) &&
+                    (o.invoicePrintedAt ? (
+                      <Chip className="bg-slate-100 text-slate-600">
+                        <CheckCircle2 size={11} aria-hidden="true" className="mr-1 inline" />
+                        Invoice printed{o.invoicePrintCount > 1 ? ` ×${o.invoicePrintCount}` : ""}
+                      </Chip>
+                    ) : (
+                      <Chip className="bg-amber-100 text-amber-900">Invoice not printed</Chip>
+                    ))}
+                </div>
+
+                {(it.total > 0 || it.cancelled > 0) && (
+                  <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px] font-semibold" aria-label="Dish status">
+                    <span className="text-slate-500">{it.total} dish{it.total === 1 ? "" : "es"}{it.cancelled > 0 || it.total > 0 ? ":" : ""}</span>
+                    {it.unsent > 0 && <Chip className="bg-slate-700 text-white">{it.unsent} not sent</Chip>}
+                    {it.waiting > 0 && <Chip className="bg-amber-100 text-amber-900">{it.waiting} waiting</Chip>}
+                    {it.preparing > 0 && <Chip className="bg-orange-100 text-orange-800">{it.preparing} cooking</Chip>}
+                    {it.ready > 0 && <Chip className="bg-green-600 text-white">{it.ready} ready to serve</Chip>}
+                    {it.served > 0 && <Chip className="bg-slate-100 text-slate-600">{it.served} served</Chip>}
+                    {it.cancelled > 0 && <Chip className="bg-red-100 text-red-700">{it.cancelled} cancelled</Chip>}
+                  </div>
+                )}
+
+                <DishLines lines={o.lines} />
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
+  );
+}
+
 /** The cashier's view: only tables (and running takeaways) that have an order to bill. */
 export function CashierBoard({
   tables: rawTables,
@@ -116,6 +362,9 @@ export function CashierBoard({
   onSelectTakeaway,
   onAddDishes,
   onCancelEmpty,
+  today,
+  selectedOrderId = null,
+  onSelectToday,
   payFirst = false,
   cafe = false,
 }: {
@@ -129,6 +378,12 @@ export function CashierBoard({
   onAddDishes?: (order: PosOrderSummary) => void;
   /** An order with no dishes left: cancel it instead of leaving it on the board. */
   onCancelEmpty?: (order: PosOrderSummary) => void;
+  /** Today's billed and paid orders, with whether each invoice was printed. */
+  today?: PosToday;
+  /** The order open in the panel, highlighted in the day's list. */
+  selectedOrderId?: string | null;
+  /** An order picked from the day's list to bill, settle or reprint. */
+  onSelectToday?: (order: PosTodayOrder) => void;
   /** Dine-in guests pay when ordering, so a running table order is one waiting to be paid. */
   payFirst?: boolean;
   /** Cafe flow: orders are paid before they are cooked, so there is no "bill printed" state. */
@@ -304,6 +559,8 @@ export function CashierBoard({
           </div>
         </section>
       )}
+
+      {today && onSelectToday && <TodayOrders today={today} selectedId={selectedOrderId} onSelect={onSelectToday} />}
     </div>
   );
 }

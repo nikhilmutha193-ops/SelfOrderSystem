@@ -1,5 +1,5 @@
 import { newId } from "../../lib/id";
-import type { Order, OrderItem, PosFloor, PosMenu, PosMenuItem, SelectedModifier } from "../../lib/types";
+import type { Order, OrderItem, PosFloor, PosMenu, PosMenuItem, PosToday, SelectedModifier } from "../../lib/types";
 import { api } from "../../shared/api/client";
 import type { NewOrderLine } from "../orders/api";
 
@@ -72,6 +72,12 @@ export interface OfflineSyncResult {
 export const posApi = {
   menu: () => api.get<PosMenu>("/pos/menu").then((res) => res.data),
   floor: () => api.get<PosFloor>("/pos/floor").then((res) => res.data),
+  today: () => api.get<PosToday>("/pos/today").then((res) => res.data),
+  /** The KOT and the invoice as separate print jobs (a slip each). */
+  printBoth: (orderId: string) =>
+    api.post<{ kots: number; invoices: number; rounds: number }>(`/pos/orders/${orderId}/print-both`).then((res) => res.data),
+  /** The invoice was opened as a PDF to print from the browser: counts it as printed. */
+  invoicePrinted: (orderId: string) => api.post(`/pos/orders/${orderId}/invoice-printed`).then((res) => res.data),
   createOrder: (input: CreatePosOrderInput) =>
     api
       .post<CreatePosOrderResult>("/pos/orders", input, {

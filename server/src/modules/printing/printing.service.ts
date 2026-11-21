@@ -323,6 +323,7 @@ export async function enqueueBill(restaurantId: string, orderId: string | Types.
       orderId: order._id,
     }))
   );
+  await repo.markInvoicePrinted(order._id);
   return printers.length;
 }
 

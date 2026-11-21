@@ -3,7 +3,7 @@ import { FilterQuery, Types } from "mongoose";
 import Category from "../../models/Category";
 import Chef from "../../models/Chef";
 import FoodItem from "../../models/FoodItem";
-import Order from "../../models/Order";
+import Order, { IOrder } from "../../models/Order";
 import OrderItem, { IOrderItem } from "../../models/OrderItem";
 import PrintAgent, { IPrintAgent } from "../../models/PrintAgent";
 import Printer, { IPrinter } from "../../models/Printer";
@@ -32,6 +32,14 @@ export class PrintingRepository {
 
   createStation(name: string) {
     return Station.create({ restaurantId: this.restaurantId, name });
+  }
+
+  /** Notes that this order's invoice went to a printer (or was opened to print). */
+  async markInvoicePrinted(orderId: Types.ObjectId | string) {
+    await Order.updateOne(this.scoped<IOrder>({ _id: orderId }), {
+      $set: { invoicePrintedAt: new Date() },
+      $inc: { invoicePrintCount: 1 },
+    });
   }
 
   async deleteStation(id: Types.ObjectId) {

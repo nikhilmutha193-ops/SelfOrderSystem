@@ -100,6 +100,9 @@ export interface IOrder {
   customerGstin?: string;
   kotSeq?: number;
   archivedAt?: Date | null;
+  /** When the invoice was last sent to a printer or opened to print, and how many times: the cashier's "not printed yet" list. */
+  invoicePrintedAt?: Date | null;
+  invoicePrintCount?: number;
   cancelReason?: string;
   cancelledAt?: Date | null;
   voidedAt?: Date | null;
@@ -227,6 +230,8 @@ const orderSchema = new Schema<IOrder>(
     customerGstin: { type: String, trim: true, uppercase: true },
     kotSeq: { type: Number },
     archivedAt: { type: Date, default: null },
+    invoicePrintedAt: { type: Date, default: null },
+    invoicePrintCount: { type: Number, default: 0 },
     cancelReason: { type: String, trim: true },
     cancelledAt: { type: Date, default: null },
     voidedAt: { type: Date, default: null },

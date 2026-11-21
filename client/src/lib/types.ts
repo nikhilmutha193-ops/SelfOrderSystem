@@ -390,6 +390,9 @@ export interface Order {
   bill?: BillSnapshot | null;
   customerGstin?: string;
   archivedAt?: string | null;
+  /** When the invoice was last sent to a printer or opened to print (null: never), and how many times. */
+  invoicePrintedAt?: string | null;
+  invoicePrintCount?: number;
   cancelReason?: string;
   voidedAt?: string | null;
   voidReason?: string;
@@ -1014,6 +1017,55 @@ export interface PosOrderSummary {
   /** The guest left to pay at the counter: settled here, but no longer holding its table. */
   payAtCounter?: boolean;
   tableCode?: string | null;
+}
+
+/** An order of the business day (running, billed, paid or cancelled), for the cashier's list to check and reprint. */
+export interface PosTodayOrder {
+  _id: string;
+  orderType: OrderType;
+  tableCode: string | null;
+  /** The table's own state; null for takeaways and walk-in tables, which are never occupied. */
+  tableStatus: TableStatus | null;
+  customerName: string;
+  hasPhone: boolean;
+  status: OrderStatus;
+  invoiceNumber: string | null;
+  at: string;
+  total: number;
+  paymentMethod: string;
+  payAtCounter: boolean;
+  source?: Order["source"];
+  invoicePrintedAt: string | null;
+  invoicePrintCount: number;
+  /** The last KOT round sent, or null when nothing went to the kitchen. */
+  lastKotRound: number | null;
+  /** KOT token numbers of the order (one per round), or the kiosk pickup number. */
+  tokens: number[];
+  /** The dishes with what was chosen for each. */
+  lines: PosTodayLine[];
+  /** Dishes by how far they got: not sent, sent and waiting, being cooked, ready, served. */
+  items: { total: number; unsent: number; waiting: number; preparing: number; ready: number; served: number; cancelled: number };
+}
+
+export interface PosTodayLine {
+  name: string;
+  quantity: number;
+  status: OrderItemStatus;
+  sent: boolean;
+  token: number | null;
+  jain: boolean;
+  pack: boolean;
+  free: boolean;
+  options: string[];
+  /** Spice choice and the guest's comment. */
+  note: string;
+  combo: string[];
+}
+
+export interface PosToday {
+  since: string;
+  orders: PosTodayOrder[];
+  notPrinted: number;
 }
 
 export interface PosTable {

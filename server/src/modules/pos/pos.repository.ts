@@ -116,6 +116,90 @@ export class PosRepository {
       .lean();
   }
 
+  /** Every order of the business day (opened, or billed, today): running, billed, paid and cancelled. Newest first. */
+  todaysOrders(since: Date) {
+    return Order.find(
+      this.scoped<IOrder>({
+        orderType: { $in: ["dine-in", "takeaway"] },
+        archivedAt: null,
+        $or: [{ billedAt: { $gte: since } }, { checkinTime: { $gte: since } }],
+      })
+    )
+      .select(
+        "orderType tableId customerName customerPhone status invoiceNumber billedAt checkinTime bill.grandTotal paymentMethod payAtCounter source kiosk pickupNumber invoicePrintedAt invoicePrintCount"
+      )
+      .sort({ billedAt: -1, checkinTime: -1 })
+      .limit(500)
+      .lean();
+  }
+
+  /** Dish counts per order by what happened to them, and the last KOT round that was sent. */
+  itemStates(orderIds: Types.ObjectId[]) {
+    const count = (match: Record<string, unknown>) => ({ $sum: { $cond: [match, "$quantity", 0] } });
+    const live = { $ne: ["$status", "cancelled"] };
+    const sent = { $ne: ["$kotRound", null] };
+    return OrderItem.aggregate<{
+      _id: Types.ObjectId;
+      subtotal: number;
+      total: number;
+      unsent: number;
+      waiting: number;
+      preparing: number;
+      ready: number;
+      served: number;
+      cancelled: number;
+      lastKotRound: number | null;
+    }>([
+      { $match: { restaurantId: new Types.ObjectId(this.restaurantId), orderId: { $in: orderIds } } },
+      {
+        $group: {
+          _id: "$orderId",
+          subtotal: { $sum: { $cond: [live, "$total", 0] } },
+          total: count(live),
+          unsent: count({ $and: [live, { $eq: ["$kotRound", null] }] }),
+          waiting: count({ $and: [{ $eq: ["$status", "pending"] }, sent] }),
+          preparing: count({ $eq: ["$status", "preparing"] }),
+          ready: count({ $eq: ["$status", "ready"] }),
+          served: count({ $eq: ["$status", "served"] }),
+          cancelled: count({ $eq: ["$status", "cancelled"] }),
+          lastKotRound: { $max: "$kotRound" },
+        },
+      },
+    ]);
+  }
+
+  /** The dishes of these orders with what the guest chose (options, Jain, pack, spice and comment in the note). */
+  itemLines(orderIds: Types.ObjectId[]) {
+    return OrderItem.find({ restaurantId: this.restaurantId, orderId: { $in: orderIds } })
+      .select(
+        "orderId foodName quantity isJain isPacked modifiers note status kotRound tokenNumber complimentary components"
+      )
+      .sort({ createdAt: 1 })
+      .lean();
+  }
+
+  restaurantDay() {
+    return Restaurant.findById(this.restaurantId).select("dayEndTime timezone").lean();
+  }
+
+  /** The KOT rounds that were sent for an order (one ticket each). */
+  async kotRounds(orderId: Types.ObjectId): Promise<number[]> {
+    const rounds = (await OrderItem.distinct("kotRound", {
+      restaurantId: this.restaurantId,
+      orderId,
+      kotRound: { $ne: null },
+      status: { $ne: "cancelled" },
+    })) as number[];
+    return rounds.sort((a, b) => a - b);
+  }
+
+  async markInvoicePrinted(orderId: Types.ObjectId) {
+    await Order.updateOne(this.scoped<IOrder>({ _id: orderId }), {
+      $set: { invoicePrintedAt: new Date() },
+      $inc: { invoicePrintCount: 1 },
+    });
+  }
+
   itemSummaries(orderIds: Types.ObjectId[]) {
     return OrderItem.aggregate<ItemSummary>([
       {

@@ -108,7 +108,9 @@ describe("print agent downloads", () => {
     expect(app.headers["content-disposition"]).toContain("PrintAgent.zip");
     const files = readZip(app.body as Buffer);
     expect(files["PrintAgent/PrintAgent.exe"].toString()).toBe("MZ-fake-exe");
-    expect(Object.keys(files)).toEqual(expect.arrayContaining(["PrintAgent/pair.bat", "PrintAgent/start-agent.bat"]));
+    // Just the exe and this site's address (the window opens with it filled in): no scripts to run.
+    expect(Object.keys(files).sort()).toEqual(["PrintAgent/PrintAgent.exe", "PrintAgent/server.txt"]);
+    expect(files["PrintAgent/server.txt"].toString().trim()).toMatch(/^https?:\/\/127\.0\.0\.1:\d+$/);
   });
 
   it("hands the download to the browser through a short-lived link", async () => {

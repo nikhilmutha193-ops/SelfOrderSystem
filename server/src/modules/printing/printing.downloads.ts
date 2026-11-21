@@ -41,27 +41,26 @@ export function agentDownloadInfo() {
 }
 
 const deflate = promisify(deflateRaw);
-let appZipCache: { file: string; mtimeMs: number; size: number; zip: Buffer } | null = null;
+let exeCache: { file: string; mtimeMs: number; size: number; exe: Buffer; deflated: Buffer } | null = null;
 
 /**
- * PrintAgent.exe with its two scripts as one zip. Browsers (Edge and Chrome especially, over plain http) often refuse to
- * download an unsigned .exe, but a zip is fine, and deflating cuts the size to a third. Built once per exe file.
+ * PrintAgent.exe as a zip, with `server.txt` holding this site's address so the setup window opens with it filled in and
+ * only the pairing code is left to type. Browsers (Edge and Chrome especially, over plain http) often refuse to download
+ * an unsigned .exe, but a zip is fine, and deflating cuts the size to a third. The exe is compressed once per file; the
+ * small address file differs per request.
  */
-export async function agentAppZip(): Promise<Buffer | null> {
+export async function agentAppZip(serverAddress: string): Promise<Buffer | null> {
   const file = agentExePath();
   if (!file) return null;
   const stat = fs.statSync(file);
-  if (appZipCache && appZipCache.file === file && appZipCache.mtimeMs === stat.mtimeMs && appZipCache.size === stat.size) {
-    return appZipCache.zip;
+  if (!exeCache || exeCache.file !== file || exeCache.mtimeMs !== stat.mtimeMs || exeCache.size !== stat.size) {
+    const exe = fs.readFileSync(file);
+    exeCache = { file, mtimeMs: stat.mtimeMs, size: stat.size, exe, deflated: await deflate(exe) };
   }
-  const exe = fs.readFileSync(file);
-  const zip = createZip([
-    { name: "PrintAgent/PrintAgent.exe", content: exe, compressed: await deflate(exe) },
-    { name: "PrintAgent/pair.bat", content: AGENT_FILES["pair.bat"] },
-    { name: "PrintAgent/start-agent.bat", content: AGENT_FILES["start-agent.bat"] },
+  return createZip([
+    { name: "PrintAgent/PrintAgent.exe", content: exeCache.exe, compressed: exeCache.deflated },
+    { name: "PrintAgent/server.txt", content: `${serverAddress}\n` },
   ]);
-  appZipCache = { file, mtimeMs: stat.mtimeMs, size: stat.size, zip };
-  return zip;
 }
 
 export type AgentFileKind = "zip" | "app";

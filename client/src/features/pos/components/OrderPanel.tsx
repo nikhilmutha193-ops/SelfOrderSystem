@@ -1,3 +1,4 @@
+import { Printer } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
 import type { OrderDetailResponse, OrderItem } from "../../../lib/types";
@@ -159,6 +160,10 @@ export function OrderPanel({
   onTogglePacked,
   onCancelItem,
   onCancelOrder,
+  onBillBoth,
+  onSettleBoth,
+  onPrintInvoice,
+  paid,
   onSaveKot,
   onHold,
   onBill,
@@ -189,6 +194,14 @@ export function OrderPanel({
   onCancelItem?: (item: OrderItem) => void;
   /** Cancel an open order that has no dishes left (all removed), instead of leaving it running. */
   onCancelOrder?: () => void;
+  /** Send what is unsent to the kitchen, make the bill, and print the KOT and the invoice as two separate slips. */
+  onBillBoth?: () => void;
+  /** Pay first (cafe): take the payment, which sends the KOT, then print the KOT and the invoice as two separate slips. */
+  onSettleBoth?: () => void;
+  /** Print the invoice of a paid order whose invoice was never printed (a billed or open order uses the Bill button). */
+  onPrintInvoice?: () => void;
+  /** The order was just paid: the footer offers its invoice, the KOT with it, WhatsApp, and moving on to the next order. */
+  paid?: { onPrintInvoice: () => void; onPrintBoth: () => void; onNext: () => void } | null;
   onSaveKot: () => void;
   onHold: (() => void) | null;
   onBill: () => void;
@@ -460,21 +473,66 @@ export function OrderPanel({
         )}
       </div>
 
-      <div className="grid grid-cols-2 gap-2 border-t border-slate-200 p-3">
+      {paid && order?.status === "closed" && (
+        <div className="border-t border-green-200 bg-green-50 p-3" data-testid="paid-footer">
+          <p className="text-sm font-semibold text-green-900">
+            Paid{order.invoiceNumber ? ` · ${order.invoiceNumber}` : ""}
+          </p>
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            <Button variant="secondary" icon={Printer} onClick={paid.onPrintInvoice} disabled={busy}>
+              Print invoice
+            </Button>
+            <Button
+              variant="secondary"
+              icon={Printer}
+              onClick={paid.onPrintBoth}
+              disabled={busy}
+              title="The KOT and the invoice print as two separate slips"
+            >
+              KOT + invoice
+            </Button>
+            <div className="col-span-2">
+              <WhatsAppBillButton
+                key={order._id}
+                orderId={order._id}
+                compact
+                hasPhone={!!order.customerPhone?.replace(/\D/g, "")}
+              />
+            </div>
+            <Button className="col-span-2" onClick={paid.onNext}>
+              New order
+            </Button>
+          </div>
+        </div>
+      )}
+      <div className={`grid grid-cols-2 gap-2 border-t border-slate-200 p-3 ${paid && order?.status === "closed" ? "hidden" : ""}`}>
         {cafe && !offline ? (
           <>
             {onSettle ? (
               <>
+                {/* Payment and KOT + invoice: two different buttons on one row (the captain's phone keeps one). */}
                 <Button
-                  size="lg"
-                  className="col-span-2 !bg-green-600 hover:!bg-green-700"
+                  size={!phone && onSettleBoth ? "md" : "lg"}
+                  className={`${!phone && onSettleBoth ? "" : "col-span-2"} !bg-green-600 hover:!bg-green-700`}
                   onClick={onSettle}
                   disabled={busy || nothing || order?.status === "closed"}
                   title="F10"
+                  data-testid="settle-button"
                 >
                   Pay &amp; send KOT{" "}
                   {!phone && <kbd className="text-[10px] opacity-70">F10</kbd>}
                 </Button>
+                {!phone && onSettleBoth && (
+                  <Button
+                    variant="secondary"
+                    icon={Printer}
+                    onClick={onSettleBoth}
+                    disabled={busy || nothing || order?.status === "closed"}
+                    title="Take the payment, send the KOT, and print the KOT and the invoice as two separate slips"
+                  >
+                    KOT + invoice
+                  </Button>
+                )}
                 {phone && (
                   <Button
                     variant="secondary"
@@ -557,28 +615,64 @@ export function OrderPanel({
                 {moreOpen ? "Hide options" : "More"}
               </Button>
             )}
-            <Button
-              variant="secondary"
-              onClick={onBill}
-              disabled={busy || nothing || order?.status === "closed"}
-              title="F9"
-            >
-              {order?.status === "billed"
-                ? "Reprint bill"
-                : phone
-                  ? "Request bill"
-                  : "Bill"}{" "}
-              {!phone && <kbd className="text-[10px] opacity-70">F9</kbd>}
-            </Button>
-            {onSettle && !payFirst && (
-              <Button
-                className="!bg-green-600 hover:!bg-green-700"
-                onClick={onSettle}
-                disabled={busy || nothing || order?.status === "closed" || !!settleBlock}
-                title={settleBlock ? "Serve every dish first" : "F10"}
-              >
-                Settle <kbd className="text-[10px] opacity-70">F10</kbd>
-              </Button>
+            {/* A paid order has nothing left to bill, so it has no payment and no invoice buttons here. */}
+            {phone ? (
+              <>
+                {order?.status !== "closed" && (
+                  <Button variant="secondary" onClick={onBill} disabled={busy || nothing} title="Ask for the bill">
+                    {order?.status === "billed" ? "Reprint bill" : "Request bill"}
+                  </Button>
+                )}
+                {onSettle && !payFirst && order?.status !== "closed" && (
+                  <Button
+                    className="!bg-green-600 hover:!bg-green-700"
+                    onClick={onSettle}
+                    disabled={busy || nothing || !!settleBlock}
+                    title={settleBlock ? "Serve every dish first" : undefined}
+                  >
+                    Settle
+                  </Button>
+                )}
+              </>
+            ) : (
+              order?.status !== "closed" && (
+                <>
+                  {/* Payment and KOT + invoice are two different buttons on one row. */}
+                  {onSettle && !payFirst && (
+                    <Button
+                      className="!bg-green-600 hover:!bg-green-700"
+                      onClick={onSettle}
+                      disabled={busy || nothing || !!settleBlock}
+                      title={settleBlock ? "Serve every dish first" : "Take the payment (F10)"}
+                      data-testid="settle-button"
+                    >
+                      Settle <kbd className="text-[10px] opacity-70">F10</kbd>
+                    </Button>
+                  )}
+                  {onBillBoth && (
+                    <Button
+                      variant="secondary"
+                      icon={Printer}
+                      onClick={onBillBoth}
+                      disabled={busy || nothing}
+                      title="Send the KOT, make the bill, and print the KOT and the invoice as two separate slips"
+                    >
+                      KOT + invoice
+                    </Button>
+                  )}
+                  <Button
+                    variant="secondary"
+                    icon={Printer}
+                    className="col-span-2"
+                    onClick={onBill}
+                    disabled={busy || nothing}
+                    title="Make the bill if it is not made yet, and print the invoice (F9)"
+                  >
+                    {order?.status === "billed" ? "Reprint invoice" : "Print invoice"}{" "}
+                    <kbd className="text-[10px] opacity-70">F9</kbd>
+                  </Button>
+                </>
+              )
             )}
             {settleBlock && (
               <div
@@ -603,16 +697,32 @@ export function OrderPanel({
           !offline &&
           order.invoiceNumber &&
           (order.status === "billed" || order.status === "closed") && (
-            <div className="col-span-2">
-              <WhatsAppBillButton
-                key={order._id}
-                orderId={order._id}
-                compact
-                hasPhone={!!order.customerPhone?.replace(/\D/g, "")}
-              />
-            </div>
+            <>
+              {/* A paid order whose invoice was never printed: print it here. Once printed this button is gone. */}
+              {order.status === "closed" && !order.invoicePrintedAt && onPrintInvoice && (
+                <Button
+                  variant="secondary"
+                  icon={Printer}
+                  className="col-span-2"
+                  onClick={onPrintInvoice}
+                  disabled={busy}
+                  data-testid="print-invoice-unprinted"
+                >
+                  Print invoice
+                </Button>
+              )}
+              <div className="col-span-2">
+                <WhatsAppBillButton
+                  key={order._id}
+                  orderId={order._id}
+                  compact
+                  hasPhone={!!order.customerPhone?.replace(/\D/g, "")}
+                />
+              </div>
+            </>
           )}
-        {onHold && order && !offline && (
+        {/* Pay first (cafe, or paid before the kitchen): the bill is not split, merged or discounted here. */}
+        {onHold && order && !offline && !cafe && !payFirst && (
           <Button
             variant="secondary"
             className="col-span-2"
