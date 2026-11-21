@@ -14,6 +14,7 @@ import {
   readBackupFile,
   resetCollections,
 } from "../utils/backupService";
+import { backupTimes } from "../utils/backupScheduler";
 import { isValidDayEndTime } from "../utils/businessDay";
 import { HttpError } from "../utils/httpError";
 import { assertOwnerPassword } from "../utils/ownerConfirm";
@@ -108,21 +109,36 @@ export const resetData = asyncHandler(async (req: Request, res: Response) => {
   res.json({ message: "Data reset", removed, backupFilename });
 });
 
+const MAX_BACKUP_TIMES = 6;
+
+function scheduleView(schedule: { enabled: boolean; time: string; times?: string[]; lastRunAt?: Date }) {
+  const times = backupTimes(schedule);
+  return { enabled: schedule.enabled, time: times[0] ?? schedule.time, times, lastRunAt: schedule.lastRunAt };
+}
+
 export const getBackupSchedule =asyncHandler(async (req: Request, res: Response) => {
   const restaurant = await Restaurant.findById(req.restaurantId);
   if (!restaurant) throw new HttpError(404, "Restaurant not found");
-  res.json(restaurant.backupSchedule);
+  res.json(scheduleView(restaurant.backupSchedule));
 });
 
 export const updateBackupSchedule = asyncHandler(async (req: Request, res: Response) => {
-  const { enabled, time } = req.body as { enabled?: boolean; time?: string };
+  const { enabled, time, times } = req.body as { enabled?: boolean; time?: string; times?: unknown };
   if (typeof enabled !== "boolean") throw new HttpError(400, "enabled must be a boolean");
-  if (typeof time !== "string" || !isValidDayEndTime(time)) throw new HttpError(400, "time must be in HH:mm format");
+  // `times` is the list; a client that only sends one `time` still works.
+  const wanted = times === undefined ? [time] : times;
+  if (!Array.isArray(wanted) || wanted.some((t) => typeof t !== "string" || !isValidDayEndTime(t))) {
+    throw new HttpError(400, "Every backup time must be in HH:mm format");
+  }
+  const list = [...new Set(wanted as string[])].sort();
+  if (list.length === 0) throw new HttpError(400, "Add at least one backup time");
+  if (list.length > MAX_BACKUP_TIMES) throw new HttpError(400, `You can set at most ${MAX_BACKUP_TIMES} backup times a day`);
 
   const restaurant = await Restaurant.findById(req.restaurantId);
   if (!restaurant) throw new HttpError(404, "Restaurant not found");
   restaurant.backupSchedule.enabled = enabled;
-  restaurant.backupSchedule.time = time;
+  restaurant.backupSchedule.times = list;
+  restaurant.backupSchedule.time = list[0];
   await restaurant.save();
-  res.json(restaurant.backupSchedule);
+  res.json(scheduleView(restaurant.backupSchedule));
 });

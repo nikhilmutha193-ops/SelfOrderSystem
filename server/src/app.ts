@@ -22,6 +22,7 @@ import menuEngineeringRoutes from "./modules/menuEngineering/menuEngineering.rou
 import { registerCreditHandlers } from "./modules/credit/credit.handlers";
 import creditRoutes from "./modules/credit/credit.routes";
 import pricingRoutes from "./modules/pricing/pricing.routes";
+import { menuImportRoutes } from "./modules/menuImport/menuImport.routes";
 import recommendationRoutes from "./modules/recommendations/recommendations.routes";
 import chatRoutes from "./modules/chat/chat.routes";
 import { registerCustomerHandlers } from "./modules/customers/customers.handlers";
@@ -157,6 +158,7 @@ app.use("/api", maintenanceGate); // while maintenance is on, only signed-in adm
 app.use("/api/maintenance", maintenanceRoutes);
 app.use("/api/auth", authLimiter, authRoutes);
 app.use("/api/menu/recommendations", recommendationRoutes);
+app.use("/api/menu-import", menuImportRoutes);
 app.use("/api", catalogRoutes);
 app.use("/api/tables", tablesRoutes);
 app.use("/api/chefs", chefsRoutes);

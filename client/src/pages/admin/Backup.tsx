@@ -35,6 +35,7 @@ interface ResetResult {
 interface ScheduleDto {
   enabled: boolean;
   time: string;
+  times: string[];
   lastRunAt?: string;
 }
 
@@ -79,7 +80,7 @@ export default function Backup() {
   const [rowError, setRowError] = useState<string | null>(null);
   const [rowResult, setRowResult] = useState<RestoreSummary | null>(null);
 
-  const [schedule, setSchedule] = useState<ScheduleDto>({ enabled: false, time: "02:00" });
+  const [schedule, setSchedule] = useState<ScheduleDto>({ enabled: false, time: "02:00", times: ["02:00"] });
   const [scheduleSaving, setScheduleSaving] = useState(false);
   const [scheduleError, setScheduleError] = useState<string | null>(null);
   const [scheduleSaved, setScheduleSaved] = useState(false);
@@ -158,7 +159,7 @@ export default function Backup() {
   async function loadSchedule() {
     try {
       const res = await api.get<ScheduleDto>("/backup/schedule");
-      setSchedule(res.data);
+      setSchedule({ ...res.data, times: res.data.times?.length ? res.data.times : [res.data.time] });
     } catch {
       // non-fatal - schedule section just falls back to its defaults
     }
@@ -261,7 +262,7 @@ export default function Backup() {
     setScheduleSaved(false);
     setScheduleSaving(true);
     try {
-      const res = await api.put<ScheduleDto>("/backup/schedule", { enabled: schedule.enabled, time: schedule.time });
+      const res = await api.put<ScheduleDto>("/backup/schedule", { enabled: schedule.enabled, times: schedule.times });
       setSchedule(res.data);
       setScheduleSaved(true);
     } catch (err) {
@@ -382,7 +383,7 @@ export default function Backup() {
         <Card data-tour="backup-schedule">
           <h2 className="mb-3 text-base font-semibold text-slate-900">Automatic daily backup</h2>
           <p className="mb-3 text-sm text-slate-500">
-            When enabled, a backup is generated automatically every day at the chosen time.
+            When enabled, a backup is generated automatically every day at each of the times below (up to 6).
           </p>
           <ErrorText>{scheduleError}</ErrorText>
           <div className="flex flex-wrap items-center gap-4">
@@ -399,18 +400,46 @@ export default function Backup() {
                 Enabled
               </label>
             </div>
-            <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
-              Time
-              <Input
-                type="time"
-                className="!w-36"
-                value={schedule.time}
-                onChange={(e) => {
-                  setSchedule((s) => ({ ...s, time: e.target.value }));
-                  setScheduleSaved(false);
-                }}
-              />
-            </label>
+            <div className="flex flex-col gap-2">
+              <span className="text-sm font-medium text-slate-700">Times each day</span>
+              {schedule.times.map((t, index) => (
+                <div key={index} className="flex items-center gap-2">
+                  <Input
+                    type="time"
+                    className="!w-36"
+                    value={t}
+                    onChange={(e) => {
+                      const next = schedule.times.map((x, i) => (i === index ? e.target.value : x));
+                      setSchedule((s) => ({ ...s, times: next }));
+                      setScheduleSaved(false);
+                    }}
+                  />
+                  {schedule.times.length > 1 && (
+                    <Button
+                      variant="secondary"
+                      onClick={() => {
+                        setSchedule((s) => ({ ...s, times: s.times.filter((_, i) => i !== index) }));
+                        setScheduleSaved(false);
+                      }}
+                    >
+                      Remove
+                    </Button>
+                  )}
+                </div>
+              ))}
+              {schedule.times.length < 6 && (
+                <Button
+                  variant="secondary"
+                  className="self-start"
+                  onClick={() => {
+                    setSchedule((s) => ({ ...s, times: [...s.times, "14:00"] }));
+                    setScheduleSaved(false);
+                  }}
+                >
+                  Add another time
+                </Button>
+              )}
+            </div>
             <Button onClick={saveSchedule} disabled={scheduleSaving} className="self-start">
               {scheduleSaving ? "Saving..." : "Save schedule"}
             </Button>

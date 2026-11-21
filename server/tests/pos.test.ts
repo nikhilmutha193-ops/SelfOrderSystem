@@ -246,3 +246,52 @@ describe("POS without tables", () => {
     await api().put("/api/restaurant/settings").set(bearer(owner)).send({ billingSettings: { posUseTables: true } });
   });
 });
+
+describe("removing a saved line before the kitchen has it", () => {
+  it("needs no reason for a held takeaway, but asks for one once the KOT was sent", async () => {
+    const held = await createPos({
+      orderType: "takeaway",
+      sendToKitchen: false,
+      items: [
+        { foodItemId: world.food.dosa, quantity: 1 },
+        { foodItemId: world.food.vada, quantity: 2 },
+      ],
+    });
+    expect(held.status).toBe(201);
+    const detail = await api().get(`/api/orders/${held.body.order._id}`).set(bearer(owner));
+    const [dosa, vada] = detail.body.items;
+    expect(dosa.kotRound ?? null).toBeNull();
+
+    const removed = await api().patch(`/api/orders/items/${dosa._id}/cancel`).set(bearer(owner)).send({});
+    expect(removed.status).toBe(200);
+    const after = await api().get(`/api/orders/${held.body.order._id}`).set(bearer(owner));
+    expect(after.body.items.find((i: { _id: string }) => i._id === dosa._id).status).toBe("cancelled");
+    expect(after.body.totals.subtotal).toBe(120);
+
+    expect((await api().post(`/api/orders/${held.body.order._id}/kot/print`).set(bearer(owner))).status).toBe(200);
+    const sent = await api().patch(`/api/orders/items/${vada._id}/cancel`).set(bearer(owner)).send({});
+    expect(sent.status).toBe(400);
+  });
+});
+
+describe("an order with no dishes left", () => {
+  it("shows on the counter list with no items, and can be cancelled from there", async () => {
+    const held = await createPos({
+      orderType: "takeaway",
+      sendToKitchen: false,
+      items: [{ foodItemId: world.food.dosa, quantity: 1 }],
+    });
+    const id = held.body.order._id;
+    const itemId = (await api().get(`/api/orders/${id}`).set(bearer(owner))).body.items[0]._id;
+    await api().patch(`/api/orders/items/${itemId}/cancel`).set(bearer(owner)).send({});
+
+    const floor = await api().get("/api/pos/floor").set(bearer(owner));
+    const empty = floor.body.takeaways.find((o: { _id: string }) => o._id === id);
+    expect(empty).toMatchObject({ itemCount: 0, total: 0, status: "open" });
+
+    const cancelled = await api().patch(`/api/orders/${id}/cancel`).set(bearer(owner)).send({});
+    expect(cancelled.status).toBe(200);
+    const after = await api().get("/api/pos/floor").set(bearer(owner));
+    expect(after.body.takeaways.map((o: { _id: string }) => o._id)).not.toContain(id);
+  });
+});

@@ -114,6 +114,8 @@ export function CashierBoard({
   orderId,
   onSelectTable,
   onSelectTakeaway,
+  onAddDishes,
+  onCancelEmpty,
   payFirst = false,
   cafe = false,
 }: {
@@ -123,6 +125,10 @@ export function CashierBoard({
   orderId: string | null;
   onSelectTable: (table: PosTable) => void;
   onSelectTakeaway: (order: PosOrderSummary) => void;
+  /** An order with no dishes left: go and add some. */
+  onAddDishes?: (order: PosOrderSummary) => void;
+  /** An order with no dishes left: cancel it instead of leaving it on the board. */
+  onCancelEmpty?: (order: PosOrderSummary) => void;
   /** Dine-in guests pay when ordering, so a running table order is one waiting to be paid. */
   payFirst?: boolean;
   /** Cafe flow: orders are paid before they are cooked, so there is no "bill printed" state. */
@@ -236,8 +242,8 @@ export function CashierBoard({
           </h3>
           <div className="grid grid-cols-[repeat(auto-fill,minmax(210px,1fr))] gap-3">
             {takeaways.map((order) => (
+              <div key={order._id} className="flex flex-col gap-1.5">
               <Card
-                key={order._id}
                 selected={!tableId && orderId === order._id}
                 onClick={() => onSelectTakeaway(order)}
                 title={
@@ -270,6 +276,30 @@ export function CashierBoard({
                 minutes={minutesSince(order.createdAt, now)}
                 payFirst={order.source === "kiosk"}
               />
+              {order.itemCount === 0 && order.status === "open" && (onAddDishes || onCancelEmpty) && (
+                <div className="flex gap-2" data-testid="empty-order-actions">
+                  <span className="sr-only">This order has no dishes</span>
+                  {onAddDishes && (
+                    <button
+                      type="button"
+                      onClick={() => onAddDishes(order)}
+                      className="min-h-[40px] flex-1 rounded-lg border border-orange-300 bg-white px-2 text-xs font-semibold text-orange-700 hover:bg-orange-50"
+                    >
+                      Add dishes
+                    </button>
+                  )}
+                  {onCancelEmpty && (
+                    <button
+                      type="button"
+                      onClick={() => onCancelEmpty(order)}
+                      className="min-h-[40px] flex-1 rounded-lg border border-red-200 bg-white px-2 text-xs font-semibold text-red-600 hover:bg-red-50"
+                    >
+                      Cancel order
+                    </button>
+                  )}
+                </div>
+              )}
+              </div>
             ))}
           </div>
         </section>

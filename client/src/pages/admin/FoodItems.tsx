@@ -1,10 +1,15 @@
-import { Eye, EyeOff, ImagePlus, Pencil, Plus, Sparkles, Star, Trash2, UtensilsCrossed, X } from "lucide-react";
+import { Eye, EyeOff, FileUp, ImagePlus, Pencil, Plus, Sparkles, Star, Trash2, UtensilsCrossed, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
+import { FoodImportDialog } from "../../features/menuImport/FoodImportDialog";
+import { menuImportApi } from "../../features/menuImport/api";
 import { useAreas } from "../../features/pricing/queries";
 import { StationSelect } from "../../features/printing/components/StationSelect";
 import type { Category, FoodItem, FoodType, ModifierGroup, Subcategory, Translations } from "../../lib/types";
+import { useCanEdit } from "../../lib/adminAuth";
 import { api, extractErrorMessage, uploadImage } from "../../shared/api/client";
+import { sheet } from "../../shared/export/excel";
+import { ExcelButton } from "../../shared/ui/ExcelButton";
 import { Dialog } from "../../shared/ui/Dialog";
 import { usePageTour, type TourStep } from "../../shared/ui/PageTour";
 import {
@@ -146,6 +151,9 @@ export default function FoodItems() {
       g.map((grp, idx) => (idx === gi ? { ...grp, options: grp.options.filter((_, j) => j !== oi) } : grp)),
     );
   }
+
+  const canEdit = useCanEdit("foodItems");
+  const [importOpen, setImportOpen] = useState(false);
 
   function load() {
     Promise.all([
@@ -460,11 +468,34 @@ export default function FoodItems() {
         title="Food Items"
         description="Every dish on your menu, with prices, photos, options and kitchen routing."
         actions={
-          <Button data-tour="food-add" icon={Plus} onClick={startNew}>
-            Add dish
-          </Button>
+          <>
+            <ExcelButton
+              fileName="food-items"
+              label="Export Excel"
+              sheets={async () => {
+                const menu = await menuImportApi.export();
+                return [
+                  sheet({
+                    name: "Food items",
+                    columns: menu.columns.map((c) => ({ header: c.label, value: (row: Record<string, string | number | null>) => row[c.key] })),
+                    rows: menu.rows,
+                  }),
+                ];
+              }}
+            />
+            {canEdit && (
+              <Button variant="secondary" icon={FileUp} onClick={() => setImportOpen(true)}>
+                Import Excel
+              </Button>
+            )}
+            <Button data-tour="food-add" icon={Plus} onClick={startNew}>
+              Add dish
+            </Button>
+          </>
         }
       />
+
+      <FoodImportDialog open={importOpen} onClose={() => setImportOpen(false)} onImported={load} />
 
       {!formOpen && <ErrorText>{error}</ErrorText>}
 

@@ -106,7 +106,10 @@ export interface IInvoiceSettings {
 
 export interface IBackupSchedule {
   enabled: boolean;
+  /** The first time of the day, kept for settings saved before there could be several. */
   time: string;
+  /** Every time of day (HH:mm) a backup runs; empty on old settings, where `time` is the only one. */
+  times: string[];
   lastRunAt?: Date;
 }
 
@@ -408,6 +411,7 @@ const backupScheduleSchema = new Schema<IBackupSchedule>(
   {
     enabled: { type: Boolean, default: false },
     time: { type: String, default: "02:00" },
+    times: { type: [String], default: [] },
     lastRunAt: { type: Date },
   },
   { _id: false }

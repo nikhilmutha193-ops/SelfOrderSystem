@@ -157,6 +157,8 @@ export function OrderPanel({
   onDraftRemove,
   onDraftEdit,
   onTogglePacked,
+  onCancelItem,
+  onCancelOrder,
   onSaveKot,
   onHold,
   onBill,
@@ -183,6 +185,10 @@ export function OrderPanel({
   onDraftEdit?: (line: DraftLine) => void;
   /** Staff can mark a saved line to be packed (or not) while the order is open. */
   onTogglePacked?: (item: OrderItem) => void;
+  /** Staff can take a saved line off the order while the kitchen has not got it yet (held takeaways, bills left to pay). */
+  onCancelItem?: (item: OrderItem) => void;
+  /** Cancel an open order that has no dishes left (all removed), instead of leaving it running. */
+  onCancelOrder?: () => void;
   onSaveKot: () => void;
   onHold: (() => void) | null;
   onBill: () => void;
@@ -213,6 +219,12 @@ export function OrderPanel({
     (i) => i.kotRound == null && i.status !== "cancelled",
   ).length;
   const isOpen = !order || order.status === "open";
+  // Leaving an order at the counter to be paid there (captain, cafe flow): also fine when it was already billed and the
+  // payment dialog was closed without paying; there is nothing left to save then, the order just stays awaiting payment.
+  const canLeaveAtCounter =
+    isOpen
+      ? draft.length > 0 || unsent > 0
+      : order?.status === "billed" && draft.length === 0;
   const nothing = savedItems.length === 0 && draft.length === 0;
   const totals = detail?.totals;
 
@@ -271,6 +283,14 @@ export function OrderPanel({
         {nothing && (
           <p className="py-8 text-center text-sm text-slate-400">{emptyText}</p>
         )}
+        {order && isOpen && onCancelOrder && draft.length === 0 && savedItems.every((i) => i.status === "cancelled") && (
+          <div className="mb-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm" data-testid="empty-order-panel">
+            <p className="text-slate-600">This order has no dishes. Add some, or cancel it.</p>
+            <Button variant="secondary" className="mt-2" onClick={onCancelOrder} disabled={busy}>
+              Cancel this empty order
+            </Button>
+          </div>
+        )}
         <ul className="flex flex-col divide-y divide-slate-100">
           {savedItems.map((item) => (
             <li
@@ -301,6 +321,16 @@ export function OrderPanel({
                       onClick={() => onTogglePacked(item)}
                     >
                       {item.isPacked ? "Unpack" : "Pack"}
+                    </button>
+                  )}
+                  {onCancelItem && isOpen && item.status !== "cancelled" && item.kotRound == null && (
+                    <button
+                      type="button"
+                      className="text-xs text-red-600 hover:underline"
+                      aria-label={`Remove ${item.foodName}`}
+                      onClick={() => onCancelItem(item)}
+                    >
+                      Remove
                     </button>
                   )}
                 </span>
@@ -450,9 +480,7 @@ export function OrderPanel({
                     variant="secondary"
                     className="col-span-2"
                     onClick={onSaveKot}
-                    disabled={
-                      busy || !isOpen || (draft.length === 0 && unsent === 0)
-                    }
+                    disabled={busy || !canLeaveAtCounter}
                   >
                     Send to the counter to pay there
                   </Button>
@@ -463,9 +491,7 @@ export function OrderPanel({
                 size="lg"
                 className="col-span-2"
                 onClick={onSaveKot}
-                disabled={
-                  busy || !isOpen || (draft.length === 0 && unsent === 0)
-                }
+                disabled={busy || !canLeaveAtCounter}
               >
                 Send order to the counter
               </Button>

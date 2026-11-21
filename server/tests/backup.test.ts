@@ -1,9 +1,11 @@
 import { beforeAll, describe, expect, it } from "vitest";
 
+import BackupRecord from "../src/models/BackupRecord";
 import Booking from "../src/models/Booking";
 import FoodItem from "../src/models/FoodItem";
 import FoodReview from "../src/models/FoodReview";
 import LandingContent from "../src/models/LandingContent";
+import { runDueBackups } from "../src/utils/backupScheduler";
 import { api, bearer, createWorld, loginAdmin, World } from "./fixtures";
 
 let world: World;
@@ -128,5 +130,46 @@ describe("resetting data", () => {
     const restored = await api().post(`/api/backup/${saved._id}/restore`).set(bearer(owner));
     expect(restored.status).toBe(200);
     expect(await FoodReview.countDocuments({ restaurantId })).toBe(before);
+  });
+});
+
+describe("backup times", () => {
+  const save = (body: object) => api().put("/api/backup/schedule").set(bearer(owner)).send(body);
+
+  it("keeps several times a day, sorted and without repeats", async () => {
+    const res = await save({ enabled: true, times: ["18:30", "09:00", "09:00"] });
+    expect(res.status).toBe(200);
+    expect(res.body.times).toEqual(["09:00", "18:30"]);
+    expect(res.body.time).toBe("09:00");
+    expect((await api().get("/api/backup/schedule").set(bearer(owner))).body.times).toEqual(["09:00", "18:30"]);
+  });
+
+  it("still accepts the single time older clients send", async () => {
+    const res = await save({ enabled: true, time: "04:15" });
+    expect(res.status).toBe(200);
+    expect(res.body.times).toEqual(["04:15"]);
+  });
+
+  it("refuses bad, missing and too many times", async () => {
+    expect((await save({ enabled: true, times: ["25:00"] })).status).toBe(400);
+    expect((await save({ enabled: true, times: [] })).status).toBe(400);
+    expect((await save({ enabled: true, times: ["01:00", "02:00", "03:00", "04:00", "05:00", "06:00", "07:00"] })).status).toBe(400);
+  });
+
+  it("runs the scheduler once at each of its times and not in between", async () => {
+    await save({ enabled: true, times: ["09:00", "18:30"] });
+    const count = () => BackupRecord.countDocuments({ restaurantId: world.restaurantId, trigger: "scheduled" });
+    const before = await count();
+
+    await runDueBackups(new Date(2031, 0, 5, 12, 0, 0));
+    expect(await count()).toBe(before);
+
+    await runDueBackups(new Date(2031, 0, 5, 9, 0, 5));
+    expect(await count()).toBe(before + 1);
+    await runDueBackups(new Date(2031, 0, 5, 9, 0, 40)); // a second tick in the same minute
+    expect(await count()).toBe(before + 1);
+
+    await runDueBackups(new Date(2031, 0, 5, 18, 30, 5)); // the second time of the same day
+    expect(await count()).toBe(before + 2);
   });
 });

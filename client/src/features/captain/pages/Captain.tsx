@@ -16,6 +16,7 @@ import { can, useAdmin } from "../../../lib/adminAuth";
 import type {
   ChatConversation,
   KotQueueGroup,
+  OrderItem,
   PosMenu,
   PosMenuItem,
   PosOrderSummary,
@@ -32,7 +33,7 @@ import { useKotQueue } from "../../kitchen/queries";
 import SettleDialog from "../../orders/components/SettleDialog";
 import { newId } from "../../../lib/id";
 import { ordersApi } from "../../orders/api";
-import { orderKeys, useSetItemPacked } from "../../orders/queries";
+import { orderKeys, useCancelOrderItem, useSetItemPacked } from "../../orders/queries";
 import { draftUnitPrice, type DraftLine } from "../../pos/api";
 import { MenuGrid } from "../../pos/components/MenuGrid";
 import { OrderPanel } from "../../pos/components/OrderPanel";
@@ -147,6 +148,7 @@ function CaptainApp() {
   const floor = usePosFloor().data;
   const releasePosTable = useReleasePosTable();
   const setPacked = useSetItemPacked();
+  const cancelItem = useCancelOrderItem();
   const tables = floor?.tables ?? NO_TABLES;
   const printing = usePrintingStatus().data;
   const canKitchen = can(profile, "kot");
@@ -282,6 +284,19 @@ function CaptainApp() {
       await releasePosTable.mutateAsync(table._id);
       setMessage({ tone: "ok", text: `Table ${table.code} is free` });
       backToTables();
+    });
+  }
+
+  /** Takes a saved line the kitchen has not got yet off the order. */
+  async function removeSaved(item: OrderItem) {
+    const ok = await confirmDialog({
+      title: `Remove ${item.foodName}?`,
+      message: "It was never sent to the kitchen, so it is simply taken off the order.",
+      confirmLabel: "Remove",
+    });
+    if (!ok) return;
+    void run(async () => {
+      await cancelItem.mutateAsync({ itemId: item._id });
     });
   }
 
@@ -669,15 +684,17 @@ function CaptainApp() {
 
       {sheetOpen && (table || isWalkIn) && (
         <div className="fixed inset-0 z-30 flex flex-col bg-white">
-          <div className="flex shrink-0 items-center justify-between border-b border-slate-200 px-3 py-2">
-            <span className="font-semibold text-slate-800">Order</span>
+          <div className="flex shrink-0 items-center gap-2 border-b border-slate-200 px-3 py-2">
             <button
               type="button"
-              className="rounded-md px-3 py-1.5 text-sm text-slate-600"
+              aria-label="Back to the menu"
+              className="inline-flex min-h-[40px] items-center gap-1 rounded-lg bg-slate-100 px-3 text-sm font-medium text-slate-700 active:bg-slate-200"
               onClick={() => setSheetOpen(false)}
             >
-              Add more
+              <ArrowLeft size={16} aria-hidden="true" />
+              Menu
             </button>
+            <span className="font-semibold text-slate-800">Order</span>
           </div>
           <div className="min-h-0 flex-1">
             <OrderPanel
@@ -694,6 +711,7 @@ function CaptainApp() {
                 setEditLine(line);
                 setDishFor(line.item);
               }}
+              onCancelItem={(item) => void removeSaved(item)}
               onTogglePacked={(item) =>
                 void run(async () => {
                   await setPacked.mutateAsync({

@@ -4,8 +4,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
 import DishDialog from "../../../components/DishDialog";
-import type { InvoiceTotals, PosMenu, PosMenuItem, PosOrderSummary, PosTable } from "../../../lib/types";
+import type { InvoiceTotals, OrderItem, PosMenu, PosMenuItem, PosOrderSummary, PosTable } from "../../../lib/types";
 import { extractErrorMessage } from "../../../shared/api/client";
+import { confirmDialog } from "../../../shared/ui/confirm";
 import { useStaffTheme } from "../../../shared/theme";
 import { StaffSignOut } from "../../../components/StaffSignOut";
 import { can, useAdmin } from "../../../lib/adminAuth";
@@ -14,7 +15,7 @@ import { CustomerPanel } from "../../customers/components/CustomerPanel";
 import { kitchenApi, openPdfInTab } from "../../kitchen/api";
 import { ordersApi } from "../../orders/api";
 import SettleDialog from "../../orders/components/SettleDialog";
-import { orderKeys, refreshOrderData, useSetItemPacked } from "../../orders/queries";
+import { orderKeys, refreshOrderData, useCancelOrder, useCancelOrderItem, useSetItemPacked } from "../../orders/queries";
 import { useServeItem } from "../../kitchen/queries";
 import { usePrintingStatus } from "../../printing/queries";
 import { MenuGrid } from "../components/MenuGrid";
@@ -142,6 +143,8 @@ export default function Pos() {
         (activeDetail ? activeDetail.order.orderType !== "dine-in" : mode === "takeaway" && !tablesOff)));
   const releaseTable = useReleasePosTable();
   const setPacked = useSetItemPacked();
+  const cancelItem = useCancelOrderItem();
+  const cancelOrder = useCancelOrder();
   const serveDish = useServeItem();
   const menu = pricedMenu(rawMenu, mode === "takeaway" && !tablesOff ? { orderType: "takeaway" } : { orderType: "dine-in", areaId });
   const term = search.trim();
@@ -316,6 +319,38 @@ export default function Pos() {
     });
   }
 
+  /** Takes a saved line the kitchen has not got yet off the order (a held takeaway, a bill left to pay). */
+  async function removeSaved(item: OrderItem) {
+    const ok = await confirmDialog({
+      title: `Remove ${item.foodName}?`,
+      message: "It was never sent to the kitchen, so it is simply taken off the order.",
+      confirmLabel: "Remove",
+    });
+    if (!ok) return;
+    void run(async () => {
+      await cancelItem.mutateAsync({ itemId: item._id });
+    });
+  }
+
+  /** An order with no dishes left (everything removed, or opened and never filled): cancel it after a confirmation. */
+  async function cancelEmptyOrder(id: string, label: string) {
+    const ok = await confirmDialog({
+      title: "Cancel this empty order?",
+      message: `${label} has no dishes. It is removed from the counter.`,
+      confirmLabel: "Cancel order",
+      cancelLabel: "Keep it",
+    });
+    if (!ok) return;
+    void run(async () => {
+      await cancelOrder.mutateAsync({ orderId: id });
+      setMessage({ tone: "ok", text: "Empty order cancelled" });
+      if (orderId === id) {
+        setTableId(null);
+        cart.open(null);
+      }
+    });
+  }
+
   function release() {
     if (!table) return;
     const code = table.code;
@@ -468,6 +503,20 @@ export default function Pos() {
   }, [settleOpen, dishFor, offlineSettle]);
 
   const showTables = mode === "tables" && !tableId;
+  // On a table's order the top-left Back returns to the table map (asking first when dishes were added but not saved).
+  const insideTable = mode === "tables" && !!tableId;
+  async function backToTables() {
+    if (
+      cart.draft.length > 0 &&
+      !(await confirmDialog({
+        title: "Leave this table?",
+        message: "The dishes you added and haven't saved will be discarded.",
+        confirmLabel: "Discard and go back",
+      }))
+    )
+      return;
+    reset("tables");
+  }
   const cashier = mode === "cashier";
   const title =
     mode === "tables" || cashier
@@ -527,15 +576,27 @@ export default function Pos() {
   return (
     <div className="flex h-dvh max-w-full flex-col overflow-x-hidden bg-slate-100">
       <header className="flex shrink-0 flex-wrap items-center gap-2 bg-slate-900 px-3 py-2 text-white">
-        {can(profile, "dashboard") && (
-          <Link
-            to="/admin"
-            aria-label="Back to admin"
-            className="inline-flex min-h-[40px] items-center gap-1 rounded-lg px-2 text-sm text-slate-300 hover:bg-slate-800 hover:text-white"
+        {insideTable ? (
+          <button
+            type="button"
+            aria-label="Back to the tables"
+            onClick={() => void backToTables()}
+            className="inline-flex min-h-[40px] items-center gap-1 rounded-lg bg-slate-800 px-3 text-sm font-medium text-white hover:bg-slate-700"
           >
             <ArrowLeft size={16} aria-hidden="true" />
-            <span className="hidden sm:inline">Admin</span>
-          </Link>
+            Tables
+          </button>
+        ) : (
+          can(profile, "dashboard") && (
+            <Link
+              to="/admin"
+              aria-label="Back to admin"
+              className="inline-flex min-h-[40px] items-center gap-1 rounded-lg bg-slate-800 px-3 text-sm font-medium text-slate-200 hover:bg-slate-700 hover:text-white"
+            >
+              <ArrowLeft size={16} aria-hidden="true" />
+              Admin
+            </Link>
+          )
         )}
         <div className="flex rounded-lg bg-slate-800 p-1">
           {(tablesOff ? (["takeaway", "cashier"] as const) : (["tables", "takeaway", "cashier"] as const)).map((m) => (
@@ -551,21 +612,12 @@ export default function Pos() {
             </button>
           ))}
         </div>
-        {mode === "tables" && tableId && (
-          <button
-            type="button"
-            onClick={() => reset("tables")}
-            className="rounded-md bg-slate-800 px-3 py-1.5 text-sm hover:bg-slate-700"
-          >
-            All tables
-          </button>
-        )}
         <input
           ref={searchRef}
           id="pos-search"
           type="search"
           autoComplete="off"
-          placeholder="Search dish or code  (F2)"
+          placeholder={showTables ? "Open a table to search dishes" : cashier ? "Search is for adding dishes" : "Search dish or code  (F2)"}
           value={search}
           disabled={showTables || cashier}
           onChange={(e) => setSearch(e.target.value)}
@@ -622,6 +674,8 @@ export default function Pos() {
               orderId={orderId}
               onSelectTable={cashierTable}
               onSelectTakeaway={cashierTakeaway}
+              onAddDishes={resumeTakeaway}
+              onCancelEmpty={(o) => void cancelEmptyOrder(o._id, o.customerName || "This order")}
               payFirst={billing?.dineInPayment === "upfront"}
               cafe={cafe}
             />
@@ -726,6 +780,8 @@ export default function Pos() {
                 setEditLine(line);
                 setDishFor(line.item);
               }}
+            onCancelItem={(item) => void removeSaved(item)}
+            onCancelOrder={() => orderId && void cancelEmptyOrder(orderId, activeDetail?.order.customerName || "This order")}
             onTogglePacked={(item) =>
               void run(async () => {
                 await setPacked.mutateAsync({ itemId: item._id, packed: !item.isPacked });
