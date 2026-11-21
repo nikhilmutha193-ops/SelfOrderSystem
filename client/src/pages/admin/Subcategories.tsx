@@ -1,8 +1,10 @@
-import { Check, Eye, EyeOff, ListTree, Pencil, Plus } from "lucide-react";
+import { Check, Eye, EyeOff, ListTree, Pencil, Plus, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
-import type { Category, Subcategory } from "../../lib/types";
+import type { Category, FoodItem, Subcategory } from "../../lib/types";
+import { countDishes, dishCountLabel } from "./dishCounts";
 import { api, extractErrorMessage } from "../../shared/api/client";
+import { confirmDialog } from "../../shared/ui/confirm";
 import { usePageTour, type TourStep } from "../../shared/ui/PageTour";
 import {
   Badge,
@@ -28,7 +30,15 @@ export default function Subcategories() {
   const [editing, setEditing] = useState<Subcategory | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const [foods, setFoods] = useState<FoodItem[] | null>(null);
+  const counts = useMemo(() => countDishes(foods ?? []).bySubcategory, [foods]);
+
   function load() {
+    // Only to show how many dishes each subcategory has; a login without Food Items access just sees no counts.
+    api
+      .get<FoodItem[]>("/food-items")
+      .then((res) => setFoods(res.data))
+      .catch(() => setFoods(null));
     Promise.all([api.get<Subcategory[]>("/subcategories"), api.get<Category[]>("/categories")])
       .then(([subs, cats]) => {
         setSubcategories(subs.data);
@@ -67,6 +77,26 @@ export default function Subcategories() {
     setCategoryId(sub.categoryId);
     setName(sub.name);
     setDescription(sub.description || "");
+  }
+
+  // Allowed only when no dish in it is on; its switched-off dishes go with it.
+  async function remove(sub: Subcategory) {
+    const hidden = counts.get(sub._id)?.off ?? 0;
+    const ok = await confirmDialog({
+      title: `Remove ${sub.name}?`,
+      message:
+        hidden > 0
+          ? `Its ${hidden} hidden dish${hidden === 1 ? "" : "es"} ${hidden === 1 ? "is" : "are"} removed with it, for good. Old bills and reports keep them.`
+          : "It has no dishes, so only the subcategory is removed.",
+      confirmLabel: "Remove subcategory",
+    });
+    if (!ok) return;
+    try {
+      await api.delete(`/subcategories/${sub._id}`);
+      load();
+    } catch (err) {
+      setError(extractErrorMessage(err));
+    }
   }
 
   async function toggleActive(sub: Subcategory) {
@@ -157,6 +187,7 @@ export default function Subcategories() {
                 <tr>
                   <th>Name</th>
                   <th>Category</th>
+                  {foods && <th>Dishes</th>}
                   <th>Status</th>
                   <th className="text-right">Actions</th>
                 </tr>
@@ -166,6 +197,7 @@ export default function Subcategories() {
                   <tr key={sub._id}>
                     <td className="font-medium text-slate-900">{sub.name}</td>
                     <td className="text-slate-600">{categoryName(sub.categoryId)}</td>
+                    {foods && <td className="text-slate-600">{dishCountLabel(counts.get(sub._id))}</td>}
                     <td>
                       <Badge tone={sub.isActive ? "green" : "gray"} dot>
                         {sub.isActive ? "Active" : "Hidden"}
@@ -182,6 +214,21 @@ export default function Subcategories() {
                         onClick={() => toggleActive(sub)}
                       >
                         {sub.isActive ? "Hide" : "Show"}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        icon={Trash2}
+                        className="!text-red-600 hover:!bg-red-50"
+                        disabled={(counts.get(sub._id)?.on ?? 0) > 0}
+                        title={
+                          (counts.get(sub._id)?.on ?? 0) > 0
+                            ? "Switch off or move the dishes that are on first"
+                            : "Remove this subcategory"
+                        }
+                        onClick={() => remove(sub)}
+                      >
+                        Remove
                       </Button>
                     </td>
                   </tr>

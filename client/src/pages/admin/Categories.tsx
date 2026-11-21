@@ -1,10 +1,12 @@
-import { Check, Eye, EyeOff, Layers, Pencil, Plus } from "lucide-react";
+import { Check, Eye, EyeOff, Layers, Pencil, Plus, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { StationSelect } from "../../features/printing/components/StationSelect";
 import { useStationList } from "../../features/printing/queries";
-import type { Category } from "../../lib/types";
+import type { Category, FoodItem } from "../../lib/types";
+import { countDishes, dishCountLabel } from "./dishCounts";
 import { api, extractErrorMessage } from "../../shared/api/client";
+import { confirmDialog } from "../../shared/ui/confirm";
 import { usePageTour, type TourStep } from "../../shared/ui/PageTour";
 import {
   Badge,
@@ -29,12 +31,19 @@ export default function Categories() {
   const stationName = new Map(stations.map((s) => [s._id, s.name]));
   const [editing, setEditing] = useState<Category | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [foods, setFoods] = useState<FoodItem[] | null>(null);
+  const counts = useMemo(() => countDishes(foods ?? []).byCategory, [foods]);
 
   function load() {
     api
       .get<Category[]>("/categories")
       .then((res) => setCategories(res.data))
       .catch((err) => setError(extractErrorMessage(err)));
+    // Only to show how many dishes each category has; a login without Food Items access just sees no counts.
+    api
+      .get<FoodItem[]>("/food-items")
+      .then((res) => setFoods(res.data))
+      .catch(() => setFoods(null));
   }
 
   useEffect(load, []);
@@ -63,6 +72,23 @@ export default function Categories() {
     setName(category.name);
     setDescription(category.description || "");
     setStationId(category.defaultStationId ?? "");
+  }
+
+  // Allowed only when no dish under it is on; its subcategories and switched-off dishes go with it.
+  async function remove(category: Category) {
+    const hidden = counts.get(category._id)?.off ?? 0;
+    const ok = await confirmDialog({
+      title: `Remove ${category.name}?`,
+      message: `Its subcategories${hidden > 0 ? ` and its ${hidden} hidden dish${hidden === 1 ? "" : "es"}` : ""} are removed with it, for good. Old bills and reports keep them.`,
+      confirmLabel: "Remove category",
+    });
+    if (!ok) return;
+    try {
+      await api.delete(`/categories/${category._id}`);
+      load();
+    } catch (err) {
+      setError(extractErrorMessage(err));
+    }
   }
 
   async function toggleActive(category: Category) {
@@ -154,6 +180,7 @@ export default function Categories() {
                   <th>Name</th>
                   <th>Description</th>
                   {stations.length > 0 && <th>Station</th>}
+                  {foods && <th>Dishes</th>}
                   <th>Status</th>
                   <th className="text-right">Actions</th>
                 </tr>
@@ -168,6 +195,7 @@ export default function Categories() {
                         {category.defaultStationId ? (stationName.get(category.defaultStationId) ?? "—") : "—"}
                       </td>
                     )}
+                    {foods && <td className="text-slate-600">{dishCountLabel(counts.get(category._id))}</td>}
                     <td>
                       <Badge tone={category.isActive ? "green" : "gray"} dot>
                         {category.isActive ? "Active" : "Hidden"}
@@ -184,6 +212,21 @@ export default function Categories() {
                         onClick={() => toggleActive(category)}
                       >
                         {category.isActive ? "Hide" : "Show"}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        icon={Trash2}
+                        className="!text-red-600 hover:!bg-red-50"
+                        disabled={(counts.get(category._id)?.on ?? 0) > 0}
+                        title={
+                          (counts.get(category._id)?.on ?? 0) > 0
+                            ? "Switch off or move the dishes that are on first"
+                            : "Remove this category"
+                        }
+                        onClick={() => remove(category)}
+                      >
+                        Remove
                       </Button>
                     </td>
                   </tr>

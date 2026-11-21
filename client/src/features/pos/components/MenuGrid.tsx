@@ -1,10 +1,29 @@
-import { Image as ImageIcon, ImageOff, SlidersHorizontal } from "lucide-react";
+import { Image as ImageIcon, ImageOff, SlidersHorizontal, ZoomIn, ZoomOut } from "lucide-react";
 import { useState } from "react";
 
 import { FoodTypeIcon } from "../../../components/FoodBadges";
 import type { PosMenuItem } from "../../../lib/types";
 
 const IMAGES_KEY = "selforder_pos_menu_images";
+const SIZE_KEY = "selforder_pos_menu_size";
+
+/** How big the dish tiles are: the narrowest a tile gets (with and without a picture) and its text and picture sizes. */
+const SIZES = [
+  { name: "Small", minWith: 210, minWithout: 150, thumb: "h-16 w-16", tile: "min-h-[84px]", inner: "min-h-[64px]", title: "text-sm", price: "text-xs" },
+  { name: "Medium", minWith: 260, minWithout: 190, thumb: "h-20 w-20", tile: "min-h-[104px]", inner: "min-h-[80px]", title: "text-base", price: "text-sm" },
+  { name: "Large", minWith: 320, minWithout: 240, thumb: "h-24 w-24", tile: "min-h-[124px]", inner: "min-h-[96px]", title: "text-lg", price: "text-base" },
+  { name: "Extra large", minWith: 400, minWithout: 300, thumb: "h-32 w-32", tile: "min-h-[150px]", inner: "min-h-[128px]", title: "text-xl", price: "text-lg" },
+] as const;
+
+// Tile size, remembered on this device like the pictures switch.
+function readSize(): number {
+  try {
+    const n = Number(localStorage.getItem(SIZE_KEY));
+    return Number.isInteger(n) && n >= 0 && n < SIZES.length ? n : 0;
+  } catch {
+    return 0;
+  }
+}
 
 // Pictures on or off, remembered on this device (the grid is faster to scan without them on a small screen).
 function readShowImages(): boolean {
@@ -15,7 +34,7 @@ function readShowImages(): boolean {
   }
 }
 
-function Thumb({ item }: { item: PosMenuItem }) {
+function Thumb({ item, className }: { item: PosMenuItem; className: string }) {
   const [failed, setFailed] = useState(false);
   if (item.imageUrl && !failed) {
     return (
@@ -24,14 +43,14 @@ function Thumb({ item }: { item: PosMenuItem }) {
         alt=""
         loading="lazy"
         onError={() => setFailed(true)}
-        className="h-16 w-16 shrink-0 rounded-md object-cover"
+        className={`${className} shrink-0 rounded-md object-cover`}
       />
     );
   }
   return (
     <span
       aria-hidden="true"
-      className="flex h-16 w-16 shrink-0 items-center justify-center rounded-md bg-slate-100 text-lg font-semibold text-slate-400"
+      className={`flex ${className} shrink-0 items-center justify-center rounded-md bg-slate-100 text-lg font-semibold text-slate-400`}
     >
       {item.name.trim().charAt(0).toUpperCase()}
     </span>
@@ -61,6 +80,17 @@ export function MenuGrid({
   onCustomize?: (item: PosMenuItem) => void;
 }) {
   const [showImages, setShowImages] = useState(readShowImages);
+  const [size, setSize] = useState(readSize);
+  const look = SIZES[size];
+  function changeSize(next: number) {
+    const clamped = Math.min(SIZES.length - 1, Math.max(0, next));
+    setSize(clamped);
+    try {
+      localStorage.setItem(SIZE_KEY, String(clamped));
+    } catch {
+      // private mode: the choice just lasts until the page is reloaded
+    }
+  }
   function toggleImages() {
     setShowImages((on) => {
       try {
@@ -99,6 +129,31 @@ export function MenuGrid({
               ×{quantity} ✕
             </button>
           )}
+          <span className="flex items-center rounded-full bg-slate-100" role="group" aria-label="Dish tile size">
+            <button
+              type="button"
+              onClick={() => changeSize(size - 1)}
+              disabled={size === 0}
+              title="Smaller dish tiles"
+              className="flex h-9 w-9 items-center justify-center rounded-full text-slate-600 disabled:opacity-30"
+            >
+              <ZoomOut size={18} aria-hidden="true" />
+              <span className="sr-only">Smaller dish tiles</span>
+            </button>
+            <span className="min-w-[3.5rem] text-center text-[11px] font-semibold text-slate-600" aria-live="polite">
+              {look.name}
+            </span>
+            <button
+              type="button"
+              onClick={() => changeSize(size + 1)}
+              disabled={size === SIZES.length - 1}
+              title="Bigger dish tiles"
+              className="flex h-9 w-9 items-center justify-center rounded-full text-slate-600 disabled:opacity-30"
+            >
+              <ZoomIn size={18} aria-hidden="true" />
+              <span className="sr-only">Bigger dish tiles</span>
+            </button>
+          </span>
           <button
             type="button"
             onClick={toggleImages}
@@ -115,11 +170,16 @@ export function MenuGrid({
       </div>
       <div className="flex min-h-0 flex-1">
         <div className="min-h-0 flex-1 overflow-y-auto p-3">
-          <div className={`grid ${showImages ? "grid-cols-[repeat(auto-fill,minmax(210px,1fr))]" : "grid-cols-[repeat(auto-fill,minmax(150px,1fr))]"} gap-2`}>
+          <div
+            className="grid gap-2"
+            style={{
+              gridTemplateColumns: `repeat(auto-fill, minmax(${showImages ? look.minWith : look.minWithout}px, 1fr))`,
+            }}
+          >
             {items.map((item) => (
               <div
                 key={item._id}
-                className="flex min-h-[84px] overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm transition hover:border-orange-400"
+                className={`flex ${look.tile} overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm transition hover:border-orange-400`}
               >
                 <button
                   type="button"
@@ -127,15 +187,15 @@ export function MenuGrid({
                   onClick={() => onPick(item)}
                   className="flex min-w-0 flex-1 items-center gap-2.5 p-2.5 text-left active:bg-orange-50"
                 >
-                  {showImages && <Thumb item={item} />}
-                  <span className="flex min-h-[64px] min-w-0 flex-1 flex-col justify-between">
+                  {showImages && <Thumb item={item} className={look.thumb} />}
+                  <span className={`flex ${look.inner} min-w-0 flex-1 flex-col justify-between`}>
                   <span className="flex items-start gap-1.5">
                     {item.foodType && <FoodTypeIcon type={item.foodType} />}
-                    <span className="line-clamp-2 min-w-0 text-sm leading-tight font-medium break-words text-slate-800">
+                    <span className={`line-clamp-2 min-w-0 ${look.title} leading-tight font-medium break-words text-slate-800`}>
                       {item.name}
                     </span>
                   </span>
-                  <span className="mt-1 flex items-end justify-between gap-1 text-xs">
+                  <span className={`mt-1 flex items-end justify-between gap-1 ${look.price}`}>
                     <span className="font-semibold text-slate-900 tabular-nums">₹{item.price.toFixed(0)}</span>
                     {item.shortCode && <span className="font-mono text-slate-400">{item.shortCode}</span>}
                   </span>

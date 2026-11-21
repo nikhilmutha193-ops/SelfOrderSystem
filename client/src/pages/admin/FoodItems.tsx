@@ -10,6 +10,7 @@ import { useCanEdit } from "../../lib/adminAuth";
 import { api, extractErrorMessage, uploadImage } from "../../shared/api/client";
 import { sheet } from "../../shared/export/excel";
 import { ExcelButton } from "../../shared/ui/ExcelButton";
+import { confirmDialog } from "../../shared/ui/confirm";
 import { Dialog } from "../../shared/ui/Dialog";
 import { usePageTour, type TourStep } from "../../shared/ui/PageTour";
 import {
@@ -383,6 +384,24 @@ export default function FoodItems() {
     });
   }
 
+  // Past bills keep every dish's name and price, so removing a dish only takes it off the menu for good.
+  async function removeFood(food: FoodItem) {
+    const ok = await confirmDialog({
+      title: `Remove ${food.name}?`,
+      message: food.isActive
+        ? "It is on the menu right now. It will be removed for good; old bills and reports keep it."
+        : "It will be removed for good; old bills and reports keep it.",
+      confirmLabel: "Remove dish",
+    });
+    if (!ok) return;
+    try {
+      await api.delete(`/food-items/${food._id}`);
+      load();
+    } catch (err) {
+      setError(extractErrorMessage(err));
+    }
+  }
+
   async function toggleActive(food: FoodItem) {
     try {
       await api.patch(`/food-items/${food._id}/active`, {
@@ -617,6 +636,7 @@ export default function FoodItems() {
                       label={food.isActive ? `Hide ${food.name}` : `Show ${food.name}`}
                       onClick={() => toggleActive(food)}
                     />
+                    <IconButton icon={Trash2} label={`Remove ${food.name}`} onClick={() => removeFood(food)} />
                   </div>
                 </li>
               ))}
@@ -713,6 +733,15 @@ export default function FoodItems() {
                             onClick={() => toggleActive(food)}
                           >
                             {food.isActive ? "Hide" : "Show"}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            icon={Trash2}
+                            className="!text-red-600 hover:!bg-red-50"
+                            onClick={() => removeFood(food)}
+                          >
+                            Remove
                           </Button>
                         </td>
                       </tr>
