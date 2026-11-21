@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { blankToUndefined, objectId } from "../../core/validate";
+import { STOCK_UNITS } from "../../models/StockItem";
 
 const name = z
   .string({ error: "A name is required" })
@@ -23,7 +24,7 @@ export const foodParams = z.object({ foodItemId: objectId("Invalid food item") }
 
 export const stockItemSchema = z.object({
   name,
-  unit: z.enum(["g", "ml", "pcs"], { error: "Unit must be grams, millilitres or pieces" }),
+  unit: z.enum(STOCK_UNITS, { error: "Choose what the item is counted in" }),
   purchaseUnit: z
     .string()
     .nullish()

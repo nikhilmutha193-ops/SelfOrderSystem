@@ -5,7 +5,7 @@ import { extractErrorMessage } from "../../../shared/api/client";
 import { MONEY, PERCENT, sheet } from "../../../shared/export/excel";
 import { ExcelButton } from "../../../shared/ui/ExcelButton";
 import { Card, ErrorText, Input, TableWrap } from "../../../shared/ui/ui";
-import { daysAgo, isoDate, qty, rupees } from "../format";
+import { daysAgo, isoDate, qty, rupees, unitShort } from "../format";
 import { useRecipes, useUsage } from "../queries";
 
 const NO_ROWS: RecipeRow[] = [];
@@ -43,7 +43,7 @@ export function ReportsTab() {
                   rows: usage.data?.lines ?? [],
                   columns: [
                     { header: "Item", value: (l) => l.name, width: 26 },
-                    { header: "Unit", value: (l) => l.unit },
+                    { header: "Unit", value: (l) => unitShort(l.unit) },
                     { header: "Bought", value: (l) => l.purchased },
                     { header: "Used", value: (l) => l.consumed },
                     { header: "Wasted", value: (l) => l.wasted },

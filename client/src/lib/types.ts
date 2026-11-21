@@ -1087,7 +1087,19 @@ export interface PosFloor {
   areas?: Area[];
 }
 
-export type StockUnit = "g" | "ml" | "pcs";
+export type StockUnit =
+  | "g"
+  | "kg"
+  | "ml"
+  | "l"
+  | "pcs"
+  | "dozen"
+  | "packet"
+  | "box"
+  | "bottle"
+  | "can"
+  | "tray"
+  | "bunch";
 
 export interface StockItem {
   _id: string;

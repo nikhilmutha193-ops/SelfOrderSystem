@@ -3,7 +3,7 @@ import { useState } from "react";
 import type { RecipeLine, RecipeModifierLine, RecipeRow, StockItem } from "../../../lib/types";
 import { extractErrorMessage } from "../../../shared/api/client";
 import { Badge, Button, Card, ErrorText, Input, Select, TableWrap } from "../../../shared/ui/ui";
-import { rupees } from "../format";
+import { rupees, unitShort } from "../format";
 import { useRecipes, useSaveRecipe, useStockItems } from "../queries";
 
 const NO_ROWS: RecipeRow[] = [];
@@ -21,7 +21,10 @@ function RecipeEditor({ row, items, onDone }: { row: RecipeRow; items: StockItem
   const [lines, setLines] = useState<RecipeLine[]>(row.recipe?.lines ?? []);
   const [extras, setExtras] = useState<RecipeModifierLine[]>(row.recipe?.modifierLines ?? []);
   const [error, setError] = useState<string | null>(null);
-  const unitOf = (id: string) => items.find((i) => i._id === id)?.unit ?? "";
+  const unitOf = (id: string) => {
+    const unit = items.find((i) => i._id === id)?.unit;
+    return unit ? unitShort(unit) : "";
+  };
   const options = row.modifierGroups.flatMap((g) => g.options.map((o) => ({ groupName: g.name, label: o.label })));
   const first = items[0]?._id ?? "";
 

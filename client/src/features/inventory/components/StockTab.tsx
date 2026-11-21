@@ -4,7 +4,7 @@ import type { StockItem, StockItemInput, StockUnit } from "../../../lib/types";
 import { extractErrorMessage } from "../../../shared/api/client";
 import { confirmDialog } from "../../../shared/ui/confirm";
 import { Badge, Button, Card, ErrorText, Input, Select, Switch, TableWrap } from "../../../shared/ui/ui";
-import { inPurchaseUnits, MOVEMENT_LABEL, qty, rupees } from "../format";
+import { inPurchaseUnits, MOVEMENT_LABEL, qty, rupees, STOCK_UNIT_OPTIONS, unitShort } from "../format";
 import {
   useCreateCount,
   useCreateStockItem,
@@ -26,11 +26,9 @@ const BLANK: StockItemInput = {
   reorderLevel: 0,
   isActive: true,
 };
-const UNIT_PRESETS: Record<StockUnit, Pick<StockItemInput, "purchaseUnit" | "purchaseFactor">> = {
-  g: { purchaseUnit: "kg", purchaseFactor: 1000 },
-  ml: { purchaseUnit: "L", purchaseFactor: 1000 },
-  pcs: { purchaseUnit: "", purchaseFactor: 1 },
-};
+const UNIT_PRESETS = Object.fromEntries(
+  STOCK_UNIT_OPTIONS.map((u) => [u.value, { purchaseUnit: u.purchaseUnit, purchaseFactor: u.purchaseFactor }])
+) as Record<StockUnit, Pick<StockItemInput, "purchaseUnit" | "purchaseFactor">>;
 
 function ItemForm({
   initial,
@@ -75,13 +73,19 @@ function ItemForm({
             set({ unit, ...UNIT_PRESETS[unit] });
           }}
         >
-          <option value="g">grams</option>
-          <option value="ml">millilitres</option>
-          <option value="pcs">pieces</option>
+          {(["Weight", "Volume", "Count"] as const).map((group) => (
+            <optgroup key={group} label={group}>
+              {STOCK_UNIT_OPTIONS.filter((u) => u.group === group).map((u) => (
+                <option key={u.value} value={u.value}>
+                  {u.label}
+                </option>
+              ))}
+            </optgroup>
+          ))}
         </Select>
       </label>
       <label className="text-sm font-medium text-slate-700">
-        Alert below ({form.unit})
+        Alert below ({unitShort(form.unit)})
         <Input
           id="stock-reorder"
           className="mt-1"
@@ -104,7 +108,7 @@ function ItemForm({
             />
           </label>
           <label className="text-sm font-medium text-slate-700">
-            {form.unit} per {form.purchaseUnit || "unit"}
+            {unitShort(form.unit)} per {form.purchaseUnit || "unit"}
             <Input
               id="stock-factor"
               className="mt-1"
@@ -117,7 +121,7 @@ function ItemForm({
         </>
       ) : (
         <p className="self-end pb-2 text-xs text-slate-500 sm:col-span-1">
-          Bought in {form.purchaseUnit || "unit"} ({form.purchaseFactor} {form.unit} each) ·{" "}
+          Bought in {form.purchaseUnit || "unit"} ({form.purchaseFactor} {unitShort(form.unit)} each) ·{" "}
           <button
             type="button"
             className="font-medium text-orange-600 hover:underline"
@@ -160,7 +164,7 @@ function UpdateStockForm({ item, onDone }: { item: StockItem; onDone: () => void
   const [cost, setCost] = useState("");
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const unitWord = item.purchaseUnit || item.unit;
+  const unitWord = item.purchaseUnit || unitShort(item.unit);
   const pending = move.isPending || count.isPending;
 
   return (
@@ -190,7 +194,7 @@ function UpdateStockForm({ item, onDone }: { item: StockItem; onDone: () => void
       }}
     >
       <label className="text-sm font-medium text-slate-700">
-        Now on hand ({item.unit})
+        Now on hand ({unitShort(item.unit)})
         <Input
           id="update-amount"
           className="mt-1 !w-40"
@@ -460,7 +464,7 @@ function StockRow({
         </td>
         <td className="text-right tabular-nums">
           {rupees(item.avgCost * item.purchaseFactor)}
-          <span className="text-xs text-slate-400">/{item.purchaseUnit || item.unit}</span>
+          <span className="text-xs text-slate-400">/{item.purchaseUnit || unitShort(item.unit)}</span>
         </td>
         <td className="text-right tabular-nums">{rupees(item.value)}</td>
         <td>

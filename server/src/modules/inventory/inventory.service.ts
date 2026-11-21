@@ -3,7 +3,7 @@ import { Types } from "mongoose";
 import { RequestContext } from "../../core/context";
 import { withTransaction } from "../../core/transaction";
 import { IRecipe } from "../../models/Recipe";
-import { IStockItem } from "../../models/StockItem";
+import { IStockItem, StockUnit } from "../../models/StockItem";
 import { writeAudit } from "../../utils/audit";
 import { businessDateLabel, getBusinessDayRangeForDate } from "../../utils/businessDay";
 import { HttpError } from "../../utils/httpError";
@@ -13,7 +13,21 @@ import { CountInput, MovementInput, PurchaseInput, RecipeInput, StockItemInput, 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 const round3 = (n: number) => Math.round(n * 1000) / 1000;
 const round6 = (n: number) => Math.round(n * 1e6) / 1e6;
-const UNIT_LABEL = { g: "g", ml: "ml", pcs: "pcs" } as const;
+/** How a unit reads in messages and on purchase lines. */
+const UNIT_LABEL: Record<StockUnit, string> = {
+  g: "g",
+  kg: "kg",
+  ml: "ml",
+  l: "L",
+  pcs: "pcs",
+  dozen: "dozen",
+  packet: "packets",
+  box: "boxes",
+  bottle: "bottles",
+  can: "cans",
+  tray: "trays",
+  bunch: "bunches",
+};
 
 function isDuplicate(err: unknown): boolean {
   return (err as { code?: number }).code === 11000;

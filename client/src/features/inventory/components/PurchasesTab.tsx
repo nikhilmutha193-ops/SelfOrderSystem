@@ -5,7 +5,7 @@ import { extractErrorMessage } from "../../../shared/api/client";
 import { DATE, MONEY, sheet } from "../../../shared/export/excel";
 import { ExcelButton } from "../../../shared/ui/ExcelButton";
 import { Button, Card, ErrorText, Input, Select, TableWrap } from "../../../shared/ui/ui";
-import { daysAgo, isoDate, rupees } from "../format";
+import { daysAgo, isoDate, rupees, unitShort } from "../format";
 import { useCreatePurchase, useCreateVendor, usePurchases, useStockItems, useVendors } from "../queries";
 
 const NO_ITEMS: StockItem[] = [];
@@ -163,7 +163,7 @@ export function PurchasesTab({ canEdit }: { canEdit: boolean }) {
             )}
             {lines.map((line, i) => {
               const item = itemOf(line.stockItemId);
-              const per = item?.purchaseUnit || item?.unit || "unit";
+              const per = item?.purchaseUnit || (item ? unitShort(item.unit) : "unit");
               return (
                 <div key={i} className="flex flex-wrap items-center gap-2" data-testid="purchase-line">
                   <Select
