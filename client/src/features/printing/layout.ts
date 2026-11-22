@@ -5,7 +5,7 @@ import type { InvoiceSettings, KotSettings, PrintFontSize } from "../../lib/type
  * server/src/utils/printLayout.ts (the server prints with it), so keep the keys in step.
  */
 export type PaperKey = "p58" | "p80" | "page";
-export type TextSize = "small" | "normal" | "large";
+export type TextSize = "small" | "normal" | "medium" | "large";
 
 export interface SavedLayout {
   show?: Record<string, boolean>;
@@ -22,6 +22,7 @@ export const PAPERS: { value: PaperKey; label: string }[] = [
 export const TEXT_SIZE_OPTIONS: { value: TextSize; label: string }[] = [
   { value: "small", label: "Small" },
   { value: "normal", label: "Normal" },
+  { value: "medium", label: "Medium" },
   { value: "large", label: "Large" },
 ];
 

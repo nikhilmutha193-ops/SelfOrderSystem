@@ -37,6 +37,11 @@ const NAV_LINKS: [string, string][] = [
   ["#locations", "Visit Us"],
 ];
 
+/** "A", "A & B", "A, B & C". */
+function joinNames(names: string[]): string {
+  return names.length < 3 ? names.join(" & ") : `${names.slice(0, -1).join(", ")} & ${names[names.length - 1]}`;
+}
+
 export default function Landing() {
   const [data, setData] = useState<LandingData | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -128,15 +133,25 @@ export default function Landing() {
   const { restaurant, team, bestsellers, todaySpecials, banners, reviews, awards } = data;
   const activeBanner = showBanner ? banners[0] : undefined;
   const c = data.content as LandingContent | undefined;
-  const founder = team.find((m) => m.role === "owner");
+  // A restaurant can have several owners: Our Story introduces all of them, and the team section features each one large.
+  const owners = team.filter((m) => m.role === "owner");
+  const founder = owners[0];
+  const manyOwners = owners.length > 1;
+  const chefs = team.filter((m) => m.role !== "owner");
   const logo = restaurant.logoUrl || `${ASSET}/logo.jpeg`;
 
   const serveItems = c?.serve.items.length ? c.serve.items : FALLBACK_SERVE;
   const heroSubtitle = c?.hero.subtitle || restaurant.tagline || "";
   const storyText = c?.story.text || restaurant.aboutText || "";
-  const storyTitle = c?.story.title || (founder ? `Meet ${founder.name}` : "Our journey");
-  const storyImage = c?.story.imageUrl || founder?.photoUrl || "";
-  const storyQuote = c?.story.quote || founder?.bio || "";
+  const storyTitle = c?.story.title || (founder ? `Meet ${joinNames(owners.map((o) => o.name))}` : "Our journey");
+  // One photo for the story; with several owners and no photo chosen in the admin, each owner shows with their own.
+  const storyImage = c?.story.imageUrl || (manyOwners ? "" : founder?.photoUrl) || "";
+  const ownerPhotos = !c?.story.imageUrl && manyOwners ? owners : [];
+  const storyQuotes: { text: string; cite: string }[] = c?.story.quote
+    ? [{ text: c.story.quote, cite: c.story.quoteCite || "" }]
+    : owners
+        .filter((o) => o.bio)
+        .map((o) => ({ text: o.bio ?? "", cite: `${o.name}${o.title ? `, ${o.title}` : ""}` }));
   const outletItems = c?.outlets.items ?? [];
 
   const heroClassName = [
@@ -414,18 +429,34 @@ export default function Landing() {
           </section>
         )}
 
-        {c?.story.enabled !== false && (storyText || storyQuote) && (
+        {c?.story.enabled !== false && (storyText || storyQuotes.length > 0) && (
           <section className="section section--tinted story" id="story" aria-labelledby="story-title">
             <div className="container story__inner">
               <figure className="story__media">
-                {storyImage ? (
+                {ownerPhotos.length > 0 ? (
+                  <div className="story__owners">
+                    {ownerPhotos.map((owner) => (
+                      <div className="story__owner" key={owner._id}>
+                        {owner.photoUrl ? (
+                          <img className="story__owner-img" src={owner.photoUrl} alt={owner.name} loading="lazy" />
+                        ) : (
+                          <div className="story__owner-img story__owner-img--empty" role="img" aria-label={owner.name}>
+                            {owner.name.charAt(0).toUpperCase()}
+                          </div>
+                        )}
+                        <p className="story__owner-name">{owner.name}</p>
+                        {owner.title && <p className="story__owner-title">{owner.title}</p>}
+                      </div>
+                    ))}
+                  </div>
+                ) : storyImage ? (
                   <img className="story__img" src={storyImage} alt={storyTitle} />
                 ) : (
                   <div className="story__img placeholder placeholder--tall" role="img" aria-label={restaurant.name}>
                     {restaurant.name}
                   </div>
                 )}
-                {(c?.story.caption || founder) && (
+                {(c?.story.caption || (founder && !manyOwners)) && (
                   <figcaption className="story__caption">{c?.story.caption || founder?.name}</figcaption>
                 )}
               </figure>
@@ -436,16 +467,41 @@ export default function Landing() {
                   {storyTitle}
                 </h2>
                 {storyText && <p className="story__text">{storyText}</p>}
-                {storyQuote && (
-                  <blockquote className="story__quote">
-                    {storyQuote}
-                    <cite className="story__cite">
-                      {c?.story.quoteCite ||
-                        (founder ? `${founder.name}${founder.title ? `, ${founder.title}` : ""}` : "")}
-                    </cite>
+                {storyQuotes.map((quote) => (
+                  <blockquote className="story__quote" key={quote.cite + quote.text}>
+                    {quote.text}
+                    {quote.cite && <cite className="story__cite">{quote.cite}</cite>}
                   </blockquote>
-                )}
+                ))}
               </div>
+            </div>
+          </section>
+        )}
+
+        {chefs.length > 0 && (
+          <section className="section" id="team" aria-labelledby="team-title">
+            <div className="container">
+              <header className="section__header section__header--center">
+                <p className="section__eyebrow">The people behind the food</p>
+                <h2 className="section__title" id="team-title">
+                  Our Team
+                </h2>
+              </header>
+              <ul className="team__grid" role="list">
+                {chefs.map((member) => (
+                  <li className="team__member" key={member._id}>
+                    {member.photoUrl ? (
+                      <img className="team__photo" src={member.photoUrl} alt={member.name} loading="lazy" />
+                    ) : (
+                      <div className="team__photo team__initial" role="img" aria-label={member.name}>
+                        {member.name.charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                    <p className="team__name">{member.name}</p>
+                    {member.title && <p className="team__role">{member.title}</p>}
+                  </li>
+                ))}
+              </ul>
             </div>
           </section>
         )}

@@ -1,0 +1,54 @@
+/* The team beneath Our Story, shown small. The owners are introduced in Our Story, not here. */
+.team__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.team__member {
+  text-align: center;
+}
+
+.team__photo {
+  width: 5rem;
+  height: 5rem;
+  margin: 0 auto var(--space-2);
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.team__initial {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-primary);
+  color: #fff;
+  font-family: var(--font-heading);
+  font-size: var(--fs-xl, 1.5rem);
+}
+
+.team__name {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+.team__role {
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  color: var(--color-text-muted);
+}
+
+@media (min-width: 640px) {
+  .team__grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 960px) {
+  .team__grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}

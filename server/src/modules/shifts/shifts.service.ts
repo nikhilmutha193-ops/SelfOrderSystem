@@ -8,7 +8,7 @@ import { businessDateLabel, getBusinessDayRangeForDate } from "../../utils/busin
 import { HttpError } from "../../utils/httpError";
 import { round2 } from "../../utils/invoice";
 import { ShiftsRepository } from "./shifts.repository";
-import { CashMovementInput, CloseDayInput, CloseShiftInput } from "./shifts.schema";
+import { CashMovementInput, CloseDayInput, CloseShiftInput, ShiftListQuery } from "./shifts.schema";
 
 type ShiftDoc = HydratedDocument<IShift>;
 
@@ -103,8 +103,24 @@ export async function closeShift(ctx: RequestContext, input: CloseShiftInput) {
   return { ...shift.toObject(), ...totals };
 }
 
-export function listShifts(ctx: RequestContext) {
-  return new ShiftsRepository(ctx.restaurantId).listShifts(30);
+/**
+ * The cashier asks for one business day (`scope: "day"`) and gets each shift with its cash figures, an open one live.
+ * The admin history is newest first, optionally between two business dates, and goes back as far as it is asked to.
+ */
+export async function listShifts(ctx: RequestContext, query: ShiftListQuery) {
+  const repo = new ShiftsRepository(ctx.restaurantId);
+  if (query.scope === "day") {
+    const { start, end } = await resolveDate(repo, query.date);
+    const shifts = await repo.listShiftsBetween(start, end, 50);
+    return Promise.all(
+      shifts.map(async (shift) => (shift.isOpen ? { ...shift, ...(await expectedCash(repo, shift)) } : shift))
+    );
+  }
+  const restaurant = await repo.findRestaurant();
+  const range = (date: string) => getBusinessDayRangeForDate(date, restaurant?.dayEndTime, restaurant?.timezone);
+  const start = query.from ? range(query.from).start : null;
+  const end = query.to ? range(query.to).end : null;
+  return repo.listShiftsBetween(start, end, query.limit ?? 30);
 }
 
 function sumBy<T>(rows: T[], key: (row: T) => string, value: (row: T) => number) {

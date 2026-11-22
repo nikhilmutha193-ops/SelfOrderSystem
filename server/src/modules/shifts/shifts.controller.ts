@@ -9,6 +9,7 @@ import {
   closeShiftSchema,
   dateParams,
   dayQuery,
+  shiftListQuery,
   openShiftSchema,
 } from "./shifts.schema";
 import * as shifts from "./shifts.service";
@@ -18,7 +19,7 @@ export const getCurrentShift = asyncHandler(async (req: Request, res: Response) 
 });
 
 export const listShifts = asyncHandler(async (req: Request, res: Response) => {
-  res.json(await shifts.listShifts(getContext(req)));
+  res.json(await shifts.listShifts(getContext(req), parse(shiftListQuery, req.query)));
 });
 
 export const openShift = asyncHandler(async (req: Request, res: Response) => {

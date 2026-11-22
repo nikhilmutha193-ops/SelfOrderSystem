@@ -32,6 +32,14 @@ export class ShiftsRepository {
     return Shift.find(this.scoped<IShift>()).sort({ openedAt: -1 }).limit(limit).lean();
   }
 
+  /** Shifts that were open at any time between two moments, newest first. */
+  listShiftsBetween(start: Date | null, end: Date | null, limit: number) {
+    const filter: FilterQuery<IShift> = {};
+    if (end) filter.openedAt = { $lt: end };
+    if (start) filter.$or = [{ closedAt: null }, { closedAt: { $gte: start } }];
+    return Shift.find(this.scoped<IShift>(filter)).sort({ openedAt: -1 }).limit(limit).lean();
+  }
+
   findShiftsOverlapping(start: Date, end: Date) {
     return Shift.find(
       this.scoped<IShift>({ openedAt: { $lt: end }, $or: [{ closedAt: null }, { closedAt: { $gte: start } }] })

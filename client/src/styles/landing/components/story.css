@@ -56,6 +56,45 @@
   color: var(--color-primary);
 }
 
+/* Several owners: each with their own photo, two to a row. */
+.story__owners {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.story__owner {
+  text-align: center;
+}
+
+.story__owner-img {
+  width: 100%;
+  aspect-ratio: 4 / 5;
+  border-radius: var(--radius-lg);
+  object-fit: cover;
+  box-shadow: var(--shadow-lg);
+}
+
+.story__owner-img--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-primary);
+  color: #fff;
+  font-family: var(--font-heading);
+  font-size: var(--fs-2xl, 2rem);
+}
+
+.story__owner-name {
+  margin-top: var(--space-2);
+  font-weight: 600;
+}
+
+.story__owner-title {
+  font-size: var(--fs-xs);
+  color: var(--color-text-muted);
+}
+
 @media (min-width: 768px) {
   .story__inner {
     grid-template-columns: 1fr 1fr;

@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, ChevronDown, ChevronUp, CloudOff, ShoppingBasket } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronUp, CloudOff, Keyboard, ShoppingBasket, Wallet } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
@@ -10,6 +10,9 @@ import { confirmDialog } from "../../../shared/ui/confirm";
 import { useStaffTheme } from "../../../shared/theme";
 import { StaffSignOut } from "../../../components/StaffSignOut";
 import { can, useAdmin } from "../../../lib/adminAuth";
+import { useTodayShifts } from "../../shifts/queries";
+import { CashDrawerDialog } from "../components/CashDrawerDialog";
+import { ShortcutsDialog } from "../components/ShortcutsDialog";
 import { ThemeToggleButton } from "../../../shared/ui/ThemeToggle";
 import { CustomerPanel } from "../../customers/components/CustomerPanel";
 import { kitchenApi, openPdfInTab } from "../../kitchen/api";
@@ -68,6 +71,12 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
 export default function Pos() {
   useStaffTheme();
   const { profile } = useAdmin();
+  // Cash drawer for the day: shown to logins with the Day close / Cash shifts page.
+  const cashAccess = can(profile, "dayClose");
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const todayShifts = useTodayShifts(cashAccess);
+  const shiftOpen = (todayShifts.data ?? []).some((s) => s.isOpen);
   const queryClient = useQueryClient();
   const rawMenu = usePosMenu().data ?? NO_MENU;
   const floor = usePosFloor();
@@ -542,17 +551,36 @@ export default function Pos() {
     }
   }
 
-  const actions = useRef({ saveAndKot, bill, settle });
+  const actions = useRef({ saveAndKot, bill, settle, hold, both: billAndPrintBoth, go: reset, cash: cashAccess, tables: !tablesOff });
   useEffect(() => {
-    actions.current = { saveAndKot, bill, settle };
+    actions.current = { saveAndKot, bill, settle, hold, both: billAndPrintBoth, go: reset, cash: cashAccess, tables: !tablesOff };
   });
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (settleOpen || dishFor || offlineSettle) return;
+      if (settleOpen || dishFor || offlineSettle || drawerOpen || shortcutsOpen) return;
       const target = e.target as HTMLElement;
       const typing = ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName);
-      if (e.key === "F2") {
+      if (e.altKey && !e.ctrlKey && !e.metaKey) {
+        // Alt + key: jump around and run the order actions. e.code is used so it works with any keyboard layout.
+        const a = actions.current;
+        const keys: Record<string, (() => void) | null> = {
+          Digit1: a.tables ? () => a.go("tables") : null,
+          Digit2: () => a.go("takeaway"),
+          Digit3: () => a.go("cashier"),
+          KeyC: a.cash ? () => setDrawerOpen(true) : null,
+          KeyH: () => a.hold(),
+          KeyK: () => a.both(),
+        };
+        const action = keys[e.code];
+        if (action) {
+          e.preventDefault();
+          action();
+        }
+      } else if (e.key === "F1" || (!typing && e.key === "?")) {
+        e.preventDefault();
+        setShortcutsOpen(true);
+      } else if (e.key === "F2") {
         e.preventDefault();
         searchRef.current?.focus();
         searchRef.current?.select();
@@ -576,7 +604,7 @@ export default function Pos() {
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [settleOpen, dishFor, offlineSettle]);
+  }, [settleOpen, dishFor, offlineSettle, drawerOpen, shortcutsOpen]);
 
   const showTables = mode === "tables" && !tableId;
   // On a table's order the top-left Back returns to the table map (asking first when dishes were added but not saved).
@@ -721,9 +749,36 @@ export default function Pos() {
         >
           <CloudOff size={18} aria-hidden="true" />
         </button>
+        {cashAccess && (
+          <button
+            type="button"
+            aria-label="Cash drawer"
+            title={shiftOpen ? "Cash drawer" : "No shift is open: open one to track today's cash"}
+            onClick={() => setDrawerOpen(true)}
+            className="relative inline-flex min-h-[40px] items-center gap-1.5 rounded-lg bg-slate-800 px-3 text-sm font-medium text-slate-200 hover:bg-slate-700 hover:text-white"
+          >
+            <Wallet size={16} aria-hidden="true" />
+            <span className="hidden sm:inline">Cash</span>
+            {todayShifts.isSuccess && !shiftOpen && (
+              <span aria-hidden="true" className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-amber-400" />
+            )}
+          </button>
+        )}
+        <button
+          type="button"
+          aria-label="Keyboard shortcuts"
+          title="Keyboard shortcuts (F1)"
+          onClick={() => setShortcutsOpen(true)}
+          className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white lg:inline-flex"
+        >
+          <Keyboard size={18} aria-hidden="true" />
+        </button>
         <ThemeToggleButton className="hidden sm:inline-flex" />
         <StaffSignOut to="/pos/login" />
       </header>
+
+      <ShortcutsDialog open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
+      <CashDrawerDialog open={drawerOpen} onClose={() => setDrawerOpen(false)} canEdit={can(profile, "dayClose", "edit")} />
 
       <OfflineBar
         offline={offline}

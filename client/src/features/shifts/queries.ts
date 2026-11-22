@@ -1,11 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { shiftsApi } from "./api";
+import { shiftsApi, type ShiftRange } from "./api";
 
 export const shiftKeys = {
   all: ["shifts"] as const,
   current: ["shifts", "current"] as const,
-  history: ["shifts", "history"] as const,
+  history: (range: ShiftRange = {}) => ["shifts", "history", range] as const,
+  today: ["shifts", "today"] as const,
   day: (date?: string) => ["shifts", "day", date ?? "today"] as const,
   dayHistory: ["shifts", "dayHistory"] as const,
 };
@@ -18,8 +19,13 @@ export function useCurrentShift() {
   });
 }
 
-export function useShiftHistory() {
-  return useQuery({ queryKey: shiftKeys.history, queryFn: shiftsApi.history });
+export function useShiftHistory(range: ShiftRange = {}) {
+  return useQuery({ queryKey: shiftKeys.history(range), queryFn: () => shiftsApi.history(range) });
+}
+
+/** Today's shifts, for the cashier. */
+export function useTodayShifts(enabled = true) {
+  return useQuery({ queryKey: shiftKeys.today, queryFn: shiftsApi.today, enabled, refetchInterval: 30000 });
 }
 
 export function useDayReport(date?: string) {

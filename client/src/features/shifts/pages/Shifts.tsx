@@ -4,45 +4,41 @@ import { useCanEdit } from "../../../lib/adminAuth";
 import { cashSuggestions } from "../../../lib/cash";
 import { extractErrorMessage } from "../../../shared/api/client";
 import { usePageTour, type TourStep } from "../../../shared/ui/PageTour";
+import type { Shift } from "../../../lib/types";
+import { MONEY, sheet } from "../../../shared/export/excel";
+import { ExcelButton } from "../../../shared/ui/ExcelButton";
 import { Badge, Button, Card, ErrorText, Input, PageHeader, Select, TableWrap } from "../../../shared/ui/ui";
+import { AmountChips } from "../components/shiftBits";
+import { CASH_MOVEMENT_PRESETS, OPENING_FLOAT_PRESETS, rupees, when } from "../format";
 import { useCashMovement, useCloseShift, useCurrentShift, useOpenShift, useShiftHistory } from "../queries";
 
-const rupees = (n: number | undefined | null) => `₹${(n ?? 0).toFixed(2)}`;
+const NO_SHIFTS: Shift[] = [];
 
-const OPENING_FLOAT_PRESETS = [500, 1000, 2000, 5000, 10000];
-const CASH_MOVEMENT_PRESETS = [50, 100, 200, 500, 1000, 2000];
-
-function when(iso?: string | null) {
-  return iso
-    ? new Date(iso).toLocaleString([], {
-        dateStyle: "medium",
-        timeStyle: "short",
-      })
-    : "-";
-}
-
-function AmountChips({ values, onPick }: { values: number[]; onPick: (v: number) => void }) {
-  if (values.length === 0) return null;
-  return (
-    <div className="flex flex-wrap gap-1.5">
-      {values.map((v) => (
-        <button
-          key={v}
-          type="button"
-          onClick={() => onPick(v)}
-          className="min-h-[36px] rounded-full border border-slate-200 bg-slate-50 px-3 text-sm font-medium text-slate-700 tabular-nums hover:bg-slate-100"
-        >
-          ₹{v}
-        </button>
-      ))}
-    </div>
-  );
+function shiftSheet(rows: Shift[]) {
+  return sheet<Shift>({
+    name: "Cash shifts",
+    columns: [
+      { header: "Opened", value: (s) => new Date(s.openedAt), width: 18 },
+      { header: "Opened by", value: (s) => s.openedByName, width: 16 },
+      { header: "Closed", value: (s) => (s.closedAt ? new Date(s.closedAt) : null), width: 18 },
+      { header: "Closed by", value: (s) => s.closedByName, width: 16 },
+      { header: "Opening float", value: (s) => s.openingFloat, format: MONEY, width: 14 },
+      { header: "Expected cash", value: (s) => (s.isOpen ? null : s.expectedCash), format: MONEY, width: 14 },
+      { header: "Counted cash", value: (s) => (s.isOpen ? null : s.countedCash), format: MONEY, width: 14 },
+      { header: "Difference", value: (s) => (s.isOpen ? null : s.variance), format: MONEY, width: 12 },
+      { header: "Note", value: (s) => s.closingNote, width: 30 },
+    ],
+    rows,
+  });
 }
 
 export default function Shifts() {
   const canEdit = useCanEdit("dayClose");
   const current = useCurrentShift();
-  const history = useShiftHistory();
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [limit, setLimit] = useState(30);
+  const history = useShiftHistory({ ...(from && { from }), ...(to && { to }), limit });
   const openShift = useOpenShift();
   const cash = useCashMovement();
   const closeShift = useCloseShift();
@@ -66,6 +62,9 @@ export default function Shifts() {
   }
 
   const shift = current.data;
+  const shifts = history.data ?? NO_SHIFTS;
+  const closedShifts = shifts.filter((s) => !s.isOpen);
+  const totalVariance = closedShifts.reduce((sum, s) => sum + (s.variance ?? 0), 0);
   const variancePreview = shift && counted !== "" ? Number(counted) - (shift.expectedCash ?? 0) : null;
   // Cash is physical, so round the expected figure to whole rupees before offering it as a chip -
   // the first value is the exact expected amount, the rest are round-up alternatives.
@@ -349,24 +348,73 @@ export default function Shifts() {
       )}
 
       <Card data-tour="shift-history">
-        <h2 className="mb-4 text-base font-semibold text-slate-900">Recent shifts</h2>
+        <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 className="text-base font-semibold text-slate-900">Shift history</h2>
+            <p className="text-sm text-slate-500">
+              Every shift ever opened. The cashier only sees today's shifts in the POS; the full record is here.
+            </p>
+          </div>
+          <ExcelButton
+            fileName="cash-shifts"
+            label="Excel"
+            disabled={shifts.length === 0}
+            sheets={() => [shiftSheet(shifts)]}
+          />
+        </div>
+        <div className="mb-4 flex flex-wrap items-end gap-3">
+          <label className="text-sm font-medium text-slate-700">
+            From
+            <Input className="mt-1 !w-40" type="date" value={from} max={to || undefined} onChange={(e) => setFrom(e.target.value)} />
+          </label>
+          <label className="text-sm font-medium text-slate-700">
+            To
+            <Input className="mt-1 !w-40" type="date" value={to} min={from || undefined} onChange={(e) => setTo(e.target.value)} />
+          </label>
+          {(from || to) && (
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setFrom("");
+                setTo("");
+              }}
+            >
+              All dates
+            </Button>
+          )}
+          {closedShifts.length > 0 && (
+            <p className="ml-auto text-sm text-slate-600">
+              {closedShifts.length} closed shift{closedShifts.length === 1 ? "" : "s"} · difference{" "}
+              <span
+                className={`font-semibold tabular-nums ${totalVariance < -0.005 ? "text-red-600" : totalVariance > 0.005 ? "text-amber-700" : "text-green-700"}`}
+              >
+                {rupees(totalVariance)}
+              </span>
+            </p>
+          )}
+        </div>
         <TableWrap>
-          <table className="w-full min-w-[40rem] text-sm">
+          <table className="w-full min-w-[56rem] text-sm">
             <thead>
               <tr>
                 <th>Opened</th>
+                <th>Opened by</th>
                 <th>Closed</th>
+                <th>Closed by</th>
                 <th className="text-right">Float</th>
                 <th className="text-right">Expected</th>
                 <th className="text-right">Counted</th>
                 <th className="text-right">Difference</th>
+                <th>Note</th>
               </tr>
             </thead>
             <tbody>
-              {(history.data ?? []).map((s) => (
+              {shifts.map((s) => (
                 <tr key={s._id} className="border-t border-slate-100">
                   <td>{when(s.openedAt)}</td>
+                  <td>{s.openedByName ?? "-"}</td>
                   <td>{s.isOpen ? <Badge tone="amber">Open</Badge> : when(s.closedAt)}</td>
+                  <td>{s.isOpen ? "-" : (s.closedByName ?? "-")}</td>
                   <td className="text-right tabular-nums">{rupees(s.openingFloat)}</td>
                   <td className="text-right tabular-nums">{s.isOpen ? "-" : rupees(s.expectedCash)}</td>
                   <td className="text-right tabular-nums">{s.isOpen ? "-" : rupees(s.countedCash)}</td>
@@ -377,18 +425,28 @@ export default function Shifts() {
                   >
                     {s.isOpen ? "-" : rupees(s.variance)}
                   </td>
+                  <td className="max-w-[16rem] truncate text-slate-500" title={s.closingNote}>
+                    {s.closingNote ?? ""}
+                  </td>
                 </tr>
               ))}
-              {(history.data ?? []).length === 0 && (
+              {shifts.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="py-10 text-center text-sm text-slate-500">
-                    No shifts yet
+                  <td colSpan={9} className="py-10 text-center text-sm text-slate-500">
+                    {history.isLoading ? "Loading..." : "No shifts in this period"}
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
         </TableWrap>
+        {shifts.length >= limit && (
+          <div className="mt-3 text-center">
+            <Button variant="secondary" loading={history.isFetching} onClick={() => setLimit((n) => n + 100)}>
+              Show more
+            </Button>
+          </div>
+        )}
       </Card>
     </div>
   );

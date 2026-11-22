@@ -336,8 +336,14 @@ export async function printBoth(ctx: RequestContext, orderId: string) {
   }
   const repo = new PosRepository(ctx.restaurantId);
   const rounds = await repo.kotRounds(order._id);
+  // Saving the order just before sent its new items to the kitchen and printed that KOT already: printing it again
+  // would give two copies, so a round queued in the last minute is left as it is.
+  const justPrinted = new Set(await repo.recentlyPrintedRounds(order._id, new Date(Date.now() - 60_000)));
   let kots = 0;
-  for (const round of rounds) kots += await enqueueKot(ctx.restaurantId, order._id, round, { reprint: true });
+  for (const round of rounds) {
+    if (justPrinted.has(round)) kots++;
+    else kots += await enqueueKot(ctx.restaurantId, order._id, round, { reprint: true });
+  }
   const invoices = await enqueueBill(ctx.restaurantId, order._id);
   if (kots === 0 && invoices === 0) throw new HttpError(409, "No printer is set up for these slips");
   return { kots, invoices, rounds: rounds.length };

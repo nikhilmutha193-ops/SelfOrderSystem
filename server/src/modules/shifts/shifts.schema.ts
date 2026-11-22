@@ -30,8 +30,21 @@ export const closeDaySchema = z.object({
   carryForward: z.boolean().optional(),
 });
 
+/**
+ * `scope=day` is the cashier's view: only the shifts of one business day (today unless `date` is given).
+ * Without it the list is the history for the admin, newest first, optionally between two business dates.
+ */
+export const shiftListQuery = z.object({
+  scope: blankToUndefined(z.enum(["day"])),
+  date: blankToUndefined(businessDate),
+  from: blankToUndefined(businessDate),
+  to: blankToUndefined(businessDate),
+  limit: blankToUndefined(z.coerce.number().int().min(1).max(500)),
+});
+
 export const dateParams = z.object({ date: businessDate });
 
+export type ShiftListQuery = z.output<typeof shiftListQuery>;
 export type CashMovementInput = z.output<typeof cashMovementSchema>;
 export type CloseShiftInput = z.output<typeof closeShiftSchema>;
 export type CloseDayInput = z.output<typeof closeDaySchema>;

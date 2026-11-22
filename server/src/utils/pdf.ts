@@ -110,7 +110,7 @@ function isThermal(paperSize: PrintPaperSize): boolean {
   return paperSize === "thermal58" || paperSize === "thermal80";
 }
 
-const SIZE_SCALE: Record<TextSize, number> = { small: 0.85, normal: 1, large: 1.2 };
+const SIZE_SCALE: Record<TextSize, number> = { small: 0.85, normal: 1, medium: 1.1, large: 1.2 };
 
 async function renderToPaper(
   res: Response,

@@ -5,6 +5,7 @@ import Category, { ICategory } from "../../models/Category";
 import FoodItem, { IFoodItem } from "../../models/FoodItem";
 import Order, { IOfflineSync, IOrder } from "../../models/Order";
 import OrderItem from "../../models/OrderItem";
+import PrintJob from "../../models/PrintJob";
 import Restaurant from "../../models/Restaurant";
 import Subcategory, { ISubcategory } from "../../models/Subcategory";
 import TableModel, { ITable } from "../../models/Table";
@@ -180,6 +181,17 @@ export class PosRepository {
 
   restaurantDay() {
     return Restaurant.findById(this.restaurantId).select("dayEndTime timezone").lean();
+  }
+
+  /** The KOT rounds of an order whose ticket was queued for printing since `since` (it just came out of the printer). */
+  async recentlyPrintedRounds(orderId: Types.ObjectId, since: Date): Promise<number[]> {
+    const rounds = (await PrintJob.distinct("round", {
+      restaurantId: this.restaurantId,
+      orderId,
+      kind: "kot",
+      createdAt: { $gte: since },
+    })) as (number | null)[];
+    return rounds.filter((r): r is number => typeof r === "number");
   }
 
   /** The KOT rounds that were sent for an order (one ticket each). */

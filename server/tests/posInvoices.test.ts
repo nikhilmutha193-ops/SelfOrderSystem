@@ -1,3 +1,4 @@
+import { Types } from "mongoose";
 import { beforeAll, describe, expect, it } from "vitest";
 
 import PrintJob from "../src/models/PrintJob";
@@ -180,6 +181,23 @@ describe("printing the KOT and the invoice as two slips", () => {
     const found = await row(id);
     expect(found.invoicePrintCount).toBe(1);
     expect(found.invoicePrintedAt).toBeTruthy();
+  });
+
+  it("does not print the KOT twice when it was sent to the kitchen a moment ago", async () => {
+    const id = await paidTakeaway("Esha");
+    // The KOT came out when the order was sent; KOT + invoice right after must only add the invoice.
+    const first = await PrintJob.countDocuments({ orderId: id, kind: "kot" });
+    expect(first).toBe(1);
+    const res = await api().post(`/api/pos/orders/${id}/print-both`).set(bearer(owner));
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ kots: 1, rounds: 1 });
+    expect(await PrintJob.countDocuments({ orderId: id, kind: "kot" })).toBe(1);
+
+    // A reprint later (after a minute) prints the KOT again.
+    const aged = await PrintJob.collection.updateMany({ orderId: new Types.ObjectId(id), kind: "kot" }, { $set: { createdAt: new Date(Date.now() - 5 * 60_000) } });
+    expect(aged.modifiedCount).toBe(1);
+    await api().post(`/api/pos/orders/${id}/print-both`).set(bearer(owner));
+    expect(await PrintJob.countDocuments({ orderId: id, kind: "kot" })).toBe(2);
   });
 
   it("counts an invoice opened as a PDF, and a bill sent from the order page, as printed", async () => {

@@ -1,9 +1,19 @@
 import type { DayCloseRecord, DayReport, Shift } from "../../lib/types";
 import { api } from "../../shared/api/client";
 
+export interface ShiftRange {
+  from?: string;
+  to?: string;
+  limit?: number;
+}
+
 export const shiftsApi = {
   current: () => api.get<{ shift: Shift | null }>("/shifts/current").then((res) => res.data.shift),
-  history: () => api.get<Shift[]>("/shifts").then((res) => res.data),
+  /** The admin history: newest first, optionally between two business dates (YYYY-MM-DD). */
+  history: (range: ShiftRange = {}) =>
+    api.get<Shift[]>("/shifts", { params: { limit: 100, ...range } }).then((res) => res.data),
+  /** The cashier's view: the shifts of today's business day only. */
+  today: () => api.get<Shift[]>("/shifts", { params: { scope: "day" } }).then((res) => res.data),
   open: (openingFloat: number) => api.post<Shift>("/shifts/open", { openingFloat }).then((res) => res.data),
   cash: (input: { type: "in" | "out"; amount: number; reason: string }) =>
     api.post<Shift>("/shifts/current/cash", input).then((res) => res.data),

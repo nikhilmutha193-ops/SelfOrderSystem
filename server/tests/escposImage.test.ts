@@ -2,7 +2,7 @@ import { PNG } from "pngjs";
 import { describe, expect, it } from "vitest";
 
 import { EscPos } from "../src/utils/escpos";
-import { toBitmap } from "../src/utils/escposImage";
+import { qrBitmap, toBitmap } from "../src/utils/escposImage";
 
 /** A 40 x 20 picture: a black left half and a transparent right half. */
 function sample(): Buffer {
@@ -32,5 +32,15 @@ describe("printing a logo", () => {
   it("sends the picture with the raster command", () => {
     const bytes = new EscPos(32).image(toBitmap(sample(), 40)!).toBuffer();
     expect(bytes.includes(Buffer.from([0x1d, 0x76, 0x30, 0x00, 5, 0, 20, 0]))).toBe(true);
+  });
+});
+
+describe("printing the UPI QR code", () => {
+  it("makes a square picture that fits the paper, with a quiet border", () => {
+    const qr = qrBitmap("upi://pay?pa=shop@upi&pn=Shop&am=158.00&cu=INR&tn=INV%2F26-27%2F000020", 240);
+    expect(qr.height).toBeLessThanOrEqual(240);
+    expect(qr.widthBytes * 8).toBeGreaterThanOrEqual(qr.height);
+    expect(qr.data.subarray(0, qr.widthBytes).every((b) => b === 0)).toBe(true); // the top border is blank
+    expect(qr.data.some((b) => b !== 0)).toBe(true);
   });
 });

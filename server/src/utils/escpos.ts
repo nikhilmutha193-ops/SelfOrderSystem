@@ -44,13 +44,17 @@ export class EscPos {
     return this.raw(GS, 0x21, large ? 0x11 : 0x00);
   }
 
-  /** small = the printer's narrow font B, large = double width and height, normal = the usual font A. */
-  textSize(size: "small" | "normal" | "large"): this {
-    return this.raw(ESC, 0x4d, size === "small" ? 1 : 0).raw(GS, 0x21, size === "large" ? 0x11 : 0x00);
+  /**
+   * small = the printer's narrow font B, normal = the usual font A, medium = font A at double height (taller, same
+   * number of characters per line), large = double width and height.
+   */
+  textSize(size: "small" | "normal" | "medium" | "large"): this {
+    const scale = size === "large" ? 0x11 : size === "medium" ? 0x01 : 0x00;
+    return this.raw(ESC, 0x4d, size === "small" ? 1 : 0).raw(GS, 0x21, scale);
   }
 
   /** How many characters fit on a line at this text size. */
-  columns(size: "small" | "normal" | "large"): number {
+  columns(size: "small" | "normal" | "medium" | "large"): number {
     return size === "small" ? Math.floor((this.width * 4) / 3) : size === "large" ? Math.floor(this.width / 2) : this.width;
   }
 

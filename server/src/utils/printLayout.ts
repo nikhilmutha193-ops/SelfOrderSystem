@@ -9,8 +9,9 @@ import type { IInvoiceSettings, IKotSettings, PrintFontSize, PrintPaperSize } fr
 export type PaperKey = "p58" | "p80" | "page";
 export const PAPER_KEYS: PaperKey[] = ["p58", "p80", "page"];
 
-export type TextSize = "small" | "normal" | "large";
-export const TEXT_SIZES: TextSize[] = ["small", "normal", "large"];
+/** medium sits between normal and large: normal width, double height. */
+export type TextSize = "small" | "normal" | "medium" | "large";
+export const TEXT_SIZES: TextSize[] = ["small", "normal", "medium", "large"];
 
 export const KOT_SHOW = [
   "logo",

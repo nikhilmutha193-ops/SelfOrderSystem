@@ -45,6 +45,33 @@ describe("cash shifts", () => {
   });
 });
 
+describe("listing shifts", () => {
+  const list = (query: string) => api().get(`/api/shifts${query}`).set(bearer(owner));
+
+  it("gives the cashier today's shifts only, with the cash figures of the open one", async () => {
+    await api().post("/api/shifts/open").set(bearer(owner)).send({ openingFloat: 300 });
+    const today = await list("?scope=day");
+    expect(today.status).toBe(200);
+    expect(today.body.map((s: { isOpen: boolean }) => s.isOpen)).toEqual([true, false]);
+    expect(today.body[0]).toMatchObject({ openingFloat: 300, expectedCash: 300 });
+
+    // A shift from another day is not part of the cashier's view, but stays in the history.
+    const Shift = (await import("../src/models/Shift")).default;
+    await Shift.collection.updateOne(
+      { isOpen: false },
+      { $set: { openedAt: new Date(Date.now() - 5 * 86_400_000), closedAt: new Date(Date.now() - 5 * 86_400_000 + 3_600_000) } }
+    );
+    expect((await list("?scope=day")).body).toHaveLength(1);
+    expect((await list("")).body).toHaveLength(2);
+    expect((await list("?limit=1")).body).toHaveLength(1);
+    const day = (offset: number) => new Date(Date.now() - offset * 86_400_000).toISOString().slice(0, 10);
+    expect((await list(`?from=${day(1)}`)).body).toHaveLength(1);
+    expect((await list(`?from=${day(7)}&to=${day(3)}`)).body).toHaveLength(1);
+    expect((await list("?from=nope")).status).toBe(400);
+    await api().post("/api/shifts/current/close").set(bearer(owner)).send({ countedCash: 300 });
+  });
+});
+
 describe("closing the day", () => {
   it("blocks the close while bills are unpaid unless they are carried forward", async () => {
     const unpaid = await counterOrder(owner, [{ foodItemId: world.food.dosa, quantity: 1 }], "Still eating");

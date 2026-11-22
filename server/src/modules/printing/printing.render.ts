@@ -2,7 +2,7 @@ import { IOrder, IPayment } from "../../models/Order";
 import { IOrderItem } from "../../models/OrderItem";
 import { IRestaurant } from "../../models/Restaurant";
 import { charsPerLine, EscPos } from "../../utils/escpos";
-import type { Bitmap } from "../../utils/escposImage";
+import { qrBitmap, type Bitmap } from "../../utils/escposImage";
 import { InvoiceTotals } from "../../utils/invoice";
 import { billPhone } from "../../utils/phone";
 import { paperKeyFor, resolveInvoiceLayout, resolveKotLayout, TextSize } from "../../utils/printLayout";
@@ -35,7 +35,7 @@ function bump(size: TextSize): TextSize {
 }
 
 function lower(size: TextSize): TextSize {
-  return size === "large" ? "normal" : "small";
+  return size === "large" || size === "medium" ? "normal" : "small";
 }
 
 /** A line (or wrapped lines) in one text size, then back to normal. */
@@ -226,7 +226,7 @@ export function renderBill(ticket: BillTicket): Buffer {
   }
 
   if (show.upiQr && ticket.upiLink && order.status === "billed") {
-    p.divider().align("center").line("Scan to pay with any UPI app").qr(ticket.upiLink).align("left");
+    p.divider().align("center").line("Scan to pay with any UPI app").image(qrBitmap(ticket.upiLink, ticket.paperWidth === 58 ? 240 : 300)).align("left");
   }
 
   const terms = restaurant.invoiceSettings?.termsText;

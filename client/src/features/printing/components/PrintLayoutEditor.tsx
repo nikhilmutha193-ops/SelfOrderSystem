@@ -152,8 +152,9 @@ export function PrintLayoutEditor({
               ))}
             </div>
             <p className="mt-2 text-xs text-slate-500">
-              On thermal printers Small uses the printer's narrow font and Large prints double size, so a large line
-              holds half as many characters.
+              On thermal printers Small uses the printer's narrow font, Medium prints taller letters of the same
+              width (between Normal and Large) and Large prints double size, so a large line holds half as many
+              characters.
             </p>
           </div>
 
