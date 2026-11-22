@@ -2,6 +2,7 @@ import { IOrder, IPayment } from "../../models/Order";
 import { IOrderItem } from "../../models/OrderItem";
 import { IRestaurant } from "../../models/Restaurant";
 import { charsPerLine, EscPos } from "../../utils/escpos";
+import type { Bitmap } from "../../utils/escposImage";
 import { InvoiceTotals } from "../../utils/invoice";
 import { billPhone } from "../../utils/phone";
 import { paperKeyFor, resolveInvoiceLayout, resolveKotLayout, TextSize } from "../../utils/printLayout";
@@ -133,6 +134,8 @@ export interface BillTicket {
   tokenText?: string;
   totals: InvoiceTotals;
   upiLink?: string | null;
+  /** The restaurant logo, already shrunk for this paper; printed at the top when the invoice layout shows it. */
+  logo?: Bitmap | null;
   paperWidth: 58 | 80;
   openDrawer?: boolean;
 }
@@ -142,6 +145,7 @@ export function renderBill(ticket: BillTicket): Buffer {
   const { show, fonts } = resolveInvoiceLayout(restaurant.invoiceSettings, paperKeyFor(ticket.paperWidth));
   const p = new EscPos(charsPerLine(ticket.paperWidth));
   p.align("center");
+  if (show.logo && ticket.logo) p.image(ticket.logo).feed(1);
   // Same order as the PDF invoice: a big shop name, the address lines small, then the title and a bold token.
   const small = lower(fonts.header);
   if (show.restaurantName) put(p, restaurant.name, bump(fonts.header));

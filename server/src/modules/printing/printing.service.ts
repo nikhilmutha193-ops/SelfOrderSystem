@@ -7,7 +7,10 @@ import { IPrintAgent } from "../../models/PrintAgent";
 import { IPrinter } from "../../models/Printer";
 import { IPrintJob } from "../../models/PrintJob";
 import { writeAudit } from "../../utils/audit";
+import type { Bitmap } from "../../utils/escposImage";
+import { toBitmap } from "../../utils/escposImage";
 import { HttpError } from "../../utils/httpError";
+import { resolveLogoBuffer } from "../../utils/pdf";
 import { orderTokenText } from "../../utils/orderToken";
 import { totalsForOrder } from "../orders/orders.billing";
 import { kotTicketKey, kotTicketLabel } from "../../utils/kotGroups";
@@ -211,6 +214,16 @@ export async function testPrinter(ctx: RequestContext, id: string) {
   return { queued: 1 };
 }
 
+/**
+ * The paper a slip is laid out for. The page size chosen under Settings → Invoice / Kitchen tickets decides it, so the
+ * preview, the PDF and the printer agent all agree. Only when that is a full page (A5/A4) is the printer's own width used.
+ */
+function slipWidth(paperSize: string | undefined, printer: Pick<IPrinter, "paperWidth">): 58 | 80 {
+  if (paperSize === "thermal58") return 58;
+  if (paperSize === "thermal80") return 80;
+  return printer.paperWidth;
+}
+
 export async function enqueueKot(
   restaurantId: string,
   orderId: string | Types.ObjectId,
@@ -261,7 +274,7 @@ export async function enqueueKot(
         categoryName: category,
         items: groupItems,
         printedAt: groupItems[0].kotPrintedAt ?? new Date(),
-        paperWidth: printer.paperWidth,
+        paperWidth: slipWidth(restaurant.kotSettings?.paperSize, printer),
         reprint: options.reprint,
       });
       jobs.push({
@@ -301,6 +314,15 @@ export async function enqueueBill(restaurantId: string, orderId: string | Types.
       : null;
   const label = await orderLabel(repo, order);
 
+  // The logo is read once and shrunk for each paper width that needs it.
+  const logoFile = restaurant.invoiceSettings?.showLogo !== false ? await resolveLogoBuffer(restaurant.logoUrl) : null;
+  const logos = new Map<number, Bitmap | null>();
+  const logoFor = (paperWidth: 58 | 80) => {
+    if (!logoFile) return null;
+    if (!logos.has(paperWidth)) logos.set(paperWidth, toBitmap(logoFile, paperWidth === 58 ? 160 : 224, 140));
+    return logos.get(paperWidth) ?? null;
+  };
+
   await repo.createJobs(
     printers.map((printer) => ({
       printerId: printer._id,
@@ -315,10 +337,11 @@ export async function enqueueBill(restaurantId: string, orderId: string | Types.
         tokenText: restaurant.serviceFlow === "cafe" ? orderTokenText(items) : "",
         totals,
         upiLink,
+        logo: logoFor(slipWidth(restaurant.invoiceSettings?.paperSize, printer)),
         openDrawer:
           order.status === "closed" &&
           (order.paymentMethod === "cash" || order.payments.some((p) => p.method === "cash")),
-        paperWidth: printer.paperWidth,
+        paperWidth: slipWidth(restaurant.invoiceSettings?.paperSize, printer),
       }).toString("base64"),
       orderId: order._id,
     }))

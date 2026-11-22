@@ -159,6 +159,10 @@ function PrinterForm({
             <option value={80}>80 mm</option>
             <option value={58}>58 mm</option>
           </Select>
+          <span className="mt-1 block text-xs font-normal text-slate-500">
+            Used only when Paper size under Settings → Invoice or Kitchen tickets is A5 or A4. A 58 mm or 80 mm choice
+            there sets the page size, text sizes and layout for this printer.
+          </span>
         </label>
       </div>
 

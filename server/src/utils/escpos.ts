@@ -1,3 +1,5 @@
+import type { Bitmap } from "./escposImage";
+
 const ESC = 0x1b;
 const GS = 0x1d;
 
@@ -105,6 +107,18 @@ export class EscPos {
     this.raw(GS, 0x28, 0x6b, length & 0xff, (length >> 8) & 0xff, 0x31, 0x50, 0x30);
     this.parts.push(bytes);
     return this.raw(GS, 0x28, 0x6b, 0x03, 0x00, 0x31, 0x51, 0x30);
+  }
+
+  /** Prints a black and white picture (GS v 0). Centre it first with align("center"). */
+  image(bitmap: Bitmap): this {
+    const { widthBytes, height, data } = bitmap;
+    // The command takes at most 255 rows at a time on some printers, so send it in slices.
+    for (let y = 0; y < height; y += 128) {
+      const rows = Math.min(128, height - y);
+      this.raw(GS, 0x76, 0x30, 0x00, widthBytes & 0xff, widthBytes >> 8, rows & 0xff, rows >> 8);
+      this.parts.push(data.subarray(y * widthBytes, (y + rows) * widthBytes));
+    }
+    return this;
   }
 
   cut(): this {
