@@ -28,6 +28,15 @@ function stamp(date: Date, timeZone: string | undefined): string {
   });
 }
 
+/** The shop name and the token stand one step above the header size, the address lines one step below it. */
+function bump(size: TextSize): TextSize {
+  return size === "small" ? "normal" : "large";
+}
+
+function lower(size: TextSize): TextSize {
+  return size === "large" ? "normal" : "small";
+}
+
 /** A line (or wrapped lines) in one text size, then back to normal. */
 function put(p: EscPos, value: string, size: TextSize, bold = false) {
   p.textSize(size).bold(bold).wrapped(value, p.columns(size)).bold(false).textSize("normal");
@@ -133,12 +142,15 @@ export function renderBill(ticket: BillTicket): Buffer {
   const { show, fonts } = resolveInvoiceLayout(restaurant.invoiceSettings, paperKeyFor(ticket.paperWidth));
   const p = new EscPos(charsPerLine(ticket.paperWidth));
   p.align("center");
-  if (show.restaurantName) put(p, restaurant.name, fonts.header, true);
-  if (show.address && restaurant.address) put(p, restaurant.address, fonts.header);
-  if (show.gstin && restaurant.gstin) put(p, `GSTIN: ${restaurant.gstin}`, fonts.header);
-  if (show.fssai && restaurant.fssaiLicense) put(p, `FSSAI: ${restaurant.fssaiLicense}`, fonts.header);
-  put(p, order.invoiceNumber ? "Tax Invoice" : "Bill Preview", fonts.header, true);
-  if (show.token && ticket.tokenText) put(p, ticket.tokenText.toUpperCase(), fonts.header, true);
+  // Same order as the PDF invoice: a big shop name, the address lines small, then the title and a bold token.
+  const small = lower(fonts.header);
+  if (show.restaurantName) put(p, restaurant.name, bump(fonts.header));
+  if (show.address && restaurant.address) put(p, restaurant.address, small);
+  if (show.gstin && restaurant.gstin) put(p, `GSTIN: ${restaurant.gstin}`, small);
+  if (show.fssai && restaurant.fssaiLicense) put(p, `FSSAI Reg. No: ${restaurant.fssaiLicense}`, small);
+  p.feed(1);
+  put(p, order.invoiceNumber ? "Tax Invoice" : "Bill Preview", fonts.header);
+  if (show.token && ticket.tokenText) put(p, ticket.tokenText.toUpperCase(), bump(fonts.header), true);
   p.align("left").divider();
 
   const d = fonts.details;
@@ -158,12 +170,19 @@ export function renderBill(ticket: BillTicket): Buffer {
   // The same table as the PDF invoice: Item, Qty, Total.
   const itemCols = p.columns(fonts.items);
   p.textSize(fonts.items).bold(true);
-  p.table("Item", "Qty", "Total", itemCols);
+  const withPrice = show.unitPrice;
+  p.table("Item", "Qty", withPrice ? "Price" : null, "Total", itemCols);
   p.bold(false).divider("-", itemCols);
   for (const item of ticket.items.filter((i) => i.status !== "cancelled")) {
     const tag = show.tags && item.isJain ? " (Jain)" : "";
-    p.table(`${item.foodName}${tag}${item.complimentary ? " (free)" : ""}`, String(item.quantity), money(item.total), itemCols);
-    if (show.unitPrice && item.unitPrice != null && item.quantity > 1) p.line(`  @${money(item.unitPrice)} each`);
+    const unit = item.unitPrice ?? (item.quantity ? item.total / item.quantity : item.total);
+    p.table(
+      `${item.foodName}${tag}${item.complimentary ? " (free)" : ""}`,
+      String(item.quantity),
+      withPrice ? money(unit) : null,
+      money(item.total),
+      itemCols
+    );
   }
   p.textSize("normal").divider();
 

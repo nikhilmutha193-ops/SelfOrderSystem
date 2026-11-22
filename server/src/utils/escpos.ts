@@ -69,13 +69,20 @@ export class EscPos {
   }
 
   /** One table row: the name (wrapped) on the left, then the quantity and the total in their own right-aligned columns. */
-  table(name: string, qty: string, total: string, width = this.width): this {
+  table(name: string, qty: string, price: string | null, total: string, width = this.width): this {
     const qtyWidth = 4;
+    const priceWidth = price === null ? 0 : 8;
     const totalWidth = Math.max(total.length + 1, 9);
-    const nameWidth = Math.max(width - qtyWidth - totalWidth, 8);
+    const nameWidth = Math.max(width - qtyWidth - priceWidth - totalWidth, 8);
     const lines = wrap(name, nameWidth - 1);
     lines.forEach((chunk, i) => {
-      if (i === 0) this.line(chunk.padEnd(nameWidth) + toPrinterText(qty).padStart(qtyWidth) + toPrinterText(total).padStart(totalWidth));
+      if (i === 0)
+        this.line(
+          chunk.padEnd(nameWidth) +
+            toPrinterText(qty).padStart(qtyWidth) +
+            (price === null ? "" : toPrinterText(price).padStart(priceWidth)) +
+            toPrinterText(total).padStart(totalWidth)
+        );
       else this.line(chunk);
     });
     return this;
