@@ -1,4 +1,5 @@
 import { api } from "../../shared/api/client";
+import { readSpreadsheet } from "../../shared/export/readSpreadsheet";
 
 export type ImportMode = "insert" | "upsert" | "replace";
 export type ImportAction = "insert" | "update" | "unchanged" | "duplicate" | "error";
@@ -71,27 +72,4 @@ export const menuImportApi = {
   apply: (body: ImportRequest) => api.post<ImportResult>("/menu-import/apply", body).then((res) => res.data),
 };
 
-type Cell = string | number | boolean | Date | null | undefined;
-
-/** Reads the first sheet of an .xlsx file, or a .csv file, into one object per row, keyed by the header in row 1. */
-export async function readMenuFile(file: File): Promise<Record<string, unknown>[]> {
-  let table: Cell[][];
-  if (/\.csv$/i.test(file.name)) {
-    const { parseCsv } = await import("../../shared/export/excel");
-    table = parseCsv(await file.text());
-  } else {
-    const { readSheet } = await import("read-excel-file/browser");
-    table = (await readSheet(file)) as Cell[][];
-  }
-  if (table.length < 2) throw new Error("The file has a header row but no dishes under it");
-  const headers = table[0].map((h) => String(h ?? "").trim());
-  return table.slice(1).map((cells) => {
-    const row: Record<string, unknown> = {};
-    headers.forEach((header, i) => {
-      if (!header) return;
-      const cell = cells[i];
-      row[header] = cell instanceof Date ? cell.toISOString() : (cell ?? "");
-    });
-    return row;
-  });
-}
+export const readMenuFile = (file: File) => readSpreadsheet(file, "dishes");

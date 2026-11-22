@@ -6,6 +6,7 @@ import type {
   StockCountRecord,
   StockItem,
   StockItemInput,
+  StockUnit,
   StockMovement,
   UsageReport,
   Vendor,
@@ -32,7 +33,40 @@ export interface PurchaseInput {
   lines: { stockItemId: string; quantity: number; unitPrice: number }[];
 }
 
+export interface StockImportRow {
+  row: number;
+  name: string;
+  unit: StockUnit | null;
+  action: "create" | "add" | "update" | "unchanged" | "error";
+  quantity: number;
+  before: number;
+  after: number;
+  cost: number | null;
+  notes: string[];
+  error?: string;
+}
+
+export interface StockImportPreview {
+  counts: { rows: number; create: number; add: number; update: number; unchanged: number; error: number; blank: number };
+  rows: StockImportRow[];
+  unknownHeaders: string[];
+}
+
+export interface StockImportResult {
+  message: string;
+  created: number;
+  added: number;
+  updated: number;
+  unchanged: number;
+  skipped: number;
+  errors: StockImportRow[];
+}
+
 export const inventoryApi = {
+  importPreview: (rows: Record<string, unknown>[]) =>
+    api.post<StockImportPreview>("/inventory/import/preview", { rows }).then((res) => res.data),
+  importApply: (rows: Record<string, unknown>[]) =>
+    api.post<StockImportResult>("/inventory/import/apply", { rows }).then((res) => res.data),
   items: () => api.get<StockItem[]>("/inventory/items").then((res) => res.data),
   createItem: (input: StockItemInput) => api.post<StockItem>("/inventory/items", input).then((res) => res.data),
   updateItem: ({ id, input }: { id: string; input: StockItemInput }) =>

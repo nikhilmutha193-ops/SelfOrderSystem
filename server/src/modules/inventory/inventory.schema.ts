@@ -139,3 +139,12 @@ export type RecipeInput = z.output<typeof recipeSchema>;
 export type VendorInput = z.output<typeof vendorSchema>;
 export type PurchaseInput = z.output<typeof purchaseSchema>;
 export type CountInput = z.output<typeof countSchema>;
+
+export const stockImportSchema = z.object({
+  // One object per spreadsheet row: the header text as the key, the cell as the value.
+  rows: z
+    .array(z.record(z.string(), z.unknown()), { error: "rows must be a list" })
+    .min(1, { error: "The file has no rows to import" })
+    .max(2000, { error: "Import at most 2000 stock items at a time" }),
+});
+export type StockImportInput = z.output<typeof stockImportSchema>;

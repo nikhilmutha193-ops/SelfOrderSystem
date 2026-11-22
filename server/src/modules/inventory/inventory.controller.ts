@@ -12,9 +12,11 @@ import {
   rangeQuery,
   recipeSchema,
   settingsSchema,
+  stockImportSchema,
   stockItemSchema,
   vendorSchema,
 } from "./inventory.schema";
+import { applyStockImport, previewStockImport } from "./inventory.import";
 import * as inventory from "./inventory.service";
 
 export const listStock = asyncHandler(async (req: Request, res: Response) => {
@@ -104,4 +106,12 @@ export const getSettings = asyncHandler(async (req: Request, res: Response) => {
 export const updateSettings = asyncHandler(async (req: Request, res: Response) => {
   const { autoSoldOut } = parse(settingsSchema, req.body);
   res.json(await inventory.updateSettings(getContext(req), autoSoldOut));
+});
+
+export const previewImport = asyncHandler(async (req: Request, res: Response) => {
+  res.json(await previewStockImport(getContext(req), parse(stockImportSchema, req.body)));
+});
+
+export const applyImport = asyncHandler(async (req: Request, res: Response) => {
+  res.json(await applyStockImport(getContext(req), parse(stockImportSchema, req.body)));
 });

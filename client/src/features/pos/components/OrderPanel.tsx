@@ -479,8 +479,9 @@ export function OrderPanel({
             Paid{order.invoiceNumber ? ` · ${order.invoiceNumber}` : ""}
           </p>
           <div className="mt-2 grid grid-cols-2 gap-2">
+            {/* Always available, so the invoice can be printed again: it reads Reprint once it has been printed. */}
             <Button variant="secondary" icon={Printer} onClick={paid.onPrintInvoice} disabled={busy}>
-              Print invoice
+              {order.invoicePrintedAt ? "Reprint invoice" : "Print invoice"}
             </Button>
             <Button
               variant="secondary"
@@ -698,17 +699,17 @@ export function OrderPanel({
           order.invoiceNumber &&
           (order.status === "billed" || order.status === "closed") && (
             <>
-              {/* A paid order whose invoice was never printed: print it here. Once printed this button is gone. */}
-              {order.status === "closed" && !order.invoicePrintedAt && onPrintInvoice && (
+              {/* A paid order: its invoice can be printed here, and again after it was printed (it reads Reprint). */}
+              {order.status === "closed" && onPrintInvoice && (
                 <Button
                   variant="secondary"
                   icon={Printer}
                   className="col-span-2"
                   onClick={onPrintInvoice}
                   disabled={busy}
-                  data-testid="print-invoice-unprinted"
+                  data-testid="print-invoice-paid"
                 >
-                  Print invoice
+                  {order.invoicePrintedAt ? "Reprint invoice" : "Print invoice"}
                 </Button>
               )}
               <div className="col-span-2">

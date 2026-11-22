@@ -69,6 +69,16 @@ export class InventoryRepository {
     return StockItem.create({ ...data, restaurantId: this.restaurantId });
   }
 
+  /** Creates a stock item inside a transaction (the Excel import makes several together with their stock). */
+  async createStockItemIn(data: Partial<IStockItem>, session: ClientSession) {
+    const [created] = await StockItem.create([{ ...data, restaurantId: this.restaurantId }], { session });
+    return created;
+  }
+
+  updateStockItemFields(id: Types.ObjectId, set: Partial<IStockItem>, session: ClientSession) {
+    return StockItem.updateOne(this.scoped<IStockItem>({ _id: id }), { $set: set }, { session });
+  }
+
   setAvgCost(id: Types.ObjectId, avgCost: number, session?: ClientSession) {
     return StockItem.updateOne(this.scoped<IStockItem>({ _id: id }), { $set: { avgCost } }, { session });
   }

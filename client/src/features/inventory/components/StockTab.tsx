@@ -3,6 +3,8 @@ import { useState } from "react";
 import type { StockItem, StockItemInput, StockUnit } from "../../../lib/types";
 import { extractErrorMessage } from "../../../shared/api/client";
 import { confirmDialog } from "../../../shared/ui/confirm";
+import { Download, FileUp } from "lucide-react";
+
 import { Badge, Button, Card, ErrorText, Input, Select, Switch, TableWrap } from "../../../shared/ui/ui";
 import { inPurchaseUnits, MOVEMENT_LABEL, qty, rupees, STOCK_UNIT_OPTIONS, unitShort } from "../format";
 import {
@@ -16,6 +18,8 @@ import {
   useStockItems,
   useUpdateStockItem,
 } from "../queries";
+import { downloadStockSample } from "../stockSample";
+import { StockImportDialog } from "./StockImportDialog";
 
 const NO_ITEMS: StockItem[] = [];
 const BLANK: StockItemInput = {
@@ -290,6 +294,7 @@ export function StockTab({ canEdit }: { canEdit: boolean }) {
   const update = useUpdateStockItem();
   const remove = useDeleteStockItem();
   const [adding, setAdding] = useState(false);
+  const [importing, setImporting] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
   const [open, setOpen] = useState<{
     id: string;
@@ -346,8 +351,19 @@ export function StockTab({ canEdit }: { canEdit: boolean }) {
               </label>
             )}
           </div>
-          {canEdit && !adding && <Button onClick={() => setAdding(true)}>Add stock item</Button>}
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="secondary" icon={Download} onClick={() => void downloadStockSample()}>
+              Sample Excel
+            </Button>
+            {canEdit && (
+              <Button variant="secondary" icon={FileUp} onClick={() => setImporting(true)}>
+                Import Excel
+              </Button>
+            )}
+            {canEdit && !adding && <Button onClick={() => setAdding(true)}>Add stock item</Button>}
+          </div>
         </div>
+        <StockImportDialog open={importing} onClose={() => setImporting(false)} />
         {adding && (
           <div className="mt-4">
             <ItemForm

@@ -2,6 +2,7 @@ import { Router } from "express";
 
 import { requireAuth, requireModule } from "../../middleware/auth";
 import {
+  applyImport,
   createCount,
   createPurchase,
   createStockItem,
@@ -15,6 +16,7 @@ import {
   listStock,
   listVendors,
   postMovement,
+  previewImport,
   saveRecipe,
   updateSettings,
   updateStockItem,
@@ -26,6 +28,8 @@ const router = Router();
 
 router.use(requireAuth("admin"), requireModule("inventory"));
 router.get("/items", listStock);
+router.post("/import/preview", previewImport);
+router.post("/import/apply", applyImport);
 router.post("/items", createStockItem);
 router.put("/items/:id", updateStockItem);
 router.delete("/items/:id", deleteStockItem);
