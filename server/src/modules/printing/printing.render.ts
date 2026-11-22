@@ -33,11 +33,6 @@ function put(p: EscPos, value: string, size: TextSize, bold = false) {
   p.textSize(size).bold(bold).wrapped(value, p.columns(size)).bold(false).textSize("normal");
 }
 
-/** The shop name and the grand total stand one step above the text size chosen for their part of the bill. */
-function bump(size: TextSize): TextSize {
-  return size === "small" ? "normal" : "large";
-}
-
 export interface KotTicket {
   restaurant: Pick<IRestaurant, "name" | "timezone" | "kotSettings">;
   orderLabel: string;
@@ -126,12 +121,12 @@ export function renderBill(ticket: BillTicket): Buffer {
   const { show, fonts } = resolveInvoiceLayout(restaurant.invoiceSettings, paperKeyFor(ticket.paperWidth));
   const p = new EscPos(charsPerLine(ticket.paperWidth));
   p.align("center");
-  if (show.restaurantName) put(p, restaurant.name, bump(fonts.header), true);
+  if (show.restaurantName) put(p, restaurant.name, fonts.header, true);
   if (show.address && restaurant.address) put(p, restaurant.address, fonts.header);
   if (show.gstin && restaurant.gstin) put(p, `GSTIN: ${restaurant.gstin}`, fonts.header);
   if (show.fssai && restaurant.fssaiLicense) put(p, `FSSAI: ${restaurant.fssaiLicense}`, fonts.header);
   put(p, order.invoiceNumber ? "TAX INVOICE" : "BILL PREVIEW", fonts.header, true);
-  if (show.token && ticket.tokenText) put(p, ticket.tokenText.toUpperCase(), bump(fonts.header), true);
+  if (show.token && ticket.tokenText) put(p, ticket.tokenText.toUpperCase(), fonts.header, true);
   p.align("left").divider();
 
   const d = fonts.details;
@@ -181,7 +176,7 @@ export function renderBill(ticket: BillTicket): Buffer {
     p.row("Round off", `${totals.roundOff > 0 ? "+" : ""}${money(totals.roundOff)}`, cols);
   p.textSize("normal");
 
-  const total = bump(fonts.grandTotal);
+  const total = fonts.grandTotal;
   p.textSize(total).bold(true).row("TOTAL", `Rs.${money(totals.grandTotal)}`, p.columns(total)).bold(false).textSize("normal");
 
   if (show.payments) {

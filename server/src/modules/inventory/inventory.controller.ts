@@ -4,6 +4,7 @@ import { getContext } from "../../core/context";
 import { parse } from "../../core/validate";
 import { asyncHandler } from "../../middleware/errorHandler";
 import {
+  countImportSchema,
   countSchema,
   foodParams,
   idParams,
@@ -16,7 +17,7 @@ import {
   stockItemSchema,
   vendorSchema,
 } from "./inventory.schema";
-import { applyStockImport, previewStockImport } from "./inventory.import";
+import { applyCountImport, applyStockImport, previewCountImport, previewStockImport } from "./inventory.import";
 import * as inventory from "./inventory.service";
 
 export const listStock = asyncHandler(async (req: Request, res: Response) => {
@@ -114,4 +115,12 @@ export const previewImport = asyncHandler(async (req: Request, res: Response) =>
 
 export const applyImport = asyncHandler(async (req: Request, res: Response) => {
   res.json(await applyStockImport(getContext(req), parse(stockImportSchema, req.body)));
+});
+
+export const previewCountSheet = asyncHandler(async (req: Request, res: Response) => {
+  res.json(await previewCountImport(getContext(req), parse(countImportSchema, req.body)));
+});
+
+export const applyCountSheet = asyncHandler(async (req: Request, res: Response) => {
+  res.status(201).json(await applyCountImport(getContext(req), parse(countImportSchema, req.body)));
 });

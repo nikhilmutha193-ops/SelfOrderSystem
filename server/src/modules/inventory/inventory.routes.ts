@@ -2,6 +2,7 @@ import { Router } from "express";
 
 import { requireAuth, requireModule } from "../../middleware/auth";
 import {
+  applyCountSheet,
   applyImport,
   createCount,
   createPurchase,
@@ -16,6 +17,7 @@ import {
   listStock,
   listVendors,
   postMovement,
+  previewCountSheet,
   previewImport,
   saveRecipe,
   updateSettings,
@@ -43,6 +45,8 @@ router.put("/vendors/:id", updateVendor);
 router.get("/purchases", listPurchases);
 router.post("/purchases", createPurchase);
 router.get("/counts", listCounts);
+router.post("/counts/import/preview", previewCountSheet);
+router.post("/counts/import/apply", applyCountSheet);
 router.post("/counts", createCount);
 router.get("/reports/usage", usageReport);
 router.get("/settings", getSettings);

@@ -1,3 +1,4 @@
+import { Download, FileUp } from "lucide-react";
 import { useState } from "react";
 
 import type { StockCountRecord, StockItem } from "../../../lib/types";
@@ -5,6 +6,8 @@ import { extractErrorMessage } from "../../../shared/api/client";
 import { Button, Card, ErrorText, Input, TableWrap } from "../../../shared/ui/ui";
 import { qty, rupees } from "../format";
 import { useCounts, useCreateCount, useStockItems } from "../queries";
+import { downloadCountSheet } from "../stockExport";
+import { CountImportDialog } from "./CountImportDialog";
 
 const NO_ITEMS: StockItem[] = [];
 const NO_COUNTS: StockCountRecord[] = [];
@@ -17,16 +20,31 @@ export function CountsTab({ canEdit }: { canEdit: boolean }) {
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
   const entered = Object.entries(counted).filter(([, v]) => v !== "");
 
   return (
     <div className="flex flex-col gap-4">
       {canEdit && (
         <Card>
-          <h2 className="text-base font-semibold text-slate-900">Count stock</h2>
-          <p className="mb-3 text-sm text-slate-500">
-            Enter what you find on the shelf. Leave items you didn't count blank. Differences are posted as adjustments.
-          </p>
+          <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-base font-semibold text-slate-900">Count stock</h2>
+              <p className="text-sm text-slate-500">
+                Enter what you find on the shelf, or fill in a count sheet and import it. Leave items you didn't count
+                blank. Differences are posted as adjustments.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="secondary" icon={Download} onClick={() => void downloadCountSheet(items)}>
+                Download count sheet
+              </Button>
+              <Button variant="secondary" icon={FileUp} onClick={() => setImporting(true)}>
+                Import counted sheet
+              </Button>
+            </div>
+          </div>
+          <CountImportDialog open={importing} onClose={() => setImporting(false)} />
           <TableWrap>
             <table className="w-full min-w-[34rem] text-sm">
               <thead>

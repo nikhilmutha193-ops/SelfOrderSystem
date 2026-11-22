@@ -6,8 +6,8 @@ import { IStockItem, StockUnit } from "../../models/StockItem";
 import { writeAudit } from "../../utils/audit";
 import { HttpError } from "../../utils/httpError";
 import { InventoryRepository, NewMovement } from "./inventory.repository";
-import { StockImportInput } from "./inventory.schema";
-import { refreshSoldOut } from "./inventory.service";
+import { CountImportInput, StockImportInput } from "./inventory.schema";
+import { createCount, refreshSoldOut } from "./inventory.service";
 
 const round3 = (n: number) => Math.round(n * 1000) / 1000;
 const round6 = (n: number) => Math.round(n * 1e6) / 1e6;
@@ -315,5 +315,153 @@ export async function applyStockImport(ctx: RequestContext, input: StockImportIn
     errors: plan.rows.filter((r) => r.action === "error").slice(0, 50),
     createdItems,
     stockLines: addedQuantityRows,
+  };
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Counting stock from a sheet: the count sheet lists every item with its stock now; the counted quantity is typed in and
+// the file imported. Only items that are in the file and have a Counted quantity are counted; the rest are left alone.
+
+const COUNT_COLUMNS: Record<string, string[]> = {
+  name: COLUMNS.name,
+  counted: ["counted quantity", "counted", "counted stock", "count", "actual", "actual stock", "physical stock", "physical count"],
+  system: ["system stock", "system quantity", "system", "on hand", "expected", "stock now"],
+};
+const COUNT_LOOKUP = new Map<string, string>();
+for (const [field, names] of Object.entries(COUNT_COLUMNS)) for (const n of names) COUNT_LOOKUP.set(simplify(n), field);
+
+export interface CountImportRow {
+  row: number;
+  name: string;
+  unit: StockUnit | null;
+  action: "count" | "skip" | "error";
+  /** Stock on hand now, what was counted, and the difference (counted minus on hand). */
+  expected: number;
+  counted: number | null;
+  variance: number;
+  value: number;
+  note?: string;
+  error?: string;
+}
+
+async function buildCountPlan(ctx: RequestContext, input: CountImportInput) {
+  const repo = new InventoryRepository(ctx.restaurantId);
+  const [items, onHand] = await Promise.all([repo.listStockItems(), repo.onHand()]);
+  const byName = new Map(items.map((i) => [i.name.trim().toLowerCase(), i as IStockItem & { _id: Types.ObjectId }]));
+
+  const headerField = new Map<string, string>();
+  const unknownHeaders: string[] = [];
+  for (const header of new Set(input.rows.flatMap((r) => Object.keys(r)))) {
+    const field = COUNT_LOOKUP.get(simplify(header));
+    if (field) headerField.set(header, field);
+    else if (header.trim()) unknownHeaders.push(header);
+  }
+  const fields = new Set(headerField.values());
+  if (!fields.has("name")) throw new HttpError(400, "The file needs an Item column in its first row");
+  if (!fields.has("counted")) throw new HttpError(400, "The file needs a Counted quantity column. Download the count sheet to get one.");
+
+  const rows: CountImportRow[] = [];
+  const lines: { stockItemId: string; counted: number }[] = [];
+  const seen = new Map<string, number>();
+  let blank = 0;
+
+  input.rows.forEach((raw, index) => {
+    const rowNumber = index + 2; // the header is row 1
+    const cells: Record<string, unknown> = {};
+    for (const [header, value] of Object.entries(raw)) {
+      const field = headerField.get(header);
+      if (field) cells[field] = value;
+    }
+    if (Object.values(cells).every(isBlank)) {
+      blank++;
+      return;
+    }
+    const name = String(cells.name ?? "").trim();
+    const out: CountImportRow = { row: rowNumber, name, unit: null, action: "error", expected: 0, counted: null, variance: 0, value: 0 };
+    rows.push(out);
+    if (!name) {
+      out.error = "Item name is empty";
+      return;
+    }
+    const key = name.toLowerCase();
+    const first = seen.get(key);
+    if (first !== undefined) {
+      out.error = `Same item as row ${first}: skipped, so it is not counted twice`;
+      return;
+    }
+    seen.set(key, rowNumber);
+
+    const item = byName.get(key);
+    if (!item) {
+      out.error = "Not in Inventory. A count only covers items that already exist (use Import Excel on the Stock tab to add new ones)";
+      return;
+    }
+    out.name = item.name;
+    out.unit = item.unit;
+    const expected = round3(onHand.get(item._id.toString()) ?? 0);
+    out.expected = expected;
+
+    if (isBlank(cells.counted)) {
+      out.action = "skip";
+      out.note = "No counted quantity: left as it is";
+      return;
+    }
+    const counted = asNumber(cells.counted);
+    if (counted === null) {
+      out.error = "Counted quantity must be a number";
+      return;
+    }
+    if (counted < 0) {
+      out.error = "Counted quantity can't be negative";
+      return;
+    }
+    out.counted = round3(counted);
+    out.variance = round3(counted - expected);
+    out.value = Math.round(out.variance * item.avgCost * 100) / 100;
+    out.action = "count";
+    const system = isBlank(cells.system) ? null : asNumber(cells.system);
+    if (system !== null && Math.abs(system - expected) > 0.0005) {
+      out.note = `Stock changed since this sheet was made (the sheet said ${round3(system)}, it is ${expected} now). The difference is worked out against ${expected}`;
+    }
+    lines.push({ stockItemId: item._id.toString(), counted: round3(counted) });
+  });
+
+  const count = (action: CountImportRow["action"]) => rows.filter((r) => r.action === action).length;
+  const counted = rows.filter((r) => r.action === "count");
+  return {
+    rows,
+    lines,
+    unknownHeaders,
+    counts: {
+      rows: rows.length,
+      counted: counted.length,
+      different: counted.filter((r) => r.variance !== 0).length,
+      skipped: count("skip"),
+      error: count("error"),
+      blank,
+      varianceValue: Math.round(counted.reduce((s, r) => s + r.value, 0) * 100) / 100,
+    },
+  };
+}
+
+export async function previewCountImport(ctx: RequestContext, input: CountImportInput) {
+  const plan = await buildCountPlan(ctx, input);
+  return { counts: plan.counts, rows: plan.rows, unknownHeaders: plan.unknownHeaders };
+}
+
+/** Saves the counted rows as one stock count: each difference is posted as an adjustment so stock equals what was counted. */
+export async function applyCountImport(ctx: RequestContext, input: CountImportInput) {
+  const plan = await buildCountPlan(ctx, input);
+  if (plan.lines.length === 0) throw new HttpError(400, "There is nothing to count in this file. Fill in the Counted quantity column.");
+  const count = await createCount(ctx, { note: input.note || "Count from Excel", lines: plan.lines });
+  return {
+    message: "Count saved",
+    countId: count._id,
+    counted: plan.counts.counted,
+    different: plan.counts.different,
+    skipped: plan.counts.skipped,
+    problems: plan.counts.error,
+    varianceValue: count.varianceValue,
+    errors: plan.rows.filter((r) => r.action === "error").slice(0, 50),
   };
 }

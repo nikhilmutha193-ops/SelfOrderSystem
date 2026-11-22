@@ -62,7 +62,49 @@ export interface StockImportResult {
   errors: StockImportRow[];
 }
 
+export interface CountImportRow {
+  row: number;
+  name: string;
+  unit: StockUnit | null;
+  action: "count" | "skip" | "error";
+  expected: number;
+  counted: number | null;
+  variance: number;
+  value: number;
+  note?: string;
+  error?: string;
+}
+
+export interface CountImportPreview {
+  counts: {
+    rows: number;
+    counted: number;
+    different: number;
+    skipped: number;
+    error: number;
+    blank: number;
+    varianceValue: number;
+  };
+  rows: CountImportRow[];
+  unknownHeaders: string[];
+}
+
+export interface CountImportResult {
+  message: string;
+  countId: string;
+  counted: number;
+  different: number;
+  skipped: number;
+  problems: number;
+  varianceValue: number;
+  errors: CountImportRow[];
+}
+
 export const inventoryApi = {
+  countPreview: (rows: Record<string, unknown>[]) =>
+    api.post<CountImportPreview>("/inventory/counts/import/preview", { rows }).then((res) => res.data),
+  countApply: (rows: Record<string, unknown>[], note?: string) =>
+    api.post<CountImportResult>("/inventory/counts/import/apply", { rows, note }).then((res) => res.data),
   importPreview: (rows: Record<string, unknown>[]) =>
     api.post<StockImportPreview>("/inventory/import/preview", { rows }).then((res) => res.data),
   importApply: (rows: Record<string, unknown>[]) =>

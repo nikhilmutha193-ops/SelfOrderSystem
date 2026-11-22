@@ -18,6 +18,7 @@ import {
   useStockItems,
   useUpdateStockItem,
 } from "../queries";
+import { downloadCurrentStock } from "../stockExport";
 import { downloadStockSample } from "../stockSample";
 import { StockImportDialog } from "./StockImportDialog";
 
@@ -352,6 +353,9 @@ export function StockTab({ canEdit }: { canEdit: boolean }) {
             )}
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <Button variant="secondary" icon={Download} onClick={() => void downloadCurrentStock(list)}>
+              Export Excel
+            </Button>
             <Button variant="secondary" icon={Download} onClick={() => void downloadStockSample()}>
               Sample Excel
             </Button>

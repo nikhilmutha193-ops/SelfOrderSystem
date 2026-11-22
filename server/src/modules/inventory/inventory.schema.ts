@@ -148,3 +148,7 @@ export const stockImportSchema = z.object({
     .max(2000, { error: "Import at most 2000 stock items at a time" }),
 });
 export type StockImportInput = z.output<typeof stockImportSchema>;
+
+/** A filled-in count sheet: the same rows as an import, plus an optional note for the count it becomes. */
+export const countImportSchema = stockImportSchema.extend({ note });
+export type CountImportInput = z.output<typeof countImportSchema>;
