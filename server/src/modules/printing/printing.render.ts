@@ -33,6 +33,18 @@ function put(p: EscPos, value: string, size: TextSize, bold = false) {
   p.textSize(size).bold(bold).wrapped(value, p.columns(size)).bold(false).textSize("normal");
 }
 
+/** The full date and time, as on the PDF invoice. */
+function fullStamp(date: Date, timeZone: string | undefined): string {
+  return date.toLocaleString("en-IN", {
+    timeZone: timeZone || "Asia/Kolkata",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 export interface KotTicket {
   restaurant: Pick<IRestaurant, "name" | "timezone" | "kotSettings">;
   orderLabel: string;
@@ -125,31 +137,33 @@ export function renderBill(ticket: BillTicket): Buffer {
   if (show.address && restaurant.address) put(p, restaurant.address, fonts.header);
   if (show.gstin && restaurant.gstin) put(p, `GSTIN: ${restaurant.gstin}`, fonts.header);
   if (show.fssai && restaurant.fssaiLicense) put(p, `FSSAI: ${restaurant.fssaiLicense}`, fonts.header);
-  put(p, order.invoiceNumber ? "TAX INVOICE" : "BILL PREVIEW", fonts.header, true);
+  put(p, order.invoiceNumber ? "Tax Invoice" : "Bill Preview", fonts.header, true);
   if (show.token && ticket.tokenText) put(p, ticket.tokenText.toUpperCase(), fonts.header, true);
   p.align("left").divider();
 
   const d = fonts.details;
-  if (show.invoiceNumber && order.invoiceNumber) put(p, `Invoice: ${order.invoiceNumber}`, d);
-  if (show.dateTime) put(p, `Date: ${stamp(order.billedAt ?? order.checkinTime, restaurant.timezone)}`, d);
-  if (show.orderType) put(p, ticket.orderLabel, d);
+  if (show.invoiceNumber && order.invoiceNumber) put(p, `Invoice No: ${order.invoiceNumber}`, d);
+  if (show.dateTime) put(p, `Date: ${fullStamp(order.billedAt ?? order.checkinTime, restaurant.timezone)}`, d);
+  if (show.orderType) put(p, `Order: ${ticket.orderLabel}`, d);
   if (show.customerName) {
     const phone =
       show.customerPhone && order.customerPhone ? ` (${billPhone(order.customerPhone, restaurant.invoiceSettings)})` : "";
-    put(p, `Guest: ${order.customerName}${phone}`, d);
+    put(p, `Customer: ${order.customerName}${phone}`, d);
   } else if (show.customerPhone && order.customerPhone) {
     put(p, `Phone: ${billPhone(order.customerPhone, restaurant.invoiceSettings)}`, d);
   }
-  if (show.customerGstin && order.customerGstin) put(p, `Guest GSTIN: ${order.customerGstin}`, d);
+  if (show.customerGstin && order.customerGstin) put(p, `Customer GSTIN: ${order.customerGstin}`, d);
   p.divider();
 
+  // The same table as the PDF invoice: Item, Qty, Total.
   const itemCols = p.columns(fonts.items);
-  p.textSize(fonts.items);
+  p.textSize(fonts.items).bold(true);
+  p.table("Item", "Qty", "Total", itemCols);
+  p.bold(false).divider("-", itemCols);
   for (const item of ticket.items.filter((i) => i.status !== "cancelled")) {
     const tag = show.tags && item.isJain ? " (Jain)" : "";
-    const price = show.unitPrice && item.unitPrice != null ? ` @${money(item.unitPrice)}` : "";
-    const label = `${item.quantity} x ${item.foodName}${tag}${price}${item.complimentary ? " (free)" : ""}`;
-    p.row(label, money(item.total), itemCols);
+    p.table(`${item.foodName}${tag}${item.complimentary ? " (free)" : ""}`, String(item.quantity), money(item.total), itemCols);
+    if (show.unitPrice && item.unitPrice != null && item.quantity > 1) p.line(`  @${money(item.unitPrice)} each`);
   }
   p.textSize("normal").divider();
 
@@ -177,7 +191,7 @@ export function renderBill(ticket: BillTicket): Buffer {
   p.textSize("normal");
 
   const total = fonts.grandTotal;
-  p.textSize(total).bold(true).row("TOTAL", `Rs.${money(totals.grandTotal)}`, p.columns(total)).bold(false).textSize("normal");
+  p.textSize(total).bold(true).row("Grand Total", `Rs.${money(totals.grandTotal)}`, p.columns(total)).bold(false).textSize("normal");
 
   if (show.payments) {
     p.textSize(fonts.totals);
