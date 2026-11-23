@@ -259,7 +259,13 @@ export function upiPaymentLink(vpa: string, payeeName: string, amount: number, n
 
 export async function streamInvoicePdf(
   res: Response,
-  data: { restaurant: IRestaurant; order: IOrder; items: IOrderItem[]; totals: InvoiceTotals; preview?: boolean }
+  data: {
+    restaurant: IRestaurant;
+    order: IOrder;
+    items: IOrderItem[];
+    totals: InvoiceTotals;
+    preview?: boolean;
+  }
 ) {
   const { restaurant, order, items, totals } = data;
   const settings = restaurant.invoiceSettings;

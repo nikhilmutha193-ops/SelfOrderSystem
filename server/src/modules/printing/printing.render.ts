@@ -217,7 +217,7 @@ export function renderBill(ticket: BillTicket): Buffer {
   p.textSize("normal");
 
   const total = fonts.grandTotal;
-  p.textSize(total).bold(true).row("Grand Total", `Rs.${money(totals.grandTotal)}`, p.columns(total)).bold(false).textSize("normal");
+  p.textSize(total).bold(true).row(order.status === "billed" ? "Amount Payable" : "Grand Total", `Rs.${money(totals.grandTotal)}`, p.columns(total)).bold(false).textSize("normal");
 
   if (show.payments) {
     p.textSize(fonts.totals);
@@ -229,7 +229,8 @@ export function renderBill(ticket: BillTicket): Buffer {
   }
 
   if (show.upiQr && ticket.upiLink && order.status === "billed") {
-    p.divider().align("center").line("Scan to pay with any UPI app").image(qrBitmap(ticket.upiLink, ticket.paperWidth === 58 ? 240 : 300)).align("left");
+    p.divider().align("center").line(`Scan to pay Rs.${money(totals.grandTotal)}`);
+    p.image(qrBitmap(ticket.upiLink, ticket.paperWidth === 58 ? 240 : 300)).align("left");
   }
 
   const terms = restaurant.invoiceSettings?.termsText;

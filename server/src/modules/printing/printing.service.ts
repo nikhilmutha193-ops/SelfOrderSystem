@@ -301,9 +301,10 @@ export async function enqueueBill(restaurantId: string, orderId: string | Types.
   if (!order || !restaurant) return 0;
   const items = await repo.findOrderItems(order._id);
   const totals = totalsForOrder(order, items, restaurant);
+  // The payment QR on an unpaid invoice is the normal UPI link with the amount, so any UPI app opens it directly.
   const vpa = restaurant.billingSettings?.upiVpa;
   const upiLink =
-    vpa && order.invoiceNumber
+    order.status === "billed" && vpa && order.invoiceNumber
       ? `upi://pay?${new URLSearchParams({
           pa: vpa,
           pn: restaurant.billingSettings?.upiPayeeName || restaurant.name,

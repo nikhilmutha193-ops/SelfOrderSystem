@@ -577,6 +577,20 @@ export function OrderPanel({
                 Send order to the counter
               </Button>
             )}
+            {/* The invoice can be made and printed before it is paid: it shows the amount to pay and the UPI QR. */}
+            {!phone && onSettle && order?.status !== "closed" && (
+              <Button
+                variant="secondary"
+                icon={Printer}
+                className="col-span-2"
+                onClick={onBill}
+                disabled={busy || nothing}
+                title="Make the invoice before the payment and print it with the amount to pay and a UPI QR (F9)"
+              >
+                {order?.status === "billed" ? "Reprint invoice" : "Print invoice"}{" "}
+                <kbd className="text-[10px] opacity-70">F9</kbd>
+              </Button>
+            )}
             {onHold ? (
               <Button
                 variant="secondary"

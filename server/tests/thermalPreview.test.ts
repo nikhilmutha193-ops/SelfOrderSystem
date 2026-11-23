@@ -41,7 +41,7 @@ describe("thermal preview in the settings", () => {
     expect(p80.body.columns).toBe(48);
   });
 
-  it("uses the unsaved settings, and shows the invoice with its table, grand total and QR", async () => {
+  it("uses the unsaved settings, and shows an unpaid invoice with its table, the amount payable and the QR", async () => {
     const res = await api()
       .post("/api/restaurant/invoice-preview-thermal")
       .set(bearer(owner))
@@ -49,7 +49,8 @@ describe("thermal preview in the settings", () => {
     expect(res.status).toBe(200);
     const text = textOf(res.body.lines);
     expect(text.some((t) => t.startsWith("Invoice No:"))).toBe(true);
-    expect(text.some((t) => t.includes("Grand Total"))).toBe(true);
+    expect(text.some((t) => t.includes("Amount Payable"))).toBe(true);
+    expect(text.some((t) => /^Scan to pay Rs\.\d/.test(t))).toBe(true);
     expect(res.body.lines.some((l: Line) => l.kind === "image" && l.png)).toBe(true);
 
     const noQr = await api()
