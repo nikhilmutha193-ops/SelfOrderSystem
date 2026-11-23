@@ -221,7 +221,7 @@ export function renderBill(ticket: BillTicket): Buffer {
 
   if (show.payments) {
     p.textSize(fonts.totals);
-    for (const payment of order.payments ?? []) {
+    for (const payment of (order.payments ?? []).filter((p) => p.amount > 0)) {
       p.row(`Paid by ${PAYMENT_NAMES[payment.method] ?? payment.method}`, money(payment.amount), cols);
       if (payment.change) p.row("Change", money(payment.change), cols);
     }

@@ -287,6 +287,11 @@ function buildPayments(
     : []);
   if (lines.length === 0) throw new HttpError(400, "Add at least one payment");
 
+  // Only a bill of nothing (every dish complimentary) is settled with a payment of zero.
+  if (total > 0 && lines.some((line) => line.amount <= 0)) {
+    throw new HttpError(400, "Payment amounts must be more than zero");
+  }
+
   const sum = round2(lines.reduce((acc, line) => acc + line.amount, 0));
   if (Math.abs(sum - total) > 0.001) {
     throw new HttpError(400, `Payments add up to ₹${sum.toFixed(2)} but the bill is ₹${total.toFixed(2)}`);

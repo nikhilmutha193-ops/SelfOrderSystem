@@ -120,9 +120,11 @@ const tenderMethod = z.enum(["cash", "upi", "card", "online", "wallet", "credit"
   error: "A valid paymentMethod (cash, upi, card, online, wallet, credit) is required",
 });
 
+// Zero is allowed here only so a bill whose dishes are all complimentary can be settled; buildPayments refuses a
+// zero payment on any bill that has something to pay.
 const money = z
   .number({ error: "Enter an amount" })
-  .positive({ error: "Payment amounts must be more than zero" })
+  .min(0, { error: "Payment amounts can't be negative" })
   .max(10_000_000, { error: "That amount is too large" });
 
 const upiProof = {

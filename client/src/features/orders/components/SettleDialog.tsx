@@ -440,7 +440,8 @@ function SettleForm({ orderId, total, invoiceNumber, upi, onClose }: SettleDialo
   const cafe = useServiceFlow() === "cafe";
   // Cafe flow: the guest pays before the food is made, usually on their phone, so the UPI QR is shown first.
   const [lines, setLines] = useState<Line[]>([
-    emptyLine(cafe && upi?.upiVpa ? "upi" : "cash", money(total)),
+    // A bill of nothing (every dish complimentary) has no payment to take: it is recorded as cash 0.00.
+    emptyLine(cafe && upi?.upiVpa && total > 0 ? "upi" : "cash", money(total)),
   ]);
   const [splitCount, setSplitCount] = useState("2");
   const [error, setError] = useState<string | null>(null);
@@ -509,6 +510,7 @@ function SettleForm({ orderId, total, invoiceNumber, upi, onClose }: SettleDialo
   }
 
   const settled = Math.abs(remaining) < 0.001 && !lines.some((l) => upiProofMissing(l, guestPhone));
+  const nothingToPay = total <= 0;
 
   return (
     <Dialog
@@ -517,9 +519,11 @@ function SettleForm({ orderId, total, invoiceNumber, upi, onClose }: SettleDialo
       size="lg"
       title={cafe ? "Pay and send to the kitchen" : `Settle ${invoiceNumber ?? "bill"}`}
       description={
-        cafe
-          ? "Take one payment, or split it across methods. The kitchen ticket prints as soon as it is paid."
-          : "Take one payment, or split it across methods and people."
+        nothingToPay
+          ? "Every dish on this bill is complimentary, so there is nothing to pay."
+          : cafe
+            ? "Take one payment, or split it across methods. The kitchen ticket prints as soon as it is paid."
+            : "Take one payment, or split it across methods and people."
       }
       onSubmit={submit}
       dismissible={!settle.isPending}
@@ -529,7 +533,15 @@ function SettleForm({ orderId, total, invoiceNumber, upi, onClose }: SettleDialo
             Not yet
           </Button>
           <Button type="submit" size="lg" variant="success" loading={settle.isPending} disabled={!settled}>
-            {settle.isPending ? "Settling..." : cafe ? "Paid · send KOT" : "Mark paid"}
+            {settle.isPending
+              ? "Settling..."
+              : nothingToPay
+                ? cafe
+                  ? "Complete · send KOT"
+                  : "Complete"
+                : cafe
+                  ? "Paid · send KOT"
+                  : "Mark paid"}
           </Button>
         </>
       }
@@ -537,7 +549,7 @@ function SettleForm({ orderId, total, invoiceNumber, upi, onClose }: SettleDialo
       <div className="flex flex-col gap-4">
         <ChargesPanel orderId={orderId} />
 
-        <RazorpayPanel orderId={orderId} total={total} disabled={settle.isPending} onPaid={onClose} />
+        {!nothingToPay && <RazorpayPanel orderId={orderId} total={total} disabled={settle.isPending} onPaid={onClose} />}
 
         <div className="flex items-center justify-between rounded-xl bg-slate-900 px-4 py-3 text-white">
           <span className="text-sm text-slate-300">Bill total</span>

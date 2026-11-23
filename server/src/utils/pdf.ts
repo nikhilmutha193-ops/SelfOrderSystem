@@ -526,10 +526,11 @@ export async function streamInvoicePdf(
       );
       doc.y = ty;
 
-      if (show.payments && order.payments?.length) {
+      const paidLines = (order.payments ?? []).filter((p) => p.amount > 0);
+      if (show.payments && paidLines.length) {
         doc.moveDown(0.3);
         doc.fontSize(fz("totals", 9));
-        for (const payment of order.payments) {
+        for (const payment of paidLines) {
           const label =
             `Paid by ${PAYMENT_LABELS[payment.method] ?? payment.method}` +
             (payment.reference ? ` (${payment.reference})` : "");

@@ -1,5 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
 
+import Restaurant from "../src/models/Restaurant";
 import { api, bearer, createWorld, loginAdmin, seatTable, World } from "./fixtures";
 
 let world: World;
@@ -114,3 +115,49 @@ describe("complimentary dishes in a new order", () => {
     expect(refused.body.message).toBe("Only staff can make a dish complimentary");
   });
 });
+
+describe("a bill where every dish is complimentary", () => {
+  const free = (foodItemId: string) => ({ foodItemId, quantity: 1, complimentary: true, complimentaryReason: "Owner's guest" });
+
+  it("is settled with a payment of zero, and in the cafe flow that sends the KOT", async () => {
+    await Restaurant.updateOne({}, { $set: { serviceFlow: "cafe" } });
+    try {
+      const res = await api()
+        .post("/api/pos/orders")
+        .set(bearer(owner))
+        .send({ orderType: "takeaway", sendToKitchen: false, items: [free(world.food.dosa)] });
+      expect(res.status).toBe(201);
+      const id = res.body.order._id as string;
+      // Nothing has gone to the kitchen yet: the cafe flow sends it when the order is paid.
+      expect((await api().get(`/api/orders/${id}`).set(bearer(owner))).body.items[0].kotRound).toBeNull();
+
+      const pay = await api().patch(`/api/orders/${id}/pay`).set(bearer(owner)).send({ payments: [{ method: "cash", amount: 0 }] });
+      expect(pay.status).toBe(200);
+      expect(pay.body).toMatchObject({ status: "closed" });
+      const after = (await api().get(`/api/orders/${id}`).set(bearer(owner))).body;
+      expect(after.totals.grandTotal).toBe(0);
+      expect(after.items[0].kotRound).toBe(1);
+      expect(after.items[0].tokenNumber).toBeGreaterThan(0);
+      expect((await api().get(`/api/orders/${id}/invoice/pdf`).set(bearer(owner))).status).toBe(200);
+    } finally {
+      await Restaurant.updateOne({}, { $set: { serviceFlow: "restaurant" } });
+    }
+  });
+
+  it("still refuses a zero payment on a bill that has something to pay", async () => {
+    const res = await api()
+      .post("/api/pos/orders")
+      .set(bearer(owner))
+      .send({ orderType: "takeaway", items: [{ foodItemId: world.food.dosa, quantity: 1 }] });
+    const id = res.body.order._id as string;
+    const zero = await api().patch(`/api/orders/${id}/pay`).set(bearer(owner)).send({ payments: [{ method: "cash", amount: 0 }] });
+    expect(zero.status).toBe(400);
+    const split = await api()
+      .patch(`/api/orders/${id}/pay`)
+      .set(bearer(owner))
+      .send({ payments: [{ method: "cash", amount: 0 }, { method: "upi", amount: 126, payerPhone: "9876543210" }] });
+    expect(split.status).toBe(400);
+    expect(split.body.message).toMatch(/more than zero/);
+  });
+});
+
