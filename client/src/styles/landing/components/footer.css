@@ -25,6 +25,8 @@
 
 .footer__tagline {
   max-width: 26rem;
+  /* Each line typed in the admin (Enter) stays its own line. */
+  white-space: pre-line;
   font-size: var(--fs-sm);
   color: rgba(233, 223, 214, 0.75);
 }

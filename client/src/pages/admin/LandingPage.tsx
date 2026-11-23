@@ -1145,7 +1145,7 @@ export default function LandingPageEditor() {
         <Card data-tour="landing-footer">
           <h2 className="mb-4 text-base font-semibold text-slate-900">Footer</h2>
           <div className="flex flex-col gap-3">
-            <Field label="Tagline" multiline value={footer.tagline} onChange={(v) => patch("footer", { tagline: v })} />
+            <Field label="Tagline (press Enter for a new line)" multiline value={footer.tagline} onChange={(v) => patch("footer", { tagline: v })} />
 
             <p className="text-sm font-medium text-slate-700">Contact links</p>
             {footer.contacts.map((c, i) => (
