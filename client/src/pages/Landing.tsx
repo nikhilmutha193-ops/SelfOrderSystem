@@ -30,12 +30,31 @@ const VISUALLY_HIDDEN: React.CSSProperties = {
   border: 0,
 };
 
+/** The links the top menu and the footer start with; Admin > Landing page > Navigation menu replaces them. */
 const NAV_LINKS: [string, string][] = [
   ["#serve", "What We Serve"],
   ["#menu", "Menu"],
   ["#story", "Our Story"],
   ["#locations", "Visit Us"],
 ];
+
+interface Testimonial {
+  key: string;
+  rating: number;
+  text: string;
+  name: string;
+  google: boolean;
+}
+
+/** Up to `limit` testimonials, taking one of the guests' own, then one from Google, and so on. */
+function mixTestimonials(own: Testimonial[], google: Testimonial[], limit: number): Testimonial[] {
+  const out: Testimonial[] = [];
+  for (let i = 0; out.length < limit && (i < own.length || i < google.length); i++) {
+    if (i < own.length) out.push(own[i]);
+    if (out.length < limit && i < google.length) out.push(google[i]);
+  }
+  return out;
+}
 
 /** "A", "A & B", "A, B & C". */
 function joinNames(names: string[]): string {
@@ -130,7 +149,7 @@ export default function Landing() {
     return <div className="flex min-h-screen items-center justify-center text-slate-400">Loading...</div>;
   }
 
-  const { restaurant, team, bestsellers, todaySpecials, banners, reviews, awards } = data;
+  const { restaurant, team, bestsellers, todaySpecials, banners, reviews, awards, googleReviews = [] } = data;
   const activeBanner = showBanner ? banners[0] : undefined;
   const c = data.content as LandingContent | undefined;
   // A restaurant can have several owners: Our Story introduces all of them, and the team section features each one large.
@@ -138,6 +157,25 @@ export default function Landing() {
   const founder = owners[0];
   const manyOwners = owners.length > 1;
   const chefs = team.filter((m) => m.role !== "owner");
+  // Feedback shown on the website (Admin > Feedback > Show on website): guests' own and Google's, taken in turns.
+  const testimonials = mixTestimonials(
+    reviews.map((r) => ({ key: r._id, rating: r.rating, text: r.comment, name: r.customerName, google: false })),
+    (c?.reviews?.showGoogle === false ? [] : googleReviews).map((g, i) => ({
+      key: `g${i}`,
+      rating: g.rating,
+      text: g.text,
+      name: g.author,
+      google: true,
+    })),
+    c?.reviews?.maxItems ?? 6,
+  );
+  // The top menu and footer links: the owner's own (in their order, hidden ones left out) or the standard ones.
+  const customNav = (c?.nav?.items ?? []).filter((l) => l.visible !== false);
+  const navLinks: [string, string][] = c?.nav?.items?.length
+    ? customNav.map((l) => [l.href, l.label])
+    : NAV_LINKS;
+  // The menu card photos have their own page (/menu-card); the landing page only links to it.
+  const hasMenuCard = c?.menuCard?.enabled !== false && (c?.menuCard?.images ?? []).some((i) => i.imageUrl);
   const logo = restaurant.logoUrl || `${ASSET}/logo.jpeg`;
 
   const serveItems = c?.serve.items.length ? c.serve.items : FALLBACK_SERVE;
@@ -200,11 +238,17 @@ export default function Landing() {
 
           <nav className={`nav${navOpen ? " nav--open" : ""}`} id="primary-nav" aria-label="Primary">
             <ul className="nav__list">
-              {NAV_LINKS.map(([href, label]) => (
-                <li className="nav__item" key={href}>
-                  <a className="nav__link" href={href} onClick={() => setNavOpen(false)}>
-                    {label}
-                  </a>
+              {navLinks.map(([href, label]) => (
+                <li className="nav__item" key={`${href}-${label}`}>
+                  {href.startsWith("/") ? (
+                    <Link className="nav__link" to={href} onClick={() => setNavOpen(false)}>
+                      {label}
+                    </Link>
+                  ) : (
+                    <a className="nav__link" href={href} onClick={() => setNavOpen(false)}>
+                      {label}
+                    </a>
+                  )}
                 </li>
               ))}
               {showOrder && (
@@ -330,28 +374,40 @@ export default function Landing() {
                 {c?.menu.lead && <p className="section__lead">{c.menu.lead}</p>}
               </header>
 
-              <div className="menu__category">
-                <ul role="list">
-                  {bestsellers.map((item) => (
-                    <li className="menu-item" key={item._id}>
-                      <div className="menu-item__info">
-                        <p className="menu-item__name">
-                          {item.bestsellerEmoji ? `${item.bestsellerEmoji} ` : ""}
-                          {item.name}
-                        </p>
-                        {item.description && <p className="menu-item__desc">{item.description}</p>}
+              <ul className="menu-cards" role="list">
+                {bestsellers.map((item) => (
+                  <li className="menu-card" key={item._id}>
+                    {item.imageUrl ? (
+                      <img className="menu-card__img" src={item.imageUrl} alt={item.name} loading="lazy" />
+                    ) : (
+                      <div className="menu-card__img menu-card__img--empty" role="img" aria-label={item.name}>
+                        {item.name.charAt(0).toUpperCase()}
                       </div>
-                      <p className="menu-item__price">₹{item.price.toFixed(2)}</p>
-                    </li>
-                  ))}
-                </ul>
-              </div>
+                    )}
+                    <div className="menu-card__body">
+                      <p className="menu-card__name">
+                        {item.bestsellerEmoji ? `${item.bestsellerEmoji} ` : ""}
+                        {item.name}
+                      </p>
+                      {item.description && <p className="menu-card__desc">{item.description}</p>}
+                      <p className="menu-card__price">₹{item.price.toFixed(2)}</p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
 
-              {showOrder && (
+              {(showOrder || hasMenuCard) && (
                 <div className="menu__footer">
-                  <Link className="btn btn--primary btn--lg" to="/order">
-                    {c?.menu.ctaLabel || "See the full menu"}
-                  </Link>
+                  {showOrder && (
+                    <Link className="btn btn--primary btn--lg" to="/order">
+                      {c?.menu.ctaLabel || "See the full menu"}
+                    </Link>
+                  )}
+                  {hasMenuCard && (
+                    <Link className={`btn btn--lg ${showOrder ? "btn--outline" : "btn--primary"}`} to="/menu-card">
+                      View the menu card
+                    </Link>
+                  )}
                 </div>
               )}
             </div>
@@ -539,23 +595,27 @@ export default function Landing() {
           </section>
         )}
 
-        {reviews.length > 0 && (
+        {c?.reviews?.enabled !== false && testimonials.length > 0 && (
           <section className="section section--tinted" id="reviews" aria-labelledby="reviews-title">
             <div className="container">
               <header className="section__header section__header--center">
-                <p className="section__eyebrow">Testimonials</p>
+                <p className="section__eyebrow">{c?.reviews?.eyebrow ?? "Testimonials"}</p>
                 <h2 className="section__title" id="reviews-title">
-                  What our guests say
+                  {c?.reviews?.title || "What our guests say"}
                 </h2>
+                {c?.reviews?.lead && <p className="section__lead">{c.reviews.lead}</p>}
               </header>
               <ul className="outlets__grid" role="list">
-                {reviews.slice(0, 6).map((review) => (
-                  <li className="outlet-card" key={review._id}>
+                {testimonials.map((review) => (
+                  <li className="outlet-card" key={review.key}>
                     <p className="outlet-card__city" aria-label={`${review.rating} out of 5`}>
                       {"★".repeat(review.rating)}
                     </p>
-                    <p className="outlet-card__address">“{review.comment}”</p>
-                    <p className="outlet-card__hours">{review.customerName}</p>
+                    {review.text && <p className="outlet-card__address">“{review.text}”</p>}
+                    <p className="outlet-card__hours">
+                      {review.name}
+                      {review.google && " · Google review"}
+                    </p>
                   </li>
                 ))}
               </ul>
@@ -666,11 +726,17 @@ export default function Landing() {
               Quick Links
             </h3>
             <ul className="footer__list" role="list">
-              {NAV_LINKS.map(([href, label]) => (
-                <li key={href}>
-                  <a className="footer__link" href={href}>
-                    {label}
-                  </a>
+              {navLinks.map(([href, label]) => (
+                <li key={`${href}-${label}`}>
+                  {href.startsWith("/") ? (
+                    <Link className="footer__link" to={href}>
+                      {label}
+                    </Link>
+                  ) : (
+                    <a className="footer__link" href={href}>
+                      {label}
+                    </a>
+                  )}
                 </li>
               ))}
             </ul>

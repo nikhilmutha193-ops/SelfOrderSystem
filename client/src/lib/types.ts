@@ -779,6 +779,14 @@ export interface LandingContent {
   };
   menu: { enabled: boolean; eyebrow: string; title: string; lead: string; ctaLabel: string };
   todaySpecial: { enabled: boolean; eyebrow: string; title: string; lead: string };
+  reviews?: {
+    enabled: boolean;
+    eyebrow: string;
+    title: string;
+    lead: string;
+    maxItems: number;
+    showGoogle: boolean;
+  };
   story: {
     enabled: boolean;
     eyebrow: string;
@@ -807,6 +815,14 @@ export interface LandingContent {
       hidden?: boolean;
     }[];
   };
+  menuCard?: {
+    enabled: boolean;
+    eyebrow: string;
+    title: string;
+    lead: string;
+    images: { imageUrl: string; caption: string }[];
+  };
+  nav?: { items: { label: string; href: string; visible: boolean }[] };
   reels: {
     enabled: boolean;
     title: string;

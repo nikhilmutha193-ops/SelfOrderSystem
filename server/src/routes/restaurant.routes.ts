@@ -1,6 +1,7 @@
 import { Router } from "express";
 
 import { getLandingContent, updateLandingContent } from "../controllers/landingContent.controller";
+import { listLandingMenu, setLandingMenuItem } from "../controllers/landingMenu.controller";
 import {
   getRestaurantLogo,
   getRestaurantPublic,
@@ -26,6 +27,8 @@ router.post("/invoice-preview", requireAuth("admin"), requireModule("settings"),
 router.post("/kot-preview-thermal", requireAuth("admin"), requireModule("settings"), previewKotThermal);
 router.post("/invoice-preview-thermal", requireAuth("admin"), requireModule("settings"), previewInvoiceThermal);
 router.post("/seed-landing", requireAuth("admin"), requireModule("settings"), seedLandingSampleContent);
+router.get("/landing-menu", requireAuth("admin"), requireModule("landing"), listLandingMenu);
+router.put("/landing-menu/:id", requireAuth("admin"), requireModule("landing"), setLandingMenuItem);
 router.get("/landing-content", requireAuth("admin"), requireModule("landing"), getLandingContent);
 router.put("/landing-content", requireAuth("admin"), requireModule("landing"), updateLandingContent);
 

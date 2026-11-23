@@ -94,6 +94,26 @@ describe("customising the feedback QR card", () => {
   });
 });
 
+describe("the reviews section in the landing page settings", () => {
+  it("has its own switch, texts, a limit and a Google switch, with a sensible default", async () => {
+    const start = await api().get("/api/restaurant/landing-content").set(bearer(owner));
+    expect(start.body.reviews).toMatchObject({ enabled: true, title: "What our guests say", maxItems: 6, showGoogle: true });
+
+    const saved = await api()
+      .put("/api/restaurant/landing-content")
+      .set(bearer(owner))
+      .send({ reviews: { enabled: false, eyebrow: "Kind words", title: "Loved by guests", lead: "", maxItems: 99, showGoogle: false } });
+    expect(saved.status).toBe(200);
+    expect(saved.body.reviews).toMatchObject({ enabled: false, eyebrow: "Kind words", title: "Loved by guests", maxItems: 12, showGoogle: false });
+    const page = await api().get("/api/landing");
+    expect(page.body.content.reviews.enabled).toBe(false);
+
+    await api().put("/api/restaurant/landing-content").set(bearer(owner)).send({ reviews: { enabled: true, showGoogle: true, maxItems: 0 } });
+    expect((await api().get("/api/restaurant/landing-content").set(bearer(owner))).body.reviews.maxItems).toBe(1);
+    await api().put("/api/restaurant/landing-content").set(bearer(owner)).send({ reviews: { maxItems: 6 } });
+  });
+});
+
 describe("Google reviews in the feedback list", () => {
   it("fetches them once, never twice, and the admin can hide one by hand", async () => {
     process.env.SERPAPI_API_KEY = "test";
@@ -155,5 +175,50 @@ describe("Google reviews in the feedback list", () => {
     const res = await api().post("/api/reviews/google/sync").set(bearer(owner));
     expect(res.status).toBe(400);
     expect(res.body.message).toMatch(/not set up/);
+  });
+});
+
+describe("the menu card photos and the top menu links in the landing page settings", () => {
+  const put = (body: object) => api().put("/api/restaurant/landing-content").set(bearer(owner)).send(body);
+
+  it("keeps photos of the menu card, and starts with no custom links", async () => {
+    const start = await api().get("/api/restaurant/landing-content").set(bearer(owner));
+    expect(start.body.menuCard).toMatchObject({ enabled: true, title: "The menu card", images: [] });
+    expect(start.body.nav.items).toEqual([]);
+
+    const saved = await put({
+      menuCard: { enabled: true, eyebrow: "Our Menu", title: "Menu card", lead: "", images: [{ imageUrl: "/uploads/a.jpg", caption: "Page 1" }, { imageUrl: "/uploads/b.jpg", caption: "" }] },
+    });
+    expect(saved.status).toBe(200);
+    const page = await api().get("/api/landing");
+    expect(page.body.content.menuCard.images.map((i: { imageUrl: string }) => i.imageUrl)).toEqual(["/uploads/a.jpg", "/uploads/b.jpg"]);
+  });
+
+  it("saves the top menu links in order, hides one, and refuses a link that could run script", async () => {
+    const saved = await put({
+      nav: {
+        items: [
+          { label: "Menu card", href: "#menu-card", visible: true },
+          { label: "Order", href: "/order", visible: true },
+          { label: "Instagram", href: "https://instagram.com/cafe", visible: false },
+        ],
+      },
+    });
+    expect(saved.status).toBe(200);
+    expect(saved.body.nav.items.map((i: { label: string; visible: boolean }) => [i.label, i.visible])).toEqual([
+      ["Menu card", true],
+      ["Order", true],
+      ["Instagram", false],
+    ]);
+
+    for (const bad of [{ label: "X", href: "javascript:alert(1)" }, { label: "", href: "#menu" }, { label: "Y", href: "menu" }]) {
+      expect((await put({ nav: { items: [bad] } })).status).toBe(400);
+    }
+    expect((await put({ nav: { items: Array.from({ length: 13 }, (_, i) => ({ label: `L${i}`, href: "#menu" })) } })).status).toBe(400);
+    // The links saved before the refused ones are still there.
+    expect((await api().get("/api/restaurant/landing-content").set(bearer(owner))).body.nav.items).toHaveLength(3);
+
+    await put({ nav: { items: [] } });
+    expect((await api().get("/api/restaurant/landing-content").set(bearer(owner))).body.nav.items).toEqual([]);
   });
 });

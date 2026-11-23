@@ -25,6 +25,11 @@ export interface IFoodItem {
   imageUrl?: string;
   isActive: boolean;
   isBestseller: boolean;
+  /**
+   * Shown in the landing page's menu section. Left unset until the owner chooses under Landing page > Menu
+   * highlights; until then the dish follows `isBestseller`, as before this switch existed.
+   */
+  showOnLanding?: boolean;
   bestsellerEmoji?: string;
   isTodaySpecial: boolean;
   /** False for dishes that cannot be made without onion and garlic, so guests and staff can't mark them Jain. */
@@ -116,6 +121,7 @@ const foodItemSchema = new Schema<IFoodItem>(
     imageUrl: { type: String, default: "" },
     isActive: { type: Boolean, default: true },
     isBestseller: { type: Boolean, default: false },
+    showOnLanding: { type: Boolean },
     jainAvailable: { type: Boolean, default: true },
     spiceAdjustable: { type: Boolean, default: true },
     bestsellerEmoji: { type: String, default: "⭐" },

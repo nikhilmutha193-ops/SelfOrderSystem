@@ -4,7 +4,7 @@ import { useCanEdit } from "../../lib/adminAuth";
 import type { LandingContent } from "../../lib/types";
 import { api, extractErrorMessage, uploadImage } from "../../shared/api/client";
 import { usePageTour, type TourStep } from "../../shared/ui/PageTour";
-import { Button, Card, ErrorText, Input, PageHeader, Textarea } from "../../shared/ui/ui";
+import { Button, Card, ErrorText, Input, PageHeader, Select, Textarea } from "../../shared/ui/ui";
 
 type Section = keyof LandingContent;
 
@@ -266,6 +266,116 @@ function ParagraphsField({ label, value, onChange }: { label: string; value: str
   );
 }
 
+interface LandingDish {
+  _id: string;
+  name: string;
+  price: number;
+  imageUrl: string;
+  categoryName: string;
+  shown: boolean;
+}
+
+/** Which dishes the landing page's menu shows: a switch for each active dish, with its picture. Saved as you switch. */
+function LandingDishes({ canEdit }: { canEdit: boolean }) {
+  const [dishes, setDishes] = useState<LandingDish[]>([]);
+  const [search, setSearch] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    api
+      .get<LandingDish[]>("/restaurant/landing-menu")
+      .then((res) => setDishes(res.data))
+      .catch((err) => setError(extractErrorMessage(err)))
+      .finally(() => setLoaded(true));
+  }, []);
+
+  async function toggle(dish: LandingDish, show: boolean) {
+    setError(null);
+    setDishes((list) => list.map((d) => (d._id === dish._id ? { ...d, shown: show } : d)));
+    try {
+      await api.put(`/restaurant/landing-menu/${dish._id}`, { show });
+    } catch (err) {
+      setDishes((list) => list.map((d) => (d._id === dish._id ? { ...d, shown: !show } : d)));
+      setError(extractErrorMessage(err));
+    }
+  }
+
+  const term = search.trim().toLowerCase();
+  const visible = dishes.filter((d) => !term || `${d.name} ${d.categoryName}`.toLowerCase().includes(term));
+  const shownCount = dishes.filter((d) => d.shown).length;
+
+  return (
+    <div className="mt-4 border-t border-slate-100 pt-4">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h3 className="text-sm font-semibold text-slate-900">Dishes on the landing page</h3>
+          <p className="text-xs text-slate-500">
+            {shownCount} of {dishes.length} shown, each with its picture. Switching a dish saves at once; the Save button
+            below is for the texts.
+          </p>
+        </div>
+        <Input
+          className="!w-52"
+          type="search"
+          placeholder="Search dishes"
+          aria-label="Search dishes"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+      </div>
+      {error && <p className="mb-2 text-sm text-red-600">{error}</p>}
+      {loaded && dishes.length === 0 && <p className="text-sm text-slate-400">No active dishes yet.</p>}
+      <ul className="grid max-h-96 gap-2 overflow-y-auto sm:grid-cols-2">
+        {visible.map((dish) => (
+          <li
+            key={dish._id}
+            className={`flex items-center gap-3 rounded-lg border p-2 ${dish.shown ? "border-orange-200 bg-orange-50/40" : "border-slate-200"}`}
+          >
+            {dish.imageUrl ? (
+              <img src={dish.imageUrl} alt="" className="h-12 w-12 shrink-0 rounded-md object-cover" loading="lazy" />
+            ) : (
+              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md bg-slate-100 text-lg text-slate-400">
+                {dish.name.charAt(0).toUpperCase()}
+              </span>
+            )}
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-medium text-slate-800">{dish.name}</span>
+              <span className="block truncate text-xs text-slate-500">
+                {dish.categoryName && `${dish.categoryName} · `}₹{dish.price.toFixed(2)}
+                {!dish.imageUrl && " · no picture"}
+              </span>
+            </span>
+            <Toggle label="Show" value={dish.shown} onChange={(v) => canEdit && void toggle(dish, v)} />
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/** Where a menu link can go: the sections of the landing page, the order page, or any link of the owner's own. */
+const LINK_TARGETS: { href: string; label: string }[] = [
+  { href: "#serve", label: "What We Serve" },
+  { href: "#menu", label: "Menu highlights" },
+  { href: "/menu-card", label: "Menu card page" },
+  { href: "#today-special", label: "Today's Specials" },
+  { href: "#gallery", label: "Reels" },
+  { href: "#story", label: "Our Story" },
+  { href: "#team", label: "Our Team" },
+  { href: "#reviews", label: "Reviews" },
+  { href: "#awards", label: "Awards" },
+  { href: "#locations", label: "Visit Us" },
+  { href: "/order", label: "Order page" },
+];
+
+const STANDARD_NAV = [
+  { label: "What We Serve", href: "#serve", visible: true },
+  { label: "Menu", href: "#menu", visible: true },
+  { label: "Our Story", href: "#story", visible: true },
+  { label: "Visit Us", href: "#locations", visible: true },
+];
+
 function RowActions({
   onRemove,
   onUp,
@@ -319,6 +429,11 @@ export default function LandingPageEditor() {
         target: "landing-today-special",
         title: "Today's Specials",
         description: "Shows dishes marked Today's Special under Food Items, grouped by category.",
+      },
+      {
+        target: "landing-reviews",
+        title: "Reviews / feedback",
+        description: "The guest feedback section: switch it, rename it and choose how many reviews show.",
       },
       { target: "landing-story", title: "Our Story", description: "Your restaurant's story section." },
       { target: "landing-outlets", title: "Outlets", description: "Your locations, each with an address and map link." },
@@ -374,6 +489,16 @@ export default function LandingPageEditor() {
   if (!content) return <p className="text-sm text-slate-500">Loading...</p>;
 
   const { hero, serve, menu, todaySpecial, story, outlets, reels, partnership, footer } = content;
+  const nav = content.nav?.items ?? [];
+  const menuCard = content.menuCard ?? { enabled: true, eyebrow: "Our Menu", title: "The menu card", lead: "", images: [] };
+  const reviews = content.reviews ?? {
+    enabled: true,
+    eyebrow: "Testimonials",
+    title: "What our guests say",
+    lead: "",
+    maxItems: 6,
+    showGoogle: true,
+  };
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 sm:gap-6">
@@ -610,6 +735,142 @@ export default function LandingPageEditor() {
             <Field label="Intro" multiline value={menu.lead} onChange={(v) => patch("menu", { lead: v })} />
             <Field label="Button label" value={menu.ctaLabel} onChange={(v) => patch("menu", { ctaLabel: v })} />
           </div>
+          <LandingDishes canEdit={canEdit} />
+        </Card>
+
+        <Card data-tour="landing-menu-card">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-base font-semibold text-slate-900">Menu card page</h2>
+            <Toggle label="Show" value={menuCard.enabled} onChange={(v) => patch("menuCard", { enabled: v })} />
+          </div>
+          <p className="mb-3 text-xs text-slate-500">
+            Upload photos of your printed menu card, one for each page. They are not on the landing page itself: guests
+            see them on their own page, <strong>/menu-card</strong>, and tap one to enlarge it. The landing page's menu
+            section gets a <strong>View the menu card</strong> button, and you can add a link to it under Navigation menu.{" "}
+            <a className="font-medium text-orange-700 hover:underline" href="/menu-card" target="_blank" rel="noopener">
+              Open the page
+            </a>
+          </p>
+          <div className="flex flex-col gap-3">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Eyebrow" value={menuCard.eyebrow} onChange={(v) => patch("menuCard", { eyebrow: v })} />
+              <Field label="Title" value={menuCard.title} onChange={(v) => patch("menuCard", { title: v })} />
+            </div>
+            <Field label="Intro" multiline value={menuCard.lead} onChange={(v) => patch("menuCard", { lead: v })} />
+            {menuCard.images.map((photo, i) => {
+              const upd = (changes: Partial<typeof photo>) =>
+                patch("menuCard", { images: menuCard.images.map((x, j) => (i === j ? { ...x, ...changes } : x)) });
+              const swap = (to: number) => {
+                const images = [...menuCard.images];
+                [images[i], images[to]] = [images[to], images[i]];
+                patch("menuCard", { images });
+              };
+              return (
+                <div key={i} className="flex flex-col gap-2 rounded-lg border border-slate-200 p-3">
+                  <ImagePicker
+                    label={`Page ${i + 1}`}
+                    value={photo.imageUrl}
+                    onChange={(url) => upd({ imageUrl: url })}
+                    onError={setError}
+                  />
+                  <Field label="Caption (optional)" value={photo.caption} onChange={(v) => upd({ caption: v })} />
+                  <RowActions
+                    onRemove={() => patch("menuCard", { images: menuCard.images.filter((_, j) => j !== i) })}
+                    onUp={i > 0 ? () => swap(i - 1) : null}
+                    onDown={i < menuCard.images.length - 1 ? () => swap(i + 1) : null}
+                  />
+                </div>
+              );
+            })}
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => patch("menuCard", { images: [...menuCard.images, { imageUrl: "", caption: "" }] })}
+            >
+              Add a page
+            </Button>
+          </div>
+        </Card>
+
+        <Card data-tour="landing-nav">
+          <h2 className="mb-1 text-base font-semibold text-slate-900">Navigation menu</h2>
+          <p className="mb-3 text-xs text-slate-500">
+            The links at the top of the landing page and under Quick Links in the footer. Rename them, hide or reorder
+            them, point one at a section, the order page or any web address.
+          </p>
+          {nav.length === 0 ? (
+            <div className="flex flex-wrap items-center gap-3">
+              <p className="text-sm text-slate-600">Using the standard menu: What We Serve, Menu, Our Story, Visit Us.</p>
+              <Button type="button" variant="secondary" onClick={() => patch("nav", { items: STANDARD_NAV })}>
+                Customize the menu
+              </Button>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {nav.map((link, i) => {
+                const upd = (changes: Partial<typeof link>) =>
+                  patch("nav", { items: nav.map((x, j) => (i === j ? { ...x, ...changes } : x)) });
+                const swap = (to: number) => {
+                  const items = [...nav];
+                  [items[i], items[to]] = [items[to], items[i]];
+                  patch("nav", { items });
+                };
+                const known = LINK_TARGETS.some((t) => t.href === link.href);
+                return (
+                  <div
+                    key={i}
+                    className={`flex flex-col gap-2 rounded-lg border border-slate-200 p-3 ${link.visible ? "" : "bg-slate-50 opacity-70"}`}
+                  >
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <Field label="Name" value={link.label} onChange={(v) => upd({ label: v })} />
+                      <label className="text-sm font-medium text-slate-700">
+                        Goes to
+                        <Select
+                          className="mt-1"
+                          value={known ? link.href : "custom"}
+                          onChange={(e) => upd({ href: e.target.value === "custom" ? "https://" : e.target.value })}
+                        >
+                          {LINK_TARGETS.map((t) => (
+                            <option key={t.href} value={t.href}>
+                              {t.label}
+                            </option>
+                          ))}
+                          <option value="custom">Another link...</option>
+                        </Select>
+                      </label>
+                    </div>
+                    {!known && (
+                      <Field
+                        label="Link"
+                        value={link.href}
+                        placeholder="https://..."
+                        onChange={(v) => upd({ href: v })}
+                      />
+                    )}
+                    <Toggle label="Show this link" value={link.visible} onChange={(v) => upd({ visible: v })} />
+                    <RowActions
+                      onRemove={() => patch("nav", { items: nav.filter((_, j) => j !== i) })}
+                      onUp={i > 0 ? () => swap(i - 1) : null}
+                      onDown={i < nav.length - 1 ? () => swap(i + 1) : null}
+                    />
+                  </div>
+                );
+              })}
+              <div className="flex flex-wrap gap-3">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={nav.length >= 12}
+                  onClick={() => patch("nav", { items: [...nav, { label: "", href: "#menu-card", visible: true }] })}
+                >
+                  Add a link
+                </Button>
+                <Button type="button" variant="ghost" onClick={() => patch("nav", { items: [] })}>
+                  Back to the standard menu
+                </Button>
+              </div>
+            </div>
+          )}
         </Card>
 
         <Card data-tour="landing-today-special">
@@ -625,6 +886,42 @@ export default function LandingPageEditor() {
             <Field label="Eyebrow" value={todaySpecial.eyebrow} onChange={(v) => patch("todaySpecial", { eyebrow: v })} />
             <Field label="Title" value={todaySpecial.title} onChange={(v) => patch("todaySpecial", { title: v })} />
             <Field label="Intro" multiline value={todaySpecial.lead} onChange={(v) => patch("todaySpecial", { lead: v })} />
+          </div>
+        </Card>
+
+        <Card data-tour="landing-reviews">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-base font-semibold text-slate-900">Reviews / feedback</h2>
+            <Toggle label="Show" value={reviews.enabled} onChange={(v) => patch("reviews", { enabled: v })} />
+          </div>
+          <p className="mb-3 text-xs text-slate-500">
+            Shows the feedback you marked <strong>Show on website</strong> under Feedback: guests' own (table and feedback
+            QR) and, if you like, Google reviews. The section stays hidden until at least one review is shown.
+          </p>
+          <div className="flex flex-col gap-3">
+            <Field label="Eyebrow" value={reviews.eyebrow} onChange={(v) => patch("reviews", { eyebrow: v })} />
+            <Field label="Title" value={reviews.title} onChange={(v) => patch("reviews", { title: v })} />
+            <Field label="Intro" multiline value={reviews.lead} onChange={(v) => patch("reviews", { lead: v })} />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="text-sm font-medium text-slate-700">
+                How many to show
+                <Input
+                  className="mt-1"
+                  type="number"
+                  min={1}
+                  max={12}
+                  value={reviews.maxItems}
+                  onChange={(e) => patch("reviews", { maxItems: Math.min(12, Math.max(1, Number(e.target.value) || 1)) })}
+                />
+              </label>
+              <div className="flex items-end">
+                <Toggle
+                  label="Include Google reviews"
+                  value={reviews.showGoogle}
+                  onChange={(v) => patch("reviews", { showGoogle: v })}
+                />
+              </div>
+            </div>
           </div>
         </Card>
 

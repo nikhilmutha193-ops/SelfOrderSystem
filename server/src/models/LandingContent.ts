@@ -51,6 +51,17 @@ export interface ILandingContent {
     lead: string;
   };
 
+  /** "What our guests say": the feedback marked Show on website (Admin > Feedback), the guests' own and Google's. */
+  reviews: {
+    enabled: boolean;
+    eyebrow: string;
+    title: string;
+    lead: string;
+    /** How many show at most (1 to 12). */
+    maxItems: number;
+    showGoogle: boolean;
+  };
+
   story: {
     enabled: boolean;
     eyebrow: string;
@@ -81,6 +92,20 @@ export interface ILandingContent {
       /** Kept in the admin but not shown on the page. */
       hidden: boolean;
     }[];
+  };
+
+  /** Photos of the printed menu card, shown as a gallery (tap to enlarge). */
+  menuCard: {
+    enabled: boolean;
+    eyebrow: string;
+    title: string;
+    lead: string;
+    images: { imageUrl: string; caption: string }[];
+  };
+
+  /** The links in the top menu and the footer. Empty means the standard ones. */
+  nav: {
+    items: { label: string; href: string; visible: boolean }[];
   };
 
   reels: {
@@ -164,6 +189,15 @@ const landingContentSchema = new Schema<ILandingContent>(
       lead: { type: String, default: "Chef's picks, made fresh for today." },
     },
 
+    reviews: {
+      enabled: { type: Boolean, default: true },
+      eyebrow: { type: String, default: "Testimonials" },
+      title: { type: String, default: "What our guests say" },
+      lead: { type: String, default: "" },
+      maxItems: { type: Number, default: 6 },
+      showGoogle: { type: Boolean, default: true },
+    },
+
     story: {
       enabled: { type: Boolean, default: true },
       eyebrow: { type: String, default: "Our Story" },
@@ -198,6 +232,29 @@ const landingContentSchema = new Schema<ILandingContent>(
               comingSoon: { type: Boolean, default: false },
               hidden: { type: Boolean, default: false },
             },
+            { _id: false }
+          ),
+        ],
+        default: [],
+      },
+    },
+
+    menuCard: {
+      enabled: { type: Boolean, default: true },
+      eyebrow: { type: String, default: "Our Menu" },
+      title: { type: String, default: "The menu card" },
+      lead: { type: String, default: "" },
+      images: {
+        type: [new Schema({ imageUrl: String, caption: { type: String, default: "" } }, { _id: false })],
+        default: [],
+      },
+    },
+
+    nav: {
+      items: {
+        type: [
+          new Schema(
+            { label: String, href: String, visible: { type: Boolean, default: true } },
             { _id: false }
           ),
         ],

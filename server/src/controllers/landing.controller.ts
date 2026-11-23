@@ -24,6 +24,11 @@ function groupByCategory(items: { categoryId: { toString(): string }; name: stri
     .filter((group) => group.items.length > 0);
 }
 
+/** A dish is on the landing page when the owner switched it on, or has not chosen and it is a bestseller. */
+export const ON_LANDING = {
+  $or: [{ showOnLanding: true }, { showOnLanding: { $exists: false }, isBestseller: true }],
+};
+
 export const getLandingPage = asyncHandler(async (req: Request, res: Response) => {
   // Google reviews are copied into the review list (each once), so the admin can hide any of them by hand.
   await syncGoogleReviewsIfStale(req.restaurantId!);
@@ -31,7 +36,7 @@ export const getLandingPage = asyncHandler(async (req: Request, res: Response) =
     await Promise.all([
       Restaurant.findById(req.restaurantId).select("name tagline aboutText heroImages logoUrl address"),
       TeamMember.find({ restaurantId: req.restaurantId, isActive: true }).sort({ sortOrder: 1, createdAt: 1 }),
-      FoodItem.find({ restaurantId: req.restaurantId, isActive: true, isBestseller: true }).sort({ name: 1 }),
+      FoodItem.find({ restaurantId: req.restaurantId, isActive: true, ...ON_LANDING }).sort({ name: 1 }),
       FoodItem.find({ restaurantId: req.restaurantId, isActive: true, isTodaySpecial: true }).sort({ name: 1 }),
       Category.find({ restaurantId: req.restaurantId, isActive: true }).sort({ name: 1 }),
       PromoBanner.find({ restaurantId: req.restaurantId, isActive: true }).sort({ sortOrder: 1, createdAt: 1 }),
