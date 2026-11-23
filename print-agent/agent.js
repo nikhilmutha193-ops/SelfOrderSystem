@@ -199,9 +199,34 @@ function writeStatus(config, startedAt, ok, error) {
   }
 }
 
+/**
+ * A laptop on battery goes to sleep when it has been idle, and a sleeping computer polls nothing. While the agent runs on
+ * Windows a small hidden helper tells Windows the computer is in use, so it does not fall asleep by itself (closing the
+ * lid or pressing the power button still can, which is a power setting). It ends with the agent.
+ */
+function keepAwake() {
+  if (process.platform !== "win32" || process.env.PRINT_AGENT_NO_KEEPAWAKE) return;
+  const script =
+    "Add-Type -Namespace W -Name P -MemberDefinition '[DllImport(\"kernel32.dll\")] public static extern uint SetThreadExecutionState(uint f);'; " +
+    "[W.P]::SetThreadExecutionState(2147483649) | Out-Null; while ($true) { Start-Sleep -Seconds 3600 }";
+  try {
+    // Encoded, so no quote characters have to survive the Windows command line.
+    const encoded = Buffer.from(script, "utf16le").toString("base64");
+    const helper = spawn("powershell.exe", ["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-EncodedCommand", encoded], {
+      stdio: "ignore",
+      windowsHide: true,
+    });
+    helper.on("error", () => undefined);
+    process.on("exit", () => helper.kill());
+  } catch {
+    /* staying awake is a courtesy: the agent still works without it */
+  }
+}
+
 async function run(config) {
   fileLog = true;
   trimLog();
+  keepAwake();
   const other = readJson(STATUS_PATH);
   if (other && other.pid && other.pid !== process.pid && Date.now() - other.lastPollAt < 15000 && isAlive(other.pid)) {
     log("The print agent is already running on this computer.");
@@ -253,6 +278,16 @@ async function runElevated(adminArgs) {
   return { code, result: readJson(ADMIN_RESULT) };
 }
 
+/**
+ * The startup task's own settings: run on battery as well as on the charger, never stop because of the time it has
+ * been running, catch up when a start was missed, and start again by itself if it ever ends.
+ */
+const TASK_SETTINGS_SCRIPT =
+  `$s = (Get-ScheduledTask -TaskName ${psQuote(TASK_NAME)}).Settings; ` +
+  "$s.DisallowStartIfOnBatteries = $false; $s.StopIfGoingOnBatteries = $false; $s.ExecutionTimeLimit = 'PT0S'; " +
+  "$s.StartWhenAvailable = $true; $s.RestartCount = 99; $s.RestartInterval = 'PT1M'; " +
+  `Set-ScheduledTask -TaskName ${psQuote(TASK_NAME)} -Settings $s | Out-Null`;
+
 /** What is run when Windows starts: this program with the `run` command. */
 function taskCommand() {
   return IS_EXE ? `"${process.execPath}" run` : `"${process.execPath}" "${__filename}" run`;
@@ -277,6 +312,11 @@ async function adminMain(action) {
         "/Create", "/TN", TASK_NAME, "/TR", taskCommand(), "/SC", "ONSTART", "/DELAY", "0000:30", "/RU", "SYSTEM", "/RL", "HIGHEST", "/F",
       ]);
       if (made.code !== 0) throw new Error(`Windows would not create the startup task: ${made.stderr.trim() || made.stdout.trim()}`);
+      // A task made this way is stopped, and not started, when the laptop is on battery. Printing must go on, so say so.
+      const settings = await runCommand("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", TASK_SETTINGS_SCRIPT]);
+      if (settings.code !== 0) {
+        throw new Error(`Windows would not let the task run on battery power: ${settings.stderr.trim() || settings.stdout.trim()}`);
+      }
       fs.writeFileSync(AUTOSTART_MARK, new Date().toISOString());
       await runCommand("schtasks", ["/Run", "/TN", TASK_NAME]);
     } else if (action === "start") {
