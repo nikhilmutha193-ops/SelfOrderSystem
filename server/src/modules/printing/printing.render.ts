@@ -182,14 +182,13 @@ export function renderBill(ticket: BillTicket): Buffer {
     const tag = show.tags && item.isJain ? " (Jain)" : "";
     const unit = item.unitPrice ?? (item.quantity ? item.total / item.quantity : item.total);
     p.table(
-      `${item.foodName}${tag}`,
+      `${item.foodName}${tag}${item.complimentary ? " (Complimentary)" : ""}`,
       String(item.quantity),
       withPrice ? money(unit) : null,
       money(item.total),
       itemCols
     );
-    // The mark sits under the dish on the invoice; the kitchen ticket never shows it.
-    if (item.complimentary) p.line("  Complimentary");
+    // The mark is on the dish's own line on the invoice; the kitchen ticket never shows it.
   }
   p.textSize("normal").divider();
 
@@ -217,7 +216,7 @@ export function renderBill(ticket: BillTicket): Buffer {
   p.textSize("normal");
 
   const total = fonts.grandTotal;
-  p.textSize(total).bold(true).row(order.status === "billed" ? "Amount Payable" : "Grand Total", `Rs.${money(totals.grandTotal)}`, p.columns(total)).bold(false).textSize("normal");
+  p.textSize(total).bold(true).row(order.status === "billed" && totals.grandTotal > 0 ? "Amount Payable" : "Grand Total", `Rs.${money(totals.grandTotal)}`, p.columns(total)).bold(false).textSize("normal");
 
   if (show.payments) {
     p.textSize(fonts.totals);
@@ -228,7 +227,8 @@ export function renderBill(ticket: BillTicket): Buffer {
     p.textSize("normal");
   }
 
-  if (show.upiQr && ticket.upiLink && order.status === "billed") {
+  // Nothing to pay (every dish complimentary): no payment QR.
+  if (show.upiQr && ticket.upiLink && order.status === "billed" && totals.grandTotal > 0) {
     p.divider().align("center").line(`Scan to pay Rs.${money(totals.grandTotal)}`);
     p.image(qrBitmap(ticket.upiLink, ticket.paperWidth === 58 ? 240 : 300)).align("left");
   }

@@ -128,12 +128,12 @@ function GuestPayCard({
     <Card className="mb-4">
       <p className="text-sm font-medium text-slate-800">{title}</p>
       <p className="mt-1 text-2xl font-bold text-slate-900 tabular-nums">₹{totals.grandTotal.toFixed(2)}</p>
-      {online && (
+      {online && totals.grandTotal > 0 && (
         <div className="mt-3">
           <PayOnlineButton orderId={order._id} amount={totals.grandTotal} />
         </div>
       )}
-      {upi && data.payment && (
+      {upi && data.payment && totals.grandTotal > 0 && (
         <div className="mt-3">
           <UpiQr
             vpa={data.payment.upiVpa}

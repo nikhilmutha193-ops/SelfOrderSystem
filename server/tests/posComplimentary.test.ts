@@ -1,6 +1,8 @@
 import { beforeAll, describe, expect, it } from "vitest";
 
+import PrintJob from "../src/models/PrintJob";
 import Restaurant from "../src/models/Restaurant";
+import { decodeEscPos } from "../src/utils/escposPreview";
 import { api, bearer, createWorld, loginAdmin, seatTable, World } from "./fixtures";
 
 let world: World;
@@ -161,3 +163,47 @@ describe("a bill where every dish is complimentary", () => {
   });
 });
 
+describe("the payment QR on an unpaid invoice", () => {
+  const billPrint = async (items: object[]) => {
+    const res = await api().post("/api/pos/orders").set(bearer(owner)).send({ orderType: "takeaway", items });
+    const id = res.body.order._id as string;
+    expect((await api().post(`/api/orders/${id}/bill`).set(bearer(owner)).send({})).status).toBeLessThan(300);
+    await PrintJob.deleteMany({ orderId: id });
+    expect((await api().post(`/api/orders/${id}/bill/print`).set(bearer(owner))).status).toBe(200);
+    const [job] = await PrintJob.find({ orderId: id, kind: "bill" }).lean();
+    return decodeEscPos(Buffer.from(job.data, "base64"));
+  };
+  const text = (lines: ReturnType<typeof decodeEscPos>) =>
+    lines.flatMap((l) => (l.kind === "text" ? [l.runs.map((r) => r.text).join("")] : []));
+
+  it("prints for an amount to pay, and not when every dish is complimentary", async () => {
+    await Restaurant.updateOne({}, { $set: { "billingSettings.upiVpa": "cafe@okicici" } });
+    const agent = await api().post("/api/printing/agents").set(bearer(owner)).send({ name: "Counter PC" });
+    await api()
+      .post("/api/printing/printers")
+      .set(bearer(owner))
+      .send({
+        name: "Counter",
+        agentId: agent.body.agentId,
+        connection: { type: "network", host: "127.0.0.1", port: 9100 },
+        printsBills: true,
+        printsUnroutedKots: true,
+      });
+
+    const normal = await billPrint([{ foodItemId: world.food.dosa, quantity: 1 }]);
+    expect(text(normal).some((t) => t.startsWith("Scan to pay Rs."))).toBe(true);
+    expect(normal.some((l) => l.kind === "image")).toBe(true);
+    expect(text(normal).some((t) => t.includes("Amount Payable"))).toBe(true);
+
+    const nothing = await billPrint([
+      { foodItemId: world.food.vada, quantity: 1, complimentary: true, complimentaryReason: "Owner's guest" },
+    ]);
+    expect(text(nothing).some((t) => t.startsWith("Scan to pay"))).toBe(false);
+    expect(nothing.some((l) => l.kind === "image")).toBe(false);
+    expect(text(nothing).some((t) => t.includes("Grand Total"))).toBe(true);
+    expect(text(nothing).some((t) => t.includes("Amount Payable"))).toBe(false);
+    // The complimentary mark is on the dish's own line, not on a line of its own below it.
+    expect(text(nothing).some((t) => t.includes("(Complimentary)"))).toBe(true);
+    expect(text(nothing).some((t) => t.trim() === "Complimentary")).toBe(false);
+  });
+});

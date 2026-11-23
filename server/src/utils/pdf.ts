@@ -279,7 +279,7 @@ export async function streamInvoicePdf(
   const logo = show.logo ? await resolveLogoBuffer(restaurant.logoUrl) : null;
   const upiVpa = restaurant.billingSettings?.upiVpa;
   const upiQr =
-    show.upiQr && order.status === "billed" && upiVpa && order.invoiceNumber
+    show.upiQr && order.status === "billed" && upiVpa && order.invoiceNumber && totals.grandTotal > 0
       ? await QRCode.toBuffer(
           upiPaymentLink(
             upiVpa,
@@ -361,7 +361,11 @@ export async function streamInvoicePdf(
         0,
         ...items
           .filter((i) => i.status !== "cancelled")
-          .map((i) => doc.widthOfString(i.foodName + (showJainTag && i.isJain ? " (Jain)" : "")))
+          .map((i) =>
+            doc.widthOfString(
+              i.foodName + (showJainTag && i.isJain ? " (Jain)" : "") + (i.complimentary ? " (Complimentary)" : "")
+            )
+          )
       );
       const qtyMin = Math.max(widest(["Qty"], true), widest(["99"]));
       const priceMin = Math.max(widest(["Price"], true), widest(["9999.99"]));
@@ -401,7 +405,8 @@ export async function streamInvoicePdf(
       drawSeparator(doc, x0, usableWidth);
 
       for (const item of items.filter((i) => i.status !== "cancelled")) {
-        const name = item.foodName + (showJainTag && item.isJain ? " (Jain)" : "");
+        const name =
+          item.foodName + (showJainTag && item.isJain ? " (Jain)" : "") + (item.complimentary ? " (Complimentary)" : "");
         const rowCols: Column[] = showUnitPrice
           ? [
               { text: name, width: cols[0].width },
@@ -415,13 +420,6 @@ export async function streamInvoicePdf(
               { text: item.total.toFixed(2), width: cols[2].width, align: "right" },
             ];
         y = drawRow(doc, x0, doc.y, rowCols);
-        if (item.complimentary) {
-          // The mark sits under the dish, not on the kitchen ticket.
-          doc.fontSize(Math.max(fz("items", 10) - 2, 6)).font("Helvetica-Oblique");
-          doc.text("Complimentary", x0, y, { width: cols[0].width });
-          y = doc.y;
-          doc.font("Helvetica").fontSize(fz("items", 10));
-        }
         doc.y = y + 3;
       }
 
