@@ -72,6 +72,8 @@ export const kioskApi = {
   checkout: (orderId: string) => kioskHttp.post<OnlineCheckout>(`/kiosk/orders/${orderId}/checkout`).then((r) => r.data),
   confirm: (input: RazorpayConfirmation) =>
     kioskHttp.post<{ status: PaymentAttemptStatus }>("/kiosk/razorpay/confirm", input).then((r) => r.data),
+  confirmPaytm: (orderId: string) =>
+    kioskHttp.post<{ status: PaymentAttemptStatus }>("/kiosk/paytm/confirm", { orderId }).then((r) => r.data),
 };
 
 export const kioskAdminApi = {

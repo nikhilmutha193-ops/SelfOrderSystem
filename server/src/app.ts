@@ -107,6 +107,8 @@ app.use(
     cb(null, { origin: allowed });
   })
 );
+// Paytm's payment notice is a form post; the JSON parser below ignores it.
+app.use("/api/payments/paytm/webhook", express.urlencoded({ extended: false, limit: "100kb" }));
 app.use(
   express.json({
     limit: "25mb", // a full data backup/restore payload can exceed the 100kb default

@@ -34,7 +34,7 @@ export const getLandingPage = asyncHandler(async (req: Request, res: Response) =
   await syncGoogleReviewsIfStale(req.restaurantId!);
   const [restaurant, team, bestsellers, todaySpecialItems, categories, banners, reviews, awards, googleDocs, content] =
     await Promise.all([
-      Restaurant.findById(req.restaurantId).select("name tagline aboutText heroImages logoUrl address"),
+      Restaurant.findById(req.restaurantId).select("name nameStyle tagline aboutText heroImages logoUrl address"),
       TeamMember.find({ restaurantId: req.restaurantId, isActive: true }).sort({ sortOrder: 1, createdAt: 1 }),
       FoodItem.find({ restaurantId: req.restaurantId, isActive: true, ...ON_LANDING }).sort({ name: 1 }),
       FoodItem.find({ restaurantId: req.restaurantId, isActive: true, isTodaySpecial: true }).sort({ name: 1 }),

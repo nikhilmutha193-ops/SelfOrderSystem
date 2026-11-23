@@ -94,10 +94,11 @@ export const submitReview = asyncHandler(async (req: Request, res: Response) => 
 
 /** What the public feedback page needs: the restaurant's name and logo, and where happy guests are sent. */
 export const getPublicFeedbackInfo = asyncHandler(async (req: Request, res: Response) => {
-  const restaurant = await Restaurant.findById(req.restaurantId).select("name logoUrl googleReviewUrl googleMinStars");
+  const restaurant = await Restaurant.findById(req.restaurantId).select("name nameStyle logoUrl googleReviewUrl googleMinStars");
   if (!restaurant) throw new HttpError(404, "Restaurant not found");
   res.json({
     name: restaurant.name,
+    nameStyle: restaurant.nameStyle ?? [],
     logoUrl: restaurant.logoUrl ?? "",
     googleReviewUrl: restaurant.googleReviewUrl ?? "",
     googleMinStars: restaurant.googleMinStars ?? 4,

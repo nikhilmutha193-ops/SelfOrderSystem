@@ -4,7 +4,7 @@ import { getContext } from "../../core/context";
 import { parse } from "../../core/validate";
 import { asyncHandler } from "../../middleware/errorHandler";
 import { HttpError } from "../../utils/httpError";
-import { confirmCheckoutSchema, gatewaySettingsSchema, orderIdParams } from "./payments.schema";
+import { confirmCheckoutSchema, confirmPaytmSchema, gatewaySettingsSchema, orderIdParams } from "./payments.schema";
 import * as payments from "./payments.service";
 
 declare global {
@@ -38,6 +38,16 @@ export const startCheckout = asyncHandler(async (req: Request, res: Response) =>
 export const confirmCheckout = asyncHandler(async (req: Request, res: Response) => {
   const input = parse(confirmCheckoutSchema, req.body);
   res.json(await payments.confirmCheckout(getContext(req), input));
+});
+
+export const confirmPaytm = asyncHandler(async (req: Request, res: Response) => {
+  const input = parse(confirmPaytmSchema, req.body);
+  res.json(await payments.confirmPaytm(getContext(req), input));
+});
+
+export const paytmWebhook = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.restaurantId) throw new HttpError(400, "Unknown restaurant");
+  res.json(await payments.handlePaytmWebhook(req.restaurantId, (req.body ?? {}) as Record<string, unknown>));
 });
 
 export const razorpayWebhook = asyncHandler(async (req: Request, res: Response) => {

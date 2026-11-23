@@ -86,6 +86,11 @@ export interface KotCategoryGroup {
 export interface InvoiceSettings {
   invoicePrefix: string;
   placeOfSupply: string;
+  /** The name printed on invoices when it is not the restaurant name (up to four lines). */
+  displayName?: string;
+  subText?: string;
+  headerOrder?: string[];
+  detailsOrder?: string[];
   showCustomerPhone: boolean;
   /** Bills show the mobile number with the middle digits hidden, like 98XXXXXX10. */
   maskCustomerPhone?: boolean;
@@ -110,7 +115,40 @@ export interface ChatModeration {
 /** restaurant: order, cook, serve, then bill and pay. cafe: pay first; the kitchen gets the order once it is paid. */
 export type ServiceFlow = "restaurant" | "cafe";
 
+export type NameFont =
+  | "heading"
+  | "clean"
+  | "classic"
+  | "script"
+  | "display"
+  | "mono"
+  | "elegant"
+  | "modern"
+  | "rounded"
+  | "slab"
+  | "condensed"
+  | "fancy"
+  | "calligraphy"
+  | "brush"
+  | "retro"
+  | "marker"
+  | "poster";
+
+/** One piece of the restaurant name with its own style. A part with nothing set takes the style around it. */
+export interface RestaurantNamePart {
+  text: string;
+  font?: NameFont;
+  bold?: boolean;
+  italic?: boolean;
+  /** "#rrggbb", or "" for the colour around it. */
+  color?: string;
+  /** Size as a percent of the text around the name (100 = the same size). */
+  size?: number;
+}
+
 export interface Restaurant {
+  /** The name styled piece by piece (Settings > General > Restaurant name style); empty shows the plain name. */
+  nameStyle?: RestaurantNamePart[];
   siteTitle?: string;
   faviconUrl?: string;
   /** "#rrggbb", or "" for the built-in terracotta. */
@@ -695,6 +733,7 @@ export interface GoogleReview {
 export interface LandingRestaurant {
   _id: string;
   name: string;
+  nameStyle?: RestaurantNamePart[];
   tagline?: string;
   aboutText?: string;
   heroImages: string[];
@@ -1378,6 +1417,7 @@ export interface PublicBill {
     address: string;
     gstin: string;
     fssaiLicense: string;
+    subText?: string;
     logoUrl: string;
     timezone: string;
   };
@@ -1400,7 +1440,7 @@ export interface PublicBill {
     couponCode: string | null;
     payments: { label: string; amount: number; tendered: number | null; change: number }[];
   };
-  display: { showUnitPrice: boolean; showJainTag: boolean; termsText: string; footerNote: string };
+  display: { headerOrder?: string[]; detailsOrder?: string[]; showUnitPrice: boolean; showJainTag: boolean; termsText: string; footerNote: string };
   items: {
     foodName: string;
     quantity: number;
@@ -1600,24 +1640,33 @@ export interface MenuRecommendations {
   pairs: Record<string, string[]>;
 }
 
+export type GatewayProvider = "razorpay" | "paytm";
+
 export interface PaymentGatewaySettings {
-  provider: "razorpay";
+  /** Which gateway takes the online payments. */
+  provider: GatewayProvider;
   enabled: boolean;
   keyId: string;
   hasKeySecret: boolean;
   hasWebhookSecret: boolean;
+  paytm: { mid: string; website: string; environment: "staging" | "production"; hasKey: boolean };
   secretsUnreadable: boolean;
 }
 
 export interface PaymentGatewaySettingsInput {
   enabled?: boolean;
+  provider?: GatewayProvider;
   keyId?: string;
   keySecret?: string;
   webhookSecret?: string;
+  paytmMid?: string;
+  paytmKey?: string;
+  paytmWebsite?: string;
+  paytmEnvironment?: "staging" | "production";
 }
 
 /** What Razorpay Checkout needs to open for one order (amount in paise). */
-export interface OnlineCheckout {
+export interface RazorpayOnlineCheckout {
   provider: "razorpay";
   keyId: string;
   gatewayOrderId: string;
@@ -1627,6 +1676,23 @@ export interface OnlineCheckout {
   description: string;
   prefill: { name: string; contact: string };
 }
+
+/** What Paytm Checkout needs to open for one order (amount in paise): the order was started on Paytm already. */
+export interface PaytmOnlineCheckout {
+  provider: "paytm";
+  mid: string;
+  /** Paytm's server for this account (staging or production), where the checkout script comes from. */
+  host: string;
+  gatewayOrderId: string;
+  txnToken: string;
+  amount: number;
+  currency: "INR";
+  name: string;
+  description: string;
+  prefill: { name: string; contact: string };
+}
+
+export type OnlineCheckout = RazorpayOnlineCheckout | PaytmOnlineCheckout;
 
 export type PaymentAttemptStatus = "created" | "processing" | "paid" | "mismatch" | "duplicate";
 

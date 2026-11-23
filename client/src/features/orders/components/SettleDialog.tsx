@@ -11,8 +11,7 @@ import ReasonDialog from "../../../shared/ui/ReasonDialog";
 import { Button, ErrorText, Field, IconButton, Input } from "../../../shared/ui/ui";
 import UpiQr from "../../../shared/ui/UpiQr";
 import { useOrderCustomer } from "../../customers/queries";
-import { paymentsApi } from "../../payments/api";
-import { brandThemeColor, openRazorpayCheckout } from "../../payments/razorpayCheckout";
+import { payOnline } from "../../payments/payOnline";
 import { ordersApi } from "../api";
 import {
   orderKeys,
@@ -240,7 +239,7 @@ function ChargesPanel({ orderId }: { orderId: string }) {
 }
 
 /**
- * Takes the whole bill through Razorpay Checkout (UPI, cards, net banking, wallets) from the staff's own device,
+ * Takes the whole bill through the online payment (Razorpay or Paytm) Checkout (UPI, cards, net banking, wallets) from the staff's own device,
  * when the restaurant has online payments set up. The server settles the order once Razorpay confirms.
  */
 function RazorpayPanel({
@@ -266,14 +265,12 @@ function RazorpayPanel({
     setError(null);
     setNotice(null);
     try {
-      const checkout = await paymentsApi.checkout(orderId);
-      const outcome = await openRazorpayCheckout(checkout, brandThemeColor());
+      const outcome = await payOnline(orderId);
       if (outcome.kind === "dismissed") return;
       if (outcome.kind === "failed") {
         setError(`${outcome.message} Nothing was charged.`);
         return;
       }
-      await paymentsApi.confirm(outcome.confirmation);
       const fresh = await ordersApi.get(orderId);
       queryClient.setQueryData(orderKeys.detail(orderId), fresh);
       await queryClient.invalidateQueries({ queryKey: orderKeys.all });
@@ -289,7 +286,7 @@ function RazorpayPanel({
   return (
     <div className="flex flex-col gap-2 rounded-xl border border-orange-200 bg-orange-50/60 p-3">
       <Button type="button" icon={CreditCard} loading={busy} disabled={disabled} onClick={pay}>
-        Pay ₹{money(total)} with Razorpay
+        Pay ₹{money(total)} online
       </Button>
       <p className="text-xs text-slate-600">
         UPI QR, cards, net banking and wallets. The order is marked paid by itself. For cash or split payments use the

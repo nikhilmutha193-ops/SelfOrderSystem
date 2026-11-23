@@ -83,7 +83,9 @@ export const INVOICE_SHOW: LayoutField[] = [
   { key: "footer", label: "Footer note" },
 ];
 export const INVOICE_FONTS: LayoutField[] = [
-  { key: "header", label: "Restaurant details" },
+  { key: "name", label: "Restaurant name" },
+  { key: "subtext", label: "Text under the name" },
+  { key: "header", label: "Address, GSTIN and title" },
   { key: "details", label: "Invoice and customer details" },
   { key: "items", label: "Dishes" },
   { key: "totals", label: "Charges and tax" },
@@ -164,7 +166,16 @@ export function resolveInvoice(settings: InvoiceSettings, paper: PaperKey): Reso
         terms: true,
         footer: true,
       },
-      fonts: { header: base, details: base, items: base, totals: base, grandTotal: base, footer: base },
+      fonts: {
+        name: base === "small" ? "normal" : "large",
+        subtext: "normal",
+        header: base,
+        details: base,
+        items: base,
+        totals: base,
+        grandTotal: base,
+        footer: base,
+      },
     },
     settings.layouts?.[paper],
   );

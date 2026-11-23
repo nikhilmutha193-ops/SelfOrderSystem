@@ -13,8 +13,8 @@ import { nextTokenNumber } from "../../utils/kotQueue";
 import { cancelOrder } from "../orders/orders.billing";
 import { addOrderItems, getOrder, getOwnedOrder } from "../orders/orders.service";
 import { onlinePaymentAvailable } from "../payments/gateway";
-import { confirmCheckout, startCheckout } from "../payments/payments.service";
-import { ConfirmCheckoutInput } from "../payments/payments.schema";
+import { confirmCheckout, confirmPaytm, startCheckout } from "../payments/payments.service";
+import { ConfirmCheckoutInput, ConfirmPaytmInput } from "../payments/payments.schema";
 import { KioskRepository } from "./kiosk.repository";
 import { KioskOrderInput, KioskSettingsInput } from "./kiosk.schema";
 
@@ -225,6 +225,10 @@ export function startKioskCheckout(restaurantId: string, device: DeviceDoc, orde
 
 export function confirmKioskCheckout(restaurantId: string, device: DeviceDoc, input: ConfirmCheckoutInput) {
   return confirmCheckout(kioskContext(restaurantId, device), input);
+}
+
+export function confirmKioskPaytm(restaurantId: string, device: DeviceDoc, input: ConfirmPaytmInput) {
+  return confirmPaytm(kioskContext(restaurantId, device), input);
 }
 
 // ---- The pickup board (public, numbers only) ----

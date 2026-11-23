@@ -36,11 +36,13 @@ import {
   type PrintFontSize,
   type PrintPaperSize,
   type Restaurant,
+  type RestaurantNamePart,
   type ServiceFlow,
   type TaxRate,
 } from "../../lib/types";
 import { PUBLIC_RESTAURANT_KEY } from "../../lib/useDineInPayment";
 import { PrintLayoutEditor } from "../../features/printing/components/PrintLayoutEditor";
+import { InvoiceFieldOrder } from "../../features/printing/components/InvoiceFieldOrder";
 import {
   INVOICE_FONTS,
   INVOICE_SHOW,
@@ -59,6 +61,7 @@ import {
   isBrandColor,
   useBrandPreview,
 } from "../../shared/brand";
+import { NameStyleEditor } from "../../shared/ui/NameStyleEditor";
 import { usePageTour, type TourStep } from "../../shared/ui/PageTour";
 import {
   Alert,
@@ -435,6 +438,7 @@ export default function RestaurantSettings() {
   const [faviconUrl, setFaviconUrl] = useState("");
   const [uploadingFavicon, setUploadingFavicon] = useState(false);
   const [brandColor, setBrandColor] = useState("");
+  const [nameStyle, setNameStyle] = useState<RestaurantNamePart[]>([]);
   // null until loaded, so the preview doesn't reset the colour before the saved one is known.
   const [savedBrandColor, setSavedBrandColor] = useState<string | null>(null);
   const [savedLogoUrl, setSavedLogoUrl] = useState("");
@@ -554,6 +558,7 @@ export default function RestaurantSettings() {
         setFaviconUrl(res.data.faviconUrl || "");
         setBrandColor(res.data.brandColor || "");
         setSavedBrandColor(res.data.brandColor || "");
+        setNameStyle(res.data.nameStyle ?? []);
         setGstin(res.data.gstin || "");
         setFssaiLicense(res.data.fssaiLicense || "");
         setPublicUrl(res.data.publicUrl || "");
@@ -645,6 +650,7 @@ export default function RestaurantSettings() {
         siteTitle,
         faviconUrl,
         brandColor,
+        nameStyle: nameStyle.filter((p) => p.text),
         gstin,
         fssaiLicense,
         publicUrl,
@@ -840,6 +846,7 @@ export default function RestaurantSettings() {
                       )}
                     </div>
                   </div>
+                  <NameStyleEditor name={name} parts={nameStyle} onChange={setNameStyle} />
                   <BrandColorField
                     value={brandColor}
                     onChange={setBrandColor}
@@ -1588,6 +1595,37 @@ export default function RestaurantSettings() {
                     placeholder="Karnataka"
                   />
                 </Field>
+                <Field
+                  label="Restaurant name on the invoice"
+                  htmlFor="invoice-name"
+                  hint="Leave empty to print the restaurant name. Its text size is set in the invoice layout below."
+                >
+                  <Input
+                    id="invoice-name"
+                    maxLength={80}
+                    value={invoiceSettings.displayName ?? ""}
+                    onChange={(e) => setInvoiceSettings((prev) => ({ ...prev, displayName: e.target.value }))}
+                    placeholder={name}
+                  />
+                </Field>
+                <Field
+                  label="Text under the name"
+                  htmlFor="invoice-subtext"
+                  hint="A smaller second line, for example a tagline or the rest of a long name. It has its own text size."
+                >
+                  <Input
+                    id="invoice-subtext"
+                    maxLength={120}
+                    value={invoiceSettings.subText ?? ""}
+                    onChange={(e) => setInvoiceSettings((prev) => ({ ...prev, subText: e.target.value }))}
+                  />
+                </Field>
+                <InvoiceFieldOrder
+                  headerOrder={invoiceSettings.headerOrder}
+                  detailsOrder={invoiceSettings.detailsOrder}
+                  onHeader={(headerOrder) => setInvoiceSettings((prev) => ({ ...prev, headerOrder }))}
+                  onDetails={(detailsOrder) => setInvoiceSettings((prev) => ({ ...prev, detailsOrder }))}
+                />
                 <Field label="Paper size" htmlFor="invoice-paper">
                   <Select
                     id="invoice-paper"

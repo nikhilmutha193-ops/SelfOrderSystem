@@ -1,12 +1,15 @@
 import { useEffect, useState } from "react";
 
 import { StarPicker } from "../../components/ReviewFab";
+import type { RestaurantNamePart } from "../../lib/types";
+import { BrandName } from "../../shared/ui/BrandName";
 import { api, extractErrorMessage } from "../../shared/api/client";
 
 import "../../styles/order.css";
 
 interface FeedbackInfo {
   name: string;
+  nameStyle?: RestaurantNamePart[];
   logoUrl: string;
   googleReviewUrl: string;
   googleMinStars: number;
@@ -93,7 +96,9 @@ export default function Feedback() {
                 ☕
               </span>
             )}
-            <span className="order-header__name">{info.name}</span>
+            <span className="order-header__name">
+              <BrandName name={info.name} parts={info.nameStyle} />
+            </span>
           </a>
         </div>
       </header>

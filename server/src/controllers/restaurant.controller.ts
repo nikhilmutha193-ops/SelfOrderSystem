@@ -10,9 +10,11 @@ import Restaurant, {
   IExtraCharge,
   IInvoiceSettings,
   IKotSettings,
+  INamePart,
   IQrSettings,
   IRestaurant,
   ITaxRate,
+  NAME_FONTS,
   PrintPaperSize,
   SERVICE_FLOWS,
   ServiceFlow,
@@ -20,6 +22,7 @@ import Restaurant, {
 import { isValidDayEndTime, isValidTimezone } from "../utils/businessDay";
 import { HttpError } from "../utils/httpError";
 import { computeInvoiceTotals } from "../utils/invoice";
+import { DETAIL_FIELDS, HEADER_FIELDS, orderFields } from "../utils/invoiceFields";
 import { financialYearLabel, INVOICE_PREFIX_PATTERN } from "../utils/invoiceNumber";
 import { seedLandingContent } from "../utils/landingSeed";
 import { renderBill, renderKot } from "../modules/printing/printing.render";
@@ -135,7 +138,7 @@ function cleanExtraCharges(raw: unknown): IExtraCharge[] {
 
 export const getRestaurantPublic = asyncHandler(async (req: Request, res: Response) => {
   const restaurant = await Restaurant.findById(req.restaurantId).select(
-    "name logoUrl address siteTitle faviconUrl brandColor tableLoginSettings billingSettings.dineInPayment serviceFlow"
+    "name nameStyle logoUrl address siteTitle faviconUrl brandColor tableLoginSettings billingSettings.dineInPayment serviceFlow"
   );
   if (!restaurant) throw new HttpError(404, "Restaurant not found");
   const body = restaurant.toObject();
@@ -177,6 +180,7 @@ export const updateRestaurantSettings = asyncHandler(async (req: Request, res: R
     siteTitle,
     faviconUrl,
     brandColor,
+    nameStyle,
     gstin,
     fssaiLicense,
     tagline,
@@ -200,6 +204,7 @@ export const updateRestaurantSettings = asyncHandler(async (req: Request, res: R
     siteTitle?: string;
     faviconUrl?: string;
     brandColor?: string;
+    nameStyle?: unknown;
     address?: string;
     logoUrl?: string;
     gstin?: string;
@@ -238,6 +243,24 @@ export const updateRestaurantSettings = asyncHandler(async (req: Request, res: R
     throw new HttpError(400, "Brand colour must be a hex colour like #c4602f");
   }
 
+  let nameParts: INamePart[] | undefined;
+  if (nameStyle !== undefined) {
+    if (!Array.isArray(nameStyle) || nameStyle.length > 8) throw new HttpError(400, "The name can have up to 8 styled pieces");
+    nameParts = nameStyle.map((raw: Record<string, unknown>) => {
+      const text = typeof raw?.text === "string" ? raw.text.slice(0, 40) : "";
+      if (!text) throw new HttpError(400, "Every piece of the name needs some text");
+      const font = NAME_FONTS.find((f) => f === raw.font);
+      if (!font) throw new HttpError(400, "Choose a font for each piece of the name");
+      const color = typeof raw.color === "string" ? raw.color : "";
+      if (color && !/^#[0-9a-f]{6}$/i.test(color)) throw new HttpError(400, "A name colour must be a hex colour like #c4602f");
+      const size = raw.size === undefined ? 100 : Number(raw.size);
+      if (!Number.isFinite(size) || size < 50 || size > 300) {
+        throw new HttpError(400, "The size of a piece of the name must be between 50% and 300%");
+      }
+      return { text, font, bold: !!raw.bold, italic: !!raw.italic, color: color.toLowerCase(), size: Math.round(size) };
+    });
+  }
+
   if (heroImages && (!Array.isArray(heroImages) || heroImages.some((url) => typeof url !== "string" || !url))) {
     throw new HttpError(400, "heroImages must be an array of non-empty URLs");
   }
@@ -262,12 +285,15 @@ export const updateRestaurantSettings = asyncHandler(async (req: Request, res: R
   const restaurant = await Restaurant.findById(req.restaurantId);
   if (!restaurant) throw new HttpError(404, "Restaurant not found");
 
-  if (name !== undefined) restaurant.name = name;
+  if (name !== undefined) {
+    restaurant.name = String(name).replace(/\s+/g, " ").trim();
+  }
   if (address !== undefined) restaurant.address = address;
   if (logoUrl !== undefined) restaurant.logoUrl = logoUrl;
   if (siteTitle !== undefined) restaurant.siteTitle = siteTitle;
   if (faviconUrl !== undefined) restaurant.faviconUrl = faviconUrl;
   if (brandColor !== undefined) restaurant.brandColor = String(brandColor).toLowerCase();
+  if (nameParts) restaurant.set("nameStyle", nameParts);
   if (gstin !== undefined) restaurant.gstin = gstin;
   if (fssaiLicense !== undefined) restaurant.fssaiLicense = fssaiLicense;
   if (tagline !== undefined) restaurant.tagline = tagline;
@@ -345,6 +371,29 @@ export const updateRestaurantSettings = asyncHandler(async (req: Request, res: R
     }
     if (invoiceSettings.placeOfSupply !== undefined && String(invoiceSettings.placeOfSupply).length > 60) {
       throw new HttpError(400, "Place of supply must be 60 characters or fewer");
+    }
+    if (invoiceSettings.displayName !== undefined) {
+      if (typeof invoiceSettings.displayName !== "string") throw new HttpError(400, "The invoice name must be text");
+      const displayName = invoiceSettings.displayName.replace(/\s+/g, " ").trim();
+      if (displayName.length > 80) throw new HttpError(400, "The invoice name must be 80 characters or fewer");
+      invoiceSettings.displayName = displayName;
+    }
+    if (invoiceSettings.subText !== undefined) {
+      if (typeof invoiceSettings.subText !== "string") throw new HttpError(400, "The text under the name must be text");
+      const subText = invoiceSettings.subText.replace(/\s+/g, " ").trim();
+      if (subText.length > 120) throw new HttpError(400, "The text under the name must be 120 characters or fewer");
+      invoiceSettings.subText = subText;
+    }
+    for (const [key, all] of [
+      ["headerOrder", HEADER_FIELDS],
+      ["detailsOrder", DETAIL_FIELDS],
+    ] as const) {
+      const value = invoiceSettings[key];
+      if (value === undefined) continue;
+      if (!Array.isArray(value) || value.some((k: unknown) => !(all as readonly string[]).includes(k as string))) {
+        throw new HttpError(400, "The invoice field order has a field that is not known");
+      }
+      invoiceSettings[key] = orderFields(value, all);
     }
     if (invoiceSettings.maskCustomerPhone !== undefined && typeof invoiceSettings.maskCustomerPhone !== "boolean") {
       throw new HttpError(400, "Hiding the customer's phone number must be on or off");

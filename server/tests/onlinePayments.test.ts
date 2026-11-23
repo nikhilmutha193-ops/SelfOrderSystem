@@ -113,6 +113,7 @@ describe("gateway settings", () => {
       keyId: KEY_ID,
       hasKeySecret: true,
       hasWebhookSecret: true,
+      paytm: { mid: "", website: "DEFAULT", environment: "production", hasKey: false },
       secretsUnreadable: false,
     });
     expect(calls[0].auth).toBe(`Basic ${Buffer.from(`${KEY_ID}:${KEY_SECRET}`).toString("base64")}`);

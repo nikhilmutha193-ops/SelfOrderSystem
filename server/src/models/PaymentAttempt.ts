@@ -12,7 +12,7 @@ export interface IPaymentAttempt {
   _id: Types.ObjectId;
   restaurantId: Types.ObjectId;
   orderId: Types.ObjectId;
-  provider: "razorpay";
+  provider: "razorpay" | "paytm";
   gatewayOrderId: string;
   /** In paise, as the gateway counts it. */
   amount: number;
@@ -29,7 +29,7 @@ const paymentAttemptSchema = new Schema<IPaymentAttempt>(
   {
     restaurantId: { type: Schema.Types.ObjectId, ref: "Restaurant", required: true },
     orderId: { type: Schema.Types.ObjectId, ref: "Order", required: true },
-    provider: { type: String, enum: ["razorpay"], default: "razorpay" },
+    provider: { type: String, enum: ["razorpay", "paytm"], default: "razorpay" },
     gatewayOrderId: { type: String, required: true, unique: true },
     amount: { type: Number, required: true, min: 1 },
     currency: { type: String, enum: ["INR"], default: "INR" },

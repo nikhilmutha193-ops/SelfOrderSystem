@@ -57,7 +57,7 @@ export const INVOICE_SHOW = [
   "terms",
   "footer",
 ] as const;
-export const INVOICE_FONTS = ["header", "details", "items", "totals", "grandTotal", "footer"] as const;
+export const INVOICE_FONTS = ["name", "subtext", "header", "details", "items", "totals", "grandTotal", "footer"] as const;
 
 export type KotShowKey = (typeof KOT_SHOW)[number];
 export type KotFontKey = (typeof KOT_FONTS)[number];
@@ -155,6 +155,8 @@ export function resolveInvoiceLayout(
     footer: true,
   };
   const fonts: Record<InvoiceFontKey, TextSize> = {
+    name: base === "small" ? "normal" : "large",
+    subtext: "normal",
     header: base,
     details: base,
     items: base,

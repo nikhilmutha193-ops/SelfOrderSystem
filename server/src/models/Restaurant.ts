@@ -7,6 +7,38 @@ export interface ITaxRate {
   percent: number;
 }
 
+export const NAME_FONTS = [
+  "heading",
+  "clean",
+  "classic",
+  "script",
+  "display",
+  "mono",
+  "elegant",
+  "modern",
+  "rounded",
+  "slab",
+  "condensed",
+  "fancy",
+  "calligraphy",
+  "brush",
+  "retro",
+  "marker",
+  "poster",
+] as const;
+export type NameFont = (typeof NAME_FONTS)[number];
+
+export interface INamePart {
+  text: string;
+  font: NameFont;
+  bold: boolean;
+  italic: boolean;
+  /** "#rrggbb", or "" to take the colour around it. */
+  color: string;
+  /** Size as a percent of the text around the name (100 = the same size). */
+  size: number;
+}
+
 export interface IFeedbackQr {
   showLogo: boolean;
   showName: boolean;
@@ -97,6 +129,14 @@ export interface IKotSettings {
 
 export interface IInvoiceSettings {
   invoicePrefix: string;
+  /** The name printed at the top of invoices, when it is not the restaurant's own (one line). */
+  displayName: string;
+  /** A second, smaller line under the name on invoices. */
+  subText: string;
+  /** The order of the header lines (see utils/invoiceFields.ts); empty means the standard order. */
+  headerOrder: string[];
+  /** The order of the lines under the header; empty means the standard order. */
+  detailsOrder: string[];
   placeOfSupply: string;
   autoPrintBill: boolean;
   showCustomerPhone: boolean;
@@ -236,6 +276,8 @@ export interface IRestaurant {
   faviconUrl?: string;
   /** "#rrggbb", or "" for the built-in terracotta. Every screen's accent palette is built from it (client/src/shared/brand.ts). */
   brandColor?: string;
+  /** The name written piece by piece, each with its own font, weight, slant and colour. Empty: the plain name. */
+  nameStyle?: INamePart[];
   address?: string;
   gstin?: string;
   fssaiLicense?: string;
@@ -376,6 +418,10 @@ const invoiceSettingsSchema = new Schema<IInvoiceSettings>(
   {
     invoicePrefix: { type: String, default: "INV", trim: true, uppercase: true },
     placeOfSupply: { type: String, default: "", trim: true },
+    displayName: { type: String, default: "", trim: true },
+    subText: { type: String, default: "", trim: true },
+    headerOrder: { type: [String], default: [] },
+    detailsOrder: { type: [String], default: [] },
     autoPrintBill: { type: Boolean, default: false },
     showCustomerPhone: { type: Boolean, default: true },
     maskCustomerPhone: { type: Boolean, default: false },
@@ -464,6 +510,22 @@ const restaurantSchema = new Schema<IRestaurant>(
     siteTitle: { type: String, default: "" },
     faviconUrl: { type: String, default: "" },
     brandColor: { type: String, default: "" },
+    nameStyle: {
+      type: [
+        new Schema(
+          {
+            text: { type: String, default: "" },
+            font: { type: String, enum: NAME_FONTS, default: "heading" },
+            bold: { type: Boolean, default: false },
+            italic: { type: Boolean, default: false },
+            color: { type: String, default: "" },
+            size: { type: Number, default: 100, min: 50, max: 300 },
+          },
+          { _id: false }
+        ),
+      ],
+      default: [],
+    },
     address: { type: String, default: "" },
     gstin: { type: String, default: "" },
     fssaiLicense: { type: String, default: "" },

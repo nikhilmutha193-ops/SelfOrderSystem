@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 
 import type { LandingData } from "../lib/types";
 import { api } from "../shared/api/client";
+import { BrandName } from "../shared/ui/BrandName";
 
 /** The restaurant's printed menu card, as photos: one page of its own, apart from the landing page. */
 export default function MenuCard() {
@@ -35,7 +36,9 @@ export default function MenuCard() {
         <div className="mx-auto flex max-w-3xl items-center justify-between gap-3 px-4 py-3">
           <Link to="/" className="flex min-w-0 items-center gap-2 font-semibold">
             {restaurant?.logoUrl && <img src={restaurant.logoUrl} alt="" className="h-9 w-9 rounded-full object-cover" />}
-            <span className="truncate">{restaurant?.name ?? ""}</span>
+            <span className="truncate">
+              {restaurant && <BrandName name={restaurant.name} parts={restaurant.nameStyle} />}
+            </span>
           </Link>
           <Link to="/" className="shrink-0 text-sm font-medium text-slate-600 hover:text-slate-900">
             Back to site

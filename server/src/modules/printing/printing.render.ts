@@ -4,6 +4,7 @@ import { IRestaurant } from "../../models/Restaurant";
 import { charsPerLine, EscPos } from "../../utils/escpos";
 import { qrBitmap, type Bitmap } from "../../utils/escposImage";
 import { InvoiceTotals } from "../../utils/invoice";
+import { DETAIL_FIELDS, HEADER_FIELDS, invoiceDisplayName, invoiceSubtext, orderFields } from "../../utils/invoiceFields";
 import { mergeKotLines } from "../../utils/kotLines";
 import { billPhone } from "../../utils/phone";
 import { paperKeyFor, resolveInvoiceLayout, resolveKotLayout, TextSize } from "../../utils/printLayout";
@@ -41,7 +42,9 @@ function lower(size: TextSize): TextSize {
 
 /** A line (or wrapped lines) in one text size, then back to normal. */
 function put(p: EscPos, value: string, size: TextSize, bold = false) {
-  p.textSize(size).bold(bold).wrapped(value, p.columns(size)).bold(false).textSize("normal");
+  p.textSize(size).bold(bold);
+  for (const part of value.split("\n")) if (part.trim()) p.wrapped(part.trim(), p.columns(size));
+  p.bold(false).textSize("normal");
 }
 
 /** The full date and time, as on the PDF invoice. */
@@ -149,27 +152,47 @@ export function renderBill(ticket: BillTicket): Buffer {
   if (show.logo && ticket.logo) p.image(ticket.logo).feed(1);
   // Same order as the PDF invoice: a big shop name, the address lines small, then the title and a bold token.
   const small = lower(fonts.header);
-  if (show.restaurantName) put(p, restaurant.name, bump(fonts.header));
-  if (show.address && restaurant.address) put(p, restaurant.address, small);
-  if (show.gstin && restaurant.gstin) put(p, `GSTIN: ${restaurant.gstin}`, small);
-  if (show.fssai && restaurant.fssaiLicense) put(p, `FSSAI Reg. No: ${restaurant.fssaiLicense}`, small);
-  p.feed(1);
-  put(p, order.invoiceNumber ? "Tax Invoice" : "Bill Preview", fonts.header);
-  if (show.token && ticket.tokenText) put(p, ticket.tokenText.toUpperCase(), bump(fonts.header), true);
+  // The lines come in the order chosen in Settings > Invoice; the name may be written on several lines.
+  for (const field of orderFields(restaurant.invoiceSettings?.headerOrder, HEADER_FIELDS)) {
+    if (field === "name") {
+      if (show.restaurantName) put(p, invoiceDisplayName(restaurant), fonts.name, true);
+    } else if (field === "subtext") {
+      if (show.restaurantName && invoiceSubtext(restaurant)) put(p, invoiceSubtext(restaurant), fonts.subtext);
+    } else if (field === "address") {
+      if (show.address && restaurant.address) put(p, restaurant.address, small);
+    } else if (field === "gstin") {
+      if (show.gstin && restaurant.gstin) put(p, `GSTIN: ${restaurant.gstin}`, small);
+    } else if (field === "fssai") {
+      if (show.fssai && restaurant.fssaiLicense) put(p, `FSSAI Reg. No: ${restaurant.fssaiLicense}`, small);
+    } else if (field === "title") {
+      p.feed(1);
+      put(p, order.invoiceNumber ? "Tax Invoice" : "Bill Preview", fonts.header);
+    } else if (field === "token") {
+      if (show.token && ticket.tokenText) put(p, ticket.tokenText.toUpperCase(), bump(fonts.header), true);
+    }
+  }
   p.align("left").divider();
 
   const d = fonts.details;
-  if (show.invoiceNumber && order.invoiceNumber) put(p, `Invoice No: ${order.invoiceNumber}`, d);
-  if (show.dateTime) put(p, `Date: ${fullStamp(order.billedAt ?? order.checkinTime, restaurant.timezone)}`, d);
-  if (show.orderType) put(p, `Order: ${ticket.orderLabel}`, d);
-  if (show.customerName) {
-    const phone =
-      show.customerPhone && order.customerPhone ? ` (${billPhone(order.customerPhone, restaurant.invoiceSettings)})` : "";
-    put(p, `Customer: ${order.customerName}${phone}`, d);
-  } else if (show.customerPhone && order.customerPhone) {
-    put(p, `Phone: ${billPhone(order.customerPhone, restaurant.invoiceSettings)}`, d);
+  for (const field of orderFields(restaurant.invoiceSettings?.detailsOrder, DETAIL_FIELDS)) {
+    if (field === "invoiceNumber") {
+      if (show.invoiceNumber && order.invoiceNumber) put(p, `Invoice No: ${order.invoiceNumber}`, d);
+    } else if (field === "dateTime") {
+      if (show.dateTime) put(p, `Date: ${fullStamp(order.billedAt ?? order.checkinTime, restaurant.timezone)}`, d);
+    } else if (field === "orderType") {
+      if (show.orderType) put(p, `Order: ${ticket.orderLabel}`, d);
+    } else if (field === "customer") {
+      if (show.customerName) {
+        const phone =
+          show.customerPhone && order.customerPhone ? ` (${billPhone(order.customerPhone, restaurant.invoiceSettings)})` : "";
+        put(p, `Customer: ${order.customerName}${phone}`, d);
+      } else if (show.customerPhone && order.customerPhone) {
+        put(p, `Phone: ${billPhone(order.customerPhone, restaurant.invoiceSettings)}`, d);
+      }
+    } else if (field === "customerGstin") {
+      if (show.customerGstin && order.customerGstin) put(p, `Customer GSTIN: ${order.customerGstin}`, d);
+    }
   }
-  if (show.customerGstin && order.customerGstin) put(p, `Customer GSTIN: ${order.customerGstin}`, d);
   p.divider();
 
   // The same table as the PDF invoice: Item, Qty, Total.

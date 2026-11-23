@@ -8,7 +8,7 @@ import { LANGS, type Lang } from "../../../lib/i18n";
 import { suggestionsFor } from "../../../lib/recommendations";
 import type { CartLine, MenuCategory, MenuFoodItem, OrderDetailResponse } from "../../../lib/types";
 import { extractErrorMessage, setActiveAuth } from "../../../shared/api/client";
-import { brandThemeColor, openRazorpayCheckout } from "../../payments/razorpayCheckout";
+import { payOnline as runOnlinePayment } from "../../payments/payOnline";
 import { printHtml } from "../../pos/offlinePrint";
 import { getKioskToken, kioskApi, setKioskToken } from "../api";
 import { KioskMenu } from "../components/KioskMenu";
@@ -287,18 +287,25 @@ function KioskApp({ onUnpaired }: { onUnpaired: () => void }) {
     setBusy(true);
     setError(null);
     try {
-      const checkout = await kioskApi.checkout(placed.order._id);
-      checkoutOpen.current = true;
-      const outcome = await openRazorpayCheckout(checkout, brandThemeColor()).finally(() => {
-        checkoutOpen.current = false;
-        lastTouch.current = Date.now();
-      });
+      const outcome = await runOnlinePayment(
+        placed.order._id,
+        { checkout: kioskApi.checkout, confirmRazorpay: kioskApi.confirm, confirmPaytm: kioskApi.confirmPaytm },
+        async (open) => {
+          checkoutOpen.current = true;
+          try {
+            return await open();
+          } finally {
+            checkoutOpen.current = false;
+            lastTouch.current = Date.now();
+          }
+        }
+      );
       if (outcome.kind === "dismissed") return;
       if (outcome.kind === "failed") {
         setError(`${outcome.message} You weren't charged.`);
         return;
       }
-      const { status } = await kioskApi.confirm(outcome.confirmation);
+      const { status } = outcome;
       const detail = await kioskApi.order(placed.order._id);
       finish(status === "mismatch" || status === "duplicate" ? "check" : "paid", detail);
     } catch (err) {

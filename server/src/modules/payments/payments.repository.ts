@@ -15,7 +15,22 @@ export class PaymentsRepository {
     return PaymentGateway.findOne(this.scoped<IPaymentGateway>());
   }
 
-  saveGateway(changes: Partial<Pick<IPaymentGateway, "enabled" | "keyId" | "keySecretEnc" | "webhookSecretEnc">>) {
+  saveGateway(
+    changes: Partial<
+      Pick<
+        IPaymentGateway,
+        | "enabled"
+        | "provider"
+        | "keyId"
+        | "keySecretEnc"
+        | "webhookSecretEnc"
+        | "paytmMid"
+        | "paytmKeyEnc"
+        | "paytmWebsite"
+        | "paytmEnvironment"
+      >
+    >
+  ) {
     return PaymentGateway.findOneAndUpdate(
       this.scoped<IPaymentGateway>(),
       { $set: changes, $setOnInsert: { restaurantId: this.restaurantId } },
@@ -30,12 +45,12 @@ export class PaymentsRepository {
   /** An unpaid checkout for the same order and amount, recent enough to reopen instead of starting another. */
   findReusableAttempt(orderId: Types.ObjectId, amount: number, since: Date) {
     return PaymentAttempt.findOne(
-      this.scoped<IPaymentAttempt>({ orderId, amount, status: "created", createdAt: { $gte: since } })
+      this.scoped<IPaymentAttempt>({ orderId, amount, provider: "razorpay", status: "created", createdAt: { $gte: since } })
     ).sort({ createdAt: -1 });
   }
 
-  createAttempt(input: Pick<IPaymentAttempt, "orderId" | "gatewayOrderId" | "amount">) {
-    return PaymentAttempt.create({ ...input, restaurantId: this.restaurantId, provider: "razorpay", currency: "INR" });
+  createAttempt(input: Pick<IPaymentAttempt, "orderId" | "gatewayOrderId" | "amount"> & { provider?: "razorpay" | "paytm" }) {
+    return PaymentAttempt.create({ provider: "razorpay", ...input, restaurantId: this.restaurantId, currency: "INR" });
   }
 
   /** Moves a checkout from "created" to "processing"; null when another request got there first. */
@@ -47,7 +62,11 @@ export class PaymentsRepository {
     );
   }
 
-  finishAttempt(id: Types.ObjectId, status: PaymentAttemptStatus, extra: { method?: string; note?: string } = {}) {
+  finishAttempt(
+    id: Types.ObjectId,
+    status: PaymentAttemptStatus,
+    extra: { method?: string; note?: string; paymentId?: string } = {}
+  ) {
     return PaymentAttempt.updateOne(this.scoped<IPaymentAttempt>({ _id: id }), { $set: { status, ...extra } });
   }
 

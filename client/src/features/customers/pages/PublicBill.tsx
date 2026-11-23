@@ -37,6 +37,40 @@ export default function PublicBill() {
   }
   if (!bill.data) return <p className="p-6 text-sm text-slate-500">Loading your bill…</p>;
   const { restaurant, order, items, totals, display } = bill.data;
+  const headerOrder = display.headerOrder ?? ["name", "subtext", "address", "gstin", "fssai", "title", "token"];
+  const detailsOrder = display.detailsOrder ?? ["invoiceNumber", "dateTime", "orderType", "customer", "customerGstin"];
+  // The invoice number and the date share one row; the rest are lines under it, all in the order set in Invoice settings.
+  const rowFields = detailsOrder.filter((f) => f === "invoiceNumber" || f === "dateTime");
+  const lineFields = detailsOrder.filter((f) => f !== "invoiceNumber" && f !== "dateTime");
+  const headerPart = (field: string) => {
+    if (field === "name")
+      return <h1 key={field} className="text-xl font-bold text-slate-900">{restaurant.name}</h1>;
+    if (field === "subtext") return restaurant.subText ? <p key={field} className="text-sm text-slate-600">{restaurant.subText}</p> : null;
+    if (field === "address") return restaurant.address ? <p key={field} className="text-xs text-slate-500">{restaurant.address}</p> : null;
+    if (field === "gstin") return restaurant.gstin ? <p key={field} className="text-xs text-slate-500">GSTIN {restaurant.gstin}</p> : null;
+    if (field === "fssai")
+      return restaurant.fssaiLicense ? <p key={field} className="text-xs text-slate-500">FSSAI {restaurant.fssaiLicense}</p> : null;
+    if (field === "title") return <p key={field} className="mt-2 text-sm font-semibold text-slate-800">{order.title}</p>;
+    if (field === "token" && order.token)
+      return (
+        <p key={field} className="mx-auto mt-2 max-w-xs rounded-lg bg-orange-50 py-2 text-2xl font-extrabold text-orange-700">
+          {order.token}
+        </p>
+      );
+    return null;
+  };
+  const linePart = (field: string) => {
+    if (field === "orderType") return <p key={field}>Order: {order.orderTypeText}</p>;
+    if (field === "customer")
+      return (
+        <p key={field}>
+          Customer: {order.customerName}
+          {order.customerPhone ? `  (${order.customerPhone})` : ""}
+        </p>
+      );
+    if (field === "customerGstin" && order.customerGstin) return <p key={field}>Customer GSTIN: {order.customerGstin}</p>;
+    return null;
+  };
 
   return (
     <div className="min-h-dvh bg-slate-50 px-4 py-6">
@@ -45,41 +79,32 @@ export default function PublicBill() {
           {restaurant.logoUrl && (
             <img src={restaurant.logoUrl} alt="" className="mx-auto mb-2 h-14 w-14 rounded-full object-cover" />
           )}
-          <h1 className="text-xl font-bold text-slate-900">{restaurant.name}</h1>
-          {restaurant.address && <p className="text-xs text-slate-500">{restaurant.address}</p>}
-          {restaurant.gstin && <p className="text-xs text-slate-500">GSTIN {restaurant.gstin}</p>}
-          {restaurant.fssaiLicense && <p className="text-xs text-slate-500">FSSAI {restaurant.fssaiLicense}</p>}
+          {headerOrder.map(headerPart)}
         </div>
-        <p className="mb-2 text-center text-sm font-semibold text-slate-800">{order.title}</p>
         <div className="mb-3 flex justify-between border-y border-dashed border-slate-200 py-2 text-sm">
-          <span>
-            Invoice No <span className="font-semibold">{order.invoiceNumber}</span>
-          </span>
-          <span>
-            {new Date(order.billedAt).toLocaleString("en-IN", {
-              dateStyle: "medium",
-              timeStyle: "short",
-              timeZone: restaurant.timezone,
-            })}
-          </span>
+          {rowFields.map((field) =>
+            field === "invoiceNumber" ? (
+              <span key={field}>
+                Invoice No <span className="font-semibold">{order.invoiceNumber}</span>
+              </span>
+            ) : (
+              <span key={field}>
+                {new Date(order.billedAt).toLocaleString("en-IN", {
+                  dateStyle: "medium",
+                  timeStyle: "short",
+                  timeZone: restaurant.timezone,
+                })}
+              </span>
+            )
+          )}
         </div>
         {order.status === "cancelled" && (
           <p className="mb-3 rounded-md bg-red-50 px-3 py-2 text-center text-sm font-semibold text-red-700">
             This bill was {order.voided ? "voided" : "cancelled"}
           </p>
         )}
-        {order.token && (
-          <p className="mb-3 rounded-lg bg-orange-50 py-2 text-center text-2xl font-extrabold text-orange-700">
-            {order.token}
-          </p>
-        )}
         <div className="mb-3 flex flex-col gap-0.5 text-sm text-slate-600">
-          <p>Order: {order.orderTypeText}</p>
-          <p>
-            Customer: {order.customerName}
-            {order.customerPhone ? `  (${order.customerPhone})` : ""}
-          </p>
-          {order.customerGstin && <p>Customer GSTIN: {order.customerGstin}</p>}
+          {lineFields.map(linePart)}
           {order.placeOfSupply && <p>Place of supply: {order.placeOfSupply}</p>}
           <p>SAC: {order.sac} (restaurant service)</p>
         </div>

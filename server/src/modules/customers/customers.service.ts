@@ -10,6 +10,7 @@ import { writeAudit } from "../../utils/audit";
 import { HttpError } from "../../utils/httpError";
 import { computeInvoiceTotals, round2 } from "../../utils/invoice";
 import { DEFAULT_SAC } from "../../utils/invoiceNumber";
+import { DETAIL_FIELDS, HEADER_FIELDS, invoiceDisplayName, invoiceSubtext, orderFields } from "../../utils/invoiceFields";
 import { orderTokenText } from "../../utils/orderToken";
 import { invoiceTitle, orderTypeText, PAYMENT_LABELS } from "../../utils/pdf";
 import { sendBirthdayGreetingsForRestaurant } from "../../utils/birthdaySmsScheduler";
@@ -583,7 +584,8 @@ export async function publicBill(restaurantId: string, token: string) {
   const settings = restaurant.invoiceSettings;
   return {
     restaurant: {
-      name: restaurant.name,
+      name: invoiceDisplayName(restaurant),
+      subText: invoiceSubtext(restaurant),
       address: restaurant.address ?? "",
       gstin: restaurant.gstin ?? "",
       fssaiLicense: restaurant.fssaiLicense ?? "",
@@ -614,6 +616,8 @@ export async function publicBill(restaurantId: string, token: string) {
       })),
     },
     display: {
+      headerOrder: orderFields(settings?.headerOrder, HEADER_FIELDS),
+      detailsOrder: orderFields(settings?.detailsOrder, DETAIL_FIELDS),
       showUnitPrice: settings?.showUnitPrice !== false,
       showJainTag: settings?.showJainTag !== false,
       termsText: settings?.termsText ?? "",

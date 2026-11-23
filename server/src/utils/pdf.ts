@@ -13,6 +13,7 @@ import { mergeKotLines } from "./kotLines";
 import { InvoiceTotals } from "./invoice";
 import { kotTicketKey, kotTicketLabel } from "./kotGroups";
 import { DEFAULT_SAC } from "./invoiceNumber";
+import { DETAIL_FIELDS, HEADER_FIELDS, invoiceDisplayName, invoiceSubtext, orderFields } from "./invoiceFields";
 import { orderTokenText } from "./orderToken";
 import { billPhone } from "./phone";
 import {
@@ -301,43 +302,64 @@ export async function streamInvoicePdf(
     (doc, x0, usableWidth) => {
       if (logo) drawLogo(doc, logo, x0, usableWidth);
 
-      if (show.restaurantName) doc.fontSize(fz("header", 16)).text(restaurant.name, { align: "center" });
-      if (show.address && restaurant.address)
-        doc.fontSize(fz("header", 9)).text(restaurant.address, { align: "center" });
-      if (show.gstin && restaurant.gstin)
-        doc.fontSize(fz("header", 9)).text(`GSTIN: ${restaurant.gstin}`, { align: "center" });
-      if (show.fssai && restaurant.fssaiLicense)
-        doc.fontSize(fz("header", 9)).text(`FSSAI Reg. No: ${restaurant.fssaiLicense}`, { align: "center" });
-      doc.moveDown(0.5);
-      doc.fontSize(fz("header", 12)).text(invoiceTitle(order), { align: "center" });
-      // The cafe token sits in the header, under the title, where the guest looks for it.
+      // The header lines come in the order chosen in Settings > Invoice; the name may run over several lines.
       const tokenText = restaurant.serviceFlow === "cafe" ? orderTokenText(items) : "";
-      if (show.token && tokenText) {
-        doc.moveDown(0.2);
-        doc.font("Helvetica-Bold").fontSize(fz("header", 16)).text(tokenText.toUpperCase(), { align: "center" });
-        doc.font("Helvetica");
+      for (const field of orderFields(settings?.headerOrder, HEADER_FIELDS)) {
+        if (field === "name") {
+          if (show.restaurantName) doc.fontSize(fz("name", 13.5)).text(invoiceDisplayName(restaurant), { align: "center" });
+        } else if (field === "subtext") {
+          if (show.restaurantName && invoiceSubtext(restaurant))
+            doc.fontSize(fz("subtext", 9)).text(invoiceSubtext(restaurant), { align: "center" });
+        } else if (field === "address") {
+          if (show.address && restaurant.address)
+            doc.fontSize(fz("header", 9)).text(restaurant.address, { align: "center" });
+        } else if (field === "gstin") {
+          if (show.gstin && restaurant.gstin)
+            doc.fontSize(fz("header", 9)).text(`GSTIN: ${restaurant.gstin}`, { align: "center" });
+        } else if (field === "fssai") {
+          if (show.fssai && restaurant.fssaiLicense)
+            doc.fontSize(fz("header", 9)).text(`FSSAI Reg. No: ${restaurant.fssaiLicense}`, { align: "center" });
+        } else if (field === "title") {
+          doc.moveDown(0.5);
+          doc.fontSize(fz("header", 12)).text(invoiceTitle(order), { align: "center" });
+        } else if (field === "token") {
+          // The cafe token, where the guest looks for it.
+          if (show.token && tokenText) {
+            doc.moveDown(0.2);
+            doc.font("Helvetica-Bold").fontSize(fz("header", 16)).text(tokenText.toUpperCase(), { align: "center" });
+            doc.font("Helvetica");
+          }
+        }
       }
       doc.moveDown(0.5);
       drawSeparator(doc, x0, usableWidth, true);
 
       doc.fontSize(fz("details", 10));
-      if (show.invoiceNumber && order.invoiceNumber) doc.text(`Invoice No: ${order.invoiceNumber}`);
       const billDate = order.billedAt ?? order.checkinTime;
-      if (show.dateTime) {
-        doc.text(
-          `Date: ${new Date(billDate).toLocaleString("en-IN", { timeZone: restaurant.timezone || "Asia/Kolkata" })}`
-        );
+      for (const field of orderFields(settings?.detailsOrder, DETAIL_FIELDS)) {
+        if (field === "invoiceNumber") {
+          if (show.invoiceNumber && order.invoiceNumber) doc.text(`Invoice No: ${order.invoiceNumber}`);
+        } else if (field === "dateTime") {
+          if (show.dateTime) {
+            doc.text(
+              `Date: ${new Date(billDate).toLocaleString("en-IN", { timeZone: restaurant.timezone || "Asia/Kolkata" })}`
+            );
+          }
+        } else if (field === "orderType") {
+          if (show.orderType) doc.text(`Order: ${orderTypeText(order)}`);
+        } else if (field === "customer") {
+          if (show.customerName) {
+            doc.text(
+              `Customer: ${order.customerName}` +
+                (show.customerPhone && order.customerPhone ? `  (${billPhone(order.customerPhone, settings)})` : "")
+            );
+          } else if (show.customerPhone && order.customerPhone) {
+            doc.text(`Phone: ${billPhone(order.customerPhone, settings)}`);
+          }
+        } else if (field === "customerGstin") {
+          if (show.customerGstin && order.customerGstin) doc.text(`Customer GSTIN: ${order.customerGstin}`);
+        }
       }
-      if (show.orderType) doc.text(`Order: ${orderTypeText(order)}`);
-      if (show.customerName) {
-        doc.text(
-          `Customer: ${order.customerName}` +
-            (show.customerPhone && order.customerPhone ? `  (${billPhone(order.customerPhone, settings)})` : "")
-        );
-      } else if (show.customerPhone && order.customerPhone) {
-        doc.text(`Phone: ${billPhone(order.customerPhone, settings)}`);
-      }
-      if (show.customerGstin && order.customerGstin) doc.text(`Customer GSTIN: ${order.customerGstin}`);
       const placeOfSupply = order.bill?.placeOfSupply || settings?.placeOfSupply;
       if (show.placeOfSupply && placeOfSupply) doc.text(`Place of supply: ${placeOfSupply}`);
       if (show.sac) doc.text(`SAC: ${order.bill?.sac || DEFAULT_SAC} (restaurant service)`);

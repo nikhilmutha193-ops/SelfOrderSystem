@@ -22,4 +22,6 @@ export const paymentsApi = {
     api.post<OnlineCheckout>(`/payments/orders/${orderId}/checkout`).then((res) => res.data),
   confirm: (input: RazorpayConfirmation) =>
     api.post<{ status: PaymentAttemptStatus }>("/payments/razorpay/confirm", input).then((res) => res.data),
+  confirmPaytm: (orderId: string) =>
+    api.post<{ status: PaymentAttemptStatus }>("/payments/paytm/confirm", { orderId }).then((res) => res.data),
 };

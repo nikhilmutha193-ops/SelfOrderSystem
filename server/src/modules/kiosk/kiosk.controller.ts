@@ -6,7 +6,7 @@ import { idempotencyKey, runIdempotent } from "../../core/idempotency";
 import { parse } from "../../core/validate";
 import { asyncHandler } from "../../middleware/errorHandler";
 import { IKioskDevice } from "../../models/KioskDevice";
-import { confirmCheckoutSchema } from "../payments/payments.schema";
+import { confirmCheckoutSchema, confirmPaytmSchema } from "../payments/payments.schema";
 import {
   deviceIdParams,
   deviceNameSchema,
@@ -115,6 +115,11 @@ export const startCheckout = asyncHandler(async (req: Request, res: Response) =>
 export const confirmCheckout = asyncHandler(async (req: Request, res: Response) => {
   const input = parse(confirmCheckoutSchema, req.body);
   res.json(await kiosk.confirmKioskCheckout(req.restaurantId!, deviceOf(res), input));
+});
+
+export const confirmPaytm = asyncHandler(async (req: Request, res: Response) => {
+  const input = parse(confirmPaytmSchema, req.body);
+  res.json(await kiosk.confirmKioskPaytm(req.restaurantId!, deviceOf(res), input));
 });
 
 export const pickupBoard = asyncHandler(async (req: Request, res: Response) => {

@@ -3,9 +3,11 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import QrScanner from "qr-scanner";
 
 import { todayIst } from "../../lib/istDate";
+import { BrandName } from "../../shared/ui/BrandName";
 import type {
   BookingAvailabilitySlot,
   BookingSettings,
+  RestaurantNamePart,
   TableLoginSettings,
   TableRow,
 } from "../../lib/types";
@@ -58,7 +60,7 @@ export default function TableLogin() {
   const [available, setAvailable] = useState<TableRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [brand, setBrand] = useState<{ name: string; logoUrl: string }>({
+  const [brand, setBrand] = useState<{ name: string; logoUrl: string; nameStyle?: RestaurantNamePart[] }>({
     name: "Benne Kaffi",
     logoUrl: "",
   });
@@ -102,6 +104,7 @@ export default function TableLogin() {
     api
       .get<{
         name?: string;
+        nameStyle?: RestaurantNamePart[];
         logoUrl?: string;
         serviceFlow?: string;
         tableLoginSettings?: TableLoginSettings;
@@ -109,6 +112,7 @@ export default function TableLogin() {
       .then((res) => {
         setBrand({
           name: res.data.name || "Benne Kaffi",
+          nameStyle: res.data.nameStyle,
           logoUrl: res.data.logoUrl || "",
         });
         setAllowQrScan(res.data.tableLoginSettings?.allowQrScan ?? true);
@@ -369,7 +373,9 @@ export default function TableLogin() {
                 ☕
               </span>
             )}
-            <span className="order-header__name">{brand.name}</span>
+            <span className="order-header__name">
+              <BrandName name={brand.name} parts={brand.nameStyle} />
+            </span>
           </a>
           <a className="order-header__back" href="/">
             <svg

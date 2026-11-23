@@ -1,4 +1,4 @@
-import type { OnlineCheckout } from "../../lib/types";
+import type { RazorpayOnlineCheckout } from "../../lib/types";
 import type { RazorpayConfirmation } from "./api";
 
 // Razorpay Standard Checkout (https://razorpay.com/docs/payments/payment-gateway/web-integration/standard/).
@@ -48,7 +48,7 @@ export type CheckoutOutcome =
   | { kind: "failed"; message: string };
 
 /** Opens Checkout and resolves once the guest pays, closes it, or the payment fails. */
-export async function openRazorpayCheckout(checkout: OnlineCheckout, themeColor?: string): Promise<CheckoutOutcome> {
+export async function openRazorpayCheckout(checkout: RazorpayOnlineCheckout, themeColor?: string): Promise<CheckoutOutcome> {
   await loadScript();
   const Razorpay = window.Razorpay;
   if (!Razorpay) throw new Error("Couldn't load the payment page. Please pay at the counter.");

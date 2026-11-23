@@ -5,6 +5,7 @@ import type { LandingContent, LandingData } from "../lib/types";
 import { usePublicSettings } from "../lib/usePublicSettings";
 import { api, extractErrorMessage } from "../shared/api/client";
 
+import { BrandName } from "../shared/ui/BrandName";
 import "../styles/landing/index.css";
 
 const ASSET = "/landing";
@@ -223,7 +224,9 @@ export default function Landing() {
         <div className="container header__inner">
           <a className="header__logo" href="#top" aria-label={`${restaurant.name} - home`}>
             <img className="header__logo-img" src={logo} alt="" width={48} height={48} />
-            <span className="header__logo-text">{restaurant.name}</span>
+            <span className="header__logo-text">
+              <BrandName name={restaurant.name} parts={restaurant.nameStyle} />
+            </span>
           </a>
 
           <button
@@ -301,7 +304,7 @@ export default function Landing() {
                 ...(c?.hero.showHeadline === false ? VISUALLY_HIDDEN : undefined),
               }}
             >
-              {c?.hero.headline || restaurant.name}
+              {c?.hero.headline || <BrandName name={restaurant.name} parts={restaurant.nameStyle} />}
             </h1>
             {c?.hero.showSubtitle !== false && heroSubtitle && (
               <p className="hero__subtitle" style={c?.hero.subtitleColor ? { color: c.hero.subtitleColor } : undefined}>

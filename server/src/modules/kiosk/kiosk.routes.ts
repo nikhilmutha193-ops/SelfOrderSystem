@@ -5,6 +5,7 @@ import { authLimiter } from "../../middleware/rateLimit";
 import {
   cancelOrder,
   confirmCheckout,
+  confirmPaytm,
   createDevice,
   getConfig,
   getOrder,
@@ -41,6 +42,7 @@ kioskRoutes.post("/orders/:orderId/pay-at-counter", requireKiosk, payAtCounter);
 kioskRoutes.post("/orders/:orderId/cancel", requireKiosk, cancelOrder);
 kioskRoutes.post("/orders/:orderId/checkout", requireKiosk, startCheckout);
 kioskRoutes.post("/razorpay/confirm", requireKiosk, confirmCheckout);
+kioskRoutes.post("/paytm/confirm", requireKiosk, confirmPaytm);
 
 /** The TV by the counter: order numbers only, so it needs no login. */
 export const pickupRoutes = Router();

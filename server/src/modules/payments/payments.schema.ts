@@ -6,6 +6,24 @@ export const orderIdParams = z.object({ orderId: objectId() });
 
 export const gatewaySettingsSchema = z.object({
   enabled: z.boolean({ error: "Choose whether online payment is on" }).optional(),
+  provider: z.enum(["razorpay", "paytm"], { error: "Choose Razorpay or Paytm" }).optional(),
+  paytmMid: z
+    .string({ error: "The Merchant ID must be text" })
+    .trim()
+    .regex(/^[A-Za-z0-9_-]{0,40}$/, { error: "Enter the Merchant ID exactly as the Paytm dashboard shows it" })
+    .optional(),
+  // Blank or missing keeps the saved merchant key. A Paytm key is 16 characters.
+  paytmKey: z
+    .string({ error: "The Merchant Key must be text" })
+    .trim()
+    .regex(/^(.{16})?$/, { error: "The Paytm Merchant Key is 16 characters long" })
+    .optional(),
+  paytmWebsite: z
+    .string({ error: "The website name must be text" })
+    .trim()
+    .regex(/^[A-Za-z0-9_-]{0,30}$/, { error: "Enter the website name from the Paytm dashboard, e.g. DEFAULT" })
+    .optional(),
+  paytmEnvironment: z.enum(["staging", "production"], { error: "Choose staging or production" }).optional(),
   keyId: z
     .string({ error: "Key ID must be text" })
     .trim()
@@ -28,3 +46,7 @@ export const confirmCheckoutSchema = z.object({
 });
 
 export type ConfirmCheckoutInput = z.output<typeof confirmCheckoutSchema>;
+
+export const confirmPaytmSchema = z.object({ orderId: gatewayId("The payment order") });
+
+export type ConfirmPaytmInput = z.output<typeof confirmPaytmSchema>;
