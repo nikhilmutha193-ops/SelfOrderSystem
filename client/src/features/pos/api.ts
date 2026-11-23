@@ -11,6 +11,10 @@ export interface DraftLine {
   note: string;
   isJain?: boolean;
   isPacked?: boolean;
+  /** Complimentary: priced at zero when the order is saved. */
+  complimentary?: boolean;
+  /** Why it is complimentary: required when `complimentary` is set. */
+  complimentaryReason?: string;
 }
 
 export interface CreatePosOrderInput {
@@ -36,6 +40,8 @@ export function toOrderLines(lines: DraftLine[]): NewOrderLine[] {
     note: line.note || undefined,
     isJain: line.isJain || undefined,
     isPacked: line.isPacked || undefined,
+    complimentary: line.complimentary || undefined,
+    complimentaryReason: line.complimentary ? line.complimentaryReason : undefined,
     modifiers: line.modifiers.map(({ groupName, label }) => ({
       groupName,
       label,
@@ -45,6 +51,11 @@ export function toOrderLines(lines: DraftLine[]): NewOrderLine[] {
 
 export function draftUnitPrice(line: DraftLine): number {
   return line.item.price + line.modifiers.reduce((sum, m) => sum + m.priceDelta, 0);
+}
+
+/** What the line adds to the bill: nothing when it is complimentary. */
+export function draftLineTotal(line: DraftLine): number {
+  return line.complimentary ? 0 : draftUnitPrice(line) * line.quantity;
 }
 
 export interface OfflineSyncInput {

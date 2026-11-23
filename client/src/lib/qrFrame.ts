@@ -2,7 +2,9 @@ import QRCode from "qrcode";
 
 export interface QrFrameOptions {
   orderUrl: string;
-  tableCode: string;
+  tableCode?: string;
+  /** The big line under the QR; "Table <code>" when left out. */
+  heading?: string;
   restaurantName: string;
   logoUrl?: string;
   address?: string;
@@ -44,7 +46,8 @@ function drawRoundedRect(ctx: CanvasRenderingContext2D, x: number, y: number, w:
 export async function buildTableQrFrame(options: QrFrameOptions): Promise<string> {
   const {
     orderUrl,
-    tableCode,
+    tableCode = "",
+    heading,
     restaurantName,
     logoUrl,
     address,
@@ -140,7 +143,7 @@ export async function buildTableQrFrame(options: QrFrameOptions): Promise<string
   let textY = qrY + qrSize + 70;
   ctx.fillStyle = accentColor;
   ctx.font = "bold 40px system-ui, sans-serif";
-  ctx.fillText(`Table ${tableCode}`, CANVAS_WIDTH / 2, textY);
+  ctx.fillText(heading ?? `Table ${tableCode}`, CANVAS_WIDTH / 2, textY);
 
   textY += 40;
   ctx.fillStyle = "#475569";

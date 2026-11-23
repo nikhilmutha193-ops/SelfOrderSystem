@@ -8,7 +8,8 @@ import { refundState } from "../../orders/status";
 import { Badge, Button, Input } from "../../../shared/ui/ui";
 import { WhatsAppBillButton } from "../../customers/components/CustomerPanel";
 import BillActions from "../../orders/components/BillActions";
-import { draftUnitPrice, type DraftLine } from "../api";
+import { draftLineTotal, type DraftLine } from "../api";
+import { CouponRow } from "./CouponDialog";
 
 const rupees = (n: number) => `₹${n.toFixed(2)}`;
 
@@ -157,6 +158,7 @@ export function OrderPanel({
   onDraftQuantity,
   onDraftRemove,
   onDraftEdit,
+  onDraftComplimentary,
   onTogglePacked,
   onCancelItem,
   onCancelOrder,
@@ -188,6 +190,8 @@ export function OrderPanel({
   onDraftRemove: (key: string) => void;
   /** Opens the dish dialog on a new line to change its options, Jain or spice, comment and quantity. */
   onDraftEdit?: (line: DraftLine) => void;
+  /** Staff can make a new dish complimentary (or charge for it again) before the order is saved. */
+  onDraftComplimentary?: (line: DraftLine) => void;
   /** Staff can mark a saved line to be packed (or not) while the order is open. */
   onTogglePacked?: (item: OrderItem) => void;
   /** Staff can take a saved line off the order while the kitchen has not got it yet (held takeaways, bills left to pay). */
@@ -224,10 +228,9 @@ export function OrderPanel({
   const [moreOpen, setMoreOpen] = useState(false);
   const order = detail?.order ?? null;
   const savedItems = detail?.items ?? [];
-  const draftSubtotal = draft.reduce(
-    (sum, line) => sum + draftUnitPrice(line) * line.quantity,
-    0,
-  );
+  const draftSubtotal = draft.reduce((sum, line) => sum + draftLineTotal(line), 0);
+  // One plate of a dish can be complimentary in an order: the button goes once a plate of that dish already is.
+  const freeDishes = new Set(draft.filter((l) => l.complimentary).map((l) => l.item._id));
   const unsent = savedItems.filter(
     (i) => i.kotRound == null && i.status !== "cancelled",
   ).length;
@@ -385,11 +388,13 @@ export function OrderPanel({
                 {(line.modifiers.length > 0 ||
                   line.note ||
                   line.isJain ||
-                  line.isPacked) && (
+                  line.isPacked ||
+                  line.complimentary) && (
                   <span className="block truncate text-xs text-slate-500">
                     {[
                       line.isJain ? "Jain" : "",
                       line.isPacked ? "Pack" : "",
+                      line.complimentary ? `Complimentary: ${line.complimentaryReason ?? ""}` : "",
                       ...line.modifiers.map((m) => m.label),
                       line.note,
                     ]
@@ -401,9 +406,20 @@ export function OrderPanel({
               </span>
               <span className="flex shrink-0 flex-col items-end">
                 <span className="tabular-nums">
-                  {rupees(draftUnitPrice(line) * line.quantity)}
+                  {rupees(draftLineTotal(line))}
                 </span>
                 <span className="flex gap-3">
+                  {onDraftComplimentary && !offline && (line.complimentary || !freeDishes.has(line.item._id)) && (
+                    <button
+                      type="button"
+                      aria-pressed={!!line.complimentary}
+                      aria-label={`${line.complimentary ? "Charge for" : "Make complimentary"} ${line.item.name}`}
+                      className={`text-xs font-medium hover:underline ${line.complimentary ? "text-green-700" : "text-slate-600"}`}
+                      onClick={() => onDraftComplimentary(line)}
+                    >
+                      {line.complimentary ? "Charge" : line.quantity > 1 ? "1 complimentary…" : "Complimentary…"}
+                    </button>
+                  )}
                   {onDraftEdit && (
                     <button
                       type="button"
@@ -435,9 +451,15 @@ export function OrderPanel({
         {totals && savedItems.length > 0 && (
           <>
             <Row label="Subtotal" value={rupees(totals.subtotal)} />
-            {totals.discount > 0 && (
-              <Row label="Discount" value={`−${rupees(totals.discount)}`} />
+            {order && isOpen && !offline && !paid && (
+              <CouponRow order={order} subtotal={totals.subtotal} discount={totals.couponDiscount ?? 0} />
             )}
+            {/* The coupon has its own row while the order is open; any other discount shows here. */}
+            {(() => {
+              const shown = order && isOpen && !offline && !paid ? (totals.couponDiscount ?? 0) : 0;
+              const other = totals.discount - shown;
+              return other > 0.005 ? <Row label="Discount" value={`−${rupees(other)}`} /> : null;
+            })()}
             {detail && (
               <ChargeRows
                 detail={detail}

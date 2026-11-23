@@ -260,6 +260,16 @@ export default function Tables() {
     }
   }
 
+  async function setNotifyStaff(table: TableRow, show: boolean) {
+    setError(null);
+    try {
+      await api.put(`/tables/${table._id}/notify-staff`, { show });
+      load();
+    } catch (err) {
+      setError(extractErrorMessage(err));
+    }
+  }
+
   async function assignCaptain(table: TableRow, captainId: string) {
     setError(null);
     try {
@@ -850,6 +860,7 @@ export default function Tables() {
                   <th>Status</th>
                   {areas.length > 0 && <th>Area</th>}
                   <th>Captain</th>
+                  <th>Notify staff</th>
                   <th>Expires after</th>
                   <th className="text-right">Actions</th>
                 </tr>
@@ -957,6 +968,14 @@ export default function Tables() {
                           ))}
                         </Select>
                       )}
+                    </td>
+                    <td>
+                      <Switch
+                        id={`notify-${table._id}`}
+                        aria-label={`Show notify staff buttons for table ${table.code}`}
+                        checked={table.showNotifyStaff !== false}
+                        onChange={(v) => setNotifyStaff(table, v)}
+                      />
                     </td>
                     <td>
                       {table.isGuest ? (

@@ -253,6 +253,26 @@ export async function addOrderItems(ctx: RequestContext, orderId: string, input:
     (componentIds.length ? await repo.findFoodNames(componentIds) : []).map((f) => [f._id.toString(), f.name])
   );
 
+  if (input.items.some((line) => line.complimentary)) {
+    if (ctx.auth.role !== "admin") throw new HttpError(403, "Only staff can make a dish complimentary");
+    if (input.items.some((line) => line.complimentary && line.complimentaryReason.length < 3)) {
+      throw new HttpError(400, "A reason is required to make a dish complimentary");
+    }
+    // One plate of a dish can be complimentary in an order; anything more is paid for.
+    const free = new Map<string, number>();
+    for (const item of await repo.findItems(order._id)) {
+      if (item.complimentary && item.status !== "cancelled" && item.foodItemId) {
+        free.set(item.foodItemId.toString(), (free.get(item.foodItemId.toString()) ?? 0) + item.quantity);
+      }
+    }
+    for (const line of input.items) {
+      if (!line.complimentary) continue;
+      const total = (free.get(line.foodItemId) ?? 0) + line.quantity;
+      if (total > 1) throw new HttpError(400, `Only one ${foodById.get(line.foodItemId)!.name} can be complimentary in an order`);
+      free.set(line.foodItemId, total);
+    }
+  }
+
   const created = [];
   for (const line of input.items) {
     const food = foodById.get(line.foodItemId)!;
@@ -276,7 +296,9 @@ export async function addOrderItems(ctx: RequestContext, orderId: string, input:
       foodName: food.name,
       unitPrice,
       quantity: line.quantity,
-      total: round2(unitPrice * line.quantity),
+      total: line.complimentary ? 0 : round2(unitPrice * line.quantity),
+      complimentary: !!line.complimentary,
+      complimentaryReason: line.complimentary ? line.complimentaryReason : undefined,
       isJain: !!line.isJain,
       isPacked: packed,
       modifiers: chosen,
@@ -290,6 +312,13 @@ export async function addOrderItems(ctx: RequestContext, orderId: string, input:
       categoryName: categoryName.get(food.categoryId.toString()),
     });
     created.push(orderItem);
+    if (line.complimentary) {
+      await writeAudit(
+        ctx,
+        "orderItem.complimentary",
+        `Added "${food.name}" x${line.quantity} as complimentary (₹${round2(unitPrice * line.quantity).toFixed(2)}): ${line.complimentaryReason}`
+      );
+    }
   }
 
   await refreshCouponDiscount(repo, order);

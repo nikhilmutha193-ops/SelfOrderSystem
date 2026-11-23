@@ -18,6 +18,30 @@ export interface SaveResult {
 const sameModifiers = (a: SelectedModifier[], b: SelectedModifier[]) =>
   a.length === b.length && a.every((m, i) => m.groupName === b[i].groupName && m.label === b[i].label);
 
+/** The same dish with the same choices, apart from whether it is on the house. */
+const sameChoices = (a: DraftLine, b: DraftLine) =>
+  a.item._id === b.item._id &&
+  a.note === b.note &&
+  !!a.isJain === !!b.isJain &&
+  !!a.isPacked === !!b.isPacked &&
+  sameModifiers(a.modifiers, b.modifiers);
+
+/**
+ * Only one plate of a dish can be on the house in an order. A free line therefore never holds more than one: the
+ * rest of what was asked for is added to the paid line of the same dish (made if there is none yet).
+ */
+function withPaidRest(lines: DraftLine[], free: DraftLine, rest: number): DraftLine[] {
+  if (rest <= 0) return lines;
+  const paid = lines.find((l) => l !== free && !l.complimentary && sameChoices(l, free));
+  if (paid) return lines.map((l) => (l === paid ? { ...l, quantity: l.quantity + rest } : l));
+  const at = lines.indexOf(free);
+  return [
+    ...lines.slice(0, at + 1),
+    { ...free, key: newId(), quantity: rest, complimentary: false, complimentaryReason: undefined },
+    ...lines.slice(at + 1),
+  ];
+}
+
 /**
  * Ranks a dish against the typed term so the best match lands first - what Enter adds and what
  * appears at the top of the grid while searching. Exact short code beats a short code prefix
@@ -109,6 +133,7 @@ export function usePosCart() {
           l.note === note &&
           !!l.isJain === isJain &&
           !!l.isPacked === isPacked &&
+          !l.complimentary &&
           sameModifiers(l.modifiers, modifiers)
       );
       if (same) return lines.map((l) => (l === same ? { ...l, quantity: l.quantity + quantity } : l));
@@ -117,11 +142,14 @@ export function usePosCart() {
   }
 
   function changeQuantity(key: string, delta: number) {
-    setDraft((lines) =>
-      lines.flatMap((l) =>
+    setDraft((lines) => {
+      const line = lines.find((l) => l.key === key);
+      // One plate is free; asking for another one adds a paid plate.
+      if (line?.complimentary && delta > 0) return withPaidRest(lines, line, delta);
+      return lines.flatMap((l) =>
         l.key !== key ? [l] : l.quantity + delta <= 0 ? [] : [{ ...l, quantity: l.quantity + delta }]
-      )
-    );
+      );
+    });
   }
 
   /** Replaces what was chosen for a draft line (quantity, options, Jain, spice and comment, pack). */
@@ -133,7 +161,47 @@ export function usePosCart() {
     isJain = false,
     isPacked = false
   ) {
-    setDraft((lines) => lines.map((l) => (l.key === key ? { ...l, quantity, modifiers, note, isJain, isPacked } : l)));
+    setDraft((lines) => {
+      const edited = lines.map((l) =>
+        l.key === key
+          ? { ...l, quantity: l.complimentary ? 1 : quantity, modifiers, note, isJain, isPacked }
+          : l
+      );
+      const line = edited.find((l) => l.key === key);
+      return line?.complimentary ? withPaidRest(edited, line, quantity - 1) : edited;
+    });
+  }
+
+  /**
+   * Staff can give one plate of a new dish on the house (a reason is required) or take it back before the order is
+   * saved. With two or more on the line, one becomes free and the rest stay payable.
+   */
+  function toggleComplimentary(key: string, reason = "") {
+    setDraft((lines) => {
+      const line = lines.find((l) => l.key === key);
+      if (!line) return lines;
+      if (line.complimentary) {
+        // Taking it back: join the paid line of the same dish, or just start charging for it.
+        const paid = lines.find((l) => l !== line && !l.complimentary && sameChoices(l, line));
+        if (paid) {
+          return lines.filter((l) => l !== line).map((l) => (l === paid ? { ...l, quantity: l.quantity + line.quantity } : l));
+        }
+        return lines.map((l) => (l === line ? { ...l, complimentary: false, complimentaryReason: undefined } : l));
+      }
+      if (reason.trim().length < 3) return lines;
+      if (lines.some((l) => l.complimentary && l.item._id === line.item._id)) return lines;
+      if (line.quantity > 1) {
+        const free: DraftLine = {
+          ...line,
+          key: newId(),
+          quantity: 1,
+          complimentary: true,
+          complimentaryReason: reason.trim(),
+        };
+        return lines.flatMap((l) => (l === line ? [{ ...l, quantity: l.quantity - 1 }, free] : [l]));
+      }
+      return lines.map((l) => (l === line ? { ...l, complimentary: true, complimentaryReason: reason.trim() } : l));
+    });
   }
 
   function removeLine(key: string) {
@@ -182,6 +250,7 @@ export function usePosCart() {
     addLine,
     changeQuantity,
     updateLine,
+    toggleComplimentary,
     removeLine,
     save,
     bill,

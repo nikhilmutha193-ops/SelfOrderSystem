@@ -40,6 +40,9 @@ export interface NewOrderLine {
   note?: string;
   isJain?: boolean;
   isPacked?: boolean;
+  /** Staff only: the dish is on the house. */
+  complimentary?: boolean;
+  complimentaryReason?: string;
   modifiers?: { groupName: string; label: string }[];
 }
 

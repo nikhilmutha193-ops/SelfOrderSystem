@@ -83,6 +83,13 @@ const orderLineSchema = z.object({
     .min(1, { error: "quantity must be at least 1" }),
   isJain: z.boolean().nullish(),
   isPacked: z.boolean().nullish(),
+  /** Staff only: the dish is on the house. It is priced at zero and its value is kept for the reports. */
+  complimentary: z.boolean().nullish(),
+  /** Why the dish is on the house: required whenever `complimentary` is set. */
+  complimentaryReason: z
+    .string()
+    .nullish()
+    .transform((value) => (value ?? "").trim().slice(0, 200)),
   note: z
     .string()
     .nullish()

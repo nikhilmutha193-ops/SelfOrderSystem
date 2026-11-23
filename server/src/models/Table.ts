@@ -15,6 +15,8 @@ export interface ITable {
   autoReleaseMinutes?: number | null;
   captainId?: Types.ObjectId | null;
   areaId?: Types.ObjectId | null;
+  /** Whether guests at this table see the "Need something? Tap to notify staff" buttons. */
+  showNotifyStaff?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -32,6 +34,7 @@ const tableSchema = new Schema<ITable>(
     autoReleaseMinutes: { type: Number, default: null, min: 0 },
     captainId: { type: Schema.Types.ObjectId, ref: "Admin", default: null },
     areaId: { type: Schema.Types.ObjectId, default: null },
+    showNotifyStaff: { type: Boolean, default: true },
   },
   { timestamps: true }
 );

@@ -90,7 +90,7 @@ export default function PublicBill() {
                 {item.quantity} × {item.foodName}
                 {display.showJainTag && item.isJain && " (Jain)"}
                 {display.showUnitPrice && <span className="text-slate-400"> @ {rupees(item.unitPrice)}</span>}
-                {item.complimentary && <span className="text-green-700"> (complimentary)</span>}
+                {item.complimentary && <span className="block text-xs italic text-green-700">Complimentary</span>}
               </span>
               <span className="tabular-nums">{rupees(item.total)}</span>
             </li>

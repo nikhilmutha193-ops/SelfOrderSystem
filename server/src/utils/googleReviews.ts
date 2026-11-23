@@ -11,6 +11,14 @@ export interface GoogleReview {
 interface Cache {
   data: GoogleReview[];
   fetchedAt: number;
+  /** What the data was fetched with, so a changed key or place fetches again. */
+  forKey: string;
+}
+
+export interface GoogleReviewsSource {
+  apiKey: string;
+  /** A Google Maps data ID (0x...:0x...) or a place ID (ChIJ...). */
+  placeId: string;
 }
 
 interface SerpApiReviewEntry {
@@ -24,13 +32,16 @@ interface SerpApiReviewEntry {
 const CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 
 // 12 hours, to stay within SerpApi's rate limits/cost
-let cache: Cache | null = null;
+const caches = new Map<string, Cache>();
 
-export async function getGoogleReviews(): Promise<GoogleReview[]> {
-  const apiKey = process.env.SERPAPI_API_KEY;
-  const placeId = process.env.GOOGLE_PLACE_ID;
+export async function getGoogleReviews(
+  source: GoogleReviewsSource = { apiKey: process.env.SERPAPI_API_KEY ?? "", placeId: process.env.GOOGLE_PLACE_ID ?? "" }
+): Promise<GoogleReview[]> {
+  const { apiKey, placeId } = source;
   if (!apiKey || !placeId) return [];
 
+  const forKey = `${apiKey}|${placeId}`;
+  const cache = caches.get(forKey);
   if (cache && Date.now() - cache.fetchedAt < CACHE_TTL_MS) {
     return cache.data;
   }
@@ -38,7 +49,8 @@ export async function getGoogleReviews(): Promise<GoogleReview[]> {
   try {
     const url = new URL("https://serpapi.com/search.json");
     url.searchParams.set("engine", "google_maps_reviews");
-    url.searchParams.set("data_id", placeId);
+    // A place ID looks like ChIJ...; a data ID like 0x3bae...:0x...
+    url.searchParams.set(placeId.startsWith("ChIJ") ? "place_id" : "data_id", placeId);
     url.searchParams.set("api_key", apiKey);
 
     const response = await fetch(url.toString());
@@ -56,10 +68,10 @@ export async function getGoogleReviews(): Promise<GoogleReview[]> {
         profilePhotoUrl: r.user?.thumbnail,
       }));
 
-    cache = { data: reviews, fetchedAt: Date.now() };
+    caches.set(forKey, { data: reviews, fetchedAt: Date.now(), forKey });
     return reviews;
   } catch (err) {
     logger.error("Failed to fetch Google reviews from SerpApi", describeError(err));
-    return cache?.data ?? [];
+    return caches.get(forKey)?.data ?? [];
   }
 }

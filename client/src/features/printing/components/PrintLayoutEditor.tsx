@@ -12,6 +12,7 @@ import {
   type ResolvedLayout,
   type TextSize,
 } from "../layout";
+import { ThermalTicket, type ThermalPreview } from "./ThermalTicket";
 
 interface Props {
   title: string;
@@ -21,7 +22,10 @@ interface Props {
   layouts: PrintLayouts | undefined;
   resolve: (paper: PaperKey) => ResolvedLayout;
   onChange: (layouts: PrintLayouts) => void;
-  /** POST endpoint that returns a PDF made from the unsaved settings and sample data. */
+  /**
+   * POST endpoint that returns a PDF made from the unsaved settings and sample data. The same path with "-thermal"
+   * added returns what a thermal printer prints (for the 58 mm and 80 mm rolls).
+   */
   previewPath: string;
   /** The form's current, unsaved values the preview is drawn from. */
   previewBody: () => Record<string, unknown>;
@@ -47,6 +51,10 @@ export function PrintLayoutEditor({
 }: Props) {
   const [paper, setPaper] = useState<PaperKey>(initialPaper);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [thermal, setThermal] = useState<ThermalPreview | null>(null);
+  // A roll is shown as the thermal printer prints it; the page-sized PDF is one tab away.
+  const [view, setView] = useState<"thermal" | "pdf">("thermal");
+  const [shown, setShown] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const lastUrl = useRef<string | null>(null);
@@ -64,15 +72,21 @@ export function PrintLayoutEditor({
     onChange({ ...layouts, [paper]: patch(current) });
   }
 
-  async function preview(forPaper: PaperKey = paper) {
+  async function preview(forPaper: PaperKey = paper, forView: "thermal" | "pdf" = view) {
     setError(null);
     setLoading(true);
     try {
-      const res = await api.post(previewPath, { ...previewBody(), paper: forPaper }, { responseType: "blob" });
-      const url = URL.createObjectURL(res.data);
-      if (lastUrl.current) URL.revokeObjectURL(lastUrl.current);
-      lastUrl.current = url;
-      setPreviewUrl(url);
+      if (forView === "thermal" && forPaper !== "page") {
+        const res = await api.post<ThermalPreview>(`${previewPath}-thermal`, { ...previewBody(), paper: forPaper });
+        setThermal(res.data);
+      } else {
+        const res = await api.post(previewPath, { ...previewBody(), paper: forPaper }, { responseType: "blob" });
+        const url = URL.createObjectURL(res.data);
+        if (lastUrl.current) URL.revokeObjectURL(lastUrl.current);
+        lastUrl.current = url;
+        setPreviewUrl(url);
+      }
+      setShown(true);
     } catch (err) {
       setError(extractErrorMessage(err));
     } finally {
@@ -83,8 +97,16 @@ export function PrintLayoutEditor({
   function choosePaper(next: PaperKey) {
     setPaper(next);
     // Keep the preview on the same paper as the controls once one has been shown.
-    if (previewUrl) void preview(next);
+    if (shown) void preview(next);
   }
+
+  function chooseView(next: "thermal" | "pdf") {
+    setView(next);
+    if (shown) void preview(paper, next);
+  }
+
+  const onRoll = paper !== "page";
+  const showThermal = onRoll && view === "thermal";
 
   const hasOverrides = !!layouts?.[paper] && (Object.keys(layouts[paper]?.show ?? {}).length > 0 || Object.keys(layouts[paper]?.fonts ?? {}).length > 0);
 
@@ -178,9 +200,26 @@ export function PrintLayoutEditor({
         </div>
 
         <div className="min-w-0 lg:sticky lg:top-24">
-          <p className="mb-1 text-xs font-semibold tracking-wide text-slate-500 uppercase">Preview</p>
+          <div className="mb-1 flex items-center justify-between gap-2">
+            <p className="text-xs font-semibold tracking-wide text-slate-500 uppercase">Preview</p>
+            {onRoll && (
+              <Tabs
+                size="sm"
+                value={view}
+                onChange={(v) => chooseView(v as "thermal" | "pdf")}
+                items={[
+                  { value: "thermal", label: "Thermal printout" },
+                  { value: "pdf", label: "Paper (PDF)" },
+                ]}
+              />
+            )}
+          </div>
           {error && <Alert tone="error">{error}</Alert>}
-          {previewUrl ? (
+          {showThermal && thermal ? (
+            <div className="max-h-[36rem] overflow-auto rounded-xl border border-slate-200 bg-slate-100 p-3">
+              <ThermalTicket preview={thermal} />
+            </div>
+          ) : !showThermal && previewUrl ? (
             <iframe
               title={`${title} preview`}
               src={previewUrl}
@@ -188,8 +227,8 @@ export function PrintLayoutEditor({
             />
           ) : (
             <div className="flex h-48 items-center justify-center rounded-xl border border-dashed border-slate-300 px-4 text-center text-sm text-slate-500">
-              Press "Preview with sample data" to see this paper here, using made-up dishes and amounts. Nothing is
-              printed or saved.
+              Press "Preview with sample data" to see this paper here, using made-up dishes and amounts. A 58 or 80 mm
+              roll is shown as the thermal printer prints it. Nothing is printed or saved.
             </div>
           )}
           <p className="mt-2 text-xs text-slate-500">

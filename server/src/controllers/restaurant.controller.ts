@@ -22,6 +22,10 @@ import { HttpError } from "../utils/httpError";
 import { computeInvoiceTotals } from "../utils/invoice";
 import { financialYearLabel, INVOICE_PREFIX_PATTERN } from "../utils/invoiceNumber";
 import { seedLandingContent } from "../utils/landingSeed";
+import { renderBill, renderKot } from "../modules/printing/printing.render";
+import { charsPerLine } from "../utils/escpos";
+import { toBitmap } from "../utils/escposImage";
+import { decodeEscPos } from "../utils/escposPreview";
 import { resolveLogoBuffer, streamInvoicePdf, streamKotPdf } from "../utils/pdf";
 import { cleanLayouts, INVOICE_FONTS, INVOICE_SHOW, KOT_FONTS, KOT_SHOW, PaperKey } from "../utils/printLayout";
 
@@ -443,7 +447,8 @@ export const updateRestaurantSettings = asyncHandler(async (req: Request, res: R
   res.json(restaurant);
 });
 
-export const previewKotPdf = asyncHandler(async (req: Request, res: Response) => {
+/** The restaurant, order and dishes the kitchen ticket preview is drawn from (the unsaved settings, sample data). */
+async function kotPreviewData(req: Request) {
   const { name, logoUrl, kotSettings, paper } = req.body as {
     name?: string;
     logoUrl?: string;
@@ -454,12 +459,16 @@ export const previewKotPdf = asyncHandler(async (req: Request, res: Response) =>
   const restaurant = await buildPreviewRestaurant(req, { name, logoUrl, kotSettings: cleaned });
   const paperSize = previewPaperSize(paper, restaurant.kotSettings?.paperSize);
   if (paperSize) restaurant.kotSettings = { ...restaurant.kotSettings, paperSize };
-  const order = buildSampleOrder();
-  const items = SAMPLE_ITEMS as unknown as IOrderItem[];
-  await streamKotPdf(res, { restaurant, order, round: 1, items, tableCode: "5", tokenNumber: 12 });
-});
+  return {
+    restaurant,
+    order: buildSampleOrder(),
+    items: SAMPLE_ITEMS as unknown as IOrderItem[],
+    paperSize: paperSize ?? restaurant.kotSettings?.paperSize,
+  };
+}
 
-export const previewInvoicePdf = asyncHandler(async (req: Request, res: Response) => {
+/** The same for the invoice: a billed sample with a coupon, charges and a payment, so every detail can be checked. */
+async function invoicePreviewData(req: Request) {
   const { name, logoUrl, address, gstin, fssaiLicense, taxRates, invoiceSettings, paper } = req.body as {
     name?: string;
     logoUrl?: string;
@@ -489,7 +498,6 @@ export const previewInvoicePdf = asyncHandler(async (req: Request, res: Response
   if (!restaurant.address) restaurant.address = "123 Main Street, Your City";
   if (!restaurant.gstin) restaurant.gstin = "29ABCDE1234F1Z5";
   if (!restaurant.fssaiLicense) restaurant.fssaiLicense = "12345678901234";
-  // A billed sample with a coupon, charges and a payment, so every detail can be switched on and off in the preview.
   const order = {
     ...buildSampleOrder(restaurant.invoiceSettings?.invoicePrefix),
     status: "billed",
@@ -509,7 +517,55 @@ export const previewInvoicePdf = asyncHandler(async (req: Request, res: Response
   if (!restaurant.billingSettings?.upiVpa) {
     restaurant.billingSettings = { ...restaurant.billingSettings, upiVpa: "restaurant@upi" };
   }
+  return { restaurant, order, items, totals, paperSize: paperSize ?? restaurant.invoiceSettings?.paperSize };
+}
+
+export const previewKotPdf = asyncHandler(async (req: Request, res: Response) => {
+  const { restaurant, order, items } = await kotPreviewData(req);
+  await streamKotPdf(res, { restaurant, order, round: 1, items, tableCode: "5", tokenNumber: 12 });
+});
+
+export const previewInvoicePdf = asyncHandler(async (req: Request, res: Response) => {
+  const { restaurant, order, items, totals } = await invoicePreviewData(req);
   await streamInvoicePdf(res, { restaurant, order, items, totals, preview: true });
+});
+
+const thermalWidth = (paperSize: PrintPaperSize | undefined): 58 | 80 => (paperSize === "thermal58" ? 58 : 80);
+
+/** What the kitchen ticket looks like on a thermal printer: the printer's own bytes, read back into styled lines. */
+export const previewKotThermal = asyncHandler(async (req: Request, res: Response) => {
+  const { restaurant, items, paperSize } = await kotPreviewData(req);
+  const paperWidth = thermalWidth(paperSize);
+  const bytes = renderKot({
+    restaurant,
+    orderLabel: "Table 5",
+    customerName: "Sample Customer",
+    tokenNumber: 12,
+    round: 1,
+    items: items as never,
+    printedAt: new Date(),
+    paperWidth,
+  });
+  res.json({ columns: charsPerLine(paperWidth), lines: decodeEscPos(bytes) });
+});
+
+export const previewInvoiceThermal = asyncHandler(async (req: Request, res: Response) => {
+  const { restaurant, order, items, totals, paperSize } = await invoicePreviewData(req);
+  const paperWidth = thermalWidth(paperSize);
+  const logoFile = restaurant.invoiceSettings?.showLogo !== false ? await resolveLogoBuffer(restaurant.logoUrl) : null;
+  const vpa = restaurant.billingSettings?.upiVpa ?? "restaurant@upi";
+  const bytes = renderBill({
+    restaurant,
+    order,
+    orderLabel: "Dine-in · Table 5",
+    items: items as never,
+    tokenText: "Token 12",
+    totals,
+    upiLink: `upi://pay?pa=${encodeURIComponent(vpa)}&pn=${encodeURIComponent(restaurant.name)}&am=${totals.grandTotal.toFixed(2)}&cu=INR&tn=${encodeURIComponent(order.invoiceNumber ?? "")}`,
+    logo: logoFile ? toBitmap(logoFile, paperWidth === 58 ? 160 : 224, 140) : null,
+    paperWidth,
+  });
+  res.json({ columns: charsPerLine(paperWidth), lines: decodeEscPos(bytes) });
 });
 
 export const seedLandingSampleContent = asyncHandler(async (req: Request, res: Response) => {

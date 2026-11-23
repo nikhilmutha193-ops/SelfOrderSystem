@@ -127,7 +127,9 @@ export function toOfflineLines(draft: DraftLine[]): OfflineLine[] {
     foodItemId: line.item._id,
     name: line.item.name,
     quantity: line.quantity,
-    unitPrice: draftUnitPrice(line),
+    // On the house: nothing to pay. (The server prices it normally unless staff mark it free there, so a sale
+    // synced later may be held for a check.)
+    unitPrice: line.complimentary ? 0 : draftUnitPrice(line),
     modifiers: line.modifiers,
     note: line.note,
     isJain: line.isJain || undefined,

@@ -255,6 +255,8 @@ export interface TableRow {
   autoReleaseMinutes?: number | null;
   captainId?: string | null;
   areaId?: string | null;
+  /** Guests at this table see the notify-staff buttons (on unless switched off). */
+  showNotifyStaff?: boolean;
   /** The statuses staff may set by hand right now, given the table's orders. */
   allowedStatuses?: TableStatus[];
 }
@@ -675,6 +677,10 @@ export interface Review {
   rating: number;
   comment: string;
   isApproved: boolean;
+  /** Who sent it: a table guest, the feedback QR, or Google. */
+  source?: "table" | "qr" | "google";
+  phone?: string;
+  relativeDate?: string;
   createdAt: string;
 }
 
@@ -787,7 +793,19 @@ export interface LandingContent {
     enabled: boolean;
     eyebrow: string;
     title: string;
-    items: { city: string; area: string; address: string; hours: string; mapUrl: string; comingSoon: boolean }[];
+    showOrderCard: boolean;
+    orderCardEyebrow: string;
+    orderCardTitle: string;
+    orderCardText: string;
+    items: {
+      city: string;
+      area: string;
+      address: string;
+      hours: string;
+      mapUrl: string;
+      comingSoon: boolean;
+      hidden?: boolean;
+    }[];
   };
   reels: {
     enabled: boolean;

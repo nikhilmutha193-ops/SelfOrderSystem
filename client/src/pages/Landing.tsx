@@ -143,6 +143,11 @@ export default function Landing() {
   const serveItems = c?.serve.items.length ? c.serve.items : FALLBACK_SERVE;
   const heroSubtitle = c?.hero.subtitle || restaurant.tagline || "";
   const storyText = c?.story.text || restaurant.aboutText || "";
+  // The story is written as paragraphs: a new line starts a new one.
+  const storyParagraphs = storyText
+    .split(/\n+/)
+    .map((p) => p.trim())
+    .filter(Boolean);
   const storyTitle = c?.story.title || (founder ? `Meet ${joinNames(owners.map((o) => o.name))}` : "Our journey");
   // One photo for the story; with several owners and no photo chosen in the admin, each owner shows with their own.
   const storyImage = c?.story.imageUrl || (manyOwners ? "" : founder?.photoUrl) || "";
@@ -152,7 +157,8 @@ export default function Landing() {
     : owners
         .filter((o) => o.bio)
         .map((o) => ({ text: o.bio ?? "", cite: `${o.name}${o.title ? `, ${o.title}` : ""}` }));
-  const outletItems = c?.outlets.items ?? [];
+  const outletItems = (c?.outlets.items ?? []).filter((o) => !o.hidden);
+  const showOrderCard = c?.outlets.showOrderCard !== false;
 
   const heroClassName = [
     "hero",
@@ -466,7 +472,11 @@ export default function Landing() {
                 <h2 className="section__title" id="story-title">
                   {storyTitle}
                 </h2>
-                {storyText && <p className="story__text">{storyText}</p>}
+                {storyParagraphs.map((paragraph, i) => (
+                  <p className="story__text" key={i}>
+                    {paragraph}
+                  </p>
+                ))}
                 {storyQuotes.map((quote) => (
                   <blockquote className="story__quote" key={quote.cite + quote.text}>
                     {quote.text}
@@ -593,18 +603,21 @@ export default function Landing() {
                       </li>
                     )}
 
-                <li className="outlet-card outlet-card--soon">
-                  <p className="outlet-card__city">Dining in?</p>
-                  <h3 className="outlet-card__area">Order from your table</h3>
-                  <p className="outlet-card__address">
-                    Scan the QR code on your table to browse the menu and order without waiting.
-                  </p>
-                  {showOrder && (
-                    <Link className="btn btn--primary btn--block" to="/order">
-                      Start Ordering
-                    </Link>
-                  )}
-                </li>
+                {showOrderCard && (
+                  <li className="outlet-card outlet-card--soon">
+                    <p className="outlet-card__city">{c?.outlets.orderCardEyebrow ?? "Dining in?"}</p>
+                    <h3 className="outlet-card__area">{c?.outlets.orderCardTitle ?? "Order from your table"}</h3>
+                    <p className="outlet-card__address">
+                      {c?.outlets.orderCardText ??
+                        "Scan the QR code on your table to browse the menu and order without waiting."}
+                    </p>
+                    {showOrder && (
+                      <Link className="btn btn--primary btn--block" to="/order">
+                        Start Ordering
+                      </Link>
+                    )}
+                  </li>
+                )}
               </ul>
             </div>
           </section>

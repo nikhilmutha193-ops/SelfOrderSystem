@@ -8,7 +8,7 @@ import PromoBanner from "../models/PromoBanner";
 import Restaurant from "../models/Restaurant";
 import Review from "../models/Review";
 import TeamMember from "../models/TeamMember";
-import { getGoogleReviews } from "../utils/googleReviews";
+import { syncGoogleReviewsIfStale } from "../utils/reviewSync";
 import { HttpError } from "../utils/httpError";
 import { getOrCreateLandingContent } from "./landingContent.controller";
 
@@ -25,7 +25,9 @@ function groupByCategory(items: { categoryId: { toString(): string }; name: stri
 }
 
 export const getLandingPage = asyncHandler(async (req: Request, res: Response) => {
-  const [restaurant, team, bestsellers, todaySpecialItems, categories, banners, reviews, awards, googleReviews, content] =
+  // Google reviews are copied into the review list (each once), so the admin can hide any of them by hand.
+  await syncGoogleReviewsIfStale(req.restaurantId!);
+  const [restaurant, team, bestsellers, todaySpecialItems, categories, banners, reviews, awards, googleDocs, content] =
     await Promise.all([
       Restaurant.findById(req.restaurantId).select("name tagline aboutText heroImages logoUrl address"),
       TeamMember.find({ restaurantId: req.restaurantId, isActive: true }).sort({ sortOrder: 1, createdAt: 1 }),
@@ -33,14 +35,25 @@ export const getLandingPage = asyncHandler(async (req: Request, res: Response) =
       FoodItem.find({ restaurantId: req.restaurantId, isActive: true, isTodaySpecial: true }).sort({ name: 1 }),
       Category.find({ restaurantId: req.restaurantId, isActive: true }).sort({ name: 1 }),
       PromoBanner.find({ restaurantId: req.restaurantId, isActive: true }).sort({ sortOrder: 1, createdAt: 1 }),
-      Review.find({ restaurantId: req.restaurantId, isApproved: true }).sort({ createdAt: -1 }).limit(20),
+      Review.find({ restaurantId: req.restaurantId, isApproved: true, source: { $ne: "google" } })
+        .sort({ createdAt: -1 })
+        .limit(20),
       Award.find({ restaurantId: req.restaurantId, isActive: true }).sort({ sortOrder: 1, createdAt: 1 }),
-      getGoogleReviews(),
+      Review.find({ restaurantId: req.restaurantId, isApproved: true, source: "google" })
+        .sort({ createdAt: -1 })
+        .limit(20),
       getOrCreateLandingContent(req.restaurantId!),
     ]);
   if (!restaurant) throw new HttpError(404, "Restaurant not found");
 
   const todaySpecials = groupByCategory(todaySpecialItems, categories);
+  const googleReviews = googleDocs.map((r) => ({
+    author: r.customerName,
+    rating: r.rating,
+    text: r.comment,
+    relativeDate: r.relativeDate,
+    profilePhotoUrl: r.profilePhotoUrl,
+  }));
 
   res.json({ restaurant, team, bestsellers, todaySpecials, banners, reviews, awards, googleReviews, content });
 });

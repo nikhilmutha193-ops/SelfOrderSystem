@@ -6,6 +6,8 @@ import {
   getRestaurantPublic,
   getRestaurantSettings,
   previewInvoicePdf,
+  previewInvoiceThermal,
+  previewKotThermal,
   previewKotPdf,
   seedLandingSampleContent,
   updateRestaurantSettings,
@@ -21,6 +23,8 @@ router.get("/settings", requireAuth("admin"), requireModule("settings"), getRest
 router.put("/settings", requireAuth("admin"), requireModule("settings"), updateRestaurantSettings);
 router.post("/kot-preview", requireAuth("admin"), requireModule("settings"), previewKotPdf);
 router.post("/invoice-preview", requireAuth("admin"), requireModule("settings"), previewInvoicePdf);
+router.post("/kot-preview-thermal", requireAuth("admin"), requireModule("settings"), previewKotThermal);
+router.post("/invoice-preview-thermal", requireAuth("admin"), requireModule("settings"), previewInvoiceThermal);
 router.post("/seed-landing", requireAuth("admin"), requireModule("settings"), seedLandingSampleContent);
 router.get("/landing-content", requireAuth("admin"), requireModule("landing"), getLandingContent);
 router.put("/landing-content", requireAuth("admin"), requireModule("landing"), updateLandingContent);

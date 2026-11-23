@@ -9,6 +9,7 @@ import QRCode from "qrcode";
 import { IOrder } from "../models/Order";
 import { IOrderItem } from "../models/OrderItem";
 import { IRestaurant, PrintPaperSize } from "../models/Restaurant";
+import { mergeKotLines } from "./kotLines";
 import { InvoiceTotals } from "./invoice";
 import { kotTicketKey, kotTicketLabel } from "./kotGroups";
 import { DEFAULT_SAC } from "./invoiceNumber";
@@ -354,11 +355,7 @@ export async function streamInvoicePdf(
         0,
         ...items
           .filter((i) => i.status !== "cancelled")
-          .map((i) =>
-            doc.widthOfString(
-              i.foodName + (showJainTag && i.isJain ? " (Jain)" : "") + (i.complimentary ? " (complimentary)" : "")
-            )
-          )
+          .map((i) => doc.widthOfString(i.foodName + (showJainTag && i.isJain ? " (Jain)" : "")))
       );
       const qtyMin = Math.max(widest(["Qty"], true), widest(["99"]));
       const priceMin = Math.max(widest(["Price"], true), widest(["9999.99"]));
@@ -398,10 +395,7 @@ export async function streamInvoicePdf(
       drawSeparator(doc, x0, usableWidth);
 
       for (const item of items.filter((i) => i.status !== "cancelled")) {
-        const name =
-          item.foodName +
-          (showJainTag && item.isJain ? " (Jain)" : "") +
-          (item.complimentary ? " (complimentary)" : "");
+        const name = item.foodName + (showJainTag && item.isJain ? " (Jain)" : "");
         const rowCols: Column[] = showUnitPrice
           ? [
               { text: name, width: cols[0].width },
@@ -415,6 +409,13 @@ export async function streamInvoicePdf(
               { text: item.total.toFixed(2), width: cols[2].width, align: "right" },
             ];
         y = drawRow(doc, x0, doc.y, rowCols);
+        if (item.complimentary) {
+          // The mark sits under the dish, not on the kitchen ticket.
+          doc.fontSize(Math.max(fz("items", 10) - 2, 6)).font("Helvetica-Oblique");
+          doc.text("Complimentary", x0, y, { width: cols[0].width });
+          y = doc.y;
+          doc.font("Helvetica").fontSize(fz("items", 10));
+        }
         doc.y = y + 3;
       }
 
@@ -700,7 +701,8 @@ export async function streamKotPdf(
     doc.y = y + 3;
     drawSeparator(doc, x0, usableWidth);
 
-    items.forEach((item, idx) => {
+    // A paid and a complimentary plate of the same dish are cooked together: one line (unless prices are shown).
+    mergeKotLines(items, { keepComplimentary: showPrices }).forEach((item, idx) => {
       const name =
         item.foodName + (showTags && item.isJain ? " (Jain)" : "") + (showTags && item.isPacked ? " (PACK)" : "");
       const rowCols: Column[] = showPrices

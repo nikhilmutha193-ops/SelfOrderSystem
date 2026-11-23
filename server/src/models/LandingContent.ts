@@ -66,6 +66,11 @@ export interface ILandingContent {
     enabled: boolean;
     eyebrow: string;
     title: string;
+    /** The "Dining in? Order from your table" card that sits after the outlets. */
+    showOrderCard: boolean;
+    orderCardEyebrow: string;
+    orderCardTitle: string;
+    orderCardText: string;
     items: {
       city: string;
       area: string;
@@ -73,6 +78,8 @@ export interface ILandingContent {
       hours: string;
       mapUrl: string;
       comingSoon: boolean;
+      /** Kept in the admin but not shown on the page. */
+      hidden: boolean;
     }[];
   };
 
@@ -172,6 +179,13 @@ const landingContentSchema = new Schema<ILandingContent>(
       enabled: { type: Boolean, default: true },
       eyebrow: { type: String, default: "Visit Us" },
       title: { type: String, default: "Find us" },
+      showOrderCard: { type: Boolean, default: true },
+      orderCardEyebrow: { type: String, default: "Dining in?" },
+      orderCardTitle: { type: String, default: "Order from your table" },
+      orderCardText: {
+        type: String,
+        default: "Scan the QR code on your table to browse the menu and order without waiting.",
+      },
       items: {
         type: [
           new Schema(
@@ -182,6 +196,7 @@ const landingContentSchema = new Schema<ILandingContent>(
               hours: String,
               mapUrl: String,
               comingSoon: { type: Boolean, default: false },
+              hidden: { type: Boolean, default: false },
             },
             { _id: false }
           ),

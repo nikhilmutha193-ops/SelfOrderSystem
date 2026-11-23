@@ -4,6 +4,7 @@ import { IRestaurant } from "../../models/Restaurant";
 import { charsPerLine, EscPos } from "../../utils/escpos";
 import { qrBitmap, type Bitmap } from "../../utils/escposImage";
 import { InvoiceTotals } from "../../utils/invoice";
+import { mergeKotLines } from "../../utils/kotLines";
 import { billPhone } from "../../utils/phone";
 import { paperKeyFor, resolveInvoiceLayout, resolveKotLayout, TextSize } from "../../utils/printLayout";
 
@@ -87,7 +88,7 @@ export function renderKot(ticket: KotTicket): Buffer {
   else p.line(`Round ${ticket.round}`);
   p.divider();
 
-  for (const item of ticket.items) {
+  for (const item of mergeKotLines(ticket.items)) {
     const jain = show.tags && item.isJain ? " (JAIN)" : "";
     const pack = show.tags && item.isPacked ? " (PACK)" : "";
     put(p, `${item.quantity} x ${item.foodName}${jain}${pack}`, fonts.items, true);
@@ -181,12 +182,14 @@ export function renderBill(ticket: BillTicket): Buffer {
     const tag = show.tags && item.isJain ? " (Jain)" : "";
     const unit = item.unitPrice ?? (item.quantity ? item.total / item.quantity : item.total);
     p.table(
-      `${item.foodName}${tag}${item.complimentary ? " (free)" : ""}`,
+      `${item.foodName}${tag}`,
       String(item.quantity),
       withPrice ? money(unit) : null,
       money(item.total),
       itemCols
     );
+    // The mark sits under the dish on the invoice; the kitchen ticket never shows it.
+    if (item.complimentary) p.line("  Complimentary");
   }
   p.textSize("normal").divider();
 

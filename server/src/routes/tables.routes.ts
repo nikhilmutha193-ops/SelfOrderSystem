@@ -11,6 +11,7 @@ import {
   releaseOwnTableSession,
   releaseTable,
   setTableCaptain,
+  setTableNotifyStaff,
   setTableStatus,
   updateTable,
   updateTableLoginSettings,
@@ -30,6 +31,7 @@ router.get("/captains", requireAuth("admin"), requireModule("tables"), listCapta
 router.get("/settings", requireAuth("admin"), requireModule("tables"), getTableLoginSettings);
 router.put("/settings", requireAuth("admin"), requireModule("tables"), updateTableLoginSettings);
 router.put("/:id/captain", requireAuth("admin"), requireModule("tables"), setTableCaptain);
+router.put("/:id/notify-staff", requireAuth("admin"), requireModule("tables"), setTableNotifyStaff);
 router.post("/", requireAuth("admin"), requireModule("tables"), createTable);
 router.put("/:id", requireAuth("admin"), requireModule("tables"), updateTable);
 router.patch("/:id/release", requireAuth("admin"), requireModule("tables"), releaseTable);

@@ -129,3 +129,25 @@ describe("table login settings", () => {
     expect((await api().get("/api/tables/settings").set(bearer(manager))).status).toBe(403);
   });
 });
+
+describe("notify staff buttons per table", () => {
+  it("is on for every table, and an admin can hide it for one so that guest no longer sees the buttons", async () => {
+    const admin = await loginAdmin();
+    const list = await api().get("/api/tables").set(bearer(admin));
+    const table = list.body.find((t: { code: string }) => t.code === "tbl1");
+    expect(table.showNotifyStaff).not.toBe(false);
+
+    const guest = await api().post("/api/auth/table/login").send({ code: "tbl1", password: "pass1", startNewOrder: true });
+    const mine = () => api().get("/api/tables/session").set(bearer(guest.body.token));
+    expect((await mine()).body).toMatchObject({ code: "tbl1", showNotifyStaff: true });
+
+    const hidden = await api().put(`/api/tables/${table._id}/notify-staff`).set(bearer(admin)).send({ show: false });
+    expect(hidden.status).toBe(200);
+    expect((await mine()).body.showNotifyStaff).toBe(false);
+
+    expect((await api().put(`/api/tables/${table._id}/notify-staff`).set(bearer(admin)).send({ show: "no" })).status).toBe(400);
+    expect((await api().put(`/api/tables/${table._id}/notify-staff`).send({ show: true })).status).toBe(401);
+    await api().put(`/api/tables/${table._id}/notify-staff`).set(bearer(admin)).send({ show: true });
+    expect((await mine()).body.showNotifyStaff).toBe(true);
+  });
+});

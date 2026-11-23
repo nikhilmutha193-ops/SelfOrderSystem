@@ -193,11 +193,105 @@ function SegmentedPicker<T extends string>({
   );
 }
 
-function RowActions({ onRemove }: { onRemove: () => void }) {
+/**
+ * A story written as several paragraphs: each has its own box and can be moved or removed. They are saved as one text
+ * with a blank line between them, which is also how the landing page splits it again.
+ */
+function ParagraphsField({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  const [paragraphs, setParagraphs] = useState<string[]>(() => {
+    const parts = value.split(/\n+/).map((p) => p.trim()).filter(Boolean);
+    return parts.length ? parts : [""];
+  });
+  function update(next: string[]) {
+    setParagraphs(next);
+    onChange(next.map((p) => p.trim()).filter(Boolean).join("\n\n"));
+  }
+  const move = "text-xs font-semibold text-slate-600 hover:text-slate-900 disabled:opacity-30";
   return (
-    <button type="button" className="self-start text-xs font-semibold text-red-600" onClick={onRemove}>
-      Remove
-    </button>
+    <div className="flex flex-col gap-2">
+      <p className="text-sm font-medium text-slate-700">{label}</p>
+      {paragraphs.map((text, i) => (
+        <div key={i} className="flex flex-col gap-1 rounded-lg border border-slate-200 p-2">
+          <Textarea
+            aria-label={`${label}, paragraph ${i + 1}`}
+            rows={3}
+            value={text}
+            placeholder={`Paragraph ${i + 1}`}
+            onChange={(e) => update(paragraphs.map((p, j) => (j === i ? e.target.value : p)))}
+          />
+          <div className="flex items-center gap-4">
+            <span className="text-xs text-slate-400">Paragraph {i + 1}</span>
+            <button
+              type="button"
+              className={move}
+              disabled={i === 0}
+              onClick={() => {
+                const next = [...paragraphs];
+                [next[i - 1], next[i]] = [next[i], next[i - 1]];
+                update(next);
+              }}
+            >
+              Move up
+            </button>
+            <button
+              type="button"
+              className={move}
+              disabled={i === paragraphs.length - 1}
+              onClick={() => {
+                const next = [...paragraphs];
+                [next[i + 1], next[i]] = [next[i], next[i + 1]];
+                update(next);
+              }}
+            >
+              Move down
+            </button>
+            {paragraphs.length > 1 && (
+              <button
+                type="button"
+                className="text-xs font-semibold text-red-600"
+                onClick={() => update(paragraphs.filter((_, j) => j !== i))}
+              >
+                Remove
+              </button>
+            )}
+          </div>
+        </div>
+      ))}
+      <div>
+        <Button type="button" variant="secondary" onClick={() => setParagraphs([...paragraphs, ""])}>
+          Add paragraph
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function RowActions({
+  onRemove,
+  onUp,
+  onDown,
+}: {
+  onRemove: () => void;
+  onUp?: (() => void) | null;
+  onDown?: (() => void) | null;
+}) {
+  const move = "text-xs font-semibold text-slate-600 hover:text-slate-900 disabled:opacity-30";
+  return (
+    <div className="flex items-center gap-4">
+      {(onUp !== undefined || onDown !== undefined) && (
+        <>
+          <button type="button" className={move} disabled={!onUp} onClick={onUp ?? undefined}>
+            Move up
+          </button>
+          <button type="button" className={move} disabled={!onDown} onClick={onDown ?? undefined}>
+            Move down
+          </button>
+        </>
+      )}
+      <button type="button" className="text-xs font-semibold text-red-600" onClick={onRemove}>
+        Remove
+      </button>
+    </div>
   );
 }
 
@@ -542,7 +636,7 @@ export default function LandingPageEditor() {
           <div className="flex flex-col gap-3">
             <Field label="Eyebrow" value={story.eyebrow} onChange={(v) => patch("story", { eyebrow: v })} />
             <Field label="Title" value={story.title} onChange={(v) => patch("story", { title: v })} />
-            <Field label="Story" multiline value={story.text} onChange={(v) => patch("story", { text: v })} />
+            <ParagraphsField label="Story" value={story.text} onChange={(v) => patch("story", { text: v })} />
             <Field label="Pull quote" multiline value={story.quote} onChange={(v) => patch("story", { quote: v })} />
             <Field
               label="Quote attribution"
@@ -571,8 +665,17 @@ export default function LandingPageEditor() {
             {outlets.items.map((o, i) => {
               const upd = (changes: Partial<typeof o>) =>
                 patch("outlets", { items: outlets.items.map((x, j) => (i === j ? { ...x, ...changes } : x)) });
+              const swap = (to: number) => {
+                const items = [...outlets.items];
+                [items[i], items[to]] = [items[to], items[i]];
+                patch("outlets", { items });
+              };
               return (
-                <div key={i} className="flex flex-col gap-2 rounded-lg border border-slate-200 p-3">
+                <div
+                  key={i}
+                  className={`flex flex-col gap-2 rounded-lg border border-slate-200 p-3 ${o.hidden ? "bg-slate-50 opacity-70" : ""}`}
+                >
+                  <Toggle label="Show this card on the page" value={!o.hidden} onChange={(v) => upd({ hidden: !v })} />
                   <div className="grid gap-2 sm:grid-cols-2">
                     <Field label="City" value={o.city} onChange={(v) => upd({ city: v })} />
                     <Field label="Area" value={o.area} onChange={(v) => upd({ area: v })} />
@@ -593,7 +696,11 @@ export default function LandingPageEditor() {
                     />
                   </div>
                   <Toggle label="Coming soon" value={o.comingSoon} onChange={(v) => upd({ comingSoon: v })} />
-                  <RowActions onRemove={() => patch("outlets", { items: outlets.items.filter((_, j) => j !== i) })} />
+                  <RowActions
+                    onRemove={() => patch("outlets", { items: outlets.items.filter((_, j) => j !== i) })}
+                    onUp={i > 0 ? () => swap(i - 1) : null}
+                    onDown={i < outlets.items.length - 1 ? () => swap(i + 1) : null}
+                  />
                 </div>
               );
             })}
@@ -604,13 +711,43 @@ export default function LandingPageEditor() {
                 patch("outlets", {
                   items: [
                     ...outlets.items,
-                    { city: "", area: "", address: "", hours: "", mapUrl: "", comingSoon: false },
+                    { city: "", area: "", address: "", hours: "", mapUrl: "", comingSoon: false, hidden: false },
                   ],
                 })
               }
             >
               Add outlet
             </Button>
+
+            <div className="flex flex-col gap-2 rounded-lg border border-slate-200 p-3">
+              <Toggle
+                label="Show the order-from-your-table card"
+                value={outlets.showOrderCard !== false}
+                onChange={(v) => patch("outlets", { showOrderCard: v })}
+              />
+              {outlets.showOrderCard !== false && (
+                <>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <Field
+                      label="Small heading"
+                      value={outlets.orderCardEyebrow ?? ""}
+                      onChange={(v) => patch("outlets", { orderCardEyebrow: v })}
+                    />
+                    <Field
+                      label="Title"
+                      value={outlets.orderCardTitle ?? ""}
+                      onChange={(v) => patch("outlets", { orderCardTitle: v })}
+                    />
+                  </div>
+                  <Field
+                    label="Text"
+                    multiline
+                    value={outlets.orderCardText ?? ""}
+                    onChange={(v) => patch("outlets", { orderCardText: v })}
+                  />
+                </>
+              )}
+            </div>
           </div>
         </Card>
 

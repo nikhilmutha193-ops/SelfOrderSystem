@@ -7,6 +7,15 @@ export interface ITaxRate {
   percent: number;
 }
 
+export interface IFeedbackQr {
+  showLogo: boolean;
+  showName: boolean;
+  showAddress: boolean;
+  heading: string;
+  instructionText: string;
+  accentColor: string;
+}
+
 export interface IQrSettings {
   showLogo: boolean;
   showName: boolean;
@@ -217,6 +226,12 @@ export interface IRestaurant {
   name: string;
   key: string;
   logoUrl?: string;
+  /** The "write a review" link of the Google Business Profile; happy guests of the feedback QR are sent there. */
+  googleReviewUrl?: string;
+  /** Ratings from this many stars up are offered the Google review link (default 4). */
+  googleMinStars?: number;
+  /** How the feedback QR card looks (logo, name, address, the lines under the QR, accent colour). */
+  feedbackQr?: IFeedbackQr;
   siteTitle?: string;
   faviconUrl?: string;
   /** "#rrggbb", or "" for the built-in terracotta. Every screen's accent palette is built from it (client/src/shared/brand.ts). */
@@ -264,6 +279,18 @@ const taxRateSchema = new Schema<ITaxRate>(
     percent: { type: Number, required: true, min: 0, max: 100 },
   },
   { _id: true }
+);
+
+const feedbackQrSchema = new Schema<IFeedbackQr>(
+  {
+    showLogo: { type: Boolean, default: true },
+    showName: { type: Boolean, default: true },
+    showAddress: { type: Boolean, default: false },
+    heading: { type: String, default: "Rate your visit", trim: true, maxlength: 40 },
+    instructionText: { type: String, default: "Scan to share your feedback", trim: true, maxlength: 80 },
+    accentColor: { type: String, default: "#ea580c" },
+  },
+  { _id: false }
 );
 
 const qrSettingsSchema = new Schema<IQrSettings>(
@@ -431,6 +458,9 @@ const restaurantSchema = new Schema<IRestaurant>(
     name: { type: String, required: true, trim: true },
     key: { type: String, required: true, unique: true, trim: true, lowercase: true },
     logoUrl: { type: String, default: "" },
+    googleReviewUrl: { type: String, default: "", trim: true },
+    googleMinStars: { type: Number, default: 4, min: 1, max: 5 },
+    feedbackQr: { type: feedbackQrSchema, default: () => ({}) },
     siteTitle: { type: String, default: "" },
     faviconUrl: { type: String, default: "" },
     brandColor: { type: String, default: "" },

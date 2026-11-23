@@ -201,10 +201,10 @@ export const ADMIN_NAV: AdminNavGroup[] = [
       },
       {
         to: "/admin/reviews",
-        label: "Reviews",
+        label: "Feedback",
         module: "reviews",
         icon: Star,
-        keywords: "feedback",
+        keywords: "reviews feedback qr google rating",
       },
     ],
   },

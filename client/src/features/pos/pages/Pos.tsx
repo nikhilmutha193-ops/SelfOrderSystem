@@ -13,6 +13,7 @@ import { can, useAdmin } from "../../../lib/adminAuth";
 import { useTodayShifts } from "../../shifts/queries";
 import { CashDrawerDialog } from "../components/CashDrawerDialog";
 import { ShortcutsDialog } from "../components/ShortcutsDialog";
+import ReasonDialog from "../../../shared/ui/ReasonDialog";
 import { ThemeToggleButton } from "../../../shared/ui/ThemeToggle";
 import { CustomerPanel } from "../../customers/components/CustomerPanel";
 import { kitchenApi, openPdfInTab } from "../../kitchen/api";
@@ -75,6 +76,8 @@ export default function Pos() {
   const cashAccess = can(profile, "dayClose");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  // The new dish staff are about to make complimentary: a reason is asked for first.
+  const [freeFor, setFreeFor] = useState<DraftLine | null>(null);
   const todayShifts = useTodayShifts(cashAccess);
   const shiftOpen = (todayShifts.data ?? []).some((s) => s.isOpen);
   const queryClient = useQueryClient();
@@ -558,7 +561,7 @@ export default function Pos() {
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (settleOpen || dishFor || offlineSettle || drawerOpen || shortcutsOpen) return;
+      if (settleOpen || dishFor || offlineSettle || drawerOpen || shortcutsOpen || freeFor) return;
       const target = e.target as HTMLElement;
       const typing = ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName);
       if (e.altKey && !e.ctrlKey && !e.metaKey) {
@@ -604,7 +607,7 @@ export default function Pos() {
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [settleOpen, dishFor, offlineSettle, drawerOpen, shortcutsOpen]);
+  }, [settleOpen, dishFor, offlineSettle, drawerOpen, shortcutsOpen, freeFor]);
 
   const showTables = mode === "tables" && !tableId;
   // On a table's order the top-left Back returns to the table map (asking first when dishes were added but not saved).
@@ -777,6 +780,17 @@ export default function Pos() {
         <StaffSignOut to="/pos/login" />
       </header>
 
+      <ReasonDialog
+        open={freeFor !== null}
+        title={`Make ${freeFor?.item.name ?? "this dish"} complimentary?`}
+        description={`One plate is complimentary${(freeFor?.quantity ?? 1) > 1 ? " and the rest are charged" : ""}. The reason is kept with the order.`}
+        confirmLabel="Make complimentary"
+        onCancel={() => setFreeFor(null)}
+        onConfirm={async ({ note }) => {
+          if (freeFor) cart.toggleComplimentary(freeFor.key, note);
+          setFreeFor(null);
+        }}
+      />
       <ShortcutsDialog open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
       <CashDrawerDialog open={drawerOpen} onClose={() => setDrawerOpen(false)} canEdit={can(profile, "dayClose", "edit")} />
 
@@ -914,6 +928,7 @@ export default function Pos() {
             onCustomerName={setCustomerName}
             onDraftQuantity={cart.changeQuantity}
             onDraftRemove={cart.removeLine}
+            onDraftComplimentary={(line) => (line.complimentary ? cart.toggleComplimentary(line.key) : setFreeFor(line))}
               onDraftEdit={(line) => {
                 setEditLine(line);
                 setDishFor(line.item);

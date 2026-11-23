@@ -44,6 +44,7 @@ const Inventory = lazy(() => import("../features/inventory/pages/Inventory"));
 const Customers = lazy(() => import("../features/customers/pages/Customers"));
 const Bookings = lazy(() => import("../features/bookings/pages/Bookings"));
 const PublicBill = lazy(() => import("../features/customers/pages/PublicBill"));
+const Feedback = lazy(() => import("../pages/customer/Feedback"));
 const NewOrder = lazy(() => import("../features/orders/pages/NewOrder"));
 const Pos = lazy(() => import("../features/pos/pages/Pos"));
 const Captain = lazy(() => import("../features/captain/pages/Captain"));
@@ -90,6 +91,7 @@ export default function App() {
               <Route path="/order" element={<TableLogin />} />
               <Route path="/order/track" element={<TrackOrder />} />
               <Route path="/bill/:token" element={<PublicBill />} />
+              <Route path="/feedback" element={<Feedback />} />
               <Route
                 path="/order/details"
                 element={<Navigate to="/order/menu" replace />}

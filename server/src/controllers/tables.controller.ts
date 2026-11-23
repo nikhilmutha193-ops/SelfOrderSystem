@@ -63,6 +63,20 @@ export const setTableCaptain = asyncHandler(async (req: Request, res: Response) 
   res.json(table);
 });
 
+/** Show or hide the "notify staff" buttons for the guests of one table. */
+export const setTableNotifyStaff = asyncHandler(async (req: Request, res: Response) => {
+  if (!Types.ObjectId.isValid(req.params.id)) throw new HttpError(400, "Invalid id");
+  const { show } = req.body as { show?: unknown };
+  if (typeof show !== "boolean") throw new HttpError(400, "Choose whether guests see the notify staff buttons");
+  const table = await TableModel.findOneAndUpdate(
+    { _id: req.params.id, restaurantId: req.restaurantId },
+    { $set: { showNotifyStaff: show } },
+    { new: true }
+  ).select("-passwordHash");
+  if (!table) throw new HttpError(404, "Table not found");
+  res.json(table);
+});
+
 export const getTableLoginSettings = asyncHandler(async (req: Request, res: Response) => {
   const restaurant = await Restaurant.findById(req.restaurantId).select("tableLoginSettings");
   if (!restaurant) throw new HttpError(404, "Restaurant not found");
@@ -271,9 +285,11 @@ export const setTableStatus = asyncHandler(async (req: Request, res: Response) =
 
 /** The signed-in guest's own table, so the menu can show its number before an order exists. */
 export const getOwnTable = asyncHandler(async (req: Request, res: Response) => {
-  if (!req.auth?.tableId) return res.json({ code: null });
-  const table = await TableModel.findOne({ _id: req.auth.tableId, restaurantId: req.restaurantId }).select("code");
-  res.json({ code: table?.code ?? null });
+  if (!req.auth?.tableId) return res.json({ code: null, showNotifyStaff: true });
+  const table = await TableModel.findOne({ _id: req.auth.tableId, restaurantId: req.restaurantId }).select(
+    "code showNotifyStaff"
+  );
+  res.json({ code: table?.code ?? null, showNotifyStaff: table?.showNotifyStaff !== false });
 });
 
 export const releaseOwnTableSession = asyncHandler(async (req: Request, res: Response) => {

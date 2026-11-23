@@ -142,9 +142,10 @@ export default function Menu() {
   // The table code is known from the sign-in, so it shows before the first order exists.
   const ownTable = useQuery({
     queryKey: ["guest", "table", tableId ?? ""],
-    queryFn: () => api.get<{ code: string | null }>("/tables/session").then((res) => res.data),
+    queryFn: () =>
+      api.get<{ code: string | null; showNotifyStaff?: boolean }>("/tables/session").then((res) => res.data),
     enabled: !!tableId,
-    staleTime: 5 * 60_000,
+    staleTime: 60_000,
   });
   const myOrders = useMyOrders(!!orderId && via !== "token", POLL.guestInvoice).data;
   const tableCode = orderQuery.data?.tableCode ?? ownTable.data?.code ?? null;
@@ -798,7 +799,7 @@ export default function Menu() {
         </div>
       )}
 
-      <QuickRequests onNeedOrder={requestWithoutOrder} />
+      {ownTable.data?.showNotifyStaff !== false && <QuickRequests onNeedOrder={requestWithoutOrder} />}
 
       {!isFiltering && access.showMenu && access.placeOrder && (
         <PopularStrip
