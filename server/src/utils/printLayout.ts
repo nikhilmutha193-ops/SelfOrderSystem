@@ -29,7 +29,7 @@ export const KOT_SHOW = [
   "itemCount",
   "footer",
 ] as const;
-export const KOT_FONTS = ["header", "token", "orderInfo", "items", "notes", "footer"] as const;
+export const KOT_FONTS = ["name", "subtext", "header", "token", "orderInfo", "items", "notes", "footer"] as const;
 
 export const INVOICE_SHOW = [
   "logo",
@@ -108,6 +108,8 @@ export function resolveKotLayout(
     footer: true,
   };
   const fonts: Record<KotFontKey, TextSize> = {
+    name: base,
+    subtext: "normal",
     header: base,
     token: "large",
     orderInfo: base,

@@ -357,6 +357,17 @@ export const updateRestaurantSettings = asyncHandler(async (req: Request, res: R
         throw new HttpError(400, "Keep the Ready or the Served step on, or a dish would never finish");
       }
     }
+    for (const [key, max, what] of [
+      ["displayName", 80, "The ticket name"],
+      ["subText", 120, "The text under the name"],
+    ] as const) {
+      const value = kotSettings[key];
+      if (value === undefined) continue;
+      if (typeof value !== "string") throw new HttpError(400, `${what} must be text`);
+      const clean = value.replace(/\s+/g, " ").trim();
+      if (clean.length > max) throw new HttpError(400, `${what} must be ${max} characters or fewer`);
+      kotSettings[key] = clean;
+    }
     if (kotSettings.layouts !== undefined) kotSettings.layouts = cleanLayouts(kotSettings.layouts, KOT_SHOW, KOT_FONTS);
     Object.assign(restaurant.kotSettings, kotSettings);
     restaurant.markModified("kotSettings.layouts");

@@ -54,6 +54,9 @@ export type GuestOrderMode = "auto" | "accept";
 export interface KotSettings {
   guestOrderMode: GuestOrderMode;
   headerText: string;
+  /** The name printed on kitchen tickets when it is not the restaurant name. */
+  displayName?: string;
+  subText?: string;
   showCustomerName: boolean;
   showTableInfo: boolean;
   footerNote: string;

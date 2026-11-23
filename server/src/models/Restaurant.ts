@@ -107,6 +107,10 @@ export const SERVICE_FLOWS: ServiceFlow[] = ["restaurant", "cafe"];
 export interface IKotSettings {
   guestOrderMode: GuestOrderMode;
   headerText: string;
+  /** The name printed on kitchen tickets when it is not the restaurant's own (one line). */
+  displayName: string;
+  /** A second, smaller line under the name on kitchen tickets. */
+  subText: string;
   showCustomerName: boolean;
   showTableInfo: boolean;
   footerNote: string;
@@ -384,6 +388,8 @@ const kotSettingsSchema = new Schema<IKotSettings>(
   {
     guestOrderMode: { type: String, enum: ["auto", "accept"], default: "auto" },
     headerText: { type: String, default: "Kitchen Order Ticket" },
+    displayName: { type: String, default: "", trim: true },
+    subText: { type: String, default: "", trim: true },
     showCustomerName: { type: Boolean, default: true },
     showTableInfo: { type: Boolean, default: true },
     footerNote: { type: String, default: "" },

@@ -53,3 +53,30 @@ describe("one line per dish on the kitchen ticket", () => {
     expect(bytes).not.toContain("1 x Ghee Idli");
   });
 });
+
+describe("lines that come from the database", () => {
+  it("keeps the dish name and quantity of a Mongoose-like document", () => {
+    // Like a Mongoose document: the fields are getters on the prototype, so a spread copies nothing.
+    class Doc {
+      get foodName() {
+        return "Ghee Idli";
+      }
+      get quantity() {
+        return 2;
+      }
+      get modifiers() {
+        return [];
+      }
+      get note() {
+        return "";
+      }
+      toObject() {
+        return { foodName: "Ghee Idli", quantity: 2, modifiers: [], note: "" };
+      }
+    }
+    const doc = new Doc();
+    const merged = mergeKotLines([doc]);
+    expect(merged[0].foodName).toBe("Ghee Idli");
+    expect(merged[0].quantity).toBe(2);
+  });
+});

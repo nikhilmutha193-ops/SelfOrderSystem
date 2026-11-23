@@ -1266,6 +1266,31 @@ export default function RestaurantSettings() {
                       ))}
                     </Select>
                   </Field>
+                  <Field
+                    label="Restaurant name on the ticket"
+                    htmlFor="kot-name"
+                    hint="Leave empty to print the restaurant name. Its text size is set in the ticket layout below."
+                  >
+                    <Input
+                      id="kot-name"
+                      maxLength={80}
+                      value={kotSettings.displayName ?? ""}
+                      onChange={(e) => setKotSettings((prev) => ({ ...prev, displayName: e.target.value }))}
+                      placeholder={name}
+                    />
+                  </Field>
+                  <Field
+                    label="Text under the name"
+                    htmlFor="kot-subtext"
+                    hint="A smaller second line, for example a tagline or the rest of a long name. It has its own text size."
+                  >
+                    <Input
+                      id="kot-subtext"
+                      maxLength={120}
+                      value={kotSettings.subText ?? ""}
+                      onChange={(e) => setKotSettings((prev) => ({ ...prev, subText: e.target.value }))}
+                    />
+                  </Field>
                   <Field label="Header text" htmlFor="kot-header">
                     <Input
                       id="kot-header"

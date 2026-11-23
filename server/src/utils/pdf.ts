@@ -651,7 +651,10 @@ export async function streamKotPdf(
   ) {
     if (logo) drawLogo(doc, logo, x0, usableWidth);
 
-    if (layout.show.restaurantName) doc.fontSize(fz("header", 14)).text(restaurant.name, { align: "center" });
+    if (layout.show.restaurantName) {
+      doc.fontSize(fz("name", 14)).text(settings?.displayName?.trim() || restaurant.name, { align: "center" });
+      if (settings?.subText?.trim()) doc.fontSize(fz("subtext", 9)).text(settings.subText.trim(), { align: "center" });
+    }
     if (layout.show.header) {
       doc
         .fontSize(fz("header", 12))

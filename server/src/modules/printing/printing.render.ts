@@ -78,7 +78,8 @@ export function renderKot(ticket: KotTicket): Buffer {
   const { show, fonts } = resolveKotLayout(settings, paperKeyFor(ticket.paperWidth));
   const p = new EscPos(charsPerLine(ticket.paperWidth));
   p.align("center");
-  if (show.restaurantName) put(p, ticket.restaurant.name, fonts.header, true);
+  if (show.restaurantName) put(p, settings?.displayName?.trim() || ticket.restaurant.name, fonts.name, true);
+  if (show.restaurantName && settings?.subText?.trim()) put(p, settings.subText.trim(), fonts.subtext);
   if (show.header) put(p, settings?.headerText || "Kitchen Order Ticket", fonts.header, true);
   if (ticket.reprint) p.line("*** REPRINT ***");
   if (show.token && ticket.tokenNumber != null) put(p, `TOKEN ${ticket.tokenNumber}`, fonts.token, true);

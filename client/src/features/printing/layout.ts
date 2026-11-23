@@ -48,7 +48,9 @@ export const KOT_SHOW: LayoutField[] = [
   { key: "footer", label: "Footer note" },
 ];
 export const KOT_FONTS: LayoutField[] = [
-  { key: "header", label: "Header and names" },
+  { key: "name", label: "Restaurant name" },
+  { key: "subtext", label: "Text under the name" },
+  { key: "header", label: "Header and station" },
   { key: "token", label: "Token number" },
   { key: "orderInfo", label: "Order, table and customer" },
   { key: "items", label: "Dish names" },
@@ -130,7 +132,7 @@ export function resolveKot(settings: KotSettings, paper: PaperKey): ResolvedLayo
         itemCount: true,
         footer: true,
       },
-      fonts: { header: base, token: "large", orderInfo: base, items: base, notes: base, footer: base },
+      fonts: { name: base, subtext: "normal", header: base, token: "large", orderInfo: base, items: base, notes: base, footer: base },
     },
     legacyHidden ? { ...saved, show: { ...saved?.show, restaurantName: false } } : saved,
   );

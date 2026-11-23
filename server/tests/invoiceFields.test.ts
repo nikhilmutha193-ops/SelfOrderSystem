@@ -79,3 +79,22 @@ describe("invoice name and text under it have their own sizes", () => {
     expect(runOf("Since 1998").small).toBe(true);
   });
 });
+
+describe("kitchen ticket name and text under it", () => {
+  it("prints them with their own sizes and refuses long ones", async () => {
+    const res = await api()
+      .post("/api/restaurant/kot-preview-thermal")
+      .set(bearer(owner))
+      .send({
+        paper: "p80",
+        kotSettings: { displayName: "Benne Kaffi", subText: "Kitchen", layouts: { p80: { fonts: { name: "large", subtext: "small" } } } },
+      });
+    expect(res.status).toBe(200);
+    const text = textOf(res.body.lines);
+    expect(text.indexOf("Kitchen")).toBe(text.indexOf("Benne Kaffi") + 1);
+    const put = (kotSettings: unknown) => api().put("/api/restaurant/settings").set(bearer(owner)).send({ kotSettings });
+    expect((await put({ displayName: "x".repeat(81) })).status).toBe(400);
+    expect((await put({ displayName: "Benne Kaffi", subText: "Kitchen" })).status).toBe(200);
+    expect((await put({ displayName: "", subText: "" })).status).toBe(200);
+  });
+});

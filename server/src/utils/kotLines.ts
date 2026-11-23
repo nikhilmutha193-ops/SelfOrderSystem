@@ -27,7 +27,9 @@ export function mergeKotLines<T extends KotLine>(items: T[], { keepComplimentary
       keepComplimentary && item.complimentary ? "free" : "",
     ].join("|");
     const same = merged.get(key);
-    if (!same) merged.set(key, { ...item });
+    // Items from the database are Mongoose documents, which a plain spread would empty out; copy them as objects.
+    const copy = typeof (item as { toObject?: () => T }).toObject === "function" ? (item as unknown as { toObject: () => T }).toObject() : { ...item };
+    if (!same) merged.set(key, copy);
     else {
       same.quantity += item.quantity;
       if (same.total !== undefined && item.total !== undefined) same.total += item.total;
