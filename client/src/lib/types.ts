@@ -777,7 +777,15 @@ export interface LandingContent {
     hint: string;
     items: { title: string; text: string; imageUrl: string }[];
   };
-  menu: { enabled: boolean; eyebrow: string; title: string; lead: string; ctaLabel: string };
+  menu: {
+    enabled: boolean;
+    eyebrow: string;
+    title: string;
+    lead: string;
+    ctaLabel: string;
+    showCta?: boolean;
+    showCardButton?: boolean;
+  };
   todaySpecial: { enabled: boolean; eyebrow: string; title: string; lead: string };
   reviews?: {
     enabled: boolean;

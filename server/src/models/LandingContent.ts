@@ -42,6 +42,9 @@ export interface ILandingContent {
     title: string;
     lead: string;
     ctaLabel: string;
+    /** The order button under the dishes, and the "View the menu card" button next to it. */
+    showCta: boolean;
+    showCardButton: boolean;
   };
 
   todaySpecial: {
@@ -180,6 +183,8 @@ const landingContentSchema = new Schema<ILandingContent>(
       title: { type: String, default: "Crowd favourites" },
       lead: { type: String, default: "A taste of what keeps our regulars coming back." },
       ctaLabel: { type: String, default: "See the full menu" },
+      showCta: { type: Boolean, default: true },
+      showCardButton: { type: Boolean, default: true },
     },
 
     todaySpecial: {

@@ -727,13 +727,28 @@ export default function LandingPageEditor() {
             <Toggle label="Show" value={menu.enabled} onChange={(v) => patch("menu", { enabled: v })} />
           </div>
           <p className="mb-3 text-xs text-slate-500">
-            The dishes listed here are the ones marked <strong>Bestseller</strong> under Food Items.
+            Pick the dishes below; each shows with its picture. Until you choose, the dishes marked{" "}
+            <strong>Bestseller</strong> under Food Items are used.
           </p>
           <div className="flex flex-col gap-3">
             <Field label="Eyebrow" value={menu.eyebrow} onChange={(v) => patch("menu", { eyebrow: v })} />
             <Field label="Title" value={menu.title} onChange={(v) => patch("menu", { title: v })} />
             <Field label="Intro" multiline value={menu.lead} onChange={(v) => patch("menu", { lead: v })} />
-            <Field label="Button label" value={menu.ctaLabel} onChange={(v) => patch("menu", { ctaLabel: v })} />
+            <div className="flex flex-col gap-2 rounded-lg border border-slate-200 p-3">
+              <Toggle
+                label="Show the order button"
+                value={menu.showCta !== false}
+                onChange={(v) => patch("menu", { showCta: v })}
+              />
+              {menu.showCta !== false && (
+                <Field label="Button label" value={menu.ctaLabel} onChange={(v) => patch("menu", { ctaLabel: v })} />
+              )}
+              <Toggle
+                label="Show the View the menu card button (when there are menu card photos)"
+                value={menu.showCardButton !== false}
+                onChange={(v) => patch("menu", { showCardButton: v })}
+              />
+            </div>
           </div>
           <LandingDishes canEdit={canEdit} />
         </Card>

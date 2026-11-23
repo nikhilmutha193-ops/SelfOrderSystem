@@ -44,3 +44,17 @@ describe("choosing the dishes of the landing page menu", () => {
     expect((await api().get("/api/restaurant/landing-menu")).status).toBe(401);
   });
 });
+
+describe("the buttons under the landing page menu", () => {
+  it("can each be switched off, and both are on by default", async () => {
+    const start = await api().get("/api/restaurant/landing-content").set(bearer(owner));
+    expect(start.body.menu).toMatchObject({ showCta: true, showCardButton: true });
+    const saved = await api()
+      .put("/api/restaurant/landing-content")
+      .set(bearer(owner))
+      .send({ menu: { ...start.body.menu, showCta: false, showCardButton: false } });
+    expect(saved.body.menu).toMatchObject({ showCta: false, showCardButton: false, ctaLabel: "See the full menu" });
+    expect((await api().get("/api/landing")).body.content.menu).toMatchObject({ showCta: false, showCardButton: false });
+  });
+});
+

@@ -176,6 +176,9 @@ export default function Landing() {
     : NAV_LINKS;
   // The menu card photos have their own page (/menu-card); the landing page only links to it.
   const hasMenuCard = c?.menuCard?.enabled !== false && (c?.menuCard?.images ?? []).some((i) => i.imageUrl);
+  // The buttons under the menu highlights; each can be switched off in Admin > Landing page > Menu highlights.
+  const showOrderButton = showOrder && c?.menu.showCta !== false;
+  const showCardButton = hasMenuCard && c?.menu.showCardButton !== false;
   const logo = restaurant.logoUrl || `${ASSET}/logo.jpeg`;
 
   const serveItems = c?.serve.items.length ? c.serve.items : FALLBACK_SERVE;
@@ -396,15 +399,15 @@ export default function Landing() {
                 ))}
               </ul>
 
-              {(showOrder || hasMenuCard) && (
+              {(showOrderButton || showCardButton) && (
                 <div className="menu__footer">
-                  {showOrder && (
+                  {showOrderButton && (
                     <Link className="btn btn--primary btn--lg" to="/order">
                       {c?.menu.ctaLabel || "See the full menu"}
                     </Link>
                   )}
-                  {hasMenuCard && (
-                    <Link className={`btn btn--lg ${showOrder ? "btn--outline" : "btn--primary"}`} to="/menu-card">
+                  {showCardButton && (
+                    <Link className={`btn btn--lg ${showOrderButton ? "btn--outline" : "btn--primary"}`} to="/menu-card">
                       View the menu card
                     </Link>
                   )}
