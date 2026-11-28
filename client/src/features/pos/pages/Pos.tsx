@@ -7,6 +7,7 @@ import DishDialog from "../../../components/DishDialog";
 import type { InvoiceTotals, OrderItem, PosMenu, PosMenuItem, PosOrderSummary, PosTable } from "../../../lib/types";
 import { extractErrorMessage } from "../../../shared/api/client";
 import { confirmDialog } from "../../../shared/ui/confirm";
+import { ITEM_CANCEL_REASON_LABELS, type ItemCancelReason } from "../../../lib/types";
 import { useStaffTheme } from "../../../shared/theme";
 import { StaffSignOut } from "../../../components/StaffSignOut";
 import { can, useAdmin } from "../../../lib/adminAuth";
@@ -19,7 +20,7 @@ import { CustomerPanel } from "../../customers/components/CustomerPanel";
 import { kitchenApi, openPdfInTab } from "../../kitchen/api";
 import { ordersApi } from "../../orders/api";
 import SettleDialog from "../../orders/components/SettleDialog";
-import { orderKeys, refreshOrderData, useCancelOrder, useCancelOrderItem, useSetItemPacked } from "../../orders/queries";
+import { orderKeys, refreshOrderData, useCancelOrder, useCancelOrderItem, useComplimentary, useSetItemPacked } from "../../orders/queries";
 import { useServeItem } from "../../kitchen/queries";
 import { usePrintingStatus } from "../../printing/queries";
 import { MenuGrid } from "../components/MenuGrid";
@@ -68,6 +69,11 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
     </button>
   );
 }
+
+const ITEM_CANCEL_OPTIONS = (Object.keys(ITEM_CANCEL_REASON_LABELS) as ItemCancelReason[]).map((value) => ({
+  value,
+  label: ITEM_CANCEL_REASON_LABELS[value],
+}));
 
 export default function Pos() {
   useStaffTheme();
@@ -160,6 +166,11 @@ export default function Pos() {
   const cancelOrder = useCancelOrder();
   // An order whose dishes already went to the kitchen is cancelled with a reason.
   const [cancellingSent, setCancellingSent] = useState<string | null>(null);
+  // One dish the kitchen already has, cancelled with a reason.
+  const [cancellingItem, setCancellingItem] = useState<OrderItem | null>(null);
+  // One plate of a saved dish made complimentary (after the KOT too), with a reason.
+  const [freeingItem, setFreeingItem] = useState<OrderItem | null>(null);
+  const makeComplimentary = useComplimentary();
   const slips = usePrintSlips(printing);
   const todayQuery = usePosToday(mode === "cashier");
   // The order that was just paid, so its invoice can be printed or sent before the screen moves on to the next order.
@@ -952,6 +963,8 @@ export default function Pos() {
                 : null
             }
             onCancelSent={() => orderId && setCancellingSent(orderId)}
+            onCancelSentItem={(item) => setCancellingItem(item)}
+            onSavedComplimentary={(item) => setFreeingItem(item)}
             onCancelOrder={() => orderId && void cancelEmptyOrder(orderId, activeDetail?.order.customerName || "This order")}
             onTogglePacked={(item) =>
               void run(async () => {
@@ -1036,6 +1049,34 @@ export default function Pos() {
               payload.isPacked,
             );
           setDishFor(null);
+        }}
+      />
+
+      <ReasonDialog
+        open={freeingItem !== null}
+        title={freeingItem ? `Make 1 ${freeingItem.foodName} complimentary?` : ""}
+        description="One plate is not charged. The kitchen ticket is not changed, and the reason is kept for the reports."
+        confirmLabel="Make complimentary"
+        onCancel={() => setFreeingItem(null)}
+        onConfirm={async ({ note }) => {
+          await makeComplimentary.mutateAsync({ itemId: freeingItem!._id, reason: note });
+          setFreeingItem(null);
+          setMessage({ tone: "ok", text: "Marked complimentary" });
+        }}
+      />
+
+      <ReasonDialog
+        open={cancellingItem !== null}
+        title={cancellingItem ? `Cancel ${cancellingItem.foodName}?` : ""}
+        description="The kitchen already has this dish. It comes off the bill, and what was cooked is written off."
+        confirmLabel="Cancel dish"
+        danger
+        options={ITEM_CANCEL_OPTIONS}
+        onCancel={() => setCancellingItem(null)}
+        onConfirm={async ({ option, note }) => {
+          await cancelItem.mutateAsync({ itemId: cancellingItem!._id, reason: option, note: note || undefined });
+          setCancellingItem(null);
+          setMessage({ tone: "ok", text: "Dish cancelled" });
         }}
       />
 

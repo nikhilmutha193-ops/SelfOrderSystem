@@ -118,6 +118,44 @@ export class OrdersRepository {
     );
   }
 
+  /**
+   * Makes one plate of a line of two or more complimentary: the line keeps the other plates (and their price) and a
+   * new one-plate line carries the same choices, kitchen round and progress at zero.
+   */
+  async splitComplimentaryPlate(item: HydratedDocument<IOrderItem>, reason: string, session?: ClientSession) {
+    const quantity = item.quantity;
+    const packagingEach = (item.packagingCharge ?? 0) / quantity;
+    const original = item.toObject() as unknown as Record<string, unknown>;
+    delete original._id;
+    delete original.createdAt;
+    delete original.updatedAt;
+    const free = await OrderItem.create(
+      [
+        {
+          ...original,
+          quantity: 1,
+          total: 0,
+          complimentary: true,
+          complimentaryReason: reason,
+          packagingCharge: Math.round(packagingEach * 100) / 100,
+        },
+      ],
+      { session }
+    );
+    await OrderItem.updateOne(
+      this.scoped<IOrderItem>({ _id: item._id }),
+      {
+        $set: {
+          quantity: quantity - 1,
+          total: Math.round(item.unitPrice * (quantity - 1) * 100) / 100,
+          packagingCharge: Math.round(packagingEach * (quantity - 1) * 100) / 100,
+        },
+      },
+      { session }
+    );
+    return free[0];
+  }
+
   setItemPacked(itemId: Types.ObjectId, packed: boolean, packagingCharge: number) {
     return OrderItem.findOneAndUpdate(
       this.scoped<IOrderItem>({ _id: itemId, status: { $ne: "cancelled" } }),

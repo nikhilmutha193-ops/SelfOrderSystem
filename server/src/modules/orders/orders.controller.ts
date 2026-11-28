@@ -172,7 +172,7 @@ export const payOrder = asyncHandler(async (req: Request, res: Response) => {
   const { orderId } = parse(orderIdParams, req.params);
   const input = parse(settleSchema, req.body);
   // Payments taken on the Settle screen need proof of a UPI payment (see settleOrder).
-  res.json(await billing.settleOrder(getContext(req), orderId, input, { requireUpiProof: true }));
+  res.json(await billing.settleOrder(getContext(req), orderId, input));
 });
 
 export const payAtCounter = asyncHandler(async (req: Request, res: Response) => {

@@ -163,6 +163,8 @@ export function OrderPanel({
   onCancelItem,
   onCancelOrder,
   onCancelSent,
+  onCancelSentItem,
+  onSavedComplimentary,
   onBillBoth,
   onSettleBoth,
   onPrintInvoice,
@@ -201,6 +203,10 @@ export function OrderPanel({
   onCancelOrder?: () => void;
   /** Cancel an order whose dishes already went to the kitchen (asks for a reason); open or billed orders only. */
   onCancelSent?: () => void;
+  /** Cancel one dish the kitchen already has (asks for a reason); open orders only. */
+  onCancelSentItem?: (item: OrderItem) => void;
+  /** Make one plate of a saved dish (already sent or not) complimentary; asks for a reason. Open orders, staff only. */
+  onSavedComplimentary?: (item: OrderItem) => void;
   /** Send what is unsent to the kitchen, make the bill, and print the KOT and the invoice as two separate slips. */
   onBillBoth?: () => void;
   /** Pay first (cafe): take the payment, which sends the KOT, then print the KOT and the invoice as two separate slips. */
@@ -350,6 +356,7 @@ export function OrderPanel({
                 <span className="mt-0.5 flex flex-wrap items-center gap-1.5">
                   {kitchenBadge(item, payFirst, cafe)}
                   {item.isPacked && <Badge tone="blue">Pack</Badge>}
+                  {item.complimentary && item.status !== "cancelled" && <Badge tone="green">Complimentary</Badge>}
                   {onTogglePacked && item.status !== "cancelled" && isOpen && (
                     <button
                       type="button"
@@ -357,6 +364,36 @@ export function OrderPanel({
                       onClick={() => onTogglePacked(item)}
                     >
                       {item.isPacked ? "Unpack" : "Pack"}
+                    </button>
+                  )}
+                  {onSavedComplimentary &&
+                    order &&
+                    isOpen &&
+                    !offline &&
+                    item.status !== "cancelled" &&
+                    !item.complimentary &&
+                    !savedItems.some(
+                      (i) => i.complimentary && i.status !== "cancelled" && i.foodItemId === item.foodItemId,
+                    ) && (
+                      <button
+                        type="button"
+                        className="text-xs font-medium text-slate-600 hover:underline"
+                        aria-label={`Make ${item.foodName} complimentary`}
+                        disabled={busy}
+                        onClick={() => onSavedComplimentary(item)}
+                      >
+                        {item.quantity > 1 ? "1 complimentary…" : "Complimentary…"}
+                      </button>
+                    )}
+                  {onCancelSentItem && order && isOpen && !offline && item.status !== "cancelled" && item.kotRound != null && (
+                    <button
+                      type="button"
+                      className="text-xs text-red-600 hover:underline"
+                      aria-label={`Cancel ${item.foodName}`}
+                      disabled={busy}
+                      onClick={() => onCancelSentItem(item)}
+                    >
+                      Cancel
                     </button>
                   )}
                   {onCancelItem && isOpen && item.status !== "cancelled" && item.kotRound == null && (

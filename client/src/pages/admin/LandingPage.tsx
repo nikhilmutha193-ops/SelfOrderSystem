@@ -1030,17 +1030,10 @@ export default function LandingPageEditor() {
             <Field label="Title" value={reviews.title} onChange={(v) => patch("reviews", { title: v })} />
             <Field label="Intro" multiline value={reviews.lead} onChange={(v) => patch("reviews", { lead: v })} />
             <div className="grid gap-3 sm:grid-cols-2">
-              <label className="text-sm font-medium text-slate-700">
-                How many to show
-                <Input
-                  className="mt-1"
-                  type="number"
-                  min={1}
-                  max={12}
-                  value={reviews.maxItems}
-                  onChange={(e) => patch("reviews", { maxItems: Math.min(12, Math.max(1, Number(e.target.value) || 1)) })}
-                />
-              </label>
+              <p className="text-xs text-slate-500">
+                Every review you have set to show appears, in one row that visitors scroll or step through with the arrow
+                buttons. Hide the ones you do not want under Feedback.
+              </p>
               <div className="flex items-end">
                 <Toggle
                   label="Include Google reviews"

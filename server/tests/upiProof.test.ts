@@ -21,16 +21,12 @@ const upload = (orderId: string) =>
     .attach("image", Buffer.from("not really a photo"), { filename: "pay.png", contentType: "image/png" });
 
 describe("UPI payment proof", () => {
-  it("refuses a UPI payment with no mobile number or screenshot, but not other methods", async () => {
+  it("settles a UPI payment with no mobile number and no screenshot", async () => {
     const id = await newOrder();
-    const refused = await pay(id, { paymentMethod: "upi" });
-    expect(refused.status).toBe(400);
-    expect(refused.body.message).toMatch(/mobile number or a screenshot/);
-    expect((await pay(id, { payments: [{ method: "upi", amount: 1 }] })).status).toBe(400);
-    expect((await Order.findById(id))!.status).not.toBe("closed");
-
-    const cash = await newOrder();
-    expect((await pay(cash, { paymentMethod: "cash" })).status).toBe(200);
+    const paid = await pay(id, { paymentMethod: "upi" });
+    expect(paid.status).toBe(200);
+    expect(paid.body.payments[0].payerPhone).toBeUndefined();
+    expect((await Order.findById(id))!.status).toBe("closed");
   });
 
   it("accepts the payer's mobile number and keeps it on the payment", async () => {

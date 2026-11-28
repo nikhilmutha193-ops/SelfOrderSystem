@@ -57,9 +57,9 @@ function payerNumber(line: Line, guestPhone: string): string {
   return line.payerPhone.trim() || (validMobile(guestPhone) ? guestPhone : "");
 }
 
-/** A UPI line is complete once it has a mobile number (typed, or the customer's on the order) or a screenshot. */
-function upiProofMissing(line: Line, guestPhone: string): boolean {
-  return line.method === "upi" && !line.proofKey && !validMobile(payerNumber(line, guestPhone));
+/** The mobile number and screenshot of a UPI payment are optional; a number that is typed must be a real one. */
+function upiNumberInvalid(line: Line): boolean {
+  return line.method === "upi" && line.payerPhone.trim() !== "" && !validMobile(line.payerPhone);
 }
 
 interface SettleDialogProps {
@@ -343,7 +343,7 @@ function UpiProof({
     }
   }
 
-  const missing = upiProofMissing(line, guestPhone);
+  const missing = false;
   const usingGuest = !line.payerPhone.trim() && validMobile(guestPhone);
   return (
     <div
@@ -353,7 +353,7 @@ function UpiProof({
       <p className="text-sm font-semibold text-slate-800">
         Record this UPI payment{" "}
         <span className="font-normal text-slate-600">
-          {usingGuest ? "(the customer's number on the order is used)" : "(required: a mobile number or a screenshot)"}
+          {usingGuest ? "(the customer's number on the order is used)" : "(optional: a mobile number or a screenshot)"}
         </span>
       </p>
       <Field label="Payer's mobile number" htmlFor={`settle-payer-${index}`}>
@@ -425,8 +425,8 @@ function UpiProof({
           </span>
         )}
       </div>
-      {line.payerPhone.trim() !== "" && !validMobile(line.payerPhone) && !line.proofKey && (
-        <p className="text-xs text-red-600">Enter a valid 10-digit mobile number, or add a screenshot instead.</p>
+      {line.payerPhone.trim() !== "" && !validMobile(line.payerPhone) && (
+        <p className="text-xs text-red-600">Enter a valid 10-digit mobile number, or clear it.</p>
       )}
       <ErrorText>{error}</ErrorText>
     </div>
@@ -484,8 +484,8 @@ function SettleForm({ orderId, total, invoiceNumber, upi, onClose }: SettleDialo
       );
       return;
     }
-    if (lines.some((l) => upiProofMissing(l, guestPhone))) {
-      setError("For a UPI payment add the payer's mobile number or a screenshot of the payment");
+    if (lines.some((l) => upiNumberInvalid(l))) {
+      setError("Enter a valid 10-digit mobile number for the UPI payment, or clear it");
       return;
     }
     try {
@@ -506,7 +506,7 @@ function SettleForm({ orderId, total, invoiceNumber, upi, onClose }: SettleDialo
     }
   }
 
-  const settled = Math.abs(remaining) < 0.001 && !lines.some((l) => upiProofMissing(l, guestPhone));
+  const settled = Math.abs(remaining) < 0.001 && !lines.some((l) => upiNumberInvalid(l));
   const nothingToPay = total <= 0;
 
   return (

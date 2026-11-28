@@ -92,11 +92,11 @@ export const getLandingPage = asyncHandler(async (req: Request, res: Response) =
       PromoBanner.find({ restaurantId: req.restaurantId, isActive: true }).sort({ sortOrder: 1, createdAt: 1 }),
       Review.find({ restaurantId: req.restaurantId, isApproved: true, source: { $ne: "google" } })
         .sort({ createdAt: -1 })
-        .limit(20),
+        .limit(60),
       Award.find({ restaurantId: req.restaurantId, isActive: true }).sort({ sortOrder: 1, createdAt: 1 }),
       Review.find({ restaurantId: req.restaurantId, isApproved: true, source: "google" })
         .sort({ createdAt: -1 })
-        .limit(20),
+        .limit(60),
       getOrCreateLandingContent(req.restaurantId!),
     ]);
   if (!restaurant) throw new HttpError(404, "Restaurant not found");

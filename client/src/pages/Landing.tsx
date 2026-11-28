@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
 import type { LandingContent, LandingData } from "../lib/types";
@@ -46,6 +46,60 @@ interface Testimonial {
   text: string;
   name: string;
   google: boolean;
+}
+
+/** All the shown reviews in one row: scroll or swipe, or use the arrow buttons. */
+function ReviewsCarousel({ children }: { children: React.ReactNode }) {
+  const ref = useRef<HTMLUListElement>(null);
+  const [edge, setEdge] = useState({ start: true, end: false });
+  const update = () => {
+    const el = ref.current;
+    if (!el) return;
+    setEdge({ start: el.scrollLeft <= 4, end: el.scrollLeft + el.clientWidth >= el.scrollWidth - 4 });
+  };
+  useEffect(() => {
+    update();
+    const el = ref.current;
+    if (!el) return;
+    const observer = new ResizeObserver(update);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [children]);
+  const go = (direction: 1 | -1) => {
+    const el = ref.current;
+    if (!el) return;
+    // One page of the grid (3 columns on a wide screen, 2 on a phone) at a time.
+    el.scrollBy({ left: direction * (el.clientWidth + 16), behavior: "smooth" });
+  };
+  return (
+    <div className="reviews">
+      <ul className="reviews__grid" role="list" ref={ref} onScroll={update} tabIndex={0} aria-label="Guest reviews">
+        {children}
+      </ul>
+      {!(edge.start && edge.end) && (
+        <>
+          <button
+            type="button"
+            className="reviews__arrow reviews__arrow--prev"
+            aria-label="Previous reviews"
+            disabled={edge.start}
+            onClick={() => go(-1)}
+          >
+            ‹
+          </button>
+          <button
+            type="button"
+            className="reviews__arrow reviews__arrow--next"
+            aria-label="Next reviews"
+            disabled={edge.end}
+            onClick={() => go(1)}
+          >
+            ›
+          </button>
+        </>
+      )}
+    </div>
+  );
 }
 
 /** One guest review; a long one is cut after a few lines with a Read more button. */
@@ -200,7 +254,7 @@ export default function Landing() {
       name: g.author,
       google: true,
     })),
-    c?.reviews?.maxItems ?? 6,
+    Number.MAX_SAFE_INTEGER,
   );
   // The top menu and footer links: the owner's own (in their order, hidden ones left out) or the standard ones.
   const customNav = (c?.nav?.items ?? []).filter((l) => l.visible !== false);
@@ -643,11 +697,11 @@ export default function Landing() {
                 </h2>
                 {c?.reviews?.lead && <p className="section__lead">{c.reviews.lead}</p>}
               </header>
-              <ul className="reviews__grid" role="list">
+              <ReviewsCarousel>
                 {testimonials.map((review) => (
                   <ReviewCard key={review.key} review={review} />
                 ))}
-              </ul>
+              </ReviewsCarousel>
             </div>
           </section>
         )}

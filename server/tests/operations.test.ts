@@ -133,4 +133,31 @@ describe("discounts and complimentary items", () => {
     expect(res.body).toMatchObject({ complimentary: true, total: 0, unitPrice: 100 });
     expect((await detail(orderId)).body.totals.subtotal).toBe(120);
   });
+
+  it("makes one plate complimentary after the KOT, splitting a line of several, and only one plate per dish", async () => {
+    const orderId = await counterOrder(owner, [{ foodItemId: world.food.dosa, quantity: 3 }]);
+    await api().post(`/api/orders/${orderId}/kot/print`).set(bearer(owner)).send({});
+    const line = (await detail(orderId)).body.items[0];
+    expect(line.kotRound).toBe(1);
+
+    const res = await api()
+      .patch(`/api/orders/items/${line._id}/complimentary`)
+      .set(bearer(owner))
+      .send({ reason: "Guest complaint" });
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ complimentary: true, quantity: 1, total: 0, kotRound: 1 });
+
+    const after = (await detail(orderId)).body;
+    const paid = after.items.find((i: { complimentary: boolean }) => !i.complimentary);
+    expect(paid.quantity).toBe(2);
+    expect(paid.total).toBe(paid.unitPrice * 2);
+    expect(after.totals.subtotal).toBe(paid.unitPrice * 2);
+
+    // A second plate of the same dish cannot also be made free.
+    const again = await api()
+      .patch(`/api/orders/items/${paid._id}/complimentary`)
+      .set(bearer(owner))
+      .send({ reason: "Another one" });
+    expect(again.status).toBe(409);
+  });
 });

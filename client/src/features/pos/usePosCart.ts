@@ -4,6 +4,7 @@ import { newId } from "../../lib/id";
 import type { PosMenu, PosMenuItem, SelectedModifier } from "../../lib/types";
 import { usePrintKot } from "../kitchen/queries";
 import { ordersApi } from "../orders/api";
+import { askGuestName } from "../../shared/ui/GuestNameHost";
 import { useAddOrderItems, useGenerateBill, useOrder } from "../orders/queries";
 import { toOrderLines, type CreatePosOrderInput, type DraftLine } from "./api";
 import { useCreatePosOrder } from "./queries";
@@ -214,6 +215,11 @@ export function usePosCart() {
     if (draft.length > 0) {
       const items = toOrderLines(draft);
       if (!id) {
+        // A new order for a table asks who the guest is; staff can skip it (the order is then just "Guest").
+        if (target.tableId && !target.customerName?.trim()) {
+          const name = await askGuestName();
+          if (name) target = { ...target, customerName: name };
+        }
         const created = await createOrder.mutateAsync({
           ...target,
           sendToKitchen: send,

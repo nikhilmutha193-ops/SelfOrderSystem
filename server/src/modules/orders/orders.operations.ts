@@ -1,4 +1,5 @@
 import { RequestContext } from "../../core/context";
+import { withTransaction } from "../../core/transaction";
 import { writeAudit } from "../../utils/audit";
 import { HttpError } from "../../utils/httpError";
 import { round2 } from "../../utils/invoice";
@@ -234,13 +235,30 @@ export async function markComplimentary(ctx: RequestContext, itemId: string, rea
   if (!order) throw new HttpError(404, "Order not found");
   requireOpen(order.status, "changed");
 
-  const value = item.total;
-  const updated = await repo.markItemComplimentary(item._id, reason);
+  // One plate of a dish can be complimentary in an order; the rest of a line is still paid for.
+  const others = (await repo.findItems(order._id)).filter(
+    (i) =>
+      i.complimentary &&
+      i.status !== "cancelled" &&
+      !i._id.equals(item._id) &&
+      i.foodItemId &&
+      item.foodItemId &&
+      i.foodItemId.equals(item.foodItemId)
+  );
+  if (others.length > 0) throw new HttpError(409, `Only one ${item.foodName} can be complimentary in an order`);
+
+  const value = item.unitPrice;
+  let updated;
+  if (item.quantity > 1) {
+    updated = await withTransaction((session) => repo.splitComplimentaryPlate(item, reason, session));
+  } else {
+    updated = await repo.markItemComplimentary(item._id, reason);
+  }
   await refreshCouponDiscount(repo, order);
   await writeAudit(
     ctx,
     "orderItem.complimentary",
-    `Made "${item.foodName}" x${item.quantity} complimentary (₹${value.toFixed(2)}): ${reason}`
+    `Made 1 "${item.foodName}" complimentary (₹${value.toFixed(2)}): ${reason}`
   );
   return updated;
 }

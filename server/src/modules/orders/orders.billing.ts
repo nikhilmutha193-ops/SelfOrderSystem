@@ -269,15 +269,11 @@ export async function reopenBill(ctx: RequestContext, orderId: string, reason: s
   return order;
 }
 
-/** A UPI payment taken at the till needs the payer's mobile number or a screenshot, so it can be checked later. */
-const UPI_PROOF_REQUIRED = "For a UPI payment add the payer's mobile number or a screenshot of the payment";
-
 function buildPayments(
   ctx: RequestContext,
   order: Pick<IOrder, "_id" | "customerPhone">,
   input: SettleInput,
-  total: number,
-  options: { requireUpiProof?: boolean } = {}
+  total: number
 ): IPayment[] {
   const lines: (Partial<Pick<IPayment, "payerPhone" | "proofKey" | "reference" | "tendered">> & {
     method: IPayment["method"];
@@ -316,7 +312,6 @@ function buildPayments(
         throw new HttpError(400, "That payment screenshot belongs to another order");
       }
       if (!payerPhone && !line.proofKey && guestPhone) payerPhone = guestPhone;
-      if (options.requireUpiProof && !payerPhone && !line.proofKey) throw new HttpError(400, UPI_PROOF_REQUIRED);
     }
     return {
       method: line.method,
@@ -338,16 +333,8 @@ function summarizeMethod(payments: IPayment[]): PaymentMethod {
   return methods.size === 1 ? payments[0].method : "split";
 }
 
-/**
- * Settles a bill. `requireUpiProof` is set for payments staff take by hand (the Settle screen); payments that
- * come from somewhere else (the online gateway, offline sales synced later) have their own record.
- */
-export async function settleOrder(
-  ctx: RequestContext,
-  orderId: string,
-  input: SettleInput,
-  options: { requireUpiProof?: boolean } = {}
-) {
+/** Settles a bill. A UPI payment may carry the payer's mobile number or a screenshot, but neither is required. */
+export async function settleOrder(ctx: RequestContext, orderId: string, input: SettleInput) {
   const order = await getOwnedOrder(ctx, orderId);
   const repo = new OrdersRepository(ctx.restaurantId);
   const wantsCredit = input.paymentMethod === "credit" || (input.payments ?? []).some((p) => p.method === "credit");
@@ -355,7 +342,7 @@ export async function settleOrder(
   if (order.status === "open") await billOpenOrder(ctx, repo, order, {});
   if (order.status !== "billed" || !order.bill) throw new HttpError(409, "This order is not open");
 
-  const payments = buildPayments(ctx, order, input, order.bill.grandTotal, options);
+  const payments = buildPayments(ctx, order, input, order.bill.grandTotal);
   const onAccount = payments.filter((p) => p.method === "credit").reduce((sum, p) => sum + p.amount, 0);
   if (onAccount > 0) await assertCreditAllowed(ctx.restaurantId, order, onAccount);
   const changes: Partial<IOrder> = {
