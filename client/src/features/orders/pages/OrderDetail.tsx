@@ -403,7 +403,7 @@ export default function OrderDetail({
 
   const statusBadge = orderStatusBadge(order);
   const facts = [
-    orderTypeLabel(order),
+    order.orderType === "dine-in" && data.tableCode ? `Dine-in · Table ${data.tableCode}` : orderTypeLabel(order),
     // Walk-in and takeaway orders, and a single guest, carry no party size worth showing.
     order.orderType === "dine-in" && order.members > 1 ? `${order.members} guests` : null,
     order.customerPhone || null,

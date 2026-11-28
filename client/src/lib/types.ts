@@ -872,6 +872,8 @@ export interface LandingContent {
     lead: string;
     images: { imageUrl: string; caption: string }[];
   };
+  seo?: { title: string; description: string; keywords: string; imageUrl: string; structuredData: boolean };
+  embed?: { items: { name: string; code: string; position: "head" | "page" | "end"; visible: boolean }[] };
   nav?: { items: { label: string; href: string; visible: boolean }[] };
   reels: {
     enabled: boolean;

@@ -106,6 +106,20 @@ export interface ILandingContent {
     images: { imageUrl: string; caption: string }[];
   };
 
+  /** What Google and social apps read: page title, description, keywords and the share picture. */
+  seo: {
+    title: string;
+    description: string;
+    keywords: string;
+    imageUrl: string;
+    structuredData: boolean;
+  };
+
+  /** HTML the owner pastes in (maps, widgets, analytics, site verification). */
+  embed: {
+    items: { name: string; code: string; position: "head" | "page" | "end"; visible: boolean }[];
+  };
+
   /** The links in the top menu and the footer. Empty means the standard ones. */
   nav: {
     items: { label: string; href: string; visible: boolean }[];
@@ -251,6 +265,31 @@ const landingContentSchema = new Schema<ILandingContent>(
       lead: { type: String, default: "" },
       images: {
         type: [new Schema({ imageUrl: String, caption: { type: String, default: "" } }, { _id: false })],
+        default: [],
+      },
+    },
+
+    seo: {
+      title: { type: String, default: "" },
+      description: { type: String, default: "" },
+      keywords: { type: String, default: "" },
+      imageUrl: { type: String, default: "" },
+      structuredData: { type: Boolean, default: true },
+    },
+
+    embed: {
+      items: {
+        type: [
+          new Schema(
+            {
+              name: { type: String, default: "" },
+              code: { type: String, default: "" },
+              position: { type: String, enum: ["head", "page", "end"], default: "page" },
+              visible: { type: Boolean, default: true },
+            },
+            { _id: false }
+          ),
+        ],
         default: [],
       },
     },

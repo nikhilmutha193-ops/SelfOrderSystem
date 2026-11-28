@@ -162,6 +162,7 @@ export function OrderPanel({
   onTogglePacked,
   onCancelItem,
   onCancelOrder,
+  onCancelSent,
   onBillBoth,
   onSettleBoth,
   onPrintInvoice,
@@ -198,6 +199,8 @@ export function OrderPanel({
   onCancelItem?: (item: OrderItem) => void;
   /** Cancel an open order that has no dishes left (all removed), instead of leaving it running. */
   onCancelOrder?: () => void;
+  /** Cancel an order whose dishes already went to the kitchen (asks for a reason); open or billed orders only. */
+  onCancelSent?: () => void;
   /** Send what is unsent to the kitchen, make the bill, and print the KOT and the invoice as two separate slips. */
   onBillBoth?: () => void;
   /** Pay first (cafe): take the payment, which sends the KOT, then print the KOT and the invoice as two separate slips. */
@@ -307,6 +310,23 @@ export function OrderPanel({
             </Button>
           </div>
         )}
+        {order &&
+          onCancelSent &&
+          !offline &&
+          !paid &&
+          (order.status === "open" || order.status === "billed") &&
+          savedItems.some((i) => i.kotRound != null && i.status !== "cancelled") && (
+            <div className="mb-2 flex justify-end">
+              <button
+                type="button"
+                className="text-xs font-semibold text-red-600 hover:underline disabled:opacity-40"
+                disabled={busy}
+                onClick={onCancelSent}
+              >
+                Cancel this order…
+              </button>
+            </div>
+          )}
         <ul className="flex flex-col divide-y divide-slate-100">
           {savedItems.map((item) => (
             <li

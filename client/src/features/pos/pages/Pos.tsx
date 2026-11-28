@@ -158,6 +158,8 @@ export default function Pos() {
   const setPacked = useSetItemPacked();
   const cancelItem = useCancelOrderItem();
   const cancelOrder = useCancelOrder();
+  // An order whose dishes already went to the kitchen is cancelled with a reason.
+  const [cancellingSent, setCancellingSent] = useState<string | null>(null);
   const slips = usePrintSlips(printing);
   const todayQuery = usePosToday(mode === "cashier");
   // The order that was just paid, so its invoice can be printed or sent before the screen moves on to the next order.
@@ -949,6 +951,7 @@ export default function Pos() {
                   }
                 : null
             }
+            onCancelSent={() => orderId && setCancellingSent(orderId)}
             onCancelOrder={() => orderId && void cancelEmptyOrder(orderId, activeDetail?.order.customerName || "This order")}
             onTogglePacked={(item) =>
               void run(async () => {
@@ -1033,6 +1036,25 @@ export default function Pos() {
               payload.isPacked,
             );
           setDishFor(null);
+        }}
+      />
+
+      <ReasonDialog
+        open={cancellingSent !== null}
+        title="Cancel this order?"
+        description="The kitchen has already got it. The order is cancelled, dishes already cooking are written off, and the reason is kept."
+        confirmLabel="Cancel order"
+        danger
+        onCancel={() => setCancellingSent(null)}
+        onConfirm={async ({ note }) => {
+          const id = cancellingSent!;
+          await cancelOrder.mutateAsync({ orderId: id, reason: note });
+          setCancellingSent(null);
+          setMessage({ tone: "ok", text: "Order cancelled" });
+          if (orderId === id) {
+            setTableId(null);
+            cart.open(null);
+          }
         }}
       />
 

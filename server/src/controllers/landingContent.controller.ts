@@ -21,6 +21,8 @@ const SECTIONS = [
   "todaySpecial",
   "reviews",
   "menuCard",
+  "seo",
+  "embed",
   "nav",
   "story",
   "outlets",
@@ -52,6 +54,40 @@ export const updateLandingContent = asyncHandler(async (req: Request, res: Respo
       }
       doc.nav.items.push({ label, href, visible: link.visible !== false });
     }
+  }
+  if (body.seo !== undefined) {
+    const seo = body.seo as Record<string, unknown>;
+    const text = (value: unknown, max: number, what: string) => {
+      const clean = typeof value === "string" ? value.replace(/\s+/g, " ").trim() : "";
+      if (clean.length > max) throw new HttpError(400, `${what} must be ${max} characters or fewer`);
+      return clean;
+    };
+    const imageUrl = typeof seo.imageUrl === "string" ? seo.imageUrl.trim() : "";
+    if (imageUrl && !/^(\/uploads\/|https:\/\/)/.test(imageUrl)) {
+      throw new HttpError(400, "The share picture must be an uploaded image or an https:// address");
+    }
+    doc.set("seo", {
+      title: text(seo.title, 70, "The page title"),
+      description: text(seo.description, 300, "The description"),
+      keywords: text(seo.keywords, 500, "The keywords"),
+      imageUrl,
+      structuredData: seo.structuredData !== false,
+    });
+  }
+  if (body.embed !== undefined) {
+    // Only the owner of the site can save this, so it may hold scripts; it is limited in size and count.
+    const items = ((body.embed as { items?: unknown[] })?.items ?? []) as Record<string, unknown>[];
+    if (!Array.isArray(items) || items.length > 10) throw new HttpError(400, "You can add up to 10 embed codes");
+    doc.set(
+      "embed.items",
+      items.map((item) => {
+        const name = typeof item.name === "string" ? item.name.trim().slice(0, 60) : "";
+        const code = typeof item.code === "string" ? item.code : "";
+        if (code.length > 20000) throw new HttpError(400, `The code for "${name || "an embed"}" is too long (20,000 characters at most)`);
+        const position = item.position === "head" || item.position === "end" ? item.position : "page";
+        return { name, code, position, visible: item.visible !== false };
+      })
+    );
   }
   if (doc.reviews) {
     const n = Math.round(Number(doc.reviews.maxItems));

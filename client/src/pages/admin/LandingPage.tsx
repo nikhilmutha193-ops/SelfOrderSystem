@@ -490,6 +490,8 @@ export default function LandingPageEditor() {
 
   const { hero, serve, menu, todaySpecial, story, outlets, reels, partnership, footer } = content;
   const nav = content.nav?.items ?? [];
+  const seo = content.seo ?? { title: "", description: "", keywords: "", imageUrl: "", structuredData: true };
+  const embeds = content.embed?.items ?? [];
   const menuCard = content.menuCard ?? { enabled: true, eyebrow: "Our Menu", title: "The menu card", lead: "", images: [] };
   const reviews = content.reviews ?? {
     enabled: true,
@@ -804,6 +806,116 @@ export default function LandingPageEditor() {
             >
               Add a page
             </Button>
+          </div>
+        </Card>
+
+        <Card data-tour="landing-seo">
+          <h2 className="mb-1 text-base font-semibold text-slate-900">Google search (SEO)</h2>
+          <p className="mb-3 text-xs text-slate-500">
+            What Google and WhatsApp or Facebook previews show for your website. Write the title and description the way a
+            guest would search for you, for example "Pure veg restaurant in Bengaluru". Keywords are separated by commas.
+          </p>
+          <div className="flex flex-col gap-3">
+            <Field
+              label="Page title"
+              value={seo.title}
+              hint={`${seo.title.length}/70 - Google shows about the first 60 characters.`}
+              onChange={(v) => patch("seo", { title: v.slice(0, 70) })}
+            />
+            <Field
+              label="Description"
+              multiline
+              value={seo.description}
+              hint={`${seo.description.length}/300 - Google shows about the first 155 characters.`}
+              onChange={(v) => patch("seo", { description: v.slice(0, 300) })}
+            />
+            <Field
+              label="Keywords"
+              multiline
+              value={seo.keywords}
+              placeholder="pure veg restaurant, family restaurant, filter coffee, breakfast near me"
+              onChange={(v) => patch("seo", { keywords: v.slice(0, 500) })}
+            />
+            <ImagePicker
+              label="Picture shown when the link is shared"
+              value={seo.imageUrl}
+              onChange={(v) => patch("seo", { imageUrl: v })}
+              onError={setError}
+            />
+            <Toggle
+              label="Also tell Google this is a restaurant (name, address and picture)"
+              value={seo.structuredData !== false}
+              onChange={(v) => patch("seo", { structuredData: v })}
+            />
+          </div>
+        </Card>
+
+        <Card data-tour="landing-embed">
+          <h2 className="mb-1 text-base font-semibold text-slate-900">HTML embed codes</h2>
+          <p className="mb-3 text-xs text-slate-500">
+            Paste code from another service: a Google Map, a booking or review widget, a video, Google Analytics, or a Google
+            Search Console verification tag. <strong>In the page</strong> shows it as a block above the footer,{" "}
+            <strong>In the page head</strong> is for analytics and verification tags, and <strong>End of the page</strong> is
+            for chat or pop-up widgets. Only paste code you trust: it runs on your website.
+          </p>
+          <div className="flex flex-col gap-3">
+            {embeds.map((item, i) => {
+              const upd = (changes: Partial<typeof item>) =>
+                patch("embed", { items: embeds.map((x, j) => (i === j ? { ...x, ...changes } : x)) });
+              return (
+                <div
+                  key={i}
+                  className={`flex flex-col gap-2 rounded-lg border border-slate-200 p-3 ${item.visible ? "" : "bg-slate-50 opacity-70"}`}
+                >
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <Field label="Name (only you see it)" value={item.name} onChange={(v) => upd({ name: v })} />
+                    <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
+                      Where
+                      <Select
+                        value={item.position}
+                        onChange={(e) => upd({ position: e.target.value as typeof item.position })}
+                      >
+                        <option value="page">In the page (above the footer)</option>
+                        <option value="head">In the page head (analytics, verification)</option>
+                        <option value="end">End of the page (widgets)</option>
+                      </Select>
+                    </label>
+                  </div>
+                  <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
+                    HTML code
+                    <Textarea
+                      rows={6}
+                      className="font-mono text-xs"
+                      spellCheck={false}
+                      value={item.code}
+                      maxLength={20000}
+                      placeholder={'<iframe src="https://www.google.com/maps/embed?..." width="100%" height="380" loading="lazy"></iframe>'}
+                      onChange={(e) => upd({ code: e.target.value })}
+                    />
+                  </label>
+                  <div className="flex items-center justify-between">
+                    <Toggle label="Show" value={item.visible} onChange={(v) => upd({ visible: v })} />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={() => patch("embed", { items: embeds.filter((_, j) => j !== i) })}
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+            <div>
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={embeds.length >= 10}
+                onClick={() => patch("embed", { items: [...embeds, { name: "", code: "", position: "page", visible: true }] })}
+              >
+                Add an embed code
+              </Button>
+            </div>
           </div>
         </Card>
 

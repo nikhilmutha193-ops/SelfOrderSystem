@@ -51,10 +51,12 @@ export const INVOICE_STATUS_BADGE: Record<InvoiceRegisterStatus, { tone: BadgeTo
   voided: { tone: "red", label: "Voided" },
 };
 
-export function orderTypeLabel(order: Pick<Order, "orderType" | "deliveryProvider">): string {
+export function orderTypeLabel(order: Pick<Order, "orderType" | "deliveryProvider"> & Partial<Pick<Order, "tableId">>): string {
   if (order.orderType === "takeaway") return "Take away";
   if (order.orderType === "delivery") return `Delivery (${order.deliveryProvider ?? "Other"})`;
-  return "Dine-in";
+  // A dine-in order names its table when the list brings it along.
+  const table = typeof order.tableId === "object" && order.tableId?.code ? ` · Table ${order.tableId.code}` : "";
+  return `Dine-in${table}`;
 }
 
 export function currentFinancialYearLabel(now = new Date()): string {

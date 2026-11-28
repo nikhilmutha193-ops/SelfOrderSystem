@@ -6,6 +6,7 @@ import { usePublicSettings } from "../lib/usePublicSettings";
 import { api, extractErrorMessage } from "../shared/api/client";
 
 import { BrandName } from "../shared/ui/BrandName";
+import { HtmlEmbed, useHeadEmbeds, useSearchTags } from "../components/HtmlEmbed";
 import "../styles/landing/index.css";
 
 const ASSET = "/landing";
@@ -45,6 +46,31 @@ interface Testimonial {
   text: string;
   name: string;
   google: boolean;
+}
+
+/** One guest review; a long one is cut after a few lines with a Read more button. */
+function ReviewCard({ review }: { review: { rating: number; text?: string; name: string; google?: boolean } }) {
+  const [open, setOpen] = useState(false);
+  const long = (review.text?.length ?? 0) > 180;
+  return (
+    <li className="review-card">
+      <p className="review-card__stars" aria-label={`${review.rating} out of 5`}>
+        {"★".repeat(review.rating)}
+      </p>
+      {review.text && (
+        <p className={`review-card__text${long && !open ? " review-card__text--clamped" : ""}`}>“{review.text}”</p>
+      )}
+      {long && (
+        <button type="button" className="review-card__more" aria-expanded={open} onClick={() => setOpen(!open)}>
+          {open ? "Show less" : "Read more"}
+        </button>
+      )}
+      <p className="review-card__who">
+        {review.name}
+        {review.google && " · Google review"}
+      </p>
+    </li>
+  );
 }
 
 /** Up to `limit` testimonials, taking one of the guests' own, then one from Google, and so on. */
@@ -134,6 +160,12 @@ export default function Landing() {
     const timer = setInterval(() => setSlide((i) => (i + 1) % heroImages.length), 6000);
     return () => clearInterval(timer);
   }, [heroImages.length]);
+
+  // What Google reads (title, description, keywords) and the owner's pasted head code.
+  const content = data?.content;
+  useSearchTags(content?.seo, data?.restaurant);
+  const embeds = (content?.embed?.items ?? []).filter((e) => e.visible !== false && e.code.trim());
+  useHeadEmbeds(embeds.filter((e) => e.position === "head").map((e) => e.code));
 
   if (loadError) {
     return (
@@ -611,18 +643,9 @@ export default function Landing() {
                 </h2>
                 {c?.reviews?.lead && <p className="section__lead">{c.reviews.lead}</p>}
               </header>
-              <ul className="outlets__grid" role="list">
+              <ul className="reviews__grid" role="list">
                 {testimonials.map((review) => (
-                  <li className="outlet-card" key={review.key}>
-                    <p className="outlet-card__city" aria-label={`${review.rating} out of 5`}>
-                      {"★".repeat(review.rating)}
-                    </p>
-                    {review.text && <p className="outlet-card__address">“{review.text}”</p>}
-                    <p className="outlet-card__hours">
-                      {review.name}
-                      {review.google && " · Google review"}
-                    </p>
-                  </li>
+                  <ReviewCard key={review.key} review={review} />
                 ))}
               </ul>
             </div>
@@ -714,6 +737,13 @@ export default function Landing() {
             </div>
           </section>
         )}
+        {embeds
+          .filter((e) => e.position === "page")
+          .map((e, i) => (
+            <section key={`page-${i}`} className="container" style={{ paddingBlock: "2rem" }}>
+              <HtmlEmbed html={e.code} />
+            </section>
+          ))}
       </main>
 
       <footer className="footer" id="footer">
@@ -802,6 +832,12 @@ export default function Landing() {
           </div>
         </div>
       </footer>
+
+      {embeds
+        .filter((e) => e.position === "end")
+        .map((e, i) => (
+          <HtmlEmbed key={`end-${i}`} html={e.code} />
+        ))}
 
       {activeBanner && (
         <div
